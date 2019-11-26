@@ -1,0 +1,1400 @@
+(example
+  (utterance "which state is the smallest ?")
+  (targetFormula (string "answer(A,smallest(A,state(A)))"))
+  (targetValue (list (name fb:en.state.district_of_columbia)))
+)
+(example
+  (utterance "which is the longest river in usa ?")
+  (targetFormula (string "answer(A,longest(A,(river(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.river.missouri)))
+)
+(example
+  (utterance "what are the highest points of all the states ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),state(B))))"))
+  (targetValue (list (name fb:en.place.mount_mckinley)))
+)
+(example
+  (utterance "what are the major rivers in ohio ?")
+  (targetFormula (string "answer(A,(major(A),river(A),loc(A,B),const(B,stateid(ohio))))"))
+  (targetValue (list ))
+)
+(example
+  (utterance "name the major rivers in florida ?")
+  (targetFormula (string "answer(A,(major(A),river(A),loc(A,B),const(B,stateid(florida))))"))
+  (targetValue (list (name fb:en.river.chattahoochee)))
+)
+(example
+  (utterance "what is the population of erie pennsylvania ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(erie,pa))))"))
+  (targetValue (list (number 119123.0 count)))
+)
+(example
+  (utterance "what state has the lowest population density ?")
+  (targetFormula (string "answer(A,smallest(B,(state(A),density(A,B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "where is the smallest city ?")
+  (targetFormula (string "answer(A,(loc(B,A),smallest(B,city(B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "which rivers run through states that border the state with the capital austin ?")
+  (targetFormula (string "answer(A,(river(A),traverse(A,B),state(B),next_to(B,C),state(C),loc(D,C),capital(D),const(D,cityid(austin,_))))"))
+  (targetValue (list (name fb:en.river.arkansas) (name fb:en.river.canadian) (name fb:en.river.cimarron) (name fb:en.river.gila) (name fb:en.river.mississippi) (name fb:en.river.neosho) (name fb:en.river.ouachita) (name fb:en.river.pearl) (name fb:en.river.pecos) (name fb:en.river.red) (name fb:en.river.rio_grande) (name fb:en.river.san_juan) (name fb:en.river.st._francis) (name fb:en.river.washita) (name fb:en.river.white)))
+)
+(example
+  (utterance "what is the lowest point in massachusetts ?")
+  (targetFormula (string "answer(A,lowest(A,(place(A),loc(A,B),const(B,stateid(massachusetts)))))"))
+  (targetValue (list (name fb:en.place.atlantic_ocean)))
+)
+(example
+  (utterance "what is the population of maryland ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(maryland))))"))
+  (targetValue (list (number 4217000.0 count)))
+)
+(example
+  (utterance "what states does the mississippi river run through ?")
+  (targetFormula (string "answer(A,(state(A),const(B,riverid(mississippi)),river(B),traverse(B,A)))"))
+  (targetValue (list (name fb:en.state.arkansas) (name fb:en.state.illinois) (name fb:en.state.iowa) (name fb:en.state.kentucky) (name fb:en.state.louisiana) (name fb:en.state.minnesota) (name fb:en.state.mississippi) (name fb:en.state.missouri) (name fb:en.state.tennessee) (name fb:en.state.wisconsin)))
+)
+(example
+  (utterance "where is portland ?")
+  (targetFormula (string "answer(A,(loc(B,A),const(B,cityid(portland,_))))"))
+  (targetValue (list (name fb:en.state.maine) (name fb:en.state.oregon)))
+)
+(example
+  (utterance "what are the cities in states through which the mississippi runs ?")
+  (targetFormula (string "answer(A,(city(A),loc(A,B),state(B),traverse(C,B),const(C,riverid(mississippi))))"))
+  (targetValue (list (name fb:en.city.appleton_wi) (name fb:en.city.arlington_heights_il) (name fb:en.city.aurora_il) (name fb:en.city.baton_rouge_la) (name fb:en.city.biloxi_ms) (name fb:en.city.bloomington_mn) (name fb:en.city.cedar_rapids_ia) (name fb:en.city.champaign_il) (name fb:en.city.chattanooga_tn) (name fb:en.city.chicago_il) (name fb:en.city.cicero_il) (name fb:en.city.columbia_mo) (name fb:en.city.covington_ky) (name fb:en.city.davenport_ia) (name fb:en.city.decatur_il) (name fb:en.city.des_moines_ia) (name fb:en.city.dubuque_ia) (name fb:en.city.duluth_mn) (name fb:en.city.elgin_il) (name fb:en.city.evanston_il) (name fb:en.city.fort_smith_ar) (name fb:en.city.green_bay_wi) (name fb:en.city.hattiesburg_ms) (name fb:en.city.independence_mo) (name fb:en.city.jackson_ms) (name fb:en.city.joliet_il) (name fb:en.city.kansas_city_mo) (name fb:en.city.kenner_la) (name fb:en.city.kenosha_wi) (name fb:en.city.knoxville_tn) (name fb:en.city.lafayette_la) (name fb:en.city.lake_charles_la) (name fb:en.city.lexington_ky) (name fb:en.city.little_rock_ar) (name fb:en.city.louisville_ky) (name fb:en.city.madison_wi) (name fb:en.city.memphis_tn) (name fb:en.city.meridian_ms) (name fb:en.city.metairie_la) (name fb:en.city.milwaukee_wi) (name fb:en.city.minneapolis_mn) (name fb:en.city.monroe_la) (name fb:en.city.nashville_tn) (name fb:en.city.new_orleans_la) (name fb:en.city.north_little_rock_ar) (name fb:en.city.oak_lawn_il) (name fb:en.city.owensboro_ky) (name fb:en.city.peoria_il) (name fb:en.city.pine_bluff_ar) (name fb:en.city.racine_wi) (name fb:en.city.rochester_mn) (name fb:en.city.rockford_il) (name fb:en.city.shreveport_la) (name fb:en.city.sioux_city_ia) (name fb:en.city.skokie_il) (name fb:en.city.springfield_il) (name fb:en.city.springfield_mo) (name fb:en.city.st._joseph_mo) (name fb:en.city.st._louis_mo) (name fb:en.city.st._paul_mn) (name fb:en.city.waterloo_ia) (name fb:en.city.waukegan_il) (name fb:en.city.west_allis_wi)))
+)
+(example
+  (utterance "how many people live in houston ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(houston,_))))"))
+  (targetValue (list (number 1595138.0 count)))
+)
+(example
+  (utterance "what are the populations of states through which the mississippi river runs ?")
+  (targetFormula (string "answer(A,(population(B,A),state(B),const(C,riverid(mississippi)),river(C),traverse(C,B)))"))
+  (targetValue (list (number 1.14E7 count) (number 2286000.0 count) (number 2364000.0 count) (number 2520000.0 count) (number 2913000.0 count) (number 4076000.0 count) (number 4206000.0 count) (number 4591000.0 count) (number 4700000.0 count) (number 4916000.0 count)))
+)
+(example
+  (utterance "what states does the ohio river run through ?")
+  (targetFormula (string "answer(A,(state(A),const(B,riverid(ohio)),river(B),traverse(B,A)))"))
+  (targetValue (list (name fb:en.state.illinois) (name fb:en.state.indiana) (name fb:en.state.kentucky) (name fb:en.state.ohio) (name fb:en.state.pennsylvania) (name fb:en.state.west_virginia)))
+)
+(example
+  (utterance "which state has the most population ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),population(A,B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "what states surround kentucky ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(kentucky))))"))
+  (targetValue (list (name fb:en.state.illinois) (name fb:en.state.indiana) (name fb:en.state.missouri) (name fb:en.state.ohio) (name fb:en.state.tennessee) (name fb:en.state.virginia) (name fb:en.state.west_virginia)))
+)
+(example
+  (utterance "what is the capital of north dakota ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid('north dakota'))))"))
+  (targetValue (list (name fb:en.city.bismarck_nd)))
+)
+(example
+  (utterance "how many cities are there in the united states ?")
+  (targetFormula (string "answer(A,count(B,(city(B),loc(B,C),const(C,countryid(usa))),A))"))
+  (targetValue (list (number 435.0 count)))
+)
+(example
+  (utterance "what is the largest capital city in the usa ?")
+  (targetFormula (string "answer(A,largest(A,(capital(A),city(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.city.phoenix_az)))
+)
+(example
+  (utterance "what are the populations of states which border texas ?")
+  (targetFormula (string "answer(A,(population(B,A),state(B),next_to(B,C),const(C,stateid(texas))))"))
+  (targetValue (list (number 1303000.0 count) (number 2286000.0 count) (number 3025000.0 count) (number 4206000.0 count)))
+)
+(example
+  (utterance "what is the capital of states that have cities named durham ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),state(B),loc(C,B),city(C),const(C,cityid(durham,_))))"))
+  (targetValue (list (name fb:en.city.raleigh_nc)))
+)
+(example
+  (utterance "what is the biggest city in kansas ?")
+  (targetFormula (string "answer(A,largest(A,(city(A),loc(A,B),const(B,stateid(kansas)))))"))
+  (targetValue (list (name fb:en.city.wichita_ks)))
+)
+(example
+  (utterance "what is the population of boulder ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(boulder,_))))"))
+  (targetValue (list (number 76685.0 count)))
+)
+(example
+  (utterance "which state has the greatest population ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),population(A,B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "what is the population of houston ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(houston,_))))"))
+  (targetValue (list (number 1595138.0 count)))
+)
+(example
+  (utterance "how many states are there ?")
+  (targetFormula (string "answer(A,count(B,state(B),A))"))
+  (targetValue (list (number 51.0 count)))
+)
+(example
+  (utterance "what states border the state with the smallest area ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),smallest(C,(state(B),area(B,C)))))"))
+  (targetValue (list (name fb:en.state.maryland) (name fb:en.state.virginia)))
+)
+(example
+  (utterance "what is the longest river that flows through a state that borders indiana ?")
+  (targetFormula (string "answer(A,longest(A,(river(A),traverse(A,B),state(B),next_to(B,C),const(C,stateid(indiana)))))"))
+  (targetValue (list (name fb:en.river.mississippi)))
+)
+(example
+  (utterance "what states border the most populous state ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),largest(C,(population(B,C),state(B)))))"))
+  (targetValue (list (name fb:en.state.arizona) (name fb:en.state.nevada) (name fb:en.state.oregon)))
+)
+(example
+  (utterance "what is the largest city in california ?")
+  (targetFormula (string "answer(A,largest(A,(city(A),loc(A,B),const(B,stateid(california)))))"))
+  (targetValue (list (name fb:en.city.los_angeles_ca)))
+)
+(example
+  (utterance "what is the longest river in the states that border nebraska ?")
+  (targetFormula (string "answer(A,longest(A,(river(A),loc(A,B),state(B),next_to(B,C),const(C,stateid(nebraska)))))"))
+  (targetValue (list (name fb:en.river.missouri)))
+)
+(example
+  (utterance "what is the capital of new jersey ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid('new jersey'))))"))
+  (targetValue (list (name fb:en.city.trenton_nj)))
+)
+(example
+  (utterance "which state has the most major cities ?")
+  (targetFormula (string "answer(A,most(A,B,(state(A),loc(B,A),major(B),city(B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "how many colorado rivers are there ?")
+  (targetFormula (string "answer(A,count(B,(const(B,riverid(colorado)),river(B)),A))"))
+  (targetValue (list (number 1.0 count)))
+)
+(example
+  (utterance "what is the highest elevation in the united states ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.place.mount_mckinley)))
+)
+(example
+  (utterance "how many people live in the biggest city in new york state ?")
+  (targetFormula (string "answer(A,(population(B,A),largest(B,(city(B),loc(B,C),const(C,stateid('new york')),state(C)))))"))
+  (targetValue (list (number 7071639.0 count)))
+)
+(example
+  (utterance "what are the capitals of states that border missouri ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),state(B),next_to(B,C),const(C,stateid(missouri))))"))
+  (targetValue (list (name fb:en.city.des_moines_ia) (name fb:en.city.frankfort_ky) (name fb:en.city.lincoln_ne) (name fb:en.city.little_rock_ar) (name fb:en.city.nashville_tn) (name fb:en.city.oklahoma_city_ok) (name fb:en.city.springfield_il) (name fb:en.city.topeka_ks)))
+)
+(example
+  (utterance "what is the length of the river that runs through the most states ?")
+  (targetFormula (string "answer(A,(len(B,A),most(B,C,(river(B),traverse(B,C),state(C)))))"))
+  (targetValue (list (number 3778000.0 length)))
+)
+(example
+  (utterance "what is the highest point in the state with capital austin ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),state(B),loc(C,B),capital(C),const(C,cityid(austin,_)))))"))
+  (targetValue (list (name fb:en.place.guadalupe_peak)))
+)
+(example
+  (utterance "what state has the largest capital ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),largest(B,capital(B))))"))
+  (targetValue (list (name fb:en.state.arizona)))
+)
+(example
+  (utterance "what is the capital of massachusetts ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid(massachusetts))))"))
+  (targetValue (list (name fb:en.city.boston_ma)))
+)
+(example
+  (utterance "what states border new jersey ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid('new jersey'))))"))
+  (targetValue (list (name fb:en.state.delaware) (name fb:en.state.new_york) (name fb:en.state.pennsylvania)))
+)
+(example
+  (utterance "what states border states that the ohio runs through ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),state(B),const(C,riverid(ohio)),traverse(C,B)))"))
+  (targetValue (list (name fb:en.state.delaware) (name fb:en.state.illinois) (name fb:en.state.indiana) (name fb:en.state.iowa) (name fb:en.state.kentucky) (name fb:en.state.maryland) (name fb:en.state.michigan) (name fb:en.state.missouri) (name fb:en.state.new_jersey) (name fb:en.state.new_york) (name fb:en.state.ohio) (name fb:en.state.pennsylvania) (name fb:en.state.tennessee) (name fb:en.state.virginia) (name fb:en.state.west_virginia) (name fb:en.state.wisconsin)))
+)
+(example
+  (utterance "which state has the highest elevation ?")
+  (targetFormula (string "answer(A,highest(B,(state(A),loc(B,A),place(B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "what is the most populous state through which the mississippi runs ?")
+  (targetFormula (string "answer(A,largest(B,(population(A,B),state(A),const(C,riverid(mississippi)),traverse(C,A))))"))
+  (targetValue (list (name fb:en.state.illinois)))
+)
+(example
+  (utterance "which is the highest peak not in alaska ?")
+  (targetFormula (string "answer(A,highest(A,(mountain(A),\+(loc(A,B),const(B,stateid(alaska))))))"))
+  (targetValue (list (name fb:en.mountain.whitney)))
+)
+(example
+  (utterance "what state has the most major cities ?")
+  (targetFormula (string "answer(A,most(A,B,(state(A),loc(B,A),major(B),city(B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "what states have cities named portland ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),city(B),const(B,cityid(portland,_))))"))
+  (targetValue (list (name fb:en.state.maine) (name fb:en.state.oregon)))
+)
+(example
+  (utterance "what is the highest point of the state with the smallest population density ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),smallest(C,(state(B),density(B,C))))))"))
+  (targetValue (list (name fb:en.place.mount_mckinley)))
+)
+(example
+  (utterance "what states border the state with the most major cities ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),most(B,C,(state(B),loc(C,B),major(C),city(C)))))"))
+  (targetValue (list (name fb:en.state.arizona) (name fb:en.state.nevada) (name fb:en.state.oregon)))
+)
+(example
+  (utterance "what is the smallest city in the us ?")
+  (targetFormula (string "answer(A,smallest(A,(city(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.city.scotts_valley_ca)))
+)
+(example
+  (utterance "what is the population of hawaii ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(hawaii))))"))
+  (targetValue (list (number 964000.0 count)))
+)
+(example
+  (utterance "what states border indiana ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(indiana))))"))
+  (targetValue (list (name fb:en.state.illinois) (name fb:en.state.kentucky) (name fb:en.state.michigan) (name fb:en.state.ohio)))
+)
+(example
+  (utterance "how many states are in the usa ?")
+  (targetFormula (string "answer(A,count(B,(state(B),loc(B,C),const(C,countryid(usa))),A))"))
+  (targetValue (list (number 51.0 count)))
+)
+(example
+  (utterance "what is the capital of illinois ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid(illinois))))"))
+  (targetValue (list (name fb:en.city.springfield_il)))
+)
+(example
+  (utterance "what river traverses the state which borders the most states ?")
+  (targetFormula (string "answer(A,(river(A),traverse(A,B),most(B,C,(state(B),next_to(B,C),state(C)))))"))
+  (targetValue (list (name fb:en.river.cumberland) (name fb:en.river.mississippi) (name fb:en.river.missouri) (name fb:en.river.st._francis) (name fb:en.river.tennessee) (name fb:en.river.white)))
+)
+(example
+  (utterance "what states border the state that borders the most states ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),most(B,C,(state(B),next_to(B,C),state(C)))))"))
+  (targetValue (list (name fb:en.state.alabama) (name fb:en.state.arkansas) (name fb:en.state.georgia) (name fb:en.state.illinois) (name fb:en.state.iowa) (name fb:en.state.kansas) (name fb:en.state.kentucky) (name fb:en.state.mississippi) (name fb:en.state.missouri) (name fb:en.state.nebraska) (name fb:en.state.north_carolina) (name fb:en.state.oklahoma) (name fb:en.state.tennessee) (name fb:en.state.virginia)))
+)
+(example
+  (utterance "how long is the colorado river ?")
+  (targetFormula (string "answer(A,(len(B,A),const(B,riverid(colorado)),river(B)))"))
+  (targetValue (list (number 2333000.0 length)))
+)
+(example
+  (utterance "what state has the longest river ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),longest(B,river(B))))"))
+  (targetValue (list (name fb:en.state.iowa) (name fb:en.state.missouri) (name fb:en.state.montana) (name fb:en.state.nebraska) (name fb:en.state.north_dakota) (name fb:en.state.south_dakota)))
+)
+(example
+  (utterance "which states border kentucky ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(kentucky))))"))
+  (targetValue (list (name fb:en.state.illinois) (name fb:en.state.indiana) (name fb:en.state.missouri) (name fb:en.state.ohio) (name fb:en.state.tennessee) (name fb:en.state.virginia) (name fb:en.state.west_virginia)))
+)
+(example
+  (utterance "give me the states that border utah ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(utah))))"))
+  (targetValue (list (name fb:en.state.arizona) (name fb:en.state.colorado) (name fb:en.state.idaho) (name fb:en.state.nevada) (name fb:en.state.new_mexico) (name fb:en.state.wyoming)))
+)
+(example
+  (utterance "what is the capital of the state with the largest population density ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),largest(C,(state(B),density(B,C)))))"))
+  (targetValue (list (name fb:en.city.trenton_nj)))
+)
+(example
+  (utterance "what states have cities named plano ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),city(B),const(B,cityid(plano,_))))"))
+  (targetValue (list (name fb:en.state.texas)))
+)
+(example
+  (utterance "what states border the state with the most cities ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),most(B,C,(state(B),loc(C,B),city(C)))))"))
+  (targetValue (list (name fb:en.state.arizona) (name fb:en.state.nevada) (name fb:en.state.oregon)))
+)
+(example
+  (utterance "how many citizens does the biggest city have in the usa ?")
+  (targetFormula (string "answer(A,(population(B,A),largest(B,city(B))))"))
+  (targetValue (list (number 7071639.0 count)))
+)
+(example
+  (utterance "how many people reside in utah ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(utah))))"))
+  (targetValue (list (number 1461000.0 count)))
+)
+(example
+  (utterance "what states border montana ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(montana))))"))
+  (targetValue (list (name fb:en.state.idaho) (name fb:en.state.north_dakota) (name fb:en.state.south_dakota) (name fb:en.state.wyoming)))
+)
+(example
+  (utterance "what rivers run through new york ?")
+  (targetFormula (string "answer(A,(river(A),traverse(A,B),const(B,stateid('new york'))))"))
+  (targetValue (list (name fb:en.river.allegheny) (name fb:en.river.delaware) (name fb:en.river.hudson)))
+)
+(example
+  (utterance "what rivers traverses the state which borders the most states ?")
+  (targetFormula (string "answer(A,(river(A),traverse(A,B),most(B,C,(state(B),next_to(B,C),state(C)))))"))
+  (targetValue (list (name fb:en.river.cumberland) (name fb:en.river.mississippi) (name fb:en.river.missouri) (name fb:en.river.st._francis) (name fb:en.river.tennessee) (name fb:en.river.white)))
+)
+(example
+  (utterance "count the states which have elevations lower than what alabama has ?")
+  (targetFormula (string "answer(A,count(B,(state(B),loc(C,B),low_point(B,C),lower(C,D),low_point(E,D),const(E,stateid(alabama)),loc(D,E)),A))"))
+  (targetValue (list (number 2.0 count)))
+)
+(example
+  (utterance "what river flows through the most states ?")
+  (targetFormula (string "answer(A,most(A,B,(river(A),traverse(A,B),state(B))))"))
+  (targetValue (list (name fb:en.river.mississippi)))
+)
+(example
+  (utterance "what rivers are there in texas ?")
+  (targetFormula (string "answer(A,(river(A),loc(A,B),const(B,stateid(texas))))"))
+  (targetValue (list (name fb:en.river.canadian) (name fb:en.river.pecos) (name fb:en.river.red) (name fb:en.river.rio_grande) (name fb:en.river.washita)))
+)
+(example
+  (utterance "which state has the highest point ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),highest(B,place(B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "what state is austin in ?")
+  (targetFormula (string "answer(A,(state(A),const(B,cityid(austin,_)),loc(B,A)))"))
+  (targetValue (list (name fb:en.state.texas)))
+)
+(example
+  (utterance "how high is the highest point of alabama ?")
+  (targetFormula (string "answer(A,(elevation(B,A),highest(B,(place(B),loc(B,C),const(C,stateid(alabama))))))"))
+  (targetValue (list (number 734.0 length)))
+)
+(example
+  (utterance "what is the length of the mississippi river ?")
+  (targetFormula (string "answer(A,(len(B,A),const(B,riverid(mississippi)),river(B)))"))
+  (targetValue (list (number 3778000.0 length)))
+)
+(example
+  (utterance "how many rivers does colorado have ?")
+  (targetFormula (string "answer(A,count(B,(river(B),const(C,stateid(colorado)),loc(B,C)),A))"))
+  (targetValue (list (number 10.0 count)))
+)
+(example
+  (utterance "what length is the mississippi ?")
+  (targetFormula (string "answer(A,(len(B,A),const(B,riverid(mississippi))))"))
+  (targetValue (list (number 3778000.0 length)))
+)
+(example
+  (utterance "what state has the most rivers ?")
+  (targetFormula (string "answer(A,most(A,B,(state(A),loc(B,A),river(B))))"))
+  (targetValue (list (name fb:en.state.colorado)))
+)
+(example
+  (utterance "how many people lived in austin ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(austin,_))))"))
+  (targetValue (list (number 345496.0 count)))
+)
+(example
+  (utterance "what city in the united states has the highest population density ?")
+  (targetFormula (string "answer(A,largest(B,(city(A),loc(A,C),const(C,countryid(usa)),density(A,B))))"))
+  (targetValue (list (name fb:en.city.seattle_wa)))
+)
+(example
+  (utterance "which states have a river ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),river(B)))"))
+  (targetValue (list (name fb:en.state.alabama) (name fb:en.state.arizona) (name fb:en.state.arkansas) (name fb:en.state.california) (name fb:en.state.colorado) (name fb:en.state.connecticut) (name fb:en.state.delaware) (name fb:en.state.district_of_columbia) (name fb:en.state.florida) (name fb:en.state.georgia) (name fb:en.state.idaho) (name fb:en.state.illinois) (name fb:en.state.indiana) (name fb:en.state.iowa) (name fb:en.state.kansas) (name fb:en.state.kentucky) (name fb:en.state.louisiana) (name fb:en.state.maryland) (name fb:en.state.massachusetts) (name fb:en.state.michigan) (name fb:en.state.minnesota) (name fb:en.state.mississippi) (name fb:en.state.missouri) (name fb:en.state.montana) (name fb:en.state.nebraska) (name fb:en.state.nevada) (name fb:en.state.new_hampshire) (name fb:en.state.new_jersey) (name fb:en.state.new_mexico) (name fb:en.state.new_york) (name fb:en.state.north_carolina) (name fb:en.state.north_dakota) (name fb:en.state.ohio) (name fb:en.state.oklahoma) (name fb:en.state.oregon) (name fb:en.state.pennsylvania) (name fb:en.state.south_carolina) (name fb:en.state.south_dakota) (name fb:en.state.tennessee) (name fb:en.state.texas) (name fb:en.state.utah) (name fb:en.state.vermont) (name fb:en.state.virginia) (name fb:en.state.washington) (name fb:en.state.west_virginia) (name fb:en.state.wisconsin) (name fb:en.state.wyoming)))
+)
+(example
+  (utterance "what is the highest point in the usa ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.place.mount_mckinley)))
+)
+(example
+  (utterance "what is the area of florida ?")
+  (targetFormula (string "answer(A,(area(B,A),const(B,stateid(florida))))"))
+  (targetValue (list (number 1.778389436081111E11 length^2)))
+)
+(example
+  (utterance "what is the capital of california ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid(california))))"))
+  (targetValue (list (name fb:en.city.sacramento_ca)))
+)
+(example
+  (utterance "what is the capital of the state with the largest population ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),largest(C,(state(B),population(B,C)))))"))
+  (targetValue (list (name fb:en.city.sacramento_ca)))
+)
+(example
+  (utterance "which state has the most major rivers ?")
+  (targetFormula (string "answer(A,most(A,B,(state(A),loc(B,A),major(B),river(B))))"))
+  (targetValue (list (name fb:en.state.colorado) (name fb:en.state.montana) (name fb:en.state.nebraska) (name fb:en.state.new_york) (name fb:en.state.wyoming)))
+)
+(example
+  (utterance "what is the capital of the state with the most inhabitants ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),largest(C,(state(B),population(B,C)))))"))
+  (targetValue (list (name fb:en.city.sacramento_ca)))
+)
+(example
+  (utterance "what is the capital of ohio ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid(ohio))))"))
+  (targetValue (list (name fb:en.city.columbus_oh)))
+)
+(example
+  (utterance "which state has the lowest elevation ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),lowest(B,place(B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "what is the population of san antonio ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid('san antonio',_))))"))
+  (targetValue (list (number 785880.0 count)))
+)
+(example
+  (utterance "number of states bordering iowa ?")
+  (targetFormula (string "answer(A,count(B,(state(B),next_to(B,C),const(C,stateid(iowa))),A))"))
+  (targetValue (list (number 6.0 count)))
+)
+(example
+  (utterance "which states does the chattahoochee river run through ?")
+  (targetFormula (string "answer(A,(state(A),const(B,riverid(chattahoochee)),river(B),traverse(B,A)))"))
+  (targetValue (list (name fb:en.state.florida) (name fb:en.state.georgia)))
+)
+(example
+  (utterance "how many people live in detroit ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(detroit,_))))"))
+  (targetValue (list (number 1203339.0 count)))
+)
+(example
+  (utterance "how many states do not have rivers ?")
+  (targetFormula (string "answer(A,count(B,(state(B),\+(loc(C,B),river(C))),A))"))
+  (targetValue (list (number 4.0 count)))
+)
+(example
+  (utterance "what states border states that border mississippi ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),state(B),next_to(B,C),const(C,stateid(mississippi))))"))
+  (targetValue (list (name fb:en.state.alabama) (name fb:en.state.arkansas) (name fb:en.state.florida) (name fb:en.state.georgia) (name fb:en.state.kentucky) (name fb:en.state.louisiana) (name fb:en.state.mississippi) (name fb:en.state.missouri) (name fb:en.state.north_carolina) (name fb:en.state.oklahoma) (name fb:en.state.tennessee) (name fb:en.state.texas) (name fb:en.state.virginia)))
+)
+(example
+  (utterance "what are the major cities in the usa ?")
+  (targetFormula (string "answer(A,(major(A),city(A),loc(A,B),const(B,countryid(usa))))"))
+  (targetValue (list (name fb:en.city.abilene_tx) (name fb:en.city.abingdon_pa) (name fb:en.city.alameda_ca) (name fb:en.city.albany_ga) (name fb:en.city.albany_ny) (name fb:en.city.alexandria_va) (name fb:en.city.alhambra_ca) (name fb:en.city.allentown_pa) (name fb:en.city.altoona_pa) (name fb:en.city.amarillo_tx) (name fb:en.city.anderson_in) (name fb:en.city.ann_arbor_mi) (name fb:en.city.appleton_wi) (name fb:en.city.arlington_heights_il) (name fb:en.city.arvada_co) (name fb:en.city.aurora_il) (name fb:en.city.bakersfield_ca) (name fb:en.city.bayonne_nj) (name fb:en.city.beaumont_tx) (name fb:en.city.bellevue_wa) (name fb:en.city.berkeley_ca) (name fb:en.city.bethesda_md) (name fb:en.city.bethlehem_pa) (name fb:en.city.billings_mt) (name fb:en.city.bloomington_mn) (name fb:en.city.boise_id) (name fb:en.city.boulder_co) (name fb:en.city.bridgeport_ct) (name fb:en.city.bristol_ct) (name fb:en.city.bristol_township_pa) (name fb:en.city.brockton_ma) (name fb:en.city.brownsville_tx) (name fb:en.city.buena_park_ca) (name fb:en.city.burbank_ca) (name fb:en.city.cambridge_ma) (name fb:en.city.camden_nj) (name fb:en.city.canton_oh) (name fb:en.city.carson_ca) (name fb:en.city.casper_wy) (name fb:en.city.cedar_rapids_ia) (name fb:en.city.champaign_il) (name fb:en.city.charleston_sc) (name fb:en.city.charleston_wv) (name fb:en.city.cheektowaga_ny) (name fb:en.city.cherry_hill_nj) (name fb:en.city.chesapeake_va) (name fb:en.city.chula_vista_ca) (name fb:en.city.cicero_il) (name fb:en.city.citrus_heights_ca) (name fb:en.city.clearwater_fl) (name fb:en.city.clifton_nj) (name fb:en.city.clinton_mi) (name fb:en.city.columbia_mo) (name fb:en.city.columbia_sc) (name fb:en.city.compton_ca) (name fb:en.city.concord_ca) (name fb:en.city.costa_mesa_ca) (name fb:en.city.cranston_ri) (name fb:en.city.daly_city_ca) (name fb:en.city.danbury_ct) (name fb:en.city.davenport_ia) (name fb:en.city.dearborn_heights_mi) (name fb:en.city.dearborn_mi) (name fb:en.city.decatur_il) (name fb:en.city.downey_ca) (name fb:en.city.dubuque_ia) (name fb:en.city.duluth_mn) (name fb:en.city.dundalk_md) (name fb:en.city.durham_nc) (name fb:en.city.east_los_angeles_ca) (name fb:en.city.east_orange_nj) (name fb:en.city.edison_nj) (name fb:en.city.el_cajon_ca) (name fb:en.city.el_monte_ca) (name fb:en.city.elgin_il) (name fb:en.city.elizabeth_nj) (name fb:en.city.elyria_oh) (name fb:en.city.erie_pa) (name fb:en.city.escondido_ca) (name fb:en.city.euclid_oh) (name fb:en.city.eugene_or) (name fb:en.city.evanston_il) (name fb:en.city.evansville_in) (name fb:en.city.fairfield_ca) (name fb:en.city.fall_river_ma) (name fb:en.city.fargo_nd) (name fb:en.city.farmington_hills_mi) (name fb:en.city.fayetteville_nc) (name fb:en.city.fort_collins_co) (name fb:en.city.fort_smith_ar) (name fb:en.city.framingham_ma) (name fb:en.city.fremont_ca) (name fb:en.city.fullerton_ca) (name fb:en.city.gainesville_fl) (name fb:en.city.garden_grove_ca) (name fb:en.city.garland_tx) (name fb:en.city.glendale_az) (name fb:en.city.glendale_ca) (name fb:en.city.grand_prairie_tx) (name fb:en.city.great_falls_mt) (name fb:en.city.green_bay_wi) (name fb:en.city.greenville_sc) (name fb:en.city.greenwich_ct) (name fb:en.city.hamilton_oh) (name fb:en.city.hammond_in) (name fb:en.city.hampton_va) (name fb:en.city.hartford_ct) (name fb:en.city.hayward_ca) (name fb:en.city.high_point_nc) (name fb:en.city.hollywood_fl) (name fb:en.city.huntington_wv) (name fb:en.city.huntsville_al) (name fb:en.city.independence_mo) (name fb:en.city.inglewood_ca) (name fb:en.city.irondequoit_ny) (name fb:en.city.irvine_ca) (name fb:en.city.irving_tx) (name fb:en.city.irvington_nj) (name fb:en.city.joliet_il) (name fb:en.city.kalamazoo_mi) (name fb:en.city.kendall_fl) (name fb:en.city.kenner_la) (name fb:en.city.kenosha_wi) (name fb:en.city.kettering_oh) (name fb:en.city.koolaupoko_hi) (name fb:en.city.lafayette_la) (name fb:en.city.lake_charles_la) (name fb:en.city.lakewood_ca) (name fb:en.city.lakewood_co) (name fb:en.city.lakewood_oh) (name fb:en.city.lansing_mi) (name fb:en.city.laredo_tx) (name fb:en.city.largo_fl) (name fb:en.city.lawrence_ma) (name fb:en.city.lawton_ok) (name fb:en.city.levittown_ny) (name fb:en.city.livonia_mi) (name fb:en.city.longview_tx) (name fb:en.city.lorain_oh) (name fb:en.city.lowell_ma) (name fb:en.city.lower_merion_pa) (name fb:en.city.lynchburg_va) (name fb:en.city.lynn_ma) (name fb:en.city.macon_ga) (name fb:en.city.manchester_nh) (name fb:en.city.mcallen_tx) (name fb:en.city.medford_ma) (name fb:en.city.meriden_ct) (name fb:en.city.mesquite_tx) (name fb:en.city.miami_beach_fl) (name fb:en.city.middletown_nj) (name fb:en.city.midland_tx) (name fb:en.city.modesto_ca) (name fb:en.city.monroe_la) (name fb:en.city.mount_vernon_ny) (name fb:en.city.mountain_view_ca) (name fb:en.city.muncie_in) (name fb:en.city.nashua_nh) (name fb:en.city.new_bedford_ma) (name fb:en.city.new_britain_ct) (name fb:en.city.new_haven_ct) (name fb:en.city.new_rochelle_ny) (name fb:en.city.newport_beach_ca) (name fb:en.city.newport_news_va) (name fb:en.city.newton_ma) (name fb:en.city.niagara_falls_ny) (name fb:en.city.norman_ok) (name fb:en.city.north_charleston_sc) (name fb:en.city.north_little_rock_ar) (name fb:en.city.norwalk_ca) (name fb:en.city.norwalk_ct) (name fb:en.city.oak_lawn_il) (name fb:en.city.oceanside_ca) (name fb:en.city.odessa_tx) (name fb:en.city.ogden_ut) (name fb:en.city.ontario_ca) (name fb:en.city.orange_ca) (name fb:en.city.orlando_fl) (name fb:en.city.overland_park_ks) (name fb:en.city.oxnard_ca) (name fb:en.city.parma_oh) (name fb:en.city.pasadena_ca) (name fb:en.city.pasadena_tx) (name fb:en.city.paterson_nj) (name fb:en.city.pawtucket_ri) (name fb:en.city.penn_hills_pa) (name fb:en.city.pensacola_fl) (name fb:en.city.peoria_il) (name fb:en.city.plano_tx) (name fb:en.city.pomona_ca) (name fb:en.city.pontiac_mi) (name fb:en.city.port_arthur_tx) (name fb:en.city.portland_me) (name fb:en.city.portsmouth_va) (name fb:en.city.provo_ut) (name fb:en.city.pueblo_co) (name fb:en.city.quincy_ma) (name fb:en.city.racine_wi) (name fb:en.city.raleigh_nc) (name fb:en.city.reading_pa) (name fb:en.city.redford_mi) (name fb:en.city.redondo_beach_ca) (name fb:en.city.reno_nv) (name fb:en.city.richardson_tx) (name fb:en.city.richmond_ca) (name fb:en.city.roanoke_va) (name fb:en.city.rochester_mn) (name fb:en.city.rockford_il) (name fb:en.city.royal_oak_mi) (name fb:en.city.saginaw_mi) (name fb:en.city.salem_or) (name fb:en.city.salinas_ca) (name fb:en.city.san_angelo_tx) (name fb:en.city.san_bernardino_ca) (name fb:en.city.san_leandro_ca) (name fb:en.city.san_mateo_ca) (name fb:en.city.santa_barbara_ca) (name fb:en.city.santa_clara_ca) (name fb:en.city.santa_monica_ca) (name fb:en.city.santa_rosa_ca) (name fb:en.city.savannah_ga) (name fb:en.city.schenectady_ny) (name fb:en.city.scotts_valley_ca) (name fb:en.city.scottsdale_az) (name fb:en.city.scranton_pa) (name fb:en.city.silver_spring_md) (name fb:en.city.simi_valley_ca) (name fb:en.city.sioux_city_ia) (name fb:en.city.sioux_falls_sd) (name fb:en.city.skokie_il) (name fb:en.city.somerville_ma) (name fb:en.city.south_bend_in) (name fb:en.city.south_gate_ca) (name fb:en.city.southfield_mi) (name fb:en.city.springfield_il) (name fb:en.city.springfield_mo) (name fb:en.city.springfield_oh) (name fb:en.city.st._clair_shores_mi) (name fb:en.city.st._joseph_mo) (name fb:en.city.stamford_ct) (name fb:en.city.sterling_heights_mi) (name fb:en.city.stockton_ca) (name fb:en.city.sunnyvale_ca) (name fb:en.city.tallahassee_fl) (name fb:en.city.taylor_mi) (name fb:en.city.tempe_az) (name fb:en.city.terre_haute_in) (name fb:en.city.thousand_oaks_ca) (name fb:en.city.topeka_ks) (name fb:en.city.torrance_ca) (name fb:en.city.trenton_nj) (name fb:en.city.troy_mi) (name fb:en.city.tuscaloosa_al) (name fb:en.city.tyler_tx) (name fb:en.city.upper_darby_pa) (name fb:en.city.utica_ny) (name fb:en.city.vallejo_ca) (name fb:en.city.ventura_ca) (name fb:en.city.waco_tx) (name fb:en.city.waltham_ma) (name fb:en.city.warwick_ri) (name fb:en.city.waterbury_ct) (name fb:en.city.waterford_mi) (name fb:en.city.waterloo_ia) (name fb:en.city.waukegan_il) (name fb:en.city.west_allis_wi) (name fb:en.city.west_covina_ca) (name fb:en.city.west_hartford_ct) (name fb:en.city.west_palm_beach_fl) (name fb:en.city.west_valley_ut) (name fb:en.city.westland_mi) (name fb:en.city.westminster_ca) (name fb:en.city.whittier_ca) (name fb:en.city.wichita_falls_tx) (name fb:en.city.wilmington_de) (name fb:en.city.winston-salem_nc) (name fb:en.city.woodbridge_nj) (name fb:en.city.wyoming_mi) (name fb:en.city.youngstown_oh)))
+)
+(example
+  (utterance "what is the most populous city ?")
+  (targetFormula (string "answer(A,largest(B,(population(A,B),city(A))))"))
+  (targetValue (list (name fb:en.city.new_york_ny)))
+)
+(example
+  (utterance "what is the length of the longest river that runs through texas ?")
+  (targetFormula (string "answer(A,(len(B,A),longest(B,(river(B),traverse(B,C),const(C,stateid(texas))))))"))
+  (targetValue (list (number 3033000.0 length)))
+)
+(example
+  (utterance "how high is mount mckinley ?")
+  (targetFormula (string "answer(A,(elevation(B,A),const(B,placeid('mount mckinley'))))"))
+  (targetValue (list (number 6194.0 length)))
+)
+(example
+  (utterance "which state has the lowest population density ?")
+  (targetFormula (string "answer(A,smallest(B,(state(A),density(A,B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "give me the number of rivers in california ?")
+  (targetFormula (string "answer(A,count(B,(river(B),loc(B,C),const(C,stateid(california))),A))"))
+  (targetValue (list (number 1.0 count)))
+)
+(example
+  (utterance "what is the largest river in washington state ?")
+  (targetFormula (string "answer(A,largest(A,(river(A),loc(A,B),const(B,stateid(washington)))))"))
+  (targetValue (list (name fb:en.river.columbia)))
+)
+(example
+  (utterance "what is the capital of the florida state ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid(florida)),state(B)))"))
+  (targetValue (list (name fb:en.city.tallahassee_fl)))
+)
+(example
+  (utterance "which city in california has the largest population ?")
+  (targetFormula (string "answer(A,largest(B,(city(A),loc(A,C),const(C,stateid(california)),population(A,B))))"))
+  (targetValue (list (name fb:en.city.los_angeles_ca)))
+)
+(example
+  (utterance "what is the highest point in montana ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,stateid(montana)))))"))
+  (targetValue (list (name fb:en.place.granite_peak)))
+)
+(example
+  (utterance "what is the lowest point in the state of california ?")
+  (targetFormula (string "answer(A,lowest(A,(place(A),loc(A,B),state(B),const(B,stateid(california)))))"))
+  (targetValue (list (name fb:en.place.death_valley)))
+)
+(example
+  (utterance "what are the major cities in alaska ?")
+  (targetFormula (string "answer(A,(major(A),city(A),loc(A,B),const(B,stateid(alaska))))"))
+  (targetValue (list ))
+)
+(example
+  (utterance "what is the combined area of all 50 states ?")
+  (targetFormula (string "answer(A,sum(C,state(C),area(C),A))"))
+  (targetValue (list (number 9.505354784481312E12 length^2)))
+)
+(example
+  (utterance "what is the lowest point in nebraska in meters ?")
+  (targetFormula (string "answer(A,lowest(A,(place(A),loc(A,B),const(B,stateid(nebraska)))))"))
+  (targetValue (list (name fb:en.place.southeast_corner)))
+)
+(example
+  (utterance "which is the smallest state ?")
+  (targetFormula (string "answer(A,smallest(A,state(A)))"))
+  (targetValue (list (name fb:en.state.district_of_columbia)))
+)
+(example
+  (utterance "how many rivers are in iowa ?")
+  (targetFormula (string "answer(A,count(B,(river(B),loc(B,C),const(C,stateid(iowa))),A))"))
+  (targetValue (list (number 2.0 count)))
+)
+(example
+  (utterance "what states border florida ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(florida))))"))
+  (targetValue (list (name fb:en.state.alabama) (name fb:en.state.georgia)))
+)
+(example
+  (utterance "what rivers are in texas ?")
+  (targetFormula (string "answer(A,(river(A),loc(A,B),const(B,stateid(texas))))"))
+  (targetValue (list (name fb:en.river.canadian) (name fb:en.river.pecos) (name fb:en.river.red) (name fb:en.river.rio_grande) (name fb:en.river.washita)))
+)
+(example
+  (utterance "what are the major cities in the state of california ?")
+  (targetFormula (string "answer(A,(major(A),city(A),loc(A,B),state(B),const(B,stateid(california))))"))
+  (targetValue (list (name fb:en.city.alameda_ca) (name fb:en.city.alhambra_ca) (name fb:en.city.bakersfield_ca) (name fb:en.city.berkeley_ca) (name fb:en.city.buena_park_ca) (name fb:en.city.burbank_ca) (name fb:en.city.carson_ca) (name fb:en.city.chula_vista_ca) (name fb:en.city.citrus_heights_ca) (name fb:en.city.compton_ca) (name fb:en.city.concord_ca) (name fb:en.city.costa_mesa_ca) (name fb:en.city.daly_city_ca) (name fb:en.city.downey_ca) (name fb:en.city.east_los_angeles_ca) (name fb:en.city.el_cajon_ca) (name fb:en.city.el_monte_ca) (name fb:en.city.escondido_ca) (name fb:en.city.fairfield_ca) (name fb:en.city.fremont_ca) (name fb:en.city.fullerton_ca) (name fb:en.city.garden_grove_ca) (name fb:en.city.glendale_ca) (name fb:en.city.hayward_ca) (name fb:en.city.inglewood_ca) (name fb:en.city.irvine_ca) (name fb:en.city.lakewood_ca) (name fb:en.city.modesto_ca) (name fb:en.city.mountain_view_ca) (name fb:en.city.newport_beach_ca) (name fb:en.city.norwalk_ca) (name fb:en.city.oceanside_ca) (name fb:en.city.ontario_ca) (name fb:en.city.orange_ca) (name fb:en.city.oxnard_ca) (name fb:en.city.pasadena_ca) (name fb:en.city.pomona_ca) (name fb:en.city.redondo_beach_ca) (name fb:en.city.richmond_ca) (name fb:en.city.salinas_ca) (name fb:en.city.san_bernardino_ca) (name fb:en.city.san_leandro_ca) (name fb:en.city.san_mateo_ca) (name fb:en.city.santa_barbara_ca) (name fb:en.city.santa_clara_ca) (name fb:en.city.santa_monica_ca) (name fb:en.city.santa_rosa_ca) (name fb:en.city.scotts_valley_ca) (name fb:en.city.simi_valley_ca) (name fb:en.city.south_gate_ca) (name fb:en.city.stockton_ca) (name fb:en.city.sunnyvale_ca) (name fb:en.city.thousand_oaks_ca) (name fb:en.city.torrance_ca) (name fb:en.city.vallejo_ca) (name fb:en.city.ventura_ca) (name fb:en.city.west_covina_ca) (name fb:en.city.westminster_ca) (name fb:en.city.whittier_ca)))
+)
+(example
+  (utterance "what state is the largest in population ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),population(A,B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "what is the highest point in the states bordering colorado ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),state(B),next_to(B,C),const(C,stateid(colorado)))))"))
+  (targetValue (list (name fb:en.place.gannett_peak)))
+)
+(example
+  (utterance "where is the highest point in hawaii ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,stateid(hawaii)))))"))
+  (targetValue (list (name fb:en.place.mauna_kea)))
+)
+(example
+  (utterance "what is the highest point in iowa ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,stateid(iowa)))))"))
+  (targetValue (list (name fb:en.place.ocheyedan_mound)))
+)
+(example
+  (utterance "what are the populations of states through which the mississippi runs ?")
+  (targetFormula (string "answer(A,(population(B,A),state(B),const(C,riverid(mississippi)),traverse(C,B)))"))
+  (targetValue (list (number 1.14E7 count) (number 2286000.0 count) (number 2364000.0 count) (number 2520000.0 count) (number 2913000.0 count) (number 4076000.0 count) (number 4206000.0 count) (number 4591000.0 count) (number 4700000.0 count) (number 4916000.0 count)))
+)
+(example
+  (utterance "what is the capital of iowa ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid(iowa))))"))
+  (targetValue (list (name fb:en.city.des_moines_ia)))
+)
+(example
+  (utterance "which state capital has the smallest population ?")
+  (targetFormula (string "answer(A,smallest(B,(capital(A),population(A,B))))"))
+  (targetValue (list (name fb:en.city.charleston_wv)))
+)
+(example
+  (utterance "what is the biggest american city in a state with a river ?")
+  (targetFormula (string "answer(A,largest(A,(city(A),loc(A,B),state(B),loc(C,B),river(C))))"))
+  (targetValue (list (name fb:en.city.new_york_ny)))
+)
+(example
+  (utterance "which state borders hawaii ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(hawaii))))"))
+  (targetValue (list ))
+)
+(example
+  (utterance "how large is alaska ?")
+  (targetFormula (string "answer(A,(size(B,A),const(B,stateid(alaska))))"))
+  (targetValue (list (number 1.5306829732085762E12 length^2)))
+)
+(example
+  (utterance "what is the smallest state bordering wyoming ?")
+  (targetFormula (string "answer(A,smallest(A,(state(A),next_to(A,B),const(B,stateid(wyoming)))))"))
+  (targetValue (list (name fb:en.state.south_dakota)))
+)
+(example
+  (utterance "which state has the highest population density ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),density(A,B))))"))
+  (targetValue (list (name fb:en.state.new_jersey)))
+)
+(example
+  (utterance "which of the states bordering pennsylvania has the largest population ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),next_to(A,C),const(C,stateid(pennsylvania)),population(A,B))))"))
+  (targetValue (list (name fb:en.state.new_york)))
+)
+(example
+  (utterance "what state borders new york ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid('new york'))))"))
+  (targetValue (list (name fb:en.state.connecticut) (name fb:en.state.massachusetts) (name fb:en.state.new_jersey) (name fb:en.state.pennsylvania) (name fb:en.state.vermont)))
+)
+(example
+  (utterance "what is the highest point of the usa ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.place.mount_mckinley)))
+)
+(example
+  (utterance "how many people live in the united states ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,countryid(usa))))"))
+  (targetValue (list (number 3.0789E8 count)))
+)
+(example
+  (utterance "what states border texas and have a major river ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(texas)),loc(C,A),major(C),river(C)))"))
+  (targetValue (list (name fb:en.state.arkansas) (name fb:en.state.new_mexico) (name fb:en.state.oklahoma)))
+)
+(example
+  (utterance "where is the lowest point in maryland ?")
+  (targetFormula (string "answer(A,lowest(A,(place(A),loc(A,B),const(B,stateid(maryland)))))"))
+  (targetValue (list (name fb:en.place.atlantic_ocean)))
+)
+(example
+  (utterance "what is the population of the state with the highest population density ?")
+  (targetFormula (string "answer(A,(population(B,A),largest(C,(state(B),density(B,C)))))"))
+  (targetValue (list (number 7365000.0 count)))
+)
+(example
+  (utterance "what states have cities named dallas ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),city(B),const(B,cityid(dallas,_))))"))
+  (targetValue (list (name fb:en.state.texas)))
+)
+(example
+  (utterance "what is the population of the state that borders the most states ?")
+  (targetFormula (string "answer(A,(population(B,A),most(B,C,(state(B),next_to(B,C),state(C)))))"))
+  (targetValue (list (number 4591000.0 count) (number 4916000.0 count)))
+)
+(example
+  (utterance "how many states border the state with the largest population ?")
+  (targetFormula (string "answer(A,count(B,(state(B),next_to(B,C),largest(D,(state(C),population(C,D)))),A))"))
+  (targetValue (list (number 3.0 count)))
+)
+(example
+  (utterance "what state has the largest area ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),area(A,B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "which states does the mississippi run through ?")
+  (targetFormula (string "answer(A,(state(A),const(B,riverid(mississippi)),traverse(B,A)))"))
+  (targetValue (list (name fb:en.state.arkansas) (name fb:en.state.illinois) (name fb:en.state.iowa) (name fb:en.state.kentucky) (name fb:en.state.louisiana) (name fb:en.state.minnesota) (name fb:en.state.mississippi) (name fb:en.state.missouri) (name fb:en.state.tennessee) (name fb:en.state.wisconsin)))
+)
+(example
+  (utterance "what is the total length of all rivers in the usa ?")
+  (targetFormula (string "answer(A,sum(C,river(C),len(C),A))"))
+  (targetValue (list (number 5.1393E7 length)))
+)
+(example
+  (utterance "how long is the delaware river ?")
+  (targetFormula (string "answer(A,(len(B,A),const(B,riverid(delaware)),river(B)))"))
+  (targetValue (list (number 451000.0 length)))
+)
+(example
+  (utterance "what is the capital of colorado ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid(colorado))))"))
+  (targetValue (list (name fb:en.city.denver_co)))
+)
+(example
+  (utterance "what is the length of the colorado river ?")
+  (targetFormula (string "answer(A,(len(B,A),const(B,riverid(colorado)),river(B)))"))
+  (targetValue (list (number 2333000.0 length)))
+)
+(example
+  (utterance "what are the population densities of each us state ?")
+  (targetFormula (string "answer(A,(density(B,A),state(B)))"))
+  (targetValue (list (number 1.0096618189487688E-4 count/length^2) (number 1.0109318236931746E-4 count/length^2) (number 1.0472602921948016E-5 count/length^2) (number 1.072547246181852E-5 count/length^2) (number 1.1090467834682163E-5 count/length^2) (number 1.122038562496149E-4 count/length^2) (number 1.3057716168953902E-5 count/length^2) (number 1.3806887372073856E-4 count/length^2) (number 1.5565896774125183E-4 count/length^2) (number 1.659078072233141E-5 count/length^2) (number 1.669705546234308E-5 count/length^2) (number 1.8535816873571475E-6 count/length^2) (number 1.864635542913518E-5 count/length^2) (number 1.9977186284798305E-5 count/length^2) (number 2.039784988526129E-5 count/length^2) (number 2.0542048480805183E-5 count/length^2) (number 2.0591092489704023E-5 count/length^2) (number 2.0663031845261368E-6 count/length^2) (number 2.2393925195461856E-4 count/length^2) (number 2.3306995971716463E-5 count/length^2) (number 2.3896800928115123E-4 count/length^2) (number 2.624972035572838E-7 count/length^2) (number 2.6739112548986136E-4 count/length^2) (number 2.7232112071659447E-5 count/length^2) (number 2.7970568136943703E-6 count/length^2) (number 2.9080885983835284E-5 count/length^2) (number 3.017458453559445E-4 count/length^2) (number 3.111153756850287E-5 count/length^2) (number 3.2316708727040326E-5 count/length^2) (number 3.4044982784686106E-5 count/length^2) (number 3.4585122380555223E-6 count/length^2) (number 3.5644820209427777E-6 count/length^2) (number 3.581113908518475E-5 count/length^2) (number 3.6517816844293226E-4 count/length^2) (number 3.830646051882484E-5 count/length^2) (number 3.874051742158607E-5 count/length^2) (number 4.137262438986899E-6 count/length^2) (number 4.206442833100068E-5 count/length^2) (number 4.31185285085754E-5 count/length^2) (number 4.39133057426589E-6 count/length^2) (number 5.0647964212334384E-5 count/length^2) (number 5.4802394808847095E-5 count/length^2) (number 5.751854131276739E-5 count/length^2) (number 5.7842013244934764E-5 count/length^2) (number 5.855527211044275E-5 count/length^2) (number 6.112954175077151E-5 count/length^2) (number 6.644231491525481E-6 count/length^2) (number 7.818054364802634E-5 count/length^2) (number 7.836924796288454E-6 count/length^2) (number 9.205488306301472E-6 count/length^2)))
+)
+(example
+  (utterance "which state has the smallest average urban population ?")
+  (targetFormula (string "answer(A,smallest(B,(state(A),density(A,B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "what states have cities named rochester ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),city(B),const(B,cityid(rochester,_))))"))
+  (targetValue (list (name fb:en.state.minnesota) (name fb:en.state.new_york)))
+)
+(example
+  (utterance "which state has the lowest point that borders idaho ?")
+  (targetFormula (string "answer(A,lowest(B,(state(A),loc(B,A),place(B),next_to(A,C),const(C,stateid(idaho)))))"))
+  (targetValue (list (name fb:en.state.oregon) (name fb:en.state.washington)))
+)
+(example
+  (utterance "what is the capital of the smallest state ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),smallest(B,state(B))))"))
+  (targetValue (list (name fb:en.city.washington_dc)))
+)
+(example
+  (utterance "what is the population of washington ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(washington))))"))
+  (targetValue (list (number 4113200.0 count)))
+)
+(example
+  (utterance "iowa borders how many states ?")
+  (targetFormula (string "answer(A,count(B,(const(C,stateid(iowa)),next_to(C,B),state(B)),A))"))
+  (targetValue (list (number 6.0 count)))
+)
+(example
+  (utterance "which states have cities named austin ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),city(B),const(B,cityid(austin,_))))"))
+  (targetValue (list (name fb:en.state.texas)))
+)
+(example
+  (utterance "how many rivers are in the state that has the most rivers ?")
+  (targetFormula (string "answer(A,count(B,(river(B),loc(B,C),most(C,D,(state(C),loc(D,C),river(D)))),A))"))
+  (targetValue (list (number 10.0 count)))
+)
+(example
+  (utterance "rivers in new york ?")
+  (targetFormula (string "answer(A,(river(A),loc(A,B),const(B,stateid('new york'))))"))
+  (targetValue (list (name fb:en.river.allegheny) (name fb:en.river.delaware) (name fb:en.river.hudson)))
+)
+(example
+  (utterance "what is the population density of maine ?")
+  (targetFormula (string "answer(A,(density(B,A),const(B,stateid(maine))))"))
+  (targetValue (list (number 1.3057716168953902E-5 count/length^2)))
+)
+(example
+  (utterance "what is the length of the river that flows through the most states ?")
+  (targetFormula (string "answer(A,(len(B,A),most(B,C,(river(B),traverse(B,C),state(C)))))"))
+  (targetValue (list (number 3778000.0 length)))
+)
+(example
+  (utterance "what are the capital city in texas ?")
+  (targetFormula (string "answer(A,(capital(A),city(A),loc(A,B),const(B,stateid(texas))))"))
+  (targetValue (list (name fb:en.city.austin_tx)))
+)
+(example
+  (utterance "what states does the missouri run through ?")
+  (targetFormula (string "answer(A,(state(A),const(B,riverid(missouri)),traverse(B,A)))"))
+  (targetValue (list (name fb:en.state.iowa) (name fb:en.state.missouri) (name fb:en.state.montana) (name fb:en.state.nebraska) (name fb:en.state.north_dakota) (name fb:en.state.south_dakota)))
+)
+(example
+  (utterance "what is the state with the largest area ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),area(A,B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "through which states does the longest river in texas run ?")
+  (targetFormula (string "answer(A,(state(A),longest(B,(river(B),loc(B,C),const(C,stateid(texas)))),traverse(B,A)))"))
+  (targetValue (list (name fb:en.state.colorado) (name fb:en.state.new_mexico) (name fb:en.state.texas)))
+)
+(example
+  (utterance "what is the population of new mexico ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid('new mexico'))))"))
+  (targetValue (list (number 1303000.0 count)))
+)
+(example
+  (utterance "what rivers are in states that border texas ?")
+  (targetFormula (string "answer(A,(river(A),loc(A,B),state(B),next_to(B,C),const(C,stateid(texas))))"))
+  (targetValue (list (name fb:en.river.arkansas) (name fb:en.river.canadian) (name fb:en.river.cimarron) (name fb:en.river.gila) (name fb:en.river.mississippi) (name fb:en.river.neosho) (name fb:en.river.ouachita) (name fb:en.river.pearl) (name fb:en.river.pecos) (name fb:en.river.red) (name fb:en.river.rio_grande) (name fb:en.river.san_juan) (name fb:en.river.st._francis) (name fb:en.river.washita) (name fb:en.river.white)))
+)
+(example
+  (utterance "which states border the missouri river ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,riverid(missouri)),river(B)))"))
+  (targetValue (list (name fb:en.state.iowa) (name fb:en.state.missouri) (name fb:en.state.montana) (name fb:en.state.nebraska) (name fb:en.state.north_dakota) (name fb:en.state.south_dakota)))
+)
+(example
+  (utterance "what is the smallest city in the usa ?")
+  (targetFormula (string "answer(A,smallest(A,(city(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.city.scotts_valley_ca)))
+)
+(example
+  (utterance "how tall is mount mckinley ?")
+  (targetFormula (string "answer(A,(elevation(B,A),const(B,placeid('mount mckinley'))))"))
+  (targetValue (list (number 6194.0 length)))
+)
+(example
+  (utterance "what is the highest point in delaware ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,stateid(delaware)))))"))
+  (targetValue (list (name fb:en.place.centerville)))
+)
+(example
+  (utterance "what is the lowest point in mississippi ?")
+  (targetFormula (string "answer(A,lowest(A,(place(A),loc(A,B),const(B,stateid(mississippi)))))"))
+  (targetValue (list (name fb:en.place.gulf_of_mexico)))
+)
+(example
+  (utterance "what state is miami in ?")
+  (targetFormula (string "answer(A,(state(A),const(B,cityid(miami,_)),loc(B,A)))"))
+  (targetValue (list (name fb:en.state.florida)))
+)
+(example
+  (utterance "what is the lowest point of all states through which the colorado river runs through ?")
+  (targetFormula (string "answer(A,lowest(A,(place(A),loc(A,B),state(B),const(C,riverid(colorado)),river(C),traverse(C,B))))"))
+  (targetValue (list (name fb:en.place.death_valley)))
+)
+(example
+  (utterance "what states contain at least one major rivers ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),major(B),river(B)))"))
+  (targetValue (list (name fb:en.state.alabama) (name fb:en.state.arkansas) (name fb:en.state.colorado) (name fb:en.state.connecticut) (name fb:en.state.delaware) (name fb:en.state.district_of_columbia) (name fb:en.state.florida) (name fb:en.state.georgia) (name fb:en.state.idaho) (name fb:en.state.illinois) (name fb:en.state.kansas) (name fb:en.state.maryland) (name fb:en.state.massachusetts) (name fb:en.state.mississippi) (name fb:en.state.missouri) (name fb:en.state.montana) (name fb:en.state.nebraska) (name fb:en.state.new_hampshire) (name fb:en.state.new_jersey) (name fb:en.state.new_mexico) (name fb:en.state.new_york) (name fb:en.state.north_carolina) (name fb:en.state.oklahoma) (name fb:en.state.pennsylvania) (name fb:en.state.south_carolina) (name fb:en.state.utah) (name fb:en.state.vermont) (name fb:en.state.virginia) (name fb:en.state.west_virginia) (name fb:en.state.wisconsin) (name fb:en.state.wyoming)))
+)
+(example
+  (utterance "what is the biggest city in louisiana ?")
+  (targetFormula (string "answer(A,largest(A,(city(A),loc(A,B),const(B,stateid(louisiana)))))"))
+  (targetValue (list (name fb:en.city.new_orleans_la)))
+)
+(example
+  (utterance "what is the most dense state in the usa ?")
+  (targetFormula (string "answer(A,largest(B,(density(A,B),state(A),loc(A,C),const(C,countryid(usa)))))"))
+  (targetValue (list (name fb:en.state.new_jersey)))
+)
+(example
+  (utterance "what is the longest river in florida ?")
+  (targetFormula (string "answer(A,longest(A,(river(A),loc(A,B),const(B,stateid(florida)))))"))
+  (targetValue (list (name fb:en.river.chattahoochee)))
+)
+(example
+  (utterance "what is the population of tempe arizona ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(tempe,az))))"))
+  (targetValue (list (number 106919.0 count)))
+)
+(example
+  (utterance "what is the largest city in the smallest state in the usa ?")
+  (targetFormula (string "answer(A,largest(A,(city(A),loc(A,B),smallest(B,(state(B),loc(B,C),const(C,countryid(usa)))))))"))
+  (targetValue (list (name fb:en.city.washington_dc)))
+)
+(example
+  (utterance "what is the population of alaska ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(alaska))))"))
+  (targetValue (list (number 401800.0 count)))
+)
+(example
+  (utterance "what is the highest point in nevada in meters ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,stateid(nevada)))))"))
+  (targetValue (list (name fb:en.place.boundary_peak)))
+)
+(example
+  (utterance "what major cities are located in pennsylvania ?")
+  (targetFormula (string "answer(A,(major(A),city(A),loc(A,B),const(B,stateid(pennsylvania))))"))
+  (targetValue (list (name fb:en.city.abingdon_pa) (name fb:en.city.allentown_pa) (name fb:en.city.altoona_pa) (name fb:en.city.bethlehem_pa) (name fb:en.city.bristol_township_pa) (name fb:en.city.erie_pa) (name fb:en.city.lower_merion_pa) (name fb:en.city.penn_hills_pa) (name fb:en.city.reading_pa) (name fb:en.city.scranton_pa) (name fb:en.city.upper_darby_pa)))
+)
+(example
+  (utterance "what are the rivers in alaska ?")
+  (targetFormula (string "answer(A,(river(A),loc(A,B),const(B,stateid(alaska))))"))
+  (targetValue (list ))
+)
+(example
+  (utterance "which states capital city is the largest ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),capital(A,B),city(B))))"))
+  (targetValue (list (name fb:en.state.arizona)))
+)
+(example
+  (utterance "where are mountains ?")
+  (targetFormula (string "answer(A,(loc(B,A),mountain(B)))"))
+  (targetValue (list (name fb:en.state.alaska) (name fb:en.state.california) (name fb:en.state.colorado) (name fb:en.state.washington)))
+)
+(example
+  (utterance "what state borders the most states ?")
+  (targetFormula (string "answer(A,most(A,B,(state(A),next_to(A,B),state(B))))"))
+  (targetValue (list (name fb:en.state.missouri) (name fb:en.state.tennessee)))
+)
+(example
+  (utterance "what are the cities of the state with the highest point ?")
+  (targetFormula (string "answer(A,(city(A),loc(A,B),state(B),loc(C,B),highest(C,place(C))))"))
+  (targetValue (list (name fb:en.city.anchorage_ak) (name fb:en.city.fairbanks_ak) (name fb:en.city.juneau_ak) (name fb:en.city.sitka_ak)))
+)
+(example
+  (utterance "how much population does texas have ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(texas))))"))
+  (targetValue (list (number 1.4229E7 count)))
+)
+(example
+  (utterance "what are the major cities in new york ?")
+  (targetFormula (string "answer(A,(major(A),city(A),loc(A,B),const(B,stateid('new york'))))"))
+  (targetValue (list (name fb:en.city.albany_ny) (name fb:en.city.cheektowaga_ny) (name fb:en.city.irondequoit_ny) (name fb:en.city.levittown_ny) (name fb:en.city.mount_vernon_ny) (name fb:en.city.new_rochelle_ny) (name fb:en.city.niagara_falls_ny) (name fb:en.city.schenectady_ny) (name fb:en.city.utica_ny)))
+)
+(example
+  (utterance "what is the highest mountain in us ?")
+  (targetFormula (string "answer(A,highest(A,(mountain(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.mountain.mckinley)))
+)
+(example
+  (utterance "what state contains the highest point of those the colorado river traverses ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),highest(B,(place(B),loc(B,C),state(C),const(D,riverid(colorado)),river(D),traverse(D,C)))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "where is dallas ?")
+  (targetFormula (string "answer(A,(loc(B,A),const(B,cityid(dallas,_))))"))
+  (targetValue (list (name fb:en.state.texas)))
+)
+(example
+  (utterance "where is the highest mountain of the united states ?")
+  (targetFormula (string "answer(A,highest(A,(mountain(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.mountain.mckinley)))
+)
+(example
+  (utterance "what states does the delaware river run through ?")
+  (targetFormula (string "answer(A,(state(A),const(B,riverid(delaware)),river(B),traverse(B,A)))"))
+  (targetValue (list (name fb:en.state.delaware) (name fb:en.state.new_jersey) (name fb:en.state.new_york) (name fb:en.state.pennsylvania)))
+)
+(example
+  (utterance "how high is the highest point in america ?")
+  (targetFormula (string "answer(A,(elevation(B,A),highest(B,(place(B),loc(B,C),const(C,countryid(usa))))))"))
+  (targetValue (list (number 6194.0 length)))
+)
+(example
+  (utterance "what city has the most people ?")
+  (targetFormula (string "answer(A,largest(B,(city(A),population(A,B))))"))
+  (targetValue (list (name fb:en.city.new_york_ny)))
+)
+(example
+  (utterance "what is the density of the new york ?")
+  (targetFormula (string "answer(A,(density(B,A),const(B,stateid('new york'))))"))
+  (targetValue (list (number 1.3806887372073856E-4 count/length^2)))
+)
+(example
+  (utterance "what is the maximum elevation of san francisco ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,cityid('san francisco',_)))))"))
+  (targetValue (list ))
+)
+(example
+  (utterance "how many capitals does rhode island have ?")
+  (targetFormula (string "answer(A,count(B,(capital(B),const(C,stateid('rhode island')),loc(B,C)),A))"))
+  (targetValue (list (number 1.0 count)))
+)
+(example
+  (utterance "what is the highest point in virginia ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,stateid(virginia)))))"))
+  (targetValue (list (name fb:en.place.mount_rogers)))
+)
+(example
+  (utterance "how long is the ohio river ?")
+  (targetFormula (string "answer(A,(len(B,A),const(B,riverid(ohio)),river(B)))"))
+  (targetValue (list (number 1569000.0 length)))
+)
+(example
+  (utterance "how long is the longest river in california ?")
+  (targetFormula (string "answer(A,(len(B,A),longest(B,(river(B),loc(B,C),const(C,stateid(california))))))"))
+  (targetValue (list (number 2333000.0 length)))
+)
+(example
+  (utterance "what is the state with the smallest area ?")
+  (targetFormula (string "answer(A,smallest(B,(state(A),area(A,B))))"))
+  (targetValue (list (name fb:en.state.district_of_columbia)))
+)
+(example
+  (utterance "which rivers do not run through texas ?")
+  (targetFormula (string "answer(A,(river(A),\+(traverse(A,B),const(B,stateid(texas)))))"))
+  (targetValue (list (name fb:en.river.allegheny) (name fb:en.river.arkansas) (name fb:en.river.bighorn) (name fb:en.river.chattahoochee) (name fb:en.river.cheyenne) (name fb:en.river.cimarron) (name fb:en.river.clark_fork) (name fb:en.river.colorado) (name fb:en.river.columbia) (name fb:en.river.connecticut) (name fb:en.river.cumberland) (name fb:en.river.dakota) (name fb:en.river.delaware) (name fb:en.river.gila) (name fb:en.river.green) (name fb:en.river.hudson) (name fb:en.river.little_missouri) (name fb:en.river.mississippi) (name fb:en.river.missouri) (name fb:en.river.neosho) (name fb:en.river.niobrara) (name fb:en.river.north_platte) (name fb:en.river.ohio) (name fb:en.river.ouachita) (name fb:en.river.pearl) (name fb:en.river.potomac) (name fb:en.river.powder) (name fb:en.river.republican) (name fb:en.river.roanoke) (name fb:en.river.rock) (name fb:en.river.san_juan) (name fb:en.river.smoky_hill) (name fb:en.river.snake) (name fb:en.river.south_platte) (name fb:en.river.st._francis) (name fb:en.river.tennessee) (name fb:en.river.tombigbee) (name fb:en.river.wabash) (name fb:en.river.wateree_catawba) (name fb:en.river.white) (name fb:en.river.yellowstone)))
+)
+(example
+  (utterance "which state has the most major rivers running through it ?")
+  (targetFormula (string "answer(A,most(A,B,(state(A),loc(B,A),major(B),river(B),traverse(B,A))))"))
+  (targetValue (list (name fb:en.state.colorado) (name fb:en.state.montana) (name fb:en.state.nebraska) (name fb:en.state.new_york) (name fb:en.state.wyoming)))
+)
+(example
+  (utterance "what is the lowest point in usa ?")
+  (targetFormula (string "answer(A,lowest(A,(place(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.place.death_valley)))
+)
+(example
+  (utterance "what is the population of new york city ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid('new york',_))))"))
+  (targetValue (list (number 7071639.0 count)))
+)
+(example
+  (utterance "which state has the biggest population ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),population(A,B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "what is the largest state that borders texas ?")
+  (targetFormula (string "answer(A,largest(A,(state(A),next_to(A,B),const(B,stateid(texas)))))"))
+  (targetValue (list (name fb:en.state.new_mexico)))
+)
+(example
+  (utterance "what is the largest city in rhode island ?")
+  (targetFormula (string "answer(A,largest(A,(city(A),loc(A,B),const(B,stateid('rhode island')))))"))
+  (targetValue (list (name fb:en.city.providence_ri)))
+)
+(example
+  (utterance "what is the population of tucson ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(tucson,_))))"))
+  (targetValue (list (number 330537.0 count)))
+)
+(example
+  (utterance "what is the highest point in maine ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,stateid(maine)))))"))
+  (targetValue (list (name fb:en.place.mount_katahdin)))
+)
+(example
+  (utterance "how many people live in minneapolis minnesota ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(minneapolis,mn))))"))
+  (targetValue (list (number 370951.0 count)))
+)
+(example
+  (utterance "which rivers do not run through usa ?")
+  (targetFormula (string "answer(A,(river(A),\+(traverse(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list ))
+)
+(example
+  (utterance "name all the rivers in colorado ?")
+  (targetFormula (string "answer(A,(river(A),loc(A,B),const(B,stateid(colorado))))"))
+  (targetValue (list (name fb:en.river.arkansas) (name fb:en.river.canadian) (name fb:en.river.colorado) (name fb:en.river.green) (name fb:en.river.north_platte) (name fb:en.river.republican) (name fb:en.river.rio_grande) (name fb:en.river.san_juan) (name fb:en.river.smoky_hill) (name fb:en.river.south_platte)))
+)
+(example
+  (utterance "what is the longest river in the largest state ?")
+  (targetFormula (string "answer(A,longest(A,(river(A),loc(A,B),largest(B,state(B)))))"))
+  (targetValue (list ))
+)
+(example
+  (utterance "which state has the smallest population density ?")
+  (targetFormula (string "answer(A,smallest(B,(state(A),density(A,B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "what is capital of the state with the lowest point ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),state(B),loc(C,B),lowest(C,place(C))))"))
+  (targetValue (list (name fb:en.city.sacramento_ca)))
+)
+(example
+  (utterance "how long is the longest river in the usa ?")
+  (targetFormula (string "answer(A,(len(B,A),longest(B,(river(B),loc(B,C),const(C,countryid(usa))))))"))
+  (targetValue (list (number 3968000.0 length)))
+)
+(example
+  (utterance "how many states border iowa ?")
+  (targetFormula (string "answer(A,count(B,(state(B),next_to(B,C),const(C,stateid(iowa))),A))"))
+  (targetValue (list (number 6.0 count)))
+)
+(example
+  (utterance "what is the highest point in states bordering georgia ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),state(B),next_to(B,C),const(C,stateid(georgia)))))"))
+  (targetValue (list (name fb:en.place.mount_mitchell)))
+)
+(example
+  (utterance "san antonio is in what state ?")
+  (targetFormula (string "answer(A,(const(B,cityid('san antonio',_)),loc(B,A),state(A)))"))
+  (targetValue (list (name fb:en.state.texas)))
+)
+(example
+  (utterance "which river traverses most states ?")
+  (targetFormula (string "answer(A,most(A,B,(river(A),traverse(A,B),state(B))))"))
+  (targetValue (list (name fb:en.river.mississippi)))
+)
+(example
+  (utterance "what is the area of ohio ?")
+  (targetFormula (string "answer(A,(area(B,A),const(B,stateid(ohio))))"))
+  (targetValue (list (number 1.069665089568768E11 length^2)))
+)
+(example
+  (utterance "what is the longest river in the state with the most major cities ?")
+  (targetFormula (string "answer(A,longest(A,(river(A),loc(A,B),most(B,C,(state(B),loc(C,B),major(C),city(C))))))"))
+  (targetValue (list (name fb:en.river.colorado)))
+)
+(example
+  (utterance "which states does the longest river run through ?")
+  (targetFormula (string "answer(A,(state(A),longest(B,river(B)),traverse(B,A)))"))
+  (targetValue (list (name fb:en.state.iowa) (name fb:en.state.missouri) (name fb:en.state.montana) (name fb:en.state.nebraska) (name fb:en.state.north_dakota) (name fb:en.state.south_dakota)))
+)
+(example
+  (utterance "how many states does usa have ?")
+  (targetFormula (string "answer(A,count(B,(state(B),const(C,countryid(usa)),loc(B,C)),A))"))
+  (targetValue (list (number 51.0 count)))
+)
+(example
+  (utterance "what is the population of the largest city in the state with the largest area ?")
+  (targetFormula (string "answer(A,(population(B,A),largest(B,(city(B),loc(B,C),largest(D,(state(C),area(C,D)))))))"))
+  (targetValue (list (number 174431.0 count)))
+)
+(example
+  (utterance "what is the high point of wyoming ?")
+  (targetFormula (string "answer(A,(high_point(B,A),loc(A,B),const(B,stateid(wyoming))))"))
+  (targetValue (list (name fb:en.place.gannett_peak)))
+)
+(example
+  (utterance "what is the highest mountain in the us ?")
+  (targetFormula (string "answer(A,highest(A,(mountain(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.mountain.mckinley)))
+)
+(example
+  (utterance "how many residents live in texas ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(texas))))"))
+  (targetValue (list (number 1.4229E7 count)))
+)
+(example
+  (utterance "what are the major cities in alabama ?")
+  (targetFormula (string "answer(A,(major(A),city(A),loc(A,B),const(B,stateid(alabama))))"))
+  (targetValue (list (name fb:en.city.huntsville_al) (name fb:en.city.tuscaloosa_al)))
+)
+(example
+  (utterance "what is the smallest state that borders the most states ?")
+  (targetFormula (string "answer(A,smallest(A,most(A,B,(state(A),next_to(A,B),state(B)))))"))
+  (targetValue (list (name fb:en.state.tennessee)))
+)
+(example
+  (utterance "what are all the rivers in texas ?")
+  (targetFormula (string "answer(A,(river(A),loc(A,B),const(B,stateid(texas))))"))
+  (targetValue (list (name fb:en.river.canadian) (name fb:en.river.pecos) (name fb:en.river.red) (name fb:en.river.rio_grande) (name fb:en.river.washita)))
+)
+(example
+  (utterance "what is the least populous state ?")
+  (targetFormula (string "answer(A,smallest(B,(population(A,B),state(A))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "what is the population density of the largest state ?")
+  (targetFormula (string "answer(A,(density(B,A),largest(B,state(B))))"))
+  (targetValue (list (number 2.624972035572838E-7 count/length^2)))
+)
+(example
+  (utterance "which river runs through most states ?")
+  (targetFormula (string "answer(A,most(A,B,(river(A),traverse(A,B),state(B))))"))
+  (targetValue (list (name fb:en.river.mississippi)))
+)
+(example
+  (utterance "which state is mount mckinley in ?")
+  (targetFormula (string "answer(A,(state(A),const(B,placeid('mount mckinley')),loc(B,A)))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "which river goes through the most states ?")
+  (targetFormula (string "answer(A,most(A,B,(river(A),traverse(A,B),state(B))))"))
+  (targetValue (list (name fb:en.river.mississippi)))
+)
+(example
+  (utterance "what are the major cities in states through which the mississippi runs ?")
+  (targetFormula (string "answer(A,(major(A),city(A),loc(A,B),state(B),traverse(C,B),const(C,riverid(mississippi))))"))
+  (targetValue (list (name fb:en.city.appleton_wi) (name fb:en.city.arlington_heights_il) (name fb:en.city.aurora_il) (name fb:en.city.bloomington_mn) (name fb:en.city.cedar_rapids_ia) (name fb:en.city.champaign_il) (name fb:en.city.cicero_il) (name fb:en.city.columbia_mo) (name fb:en.city.davenport_ia) (name fb:en.city.decatur_il) (name fb:en.city.dubuque_ia) (name fb:en.city.duluth_mn) (name fb:en.city.elgin_il) (name fb:en.city.evanston_il) (name fb:en.city.fort_smith_ar) (name fb:en.city.green_bay_wi) (name fb:en.city.independence_mo) (name fb:en.city.joliet_il) (name fb:en.city.kenner_la) (name fb:en.city.kenosha_wi) (name fb:en.city.lafayette_la) (name fb:en.city.lake_charles_la) (name fb:en.city.monroe_la) (name fb:en.city.north_little_rock_ar) (name fb:en.city.oak_lawn_il) (name fb:en.city.peoria_il) (name fb:en.city.racine_wi) (name fb:en.city.rochester_mn) (name fb:en.city.rockford_il) (name fb:en.city.sioux_city_ia) (name fb:en.city.skokie_il) (name fb:en.city.springfield_il) (name fb:en.city.springfield_mo) (name fb:en.city.st._joseph_mo) (name fb:en.city.waterloo_ia) (name fb:en.city.waukegan_il) (name fb:en.city.west_allis_wi)))
+)
+(example
+  (utterance "what is the highest elevation in texas ?")
+  (targetFormula (string "answer(A,highest(A,(place(A),loc(A,B),const(B,stateid(texas)))))"))
+  (targetValue (list (name fb:en.place.guadalupe_peak)))
+)
+(example
+  (utterance "which states border illinois ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(illinois))))"))
+  (targetValue (list (name fb:en.state.indiana) (name fb:en.state.iowa) (name fb:en.state.kentucky) (name fb:en.state.missouri) (name fb:en.state.wisconsin)))
+)
+(example
+  (utterance "how many states does tennessee border ?")
+  (targetFormula (string "answer(A,count(B,(state(B),const(C,stateid(tennessee)),next_to(C,B)),A))"))
+  (targetValue (list (number 8.0 count)))
+)
+(example
+  (utterance "how many people live in rhode island ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid('rhode island'))))"))
+  (targetValue (list (number 947200.0 count)))
+)
+(example
+  (utterance "number of people in boulder ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,cityid(boulder,_))))"))
+  (targetValue (list (number 76685.0 count)))
+)
+(example
+  (utterance "tell me what cities are in texas ?")
+  (targetFormula (string "answer(A,(city(A),loc(A,B),const(B,stateid(texas))))"))
+  (targetValue (list (name fb:en.city.abilene_tx) (name fb:en.city.amarillo_tx) (name fb:en.city.arlington_tx) (name fb:en.city.austin_tx) (name fb:en.city.beaumont_tx) (name fb:en.city.brownsville_tx) (name fb:en.city.corpus_christi_tx) (name fb:en.city.dallas_tx) (name fb:en.city.el_paso_tx) (name fb:en.city.fort_worth_tx) (name fb:en.city.garland_tx) (name fb:en.city.grand_prairie_tx) (name fb:en.city.houston_tx) (name fb:en.city.irving_tx) (name fb:en.city.laredo_tx) (name fb:en.city.longview_tx) (name fb:en.city.lubbock_tx) (name fb:en.city.mcallen_tx) (name fb:en.city.mesquite_tx) (name fb:en.city.midland_tx) (name fb:en.city.odessa_tx) (name fb:en.city.pasadena_tx) (name fb:en.city.plano_tx) (name fb:en.city.port_arthur_tx) (name fb:en.city.richardson_tx) (name fb:en.city.san_angelo_tx) (name fb:en.city.san_antonio_tx) (name fb:en.city.tyler_tx) (name fb:en.city.waco_tx) (name fb:en.city.wichita_falls_tx)))
+)
+(example
+  (utterance "what river runs through the state with the most cities ?")
+  (targetFormula (string "answer(A,(river(A),traverse(A,B),most(B,C,(state(B),loc(C,B),city(C)))))"))
+  (targetValue (list (name fb:en.river.colorado)))
+)
+(example
+  (utterance "which states border the state with the smallest area ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),smallest(C,(state(B),area(B,C)))))"))
+  (targetValue (list (name fb:en.state.maryland) (name fb:en.state.virginia)))
+)
+(example
+  (utterance "what states border michigan ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(michigan))))"))
+  (targetValue (list (name fb:en.state.indiana) (name fb:en.state.ohio) (name fb:en.state.wisconsin)))
+)
+(example
+  (utterance "what is the largest state bordering arkansas ?")
+  (targetFormula (string "answer(A,largest(A,(state(A),next_to(A,B),const(B,stateid(arkansas)))))"))
+  (targetValue (list (name fb:en.state.texas)))
+)
+(example
+  (utterance "how long is the north platte river ?")
+  (targetFormula (string "answer(A,(len(B,A),const(B,riverid('north platte')),river(B)))"))
+  (targetValue (list (number 1094000.0 length)))
+)
+(example
+  (utterance "what state bordering nevada has the largest population ?")
+  (targetFormula (string "answer(A,largest(B,(state(A),next_to(A,C),const(C,stateid(nevada)),population(A,B))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "what is the capital of new york ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),const(B,stateid('new york'))))"))
+  (targetValue (list (name fb:en.city.albany_ny)))
+)
+(example
+  (utterance "which rivers run through states with fewest cities ?")
+  (targetFormula (string "answer(A,(river(A),traverse(A,B),fewest(B,C,(state(B),loc(C,B),city(C)))))"))
+  (targetValue (list (name fb:en.river.arkansas) (name fb:en.river.bighorn) (name fb:en.river.canadian) (name fb:en.river.cheyenne) (name fb:en.river.cimarron) (name fb:en.river.clark_fork) (name fb:en.river.colorado) (name fb:en.river.columbia) (name fb:en.river.connecticut) (name fb:en.river.cumberland) (name fb:en.river.dakota) (name fb:en.river.delaware) (name fb:en.river.gila) (name fb:en.river.green) (name fb:en.river.little_missouri) (name fb:en.river.mississippi) (name fb:en.river.missouri) (name fb:en.river.neosho) (name fb:en.river.niobrara) (name fb:en.river.north_platte) (name fb:en.river.ohio) (name fb:en.river.ouachita) (name fb:en.river.pecos) (name fb:en.river.potomac) (name fb:en.river.powder) (name fb:en.river.red) (name fb:en.river.republican) (name fb:en.river.rio_grande) (name fb:en.river.san_juan) (name fb:en.river.smoky_hill) (name fb:en.river.snake) (name fb:en.river.south_platte) (name fb:en.river.st._francis) (name fb:en.river.tennessee) (name fb:en.river.tombigbee) (name fb:en.river.washita) (name fb:en.river.wateree_catawba) (name fb:en.river.white) (name fb:en.river.yellowstone)))
+)
+(example
+  (utterance "what are the populations of the major cities of texas ?")
+  (targetFormula (string "answer(A,(population(B,A),major(B),city(B),loc(B,C),const(C,stateid(texas))))"))
+  (targetValue (list (number 101261.0 count) (number 109943.0 count) (number 112560.0 count) (number 118102.0 count) (number 138857.0 count) (number 149230.0 count) (number 61195.0 count) (number 62762.0 count) (number 67042.0 count) (number 67053.0 count) (number 70508.0 count) (number 70525.0 count) (number 71462.0 count) (number 72331.0 count) (number 72496.0 count) (number 73240.0 count) (number 84997.0 count) (number 90027.0 count) (number 91449.0 count) (number 94201.0 count) (number 98315.0 count)))
+)
+(example
+  (utterance "what is the capital of the state with the longest river ?")
+  (targetFormula (string "answer(A,(capital(A),loc(A,B),longest(C,(state(B),loc(C,B),river(C)))))"))
+  (targetValue (list (name fb:en.city.bismarck_nd) (name fb:en.city.des_moines_ia) (name fb:en.city.helena_mt) (name fb:en.city.jefferson_city_mo) (name fb:en.city.lincoln_ne) (name fb:en.city.pierre_sd)))
+)
+(example
+  (utterance "which state has the most rivers ?")
+  (targetFormula (string "answer(A,most(A,B,(state(A),loc(B,A),river(B))))"))
+  (targetValue (list (name fb:en.state.colorado)))
+)
+(example
+  (utterance "how many people live in the capital of texas ?")
+  (targetFormula (string "answer(A,(population(B,A),capital(B),loc(B,C),const(C,stateid(texas))))"))
+  (targetValue (list (number 345496.0 count)))
+)
+(example
+  (utterance "where is the most populated area of new mexico ?")
+  (targetFormula (string "answer(A,largest(B,(population(A,B),city(A),loc(A,C),const(C,stateid('new mexico')))))"))
+  (targetValue (list (name fb:en.city.albuquerque_nm)))
+)
+(example
+  (utterance "how many states have a higher point than the highest point of the state with the largest capital city in the us ?")
+  (targetFormula (string "answer(A,count(B,(state(B),loc(C,B),higher(C,D),place(C),highest(D,(place(D),loc(D,E),state(E),loc(F,E),largest(F,(capital(F),city(F),loc(F,G),const(G,countryid(usa))))))),A))"))
+  (targetValue (list (number 11.0 count)))
+)
+(example
+  (utterance "how many people live in mississippi ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(mississippi))))"))
+  (targetValue (list (number 2520000.0 count)))
+)
+(example
+  (utterance "what is the largest city in smallest state through which the mississippi runs ?")
+  (targetFormula (string "answer(A,largest(A,(city(A),loc(A,B),smallest(B,(state(B),const(C,riverid(mississippi)),traverse(C,B))))))"))
+  (targetValue (list (name fb:en.city.memphis_tn)))
+)
+(example
+  (utterance "what states have cities named salt lake city ?")
+  (targetFormula (string "answer(A,(state(A),loc(B,A),city(B),const(B,cityid('salt lake city',_))))"))
+  (targetValue (list (name fb:en.state.utah)))
+)
+(example
+  (utterance "what state has the smallest urban population ?")
+  (targetFormula (string "answer(A,smallest(B,(state(A),population(A,B))))"))
+  (targetValue (list (name fb:en.state.alaska)))
+)
+(example
+  (utterance "how tall is the highest point in montana ?")
+  (targetFormula (string "answer(A,(elevation(B,A),highest(B,(place(B),loc(B,C),const(C,stateid(montana))))))"))
+  (targetValue (list (number 3901.0 length)))
+)
+(example
+  (utterance "what is the smallest state that the mississippi river runs through ?")
+  (targetFormula (string "answer(A,smallest(A,(state(A),const(B,riverid(mississippi)),river(B),traverse(B,A))))"))
+  (targetValue (list (name fb:en.state.tennessee)))
+)
+(example
+  (utterance "what is the area of the texas state ?")
+  (targetFormula (string "answer(A,(area(B,A),const(B,stateid(texas))))"))
+  (targetValue (list (number 6.910269577544172E11 length^2)))
+)
+(example
+  (utterance "what are the major cities in vermont ?")
+  (targetFormula (string "answer(A,(major(A),city(A),loc(A,B),const(B,stateid(vermont))))"))
+  (targetValue (list ))
+)
+(example
+  (utterance "what is the biggest capital city in the us ?")
+  (targetFormula (string "answer(A,largest(A,(capital(A),loc(A,B),const(B,countryid(usa)))))"))
+  (targetValue (list (name fb:en.city.phoenix_az)))
+)
+(example
+  (utterance "where is the chattahoochee river ?")
+  (targetFormula (string "answer(A,(loc(B,A),const(B,riverid(chattahoochee)),river(B)))"))
+  (targetValue (list (name fb:en.state.florida) (name fb:en.state.georgia)))
+)
+(example
+  (utterance "what is the population of utah ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(utah))))"))
+  (targetValue (list (number 1461000.0 count)))
+)
+(example
+  (utterance "how many states are there in the usa ?")
+  (targetFormula (string "answer(A,count(B,(state(B),loc(B,C),const(C,countryid(usa))),A))"))
+  (targetValue (list (number 51.0 count)))
+)
+(example
+  (utterance "what states are next to arizona ?")
+  (targetFormula (string "answer(A,(state(A),next_to(A,B),const(B,stateid(arizona))))"))
+  (targetValue (list (name fb:en.state.california) (name fb:en.state.colorado) (name fb:en.state.nevada) (name fb:en.state.new_mexico) (name fb:en.state.utah)))
+)
+(example
+  (utterance "what is the lowest point in arkansas ?")
+  (targetFormula (string "answer(A,lowest(A,(place(A),loc(A,B),const(B,stateid(arkansas)))))"))
+  (targetValue (list (name fb:en.place.ouachita_river)))
+)
+(example
+  (utterance "what is the most populous state ?")
+  (targetFormula (string "answer(A,largest(B,(population(A,B),state(A))))"))
+  (targetValue (list (name fb:en.state.california)))
+)
+(example
+  (utterance "what are the population of mississippi ?")
+  (targetFormula (string "answer(A,(population(B,A),const(B,stateid(mississippi))))"))
+  (targetValue (list (number 2520000.0 count)))
+)
+(example
+  (utterance "which state borders the most states ?")
+  (targetFormula (string "answer(A,most(A,B,(state(A),next_to(A,B),state(B))))"))
+  (targetValue (list (name fb:en.state.missouri) (name fb:en.state.tennessee)))
+)
+(example
+  (utterance "which us city has the highest population density ?")
+  (targetFormula (string "answer(A,largest(B,(city(A),density(A,B))))"))
+  (targetValue (list (name fb:en.city.seattle_wa)))
+)
+(example
+  (utterance "what is the area of wisconsin ?")
+  (targetFormula (string "answer(A,(area(B,A),const(B,stateid(wisconsin))))"))
+  (targetValue (list (number 1.4543560235969742E11 length^2)))
+)
+(example
+  (utterance "how large is texas ?")
+  (targetFormula (string "answer(A,(size(B,A),const(B,stateid(texas))))"))
+  (targetValue (list (number 6.910269577544172E11 length^2)))
+)
+(example
+  (utterance "what is the population of the smallest state ?")
+  (targetFormula (string "answer(A,smallest(B,(population(B,A),state(B))))"))
+  (targetValue (list (number 638000.0 count)))
+)
+(example
+  (utterance "which is the density of the state that the largest river in the united states runs through ?")
+  (targetFormula (string "answer(A,(density(B,A),state(B),longest(C,(river(C),loc(C,D),const(D,countryid(usa)))),traverse(C,B)))"))
+  (targetValue (list (number 1.9977186284798305E-5 count/length^2) (number 2.0663031845261368E-6 count/length^2) (number 2.7232112071659447E-5 count/length^2) (number 3.4585122380555223E-6 count/length^2) (number 3.5644820209427777E-6 count/length^2) (number 7.836924796288454E-6 count/length^2)))
+)

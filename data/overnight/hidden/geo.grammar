@@ -1,0 +1,51 @@
+# Domain-specific grammar for geo
+
+(include geo.macros)
+(include general.grammar)
+
+(rule $TypeNP (cities) (ConstantFn (@type @city)))
+(rule $TypeNP (states) (ConstantFn (@type @state)))
+(rule $TypeNP (rivers) (ConstantFn (@type @river)))
+(rule $TypeNP (lakes) (ConstantFn (@type @lake)))
+(rule $TypeNP (mountains) (ConstantFn (@type @mountain)))
+(rule $TypeNP (capitals) (ConstantFn ((reverse @capital) (@type @state))))
+(rule $TypeNP (places) (ConstantFn (@type @location)))
+
+# major
+(rule $VP (is major) (ConstantFn (@area (>= (number 200)))))
+(rule $VP (is major) (ConstantFn (@length (>= (number 2000)))))
+(rule $VP (is major) (ConstantFn (@surface_area (>= (number 2000)))))
+
+#(rule $VP/NP (is contained by) (ConstantFn @containedby))
+(rule $VP/NP (contain) (ConstantFn @contains))
+#(rule $VP/NP (is traversed by) (ConstantFn (reverse @traverses)))
+(rule $VP/NP (traverse) (ConstantFn @traverses))
+(rule $VP/NP (border) (ConstantFn @adjoins))
+
+# Properties
+(rule $RelNP (capital) (ConstantFn @capital))
+(rule $RelNP (area) (ConstantFn @area (-> fb:type.number fb:location.location)))
+(rule $RelNP (length) (ConstantFn @length))
+(rule $RelNP (elevation) (ConstantFn @elevation))
+(rule $RelNP (population) (ConstantFn @population))
+(rule $RelNP (density) (ConstantFn @density))
+(rule $RelNP (name) (ConstantFn @name))
+
+# Entities
+(rule $EntityNP1 (sacramento) (ConstantFn fb:en.sacramento fb:location.citytown)) 
+(rule $EntityNP2 (austin) (ConstantFn fb:en.austin fb:location.citytown)) 
+(rule $EntityNP1 (california) (ConstantFn fb:en.california fb:location.us_state))
+(rule $EntityNP2 (texas) (ConstantFn fb:en.texas fb:location.us_state))
+(rule $EntityNP1 (carson river) (ConstantFn fb:en.carson_river fb:geography.river))
+(rule $EntityNP2 (rio grande) (ConstantFn fb:en.rio_grande fb:geography.river))
+(rule $EntityNP1 (lake austin) (ConstantFn fb:en.lake_austin fb:geography.lake))
+(rule $EntityNP2 (crater lake) (ConstantFn fb:en.crater_lake fb:geography.lake))
+(rule $EntityNP1 (mount whitney) (ConstantFn fb:en.mount_whitney fb:geography.mountain))
+(rule $EntityNP2 (guadalupe peak) (ConstantFn fb:en.guadalupe_peak fb:geography.mountain))
+
+(rule $EntityNP1 (sacramento) (ConstantFn (string Sacramento))) 
+(rule $EntityNP1 (california) (ConstantFn (string California)))
+(rule $EntityNP1 (carson river) (ConstantFn (string Carson River)))
+(rule $EntityNP1 (lake austin) (ConstantFn (string Lake Austin)))
+(rule $EntityNP1 (mount whitney) (ConstantFn (string Mount Whitney)))
+

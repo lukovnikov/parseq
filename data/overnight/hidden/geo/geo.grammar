@@ -1,0 +1,3 @@
+# Assume that the named entities are known
+(include entities.grammar)
+(include base.grammar)

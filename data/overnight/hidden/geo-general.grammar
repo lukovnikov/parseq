@@ -1,0 +1,142 @@
+############################################################
+# Domain general
+# Keep track of coarse types:
+# - Entity: "day 1"
+# - Value: "3pm"
+# - EntitySet: "meeting"
+# - ValueSet: "start time of meeting"
+
+# General values
+(rule $EntityNP ($PHRASE) (NumberFn) (anchored 1))
+(rule $EntityNP ($PHRASE) (DateFn) (anchored 1))
+
+# Sets
+(when parse
+  (rule $NP ($EntityNP) (IdentityFn))
+  (rule $NP ($TypeNP) (IdentityFn))
+)
+#TODO: $NP         ::= $RelNP         => ((reverse $RelNP) fb:type.any)
+
+# Complementizer phrase (filtering)
+(when parse
+  (rule $CP (whose $RelNP is $NP) (lambda r (lambda n (lambda c (and (var c) (((var r) (var n))))))))
+  (rule $CP (whose $RelNP is not $NP) (lambda r (lambda n (lambda c (and (var c) ((var r) (!= (var n))))))))
+  (rule $CP (whose $RelNP is larger than $NP) (lambda r (lambda n (lambda c (and (var c) ((var r) (> (var n))))))))
+  (rule $CP (whose $RelNP is smaller than $NP) (lambda r (lambda n (lambda c (and (var c) ((var r) (< (var n))))))))
+  (rule $CP (whose $RelNP is at least $NP) (lambda r (lambda n (lambda c (and (var c) ((var r) (>= (var n))))))))
+  (rule $CP (whose $RelNP is at most $NP) (lambda r (lambda n (lambda c (and (var c) ((var r) (<= (var n))))))))
+  (rule $CP (that is $RelNP of $NP) (lambda r (lambda n (lambda c (and (var c) ((reverse (var r)) (var n)))))))
+  (rule $CP (that $VP/NP $NP) (lambda r (lambda n (lambda c (and (var c) ((var r) (var n)))))))
+  (rule $CP (that $NP $VP/NP) (lambda n (lambda r (lambda c (and (var c) ((reverse (var r)) (var n)))))))
+  (rule $CP (that $VP) (lambda v (lambda c (and (var c) (var v)))))
+)
+(when generate
+  (rule $CP00 (whose $RelNP is $EntityNP1) (lambda r (lambda n (lambda c (and (var c) ((var r) (var n)))))))
+  (rule $CP0 (whose $RelNP is not $EntityNP1) (lambda r (lambda n (lambda c (and (var c) ((var r) (!= (var n))))))))
+  (rule $CP0 (whose $RelNP is larger than $EntityNP1) (lambda r (lambda n (lambda c (and (var c) ((var r) (> (var n))))))))
+  (rule $CP0 (whose $RelNP is smaller than $EntityNP1) (lambda r (lambda n (lambda c (and (var c) ((var r) (< (var n))))))))
+  (rule $CP0 (whose $RelNP is at least $EntityNP1) (lambda r (lambda n (lambda c (and (var c) ((var r) (>= (var n))))))))
+  (rule $CP0 (whose $RelNP is at most $EntityNP1) (lambda r (lambda n (lambda c (and (var c) ((var r) (<= (var n))))))))
+  (rule $CP1 (whose $RelNP is $NP0) (lambda r (lambda n (lambda c (and (var c) ((var r) (var n)))))))
+  (rule $CP1 (whose $RelNP is larger than $NP0) (lambda r (lambda n (lambda c (and (var c) ((var r) (> (var n))))))))
+  (rule $CP1 (whose $RelNP is smaller than $NP0) (lambda r (lambda n (lambda c (and (var c) ((var r) (< (var n))))))))
+  (rule $CP1 (whose $RelNP is at least $NP0) (lambda r (lambda n (lambda c (and (var c) ((var r) (>= (var n))))))))
+  (rule $CP1 (whose $RelNP is at most $NP0) (lambda r (lambda n (lambda c (and (var c) ((var r) (<= (var n))))))))
+  (rule $CP0 (that is $RelNP of $EntityNP1) (lambda r (lambda n (lambda c (and (var c) ((reverse (var r)) (var n)))))))
+  (rule $CP00 (that $VP/NP $EntityNP1) (lambda r (lambda n (lambda c (and (var c) ((var r) (var n)))))))
+  (rule $CP00 (that $EntityNP1 $VP/NP) (lambda n (lambda r (lambda c (and (var c) ((reverse (var r)) (var n)))))))
+  (rule $CP00 (that $VP) (lambda v (lambda c (and (var c) (var v)))))
+  (rule $CP1 (that is $RelNP of $NP0) (lambda r (lambda n (lambda c (and (var c) ((reverse (var r)) (var n)))))))
+  (rule $CP1 (that $VP/NP $NP0) (lambda r (lambda n (lambda c (and (var c) ((var r) (var n)))))))
+  (rule $CP1 (that $NP0 $VP/NP) (lambda n (lambda r (lambda c (and (var c) ((reverse (var r)) (var n)))))))
+)
+
+# Complementizer phrase (superlatives)
+(when parse
+  (rule $CP (that have the smallest $RelNP) (lambda r (lambda c (argmin 1 1 (var c) (var r)))))
+  (rule $CP (that have the largest $RelNP) (lambda r (lambda c (argmax 1 1 (var c) (var r)))))
+  (rule $CP (that have the least $RelNP) (lambda r (lambda c (argmin 1 1 (var c) (reverse (lambda y (count ((reverse (var r)) (var y)))))))))
+  (rule $CP (that have the most $RelNP) (lambda r (lambda c (argmax 1 1 (var c) (reverse (lambda y (count ((reverse (var r)) (var y)))))))))
+  (rule $CP (that $VP/NP the least $NP) (lambda r (lambda s (lambda c (argmin 1 1 (var c) (reverse (lambda y (count (and ((reverse (var r)) (var y)) (var s))))))))))
+  (rule $CP (that $VP/NP the most $NP) (lambda r (lambda s (lambda c (argmax 1 1 (var c) (reverse (lambda y (count (and ((reverse (var r)) (var y)) (var s))))))))))
+  (rule $CP (that $VP/NP more than $Num $NP) (lambda r (lambda n (lambda s (lambda c ((reverse (lambda y (count (and (var s) ((reverse (var r)) (var y)))))) (> (var n))))))))
+  (rule $CP (that $VP/NP less than $Num $NP) (lambda r (lambda n (lambda s (lambda c ((reverse (lambda y (count (and (var s) ((reverse (var r)) (var y)))))) (< (var n))))))))
+  (rule $CP (that $VP/NP at least $Num $NP) (lambda r (lambda n (lambda s (lambda c ((reverse (lambda y (count (and (var s) ((reverse (var r)) (var y)))))) (>= (var n))))))))
+  (rule $CP (that $VP/NP at most $Num $NP) (lambda r (lambda n (lambda s (lambda c ((reverse (lambda y (count (and (var s) ((reverse (var r)) (var y)))))) (<= (var n))))))))
+)
+(when generate 
+  (rule $CP1 (that have the smallest $RelNP) (lambda r (lambda c (argmin 1 1 (var c) (var r)))))
+  (rule $CP1 (that have the largest $RelNP) (lambda r (lambda c (argmax 1 1 (var c) (var r)))))
+  (rule $CP1 (that have the least $RelNP) (lambda r (lambda c (argmin 1 1 (var c) (reverse (lambda y (count ((reverse (var r)) (var y)))))))))
+  (rule $CP1 (that have the most $RelNP) (lambda r (lambda c (argmax 1 1 (var c) (reverse (lambda y (count ((reverse (var r)) (var y)))))))))
+  (rule $CP1 (that $VP/NP the least $TypeNP) (lambda r (lambda s (lambda c (argmin 1 1 (var c) (reverse (lambda y (count (and ((reverse (var r)) (var y)) (var s))))))))))
+  (rule $CP1 (that $VP/NP the most $TypeNP) (lambda r (lambda s (lambda c (argmax 1 1 (var c) (reverse (lambda y (count (and ((reverse (var r)) (var y)) (var s))))))))))
+  (rule $CP1 (that $VP/NP more than $Num $TypeNP) (lambda r (lambda n (lambda s (lambda c ((reverse (lambda y (count (and (var s) ((reverse (var r)) (var y)))))) (> (var n))))))))
+  (rule $CP1 (that $VP/NP less than $Num $TypeNP) (lambda r (lambda n (lambda s (lambda c ((reverse (lambda y (count (and (var s) ((reverse (var r)) (var y)))))) (< (var n))))))))
+  (rule $CP1 (that $VP/NP at least $Num $TypeNP) (lambda r (lambda n (lambda s (lambda c ((reverse (lambda y (count (and (var s) ((reverse (var r)) (var y)))))) (>= (var n))))))))
+  (rule $CP1 (that $VP/NP at most $Num $TypeNP) (lambda r (lambda n (lambda s (lambda c ((reverse (lambda y (count (and (var s) ((reverse (var r)) (var y)))))) (<= (var n))))))))
+)
+# Construct NPs from CPs
+# $NPCP is to allow recursive adding of $CP
+(when parse
+  (rule $NPCP ($NP $CP) (JoinFn backward betaReduce))
+  (rule $NPCP ($NPCP and $CP) (JoinFn backward betaReduce))
+  (rule $NP ($NPCP) (IdentityFn)) 
+)
+(when generate
+  (rule $NP0 ($TypeNP $CP0) (JoinFn backward betaReduce))
+  (rule $NP0 ($TypeNP $CP00) (JoinFn backward betaReduce))
+  (rule $NP1 ($TypeNP $CP1) (JoinFn backward betaReduce))
+  (rule $NPCP1 ($TypeNP $CP00) (JoinFn backward betaReduce))
+  (rule $NP1 ($NPCP1 and $CP00) (JoinFn backward betaReduce)) 
+)
+
+# Transformations
+(when parse
+  (rule $NP ($RelNP of $NP) (lambda r (lambda n ((reverse (var r)) (var n))))) 
+  (rule $NP ($NP or $NP) (lambda n1 (lambda n2 (or (var n1) (var n2))))) 
+)
+
+(when generate
+  (rule $NP0 ($RelNP of $EntityNP1) (lambda r (lambda n ((reverse (var r)) (var n))))) 
+  #(rule $NP0 ($RelNP of $TypeNP) (lambda r (lambda n ((reverse (var r)) (var n))))) 
+  (rule $NP0 ($EntityNP1 or $EntityNP2) (MergeFn or)) 
+)
+
+#TODO
+# $InjectCP ::= with $RelNP $NP (and with $RelNP $NP)*   => (and ($RelNP $NP) ...)                                      # with date 2000
+# $NP ::= $RelNP of $Arg0RelNP $EntityNP $InjectCP?      => ((reverse $RelNP) (and ($Arg0RelNP $EntityNP) $InjectCP))   # educational institution of student John with date 2000
+# $NP ::= $Arg0RelNP $InjectCP?                          => ((reverse $Arg0RelNP) $InjectCP)                            # student with educational institution Stanford and with date 2000
+# $NP ::= $NP $NP\(NP/NP) $NP                            => (($NP\(NP/NP) $NP) $NP)                                     # three plus four
+
+#Numbers
+(when parse
+  (rule $NP (number of $NP) (lambda n (count (var n)))) 
+  (rule $NP (total $RelNP of $NP) (lambda r (lambda n (sum ((reverse (var r)) (var n)))))) 
+)
+
+(when generate
+  (rule $NP1 (number of $NP0) (lambda n (count (var n)))) 
+  (rule $NP1 (number of $TypeNP) (lambda n (count (var n)))) 
+  (rule $NP1 (total $RelNP of $TypeNP) (lambda r (lambda n (sum ((reverse (var r)) (var n)))))) 
+)
+
+# Sentence-level
+#$S ::= $ImpVP/NP $NP $InjectCP?                => (and (type $ImpVP/NP) (theme $NP) $InjectCP?)                       # move pot with destination stove
+#$S ::= $S when|before|after|while|until $S     => (and ((reverse time) $S) (TIME_COMPARE ((reverse time) $S)))        # open door when doorbell rings
+#$S ::= $S if there exists $NP                  => (or $S (not $NP))                                                   # open door if there exists person whose location is door
+#$S0 ::= $ImpVP/NP $NP0
+#$S1 ::= $ImpVP/NP $NP0 $InjectCP
+#$S1 ::= $ImpVP/NP $NP1
+
+#Are we covering "what is the location of any meeting?"
+
+(when parse
+  (rule $ROOT ($NP) (IdentityFn))
+)
+(when generate
+  (rule $ROOT ($NP0) (IdentityFn))
+  (rule $ROOT ($NP1) (IdentityFn))
+)
+
+

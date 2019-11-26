@@ -1,0 +1,45 @@
+# Macros
+
+(def @type fb:type.object.type)
+(def @fb_number fb:type.number)
+(def @fb_string fb:type.string)
+(def @name fb:type.object.name)
+(def @has_name (lambda x (fb:type.object.name (!fb:type.object.name (var x)))))
+(def @topic fb:common.topic)
+
+# Types of objects
+(def @location fb:location.location)
+(def @city fb:location.citytown)
+(def @state fb:location.us_state)
+(def @country fb:location.country)
+(def @lake fb:geography.lake)
+(def @river fb:geography.river)
+(def @mountain fb:geography.mountain)
+
+# Geographic relationships
+(def @containedby fb:location.location.containedby)
+(def @river_containedby (lambda x (or (fb:location.location.containedby (var x)) (fb:location.location.partially_contained_by (var x)))))
+(def @partially_contained_by fb:location.location.partially_contained_by)
+(def @contains !fb:location.location.containedby)
+(def @adjoins (lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))))
+(def @traverses fb:geography.river.cities)
+(def @capital fb:location.us_state.capital)
+
+# Numerical properties
+(def @area fb:location.location.area)
+(def @elevation fb:geography.mountain.elevation)
+(def @depth fb:geography.body_of_water.depth)
+(def @surface_area fb:geography.body_of_water.surface_area)
+(def @length fb:geography.river.length)
+
+# Surrogates for population and density (this is what is in the labeled dataset
+(def @population (lambda x (!fb:location.geocode.latitude (!fb:location.location.geolocation (var x)))))
+(def @density (lambda x (!fb:location.geocode.longitude (!fb:location.location.geolocation (var x)))))
+
+# Population - most recent (too slow)
+#(def @population (reverse (lambda x (!fb:measurement_unit.dated_integer.number (argmax 1 1 (!fb:location.statistical_region.population (var x)) fb:measurement_unit.dated_integer.year)))))
+
+# Surrogates (take for all dates)
+(def @population (lambda x (fb:location.statistical_region.population (fb:measurement_unit.dated_integer.number (var x)))))
+# Not always available
+#(def @density (lambda x (fb:location.statistical_region.arithmetic_population_density (fb:measurement_unit.dated_float.number (var x)))))

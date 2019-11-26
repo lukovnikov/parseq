@@ -1,0 +1,13 @@
+fb:location.location.containedby
+!fb:location.location.containedby
+(lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x))))
+
+#fb:location.us_state.capital
+#(lambda x (or (fb:location.location.containedby (var x)) (fb:location.location.partially_contained_by (var x))))
+#fb:location.location.area
+#fb:geography.river.length
+#fb:geography.mountain.elevation
+#(lambda x (!fb:location.geocode.latitude (!fb:location.location.geolocation (var x))))
+#(lambda x (!fb:location.geocode.longitude (!fb:location.location.geolocation (var x))))
+#fb:type.object.name
+#(lambda x (fb:type.object.name (!fb:type.object.name (var x))))

@@ -1,0 +1,251 @@
+# what state has the most rivers running through it
+(argmax $0 (state:t $0) (count $1 (and (river:t $1) (loc:t $1 $0))))
+(argmax 1 1 (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (fb:type.object.type fb:geography.river) ((lambda x (or (fb:location.location.containedby (var x)) (fb:location.location.partially_contained_by (var x)))) (var y)))))))
+
+# what state has the most major rivers running through it
+(argmax $0 (state:t $0) (count $1 (and (river:t $1) (major:t $1) (loc:t $1 $0))))
+(argmax 1 1 (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (and (fb:type.object.type fb:geography.river) (fb:geography.river.length (>= 2000))) ((lambda x (or (fb:location.location.containedby (var x)) (fb:location.location.partially_contained_by (var x)))) (var y)))))))
+
+# what state is the state with the most rivers
+(lambda $0 e (and (state:t $0) (equals:t $0 (argmax $1 (state:t $1) (count $2 (and (river:t $2) (loc:t $2 $1)))))))
+(argmax 1 1 (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (var y)))))))
+
+# what states border the states with the most cities
+(lambda $0 e (and (state:t $0) (next_to:t $0 (argmax $1 (state:t $1) (count $2 (and (city:t $2) (loc:t $2 $1)))))))
+(and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (argmax 1 1 (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:location.citytown) (fb:location.location.containedby (var z)))))))))
+
+# what state has the most cities
+(argmax $0 (state:t $0) (count $1 (and (city:t $1) (loc:t $1 $0))))
+(argmax 1 1 (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (fb:type.object.type fb:location.citytown) (fb:location.location.containedby (var y)))))))
+
+# what is the highest point in the state with the most rivers
+(argmax $0 (and (place:t $0) (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (river:t $2) (loc:t $2 $1)))))) (elevation:i $0))
+(argmax 1 1 (and (fb:type.object.type fb:location.location) (fb:location.location.containedby (argmax 1 1 (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:geography.river) ((lambda x (or (fb:location.location.containedby (var x)) (fb:location.location.partially_contained_by (var x)))) (var z))))))))) (reverse !fb:geography.mountain.elevation))
+
+# what states border states that border states that border states that border texas
+(lambda $0 e (and (state:t $0) (exists $1 (and (state:t $1) (exists $2 (and (state:t $2) (exists $3 (and (state:t $3) (next_to:t $3 texas:s) (next_to:t $2 $3) (next_to:t $1 $2) (next_to:t $0 $1)))))))))
+(and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) fb:en.texas))))))))
+
+# what states border states that border states that border florida
+(lambda $0 e (and (state:t $0) (exists $1 (and (state:t $1) (exists $2 (and (state:t $2) (next_to:t $2 florida:s) (next_to:t $1 $2) (next_to:t $0 $1)))))))
+(and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) fb:en.florida))))))
+
+# which states have points that are higher than the highest point in texas
+(lambda $0 e (and (state:t $0) (exists $1 (and (place:t $1) (> (elevation:i $1) (elevation:i (argmax $2 (and (place:t $2) (loc:t $2 texas:s)) (elevation:i $2))))))))
+(and (fb:type.object.type fb:location.us_state) (!fb:location.location.containedby (fb:geography.mountain.elevation (> (!fb:geography.mountain.elevation (argmax (number 1) (number 1) (and (fb:type.object.type fb:location.location) (fb:location.location.containedby fb:en.texas)) fb:geography.mountain.elevation))))))
+
+# what states high point are higher than that of colorado
+(lambda $0 e (and (state:t $0) (> (elevation:i (argmax $1 (and (place:t $1) (loc:t $1 $0)) (elevation:i $1))) (elevation:i (argmax $1 (and (place:t $1) (loc:t $1 colorado:s)) (elevation:i $1))))))
+(and (fb:type.object.type fb:location.us_state) (!fb:location.location.containedby (fb:geography.mountain.elevation (> (!fb:geography.mountain.elevation (argmax (number 1) (number 1) (and (fb:type.object.type fb:location.location) (fb:location.location.containedby fb:en.colorado)) fb:geography.mountain.elevation))))))
+
+# which states have points higher than the highest point in colorado
+(lambda $0 e (and (state:t $0) (exists $1 (and (place:t $1) (> (elevation:i $1) (elevation:i (argmax $2 (and (place:t $2) (loc:t $2 colorado:s)) (elevation:i $2))))))))
+(and (fb:type.object.type fb:location.us_state) (!fb:location.location.containedby (fb:geography.mountain.elevation (> (!fb:geography.mountain.elevation (argmax (number 1) (number 1) (and (fb:type.object.type fb:location.location) (fb:location.location.containedby fb:en.colorado)) fb:geography.mountain.elevation))))))
+
+# what is the highest point in each state whose lowest point is sea level
+(lambda $0 e (equals:t $0 (argmax $1 (and (place:t $1) (exists $2 (and (state:t $2) (equals:t (elevation:i (argmin $3 (and (place:t $3) (loc:t $3 $2)) (elevation:i $3))) 0:i) (loc:t $0 $2)))) (elevation:i $1))))
+(= (argmax (number 1) (number 1) (and (fb:type.object.type fb:location.location) (lambda z (and (and (fb:type.object.type fb:location.us_state) ((reverse =) (!fb:geography.mountain.elevation (argmin (number 1) (number 1) (and (fb:type.object.type fb:location.location) (fb:location.location.containedby (var z))) (reverse !fb:geography.mountain.elevation))))) (fb:location.location.containedby (var z))))) (reverse !fb:geography.mountain.elevation)))
+
+# how many rivers in texas are longer than the red
+(count $0 (and (river:t $0) (loc:t $0 texas:s) (> (len:i $0) (len:i red_river:r))))
+(count (and (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses fb:en.texas)) (fb:geography.river.length (> (!fb:geography.river.length fb:en.red_river)))))
+
+# how many states border at least one other state
+(count $0 (and (state:t $0) (> (count $1 (and (state:t $1) (next_to:t $0 $1))) 0:i)))
+(count (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (fb:type.object.type fb:location.us_state))))
+
+# what are the high points of states surrounding mississippi
+(lambda $0 e (exists $1 (and (state:t $1) (next_to:t $1 mississippi:s) (high_point:t $1 $0))))
+(argmax (number 1) (number 1) (fb:location.location.containedby (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) fb:en.mississippi))) fb:geography.mountain.elevation)
+
+# what are the populations of states through which the mississippi river run
+(lambda $0 e (exists $1 (and (state:t $1) (loc:t mississippi_river:r $1) (= (population:i $1) $0))))
+((reverse fb:location.location.population) (and (fb:type.object.type fb:location.us_state) ((reverse fb:geography.river.traverses) fb:en.mississippi_river)))
+
+# what is the highest point in each state whose lowest point is sea level
+(lambda $0 e (equals:t $0 (argmax $1 (and (place:t $1) (exists $2 (and (state:t $2) (equals:t (elevation:i (argmin $3 (and (place:t $3) (loc:t $3 $2)) (elevation:i $3))) 0:i) (loc:t $0 $2)))) (elevation:i $1))))
+(argmax (number 1) (number 1) (and (fb:type.object.type fb:location.location) (fb:location.location.containedby (fb:type.object.type fb:location.us_state))) fb:geography.mountain.elevation)
+
+# what states have a capital that is the highest point in the state
+(lambda $0 e (and (state:t $0) (exists $1 (and (capital:t $1) (loc:t $1 $0) (equals:t $1 (argmax $2 (and (place:t $2) (loc:t $2 $0)) (elevation:i $2)))))))
+(and (fb:type.object.type fb:location.us_state) (fb:location.us_state.capital (!fb:location.us_state.capital (fb:type.object.type fb:location.us_state)))))
+
+# what states have rivers named colorado
+(lambda $0 e (and (state:t $0) (exists $1 (and (named:t $1 colorado:n) (river:t $1) (loc:t $1 $0)))))
+(and (fb:type.object.type fb:location.us_state) ((reverse fb:geography.river.traverses) (and (fb:type.object.name (!fb:type.object.name fb:en.colorado_river)) (fb:type.object.type fb:geography.river))))
+
+# what river runs through the most states
+(argmax $0 (river:t $0) (count $1 (and (state:t $1) (loc:t $0 $1))))
+(argmax (number 1) (number 1) (fb:type.object.type fb:geography.river) (reverse (lambda y (count (and (fb:type.object.type fb:location.us_state) (!fb:geography.river.traverses (var y)))))))
+
+# what state has highest elevation
+(lambda $0 e (and (state:t $0) (loc:t (argmax $1 (place:t $1) (elevation:i $1)) $0)))
+(argmax (number 1) (number 1) (and (fb:type.object.type fb:geography.mountain) (fb:location.location.containedby (fb:type.object.type fb:location.us_state))) (reverse !fb:geography.mountain.elevation))
+
+# what state has the most rivers running through it
+(argmax $0 (state:t $0) (count $1 (and (river:t $1) (loc:t $1 $0))))
+(argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (var y)))))))
+
+# what are the populations of the states through which the mississippi river run
+(lambda $0 e (exists $1 (and (state:t $1) (loc:t mississippi_river:r $1) (population:t $1 $0))))
+(!fb:location.location.population (and (fb:type.object.type fb:location.us_state) ((reverse fb:geography.river.traverses) fb:en.mississippi_river))))
+
+# what is the biggest river in illinois
+(argmax $0 (and (river:t $0) (loc:t $0 illinois:s)) (size:i $0))
+(argmax (number 1) (number 1) (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses fb:en.illinois)) (reverse !fb:geography.river.length))
+
+# what is the length of the river that traverses the most states
+(len:i (argmax $0 (river:t $0) (count $1 (and (state:t $1) (loc:t $0 $1)))))
+(!fb:geography.river.length (argmax (number 1) (number 1) (fb:type.object.type fb:geography.river) (reverse (lambda y (count (and (fb:type.object.type fb:location.us_state) (!fb:geography.river.traverses (var y))))))))
+
+# what are the major cities in the states through which the major river in virginia runs
+(lambda $0 e (and (major:t $0) (city:t $0) (exists $1 (and (state:t $1) (loc:t $0 $1) (loc:t (the $2 (and (river:t $2) (major:t $2) (loc:t $2 virginia:s))) $1)))))
+(and (and (fb:location.location.area (>= 20)) (fb:type.object.type fb:location.citytown)) (fb:location.location.containedby (and (fb:type.object.type fb:location.us_state) ((reverse fb:geography.river.traverses) (and (and (fb:type.object.type fb:geography.river) (fb:geography.river.length (>= 200))) (fb:geography.river.traverses fb:en.virginia))))))
+
+# what state has the most major rivers running through it
+(argmax $0 (state:t $0) (count $1 (and (river:t $1) (major:t $1) (loc:t $1 $0))))
+(argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (and (fb:type.object.type fb:geography.river) (fb:geography.river.length (>= 200))) (fb:geography.river.traverses (var y)))))))
+
+# what are the populations of all the major cities in montana
+(lambda $0 e (exists $1 (and (major:t $1) (city:t $1) (loc:t $1 montana:s) (population:t $1 $0))))
+((reverse fb:location.location.population) (and (and (fb:location.location.area (>= 20)) (fb:type.object.type fb:location.citytown)) (fb:location.location.containedby fb:en.montana)))
+
+# which rivers run through the state with the lowest elevation in the usa
+(lambda $0 e (and (river:t $0) (loc:t $0 (argmin $1 (and (state:t $1) (loc:t $1 usa:co)) (elevation:i $1)))))
+(and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (!fb:location.location.containedby (argmin (number 1) (number 1) (and (fb:type.object.type fb:geography.mountain) (fb:location.location.containedby fb:en.united_states_of_america)) fb:geography.mountain.elevation))))
+
+# how high are the highest points of all the states
+(lambda $0 e (exists $1 (and (state:t $1) (elevation:t (argmax $2 (and (place:t $2) (loc:t $2 $1)) (elevation:i $2)) $0))))
+((reverse fb:geography.mountain.elevation) (argmax (number 1) (number 1) (and (fb:type.object.type fb:location.location) (fb:location.location.containedby (fb:type.object.type fb:location.us_state))) (reverse !fb:geography.mountain.elevation)))
+
+# what state borders the least states excluding alaska and excluding hawaii
+(argmin $0 (and (state:t $0) (not (equals:t $0 alaska:s)) (not (equals:t $0 hawaii:s))) (count $1 (and (state:t $1) (next_to:t $0 $1))))
+(argmin (number 1) (number 1) (and (and (fb:type.object.type fb:location.us_state) (!= fb:en.alaska)) (!= fb:en.hawaii)) (reverse (lambda y (count (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (var y)))))))
+
+# which states border the longest river in the usa
+(lambda $0 e (and (state:t $0) (next_to:t $0 (argmax $1 (and (river:t $1) (loc:t $1 usa:co)) (len:i $1)))))
+(and (fb:type.object.type fb:location.us_state) (!fb:geography.river.traverses (argmax (number 1) (number 1) (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses fb:en.united_states_of_america)) (reverse !fb:geography.river.length))))
+
+# which states lie on the largest river in the united states
+(lambda $0 e (and (state:t $0) (loc:t (argmax $1 (and (river:t $1) (loc:t $1 usa:co)) (len:i $1)) $0)))
+(and (fb:type.object.type fb:location.us_state) ((reverse fb:geography.river.traverses) (argmax (number 1) (number 1) (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses fb:en.united_states_of_america)) (reverse !fb:geography.river.length))))
+
+# what is the capital of the state with the highest elevation
+(capital:c (argmax $1 (state:t $1) (elevation:i $1)))
+(!fb:location.us_state.capital (!fb:location.location.containedby (argmax (number 1) (number 1) (fb:type.object.type fb:geography.mountain) (reverse !fb:geography.mountain.elevation))))
+
+# what state which the mississippi runs through has the largest population
+(argmax $0 (and (state:t $0) (loc:t mississippi_river:r $0)) (population:i $0))
+(argmax (number 1) (number 1) (and (fb:type.object.type fb:location.us_state) ((reverse fb:geography.river.traverses) fb:en.mississippi_river)) (reverse !fb:location.location.population))
+
+# how many states are next to major rivers
+(count $0 (and (state:t $0) (exists $1 (and (river:t $1) (major:t $1) (next_to:t $0 $1)))))
+(count (and (fb:type.object.type fb:location.us_state) (!fb:geography.river.traverses (and (fb:type.object.type fb:geography.river) (fb:geography.river.length (>= 200))))))
+
+# how many states border the mississippi river
+(count $0 (and (state:t $0) (next_to:t $0 mississippi_river:r)))
+(count (and (fb:type.object.type fb:location.us_state) (!fb:geography.river.traverses fb:en.mississippi_river)))
+
+# how many rivers are called colorado
+(count $0 (and (river:t $0) (named:t $0 colorado:n)))
+(count (and (fb:type.object.type fb:geography.river) (fb:type.object.name (!fb:type.object.name fb:en.colorado_river))))
+
+# what is the highest point in the state with the most rivers
+(argmax $0 (and (place:t $0) (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (river:t $2) (loc:t $2 $1)))))) (elevation:i $0))
+(argmax (number 1) (number 1) (and (fb:type.object.type fb:location.location) (fb:location.location.containedby (argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (var z))))))))) (reverse !fb:geography.mountain.elevation))
+
+# what is the longest river that passes the states that border the state that borders the most states
+(argmax $0 (and (river:t $0) (exists $1 (and (state:t $1) (next_to:t $1 (argmax $2 (state:t $2) (count $3 (and (state:t $3) (next_to:t $2 $3)))))))) (len:i $0))
+(argmax 1 1 (fb:type.object.type fb:geography.river) fb:geography.river.length)
+
+# which state has the most major cities
+(argmax $0 (state:t $0) (count $1 (and (major:t $1) (city:t $1) (loc:t $1 $0))))
+(argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (and (fb:location.location.area (>= 20)) (fb:type.object.type fb:location.citytown)) (fb:location.location.containedby (var y)))))))
+
+# what state has the most major cities
+(argmax $0 (state:t $0) (count $1 (and (city:t $1) (major:t $1) (loc:t $1 $0))))
+(argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (and (fb:location.location.area (>= 20)) (fb:type.object.type fb:location.citytown)) (fb:location.location.containedby (var y)))))))
+
+# what states border the state with the most major cities
+(lambda $0 e (and (state:t $0) (next_to:t $0 (argmax $1 (state:t $1) (count $2 (and (major:t $2) (city:t $2) (loc:t $2 $1)))))))
+(and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (and (fb:location.location.area (>= 20)) (fb:type.object.type fb:location.citytown)) (fb:location.location.containedby (var z)))))))))
+
+# how many colorado rivers are there
+(count $0 (and (named:t $0 colorado:n) (river:t $0)))
+(count (and (fb:type.object.name (!fb:type.object.name fb:en.colorado_river)) (fb:type.object.type fb:geography.river)))
+
+# count the states which have elevations lower than what alabama has
+(count $0 (and (state:t $0) (exists $1 (and (place:t $1) (loc:t $1 $0) (< (elevation:i $1) (elevation:i (argmin $2 (and (place:t $2) (loc:t $2 alabama:s)) (elevation:i $2))))))))
+(count (and (fb:type.object.type fb:location.us_state) ((reverse fb:location.location.containedby) (and (fb:type.object.type fb:location.location) (fb:geography.mountain.elevation (< (!fb:geography.mountain.elevation (and (fb:type.object.type fb:geography.mountain) (fb:location.location.containedby fb:en.alabama)))))))))
+
+# which state has the most major rivers
+(argmax $0 (state:t $0) (count $1 (and (major:t $1) (river:t $1) (loc:t $1 $0))))
+(argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda y (count (and (and (fb:geography.river.length (>= 200)) (fb:type.object.type fb:geography.river)) (fb:geography.river.traverses (var y)))))))
+
+# how many rivers are in the state that has the most rivers
+(count $0 (and (river:t $0) (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (river:t $2) (loc:t $2 $1)))))))
+(count (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (var z))))))))))
+
+# what states contain at least one major rivers
+(lambda $0 e (and (state:t $0) (> (count $1 (and (major:t $1) (river:t $1) (loc:t $1 $0))) 0:i)))
+(and (fb:type.object.type fb:location.us_state) (!fb:geography.river.traverses (fb:geography.river.length (>= 200))))
+
+# what is the longest river in the state with the most major cities
+(argmax $0 (and (river:t $0) (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (major:t $2) (city:t $2) (loc:t $2 $1)))))) (len:i $0))
+(argmax (number 1) (number 1) (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (and (fb:location.location.area (>= 20)) (fb:type.object.type fb:location.citytown)) (fb:geography.river.traverses (var z))))))))) (reverse !fb:geography.river.length))
+
+# what is the smallest state that borders the most states
+(argmin $0 (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (state:t $2) (next_to:t $2 $1))))) (size:i $0))
+(argmin (number 1) (number 1) (and (fb:type.object.type fb:location.us_state) (argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) (var z)))))))) (reverse !fb:location.location.area))
+
+# what river runs through the state with the most cities
+(lambda $0 e (and (river:t $0) (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (city:t $2) (loc:t $2 $1)))))))
+(and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:location.citytown) (fb:geography.river.traverses (var z)))))))))
+
+# which rivers run through states with fewest cities
+(lambda $0 e (and (river:t $0) (loc:t $0 (argmin $1 (state:t $1) (count $2 (and (city:t $2) (loc:t $2 $1)))))))
+(and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (argmin (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:location.citytown) (fb:geography.river.traverses (var z)))))))))
+
+# how many states have a higher point than the highest point of the state with the largest capital city in the us
+(count $0 (and (state:t $0) (exists $1 (and (place:t $1) (loc:t $1 $0) (> (elevation:i $1) (elevation:i (argmax $2 (and (place:t $2) (exists $3 (and (loc:t $2 $3) (state:t $3) (loc:t $3 usa:co) (loc:t (argmax $4 (and (capital:t $4) (city:t $4)) (size:i $4)) $3)))) (elevation:i $2))))))))
+(and (fb:type.object.type fb:location.us_state) (!fb:location.location.containedby (fb:geography.mountain.elevation (> (!fb:geography.mountain.elevation (argmax (number 1) (number 1) (fb:location.location.containedby (fb:location.us_state.capital (argmax (number 1) (number 1) (!fb:location.us_state.capital (fb:type.object.type fb:location.us_state)) fb:location.location.area))) fb:geography.mountain.elevation))))))
+
+# what are the populations of states which border texas
+(lambda $0 e (exists $1 (and (state:t $1) (next_to:t $1 texas:s) (population:t $1 $0))))
+((reverse fb:location.location.population) (and (fb:type.object.type fb:location.us_state) ((lambda x (fb:location.location.adjoin_s (fb:location.adjoining_relationship.adjoins (var x)))) fb:en.texas)))
+
+# which state has the highest elevation
+(argmax $0 (state:t $0) (elevation:i $0))
+(argmax (number 1) (number 1) (and (fb:type.object.type fb:geography.mountain) (fb:location.location.containedby (fb:type.object.type fb:location.us_state))) (reverse !fb:geography.mountain.elevation))
+
+# which state has the lowest elevation
+(argmin $0 (state:t $0) (elevation:i $0))
+(argmin (number 1) (number 1) (and (fb:type.object.type fb:geography.mountain) (fb:location.location.containedby (fb:type.object.type fb:location.us_state))) (reverse !fb:geography.mountain.elevation))
+
+# what is the largest river in washington state
+(argmax $0 (and (river:t $0) (loc:t $0 washington:s)) (size:i $0))
+(argmax (number 1) (number 1) (and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses fb:en.washington)) (reverse !fb:geography.river.length))
+
+# what are the population densities of each us state
+(lambda $0 e (exists $1 (and (state:t $1) (density:t $1 $0))))
+((reverse fb:location.location.density) (fb:type.object.type fb:location.us_state))
+
+# what is the lowest point of all states through which the colorado river runs through
+(argmin $0 (and (place:t $0) (exists $1 (and (state:t $1) (loc:t colorado_river:r $1) (loc:t $0 $1)))) (elevation:i $0))
+(argmin (number 1) (number 1) (and (fb:type.object.type fb:location.location) (fb:location.location.containedby (and (fb:type.object.type fb:location.us_state) ((reverse fb:geography.river.traverses) fb:en.colorado_river)))) (reverse !fb:geography.mountain.elevation))
+
+# what state contains the highest point of those the colorado river traverses
+(lambda $0 e (and (state:t $0) (loc:t (argmax $1 (and (place:t $1) (loc:t colorado_river:r $1)) (elevation:i $1)) $0)))
+(and (fb:type.object.type fb:location.us_state) (!fb:location.location.containedby (argmax (number 1) (number 1) (and (fb:type.object.type fb:geography.mountain) (fb:location.location.containedby (and (fb:type.object.type fb:location.us_state) ((reverse fb:geography.river.traverses) fb:en.colorado_river)))) fb:geography.mountain.elevation)))
+
+# what river runs through the state with the most cities
+(lambda $0 e (and (river:t $0) (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (city:t $2) (loc:t $2 $1)))))))
+(and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (argmax (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:location.citytown) (fb:location.location.containedby (var z)))))))))
+
+# which rivers run through states with fewest cities
+(lambda $0 e (and (river:t $0) (loc:t $0 (argmin $1 (state:t $1) (count $2 (and (city:t $2) (loc:t $2 $1)))))))
+(and (fb:type.object.type fb:geography.river) (fb:geography.river.traverses (argmin (number 1) (number 1) (fb:type.object.type fb:location.us_state) (reverse (lambda z (count (and (fb:type.object.type fb:location.citytown) (fb:location.location.containedby (var z)))))))))
+
+# what are the populations of the major cities of texas
+(lambda $0 e (exists $1 (and (city:t $1) (major:t $1) (loc:t $1 texas:s) (population:t $1 $0))))
+((reverse fb:location.location.population) (and (and (fb:type.object.type fb:location.citytown) (fb:location.location.area (>= 20))) (fb:location.location.containedby fb:en.texas)))

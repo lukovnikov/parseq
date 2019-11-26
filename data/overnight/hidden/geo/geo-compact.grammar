@@ -1,0 +1,77 @@
+# {2014-12-19} Simple grammar for GeoQuery.  To be used by the FloatingParser
+# in the agile semantic parsing project.
+# To test this grammar (not using the FloatingParser):
+
+# ./run @mode=simple-sparql @sparqlserver=localhost:3093 -Grammar.inPaths freebase/data/geo/geo-compact.grammar 
+
+(include geo.macros)
+
+## Entities (anchored)
+
+(include entities.grammar)
+
+# California
+(rule $Set ($NamedEntity) (IdentityFn))
+
+## Unaries
+
+(rule $Unary (cities) (ConstantFn (@type @city)))
+(rule $Unary (states) (ConstantFn (@type @state)))
+(rule $Unary (rivers) (ConstantFn (@type @river)))
+(rule $Unary (lakes) (ConstantFn (@type @lake)))
+(rule $Unary (mountains) (ConstantFn (@type @mountain)))
+(rule $Unary (capitals) (ConstantFn ((reverse @capital) (@type @state))))
+(rule $Unary (places) (ConstantFn (@type @location)))
+
+# cities
+(rule $Set ($Unary) (IdentityFn))
+
+(rule $Adj (major) (ConstantFn (@area (>= (number 200)))))
+(rule $Adj (major) (ConstantFn (@length (>= (number 2000)))))
+(rule $Adj (major) (ConstantFn (@surface_area (>= (number 2000)))))
+
+# major cities
+(rule $Set ($Adj $Set) (MergeFn and))
+
+## Binaries
+
+(rule $Relation (named) (ConstantFn @has_name))
+(rule $Relation (in) (ConstantFn @containedby))
+(rule $Relation (containing) (ConstantFn @contains))
+(rule $Relation (traversing) (ConstantFn @river_containedby))
+(rule $Relation (traversed by) (ConstantFn (reverse @river_containedby)))
+(rule $Relation (bordering) (ConstantFn @adjoins))
+(rule $Relation (with capital) (ConstantFn (reverse @capital)))
+
+# in California
+(rule $PostModifier ($Relation $Set) (JoinFn forward))
+# not in california
+(rule $PostModifier (not $PostModifier) (lambda x (not (var x))))
+# cities in California
+(rule $Set ($Unary $PostModifier) (MergeFn and))
+
+# Properties
+(rule $Property (area) (ConstantFn @area))
+(rule $Property (name) (ConstantFn @name))
+(rule $Property (length) (ConstantFn @length))
+(rule $Property (elevation) (ConstantFn @elevation))
+(rule $Property (population) (ConstantFn @population))
+(rule $Property (area) (ConstantFn @area))
+(rule $Property (density) (ConstantFn @density))
+(rule $Property (capital) (ConstantFn @capital))
+
+# area of California
+(rule $Set ($Property of $Set) (lambda p (lambda s ((reverse (var p)) (var s)))))
+
+# largest/smallest cities by population
+(rule $Set (largest $Property $Set) (lambda degree (lambda head (argmax 1 1 (var head) (var degree)))))
+(rule $Set (smallest $Property $Set) (lambda degree (lambda head (argmin 1 1 (var head) (var degree)))))
+
+# states containing the most/least cities
+(rule $Set ($Set $Relation the most $Set) (lambda s (lambda v (lambda o (argmax 1 1 (var s) (reverse (lambda ss (count (and (var o) ((reverse (var v)) (var ss)))))))))))
+(rule $Set ($Set $Relation the least $Set) (lambda s (lambda v (lambda o (argmin 1 1 (var s) (reverse (lambda ss (count (and (var o) ((reverse (var v)) (var ss)))))))))))
+
+# cities
+(rule $ROOT ($Set) (IdentityFn))
+# number of cities
+(rule $ROOT (number of $Set) (lambda x (count (var x))))

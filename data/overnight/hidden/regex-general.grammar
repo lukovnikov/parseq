@@ -1,0 +1,77 @@
+############################################################
+# regex general grammar - same as geo and general, but with different semantic functions
+# TODO: negation
+
+(when parse
+  (rule $EntityNP ($EntityNP1) (IdentityFn))
+  (rule $EntityNP ($EntityNP2) (IdentityFn))
+  (rule $NP ($EntityNP) (IdentityFn))
+  (rule $NP ($TypeNP) (IdentityFn))
+)
+
+# Complementizer phrase (filtering)
+(when parse
+  # I use modifier for negation, we did not have this negation in previous grammars
+  (rule $Modifier ($VP/NP $NP) (JoinFn forward betaReduce))
+  (rule $CP (that $Modifier) (IdentityFn))
+  (rule $CP (that not $Modifier) (lambda m (call + (string "~(") (var m) (string ")"))))
+)
+(when generate
+  (rule $Modifier0 ($VP/NP $EntityNP1) (JoinFn forward betaReduce))
+  (rule $Modifier1 ($VP/NP $NP0) (JoinFn forward betaReduce))
+  (rule $CP00 (that $Modifier0) (IdentityFn))
+  (rule $CP0 (that $Modifier0) (IdentityFn))
+  (rule $CP1 (that $Modifier1) (IdentityFn))
+  (rule $CP1 (that not $Modifier0) (lambda m (call + (string "~(") (var m) (string ")"))))
+)
+
+(when parse
+  (rule $CP (that $VP/NP at least $Num $NP) (lambda v (lambda num (lambda n (call + ((var v) (var n)) (string "{") (var num) (string ",}"))))))
+  (rule $CP (that $VP/NP at most $Num $NP) (lambda v (lambda num (lambda n (call + ((var v) (var n)) (string "{0,") (var num) (string "}"))))))
+  (rule $CP (that $VP/NP $Num $NP) (lambda v (lambda num (lambda n (call + ((var v) (var n)) (string "{") (var num) (string "}"))))))
+)
+(when generate
+  (rule $CP1 (that $VP/NP at least $Num $TypeNP) (lambda v (lambda num (lambda n (call + (string "(") ((var v) (var n)) (string ")") (string "{") (var num) (string ",}"))))))
+  (rule $CP1 (that $VP/NP at most $Num $TypeNP) (lambda v (lambda num (lambda n (call + (string "(") ((var v) (var n)) (string ")") (string "{0,") (var num) (string "}"))))))
+  # we don't have the third one in geo currently
+  (rule $CP1 (that $VP/NP $Num $TypeNP) (lambda v (lambda num (lambda n (call + (string "(") ((var v) (var n)) (string ")") (string "{") (var num) (string "}"))))))
+)
+
+# In previous domains CP was a function applied on NP. Here NP is a function and so the order is different
+(when parse
+  (rule $CP ($CP and $CP) (lambda c1 (lambda c2 (call + (string "(") (var c1) (string "&") (var c2) (string ")")))))
+  (rule $NP ($NP $CP) (JoinFn betaReduce forward))
+)
+(when generate
+  (rule $CP1 ($CP00 and $CP00) (lambda c1 (lambda c2 (call + (string "(") (var c1) (string "&") (var c2) (string ")")))))
+  (rule $NP0 ($TypeNP $CP0) (JoinFn betaReduce forward))
+  (rule $NP1 ($TypeNP $CP1) (JoinFn betaReduce forward))
+)
+
+#before/after
+(when parse
+  (rule $BinaryOpRight ($BinaryOp $NP) (JoinFn betaReduce forward))
+  (rule $NP ($NP $BinaryOpRight) (JoinFn betaReduce backward))
+)
+(when generate
+  (rule $BinaryOpRight ($BinaryOp $EntityNP2) (JoinFn betaReduce forward))
+  (rule $NP0 ($EntityNP1 $BinaryOpRight) (JoinFn betaReduce backward))
+)
+
+# Transformations
+(when parse
+  (rule $NP ($NP or $NP) (lambda n1 (lambda n2 (call + (string "(") (var n1) (string "|") (var n2) (string ")"))))) 
+)
+(when generate
+  (rule $NP0 ($EntityNP1 or $EntityNP2) (lambda n1 (lambda n2 (call + (string "(") (var n1) (string "|") (var n2) (string ")"))))) 
+)
+
+(when parse
+  (rule $ROOT ($NP) (IdentityFn))
+)
+(when generate
+  (rule $ROOT ($NP0) (IdentityFn))
+  (rule $ROOT ($NP1) (IdentityFn))
+)
+
+

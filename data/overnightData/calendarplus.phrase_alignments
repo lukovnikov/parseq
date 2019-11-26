@@ -1,0 +1,4186 @@
+less than three hours	smaller than three hours	2.0
+the weekly	of weekly	26.0
+end time of	when did the	7.0
+ended at or	end time is at	8.0
+is at most	on or before the	2.0
+meeting at the greenberg	meeting whose location is greenberg	3.0
+meetings which start	meeting whose start time is	2.0
+later than weekly	time of weekly	2.0
+jan 2 and whose length	january 2nd with a length	2.0
+start	recent	2.0
+meeting with attendee who has	meeting whose attendee is person	2.0
+date is	are on	2.0
+that lasts	whose length	3.0
+meeting that was	meeting whose date	2.0
+length	how long was	14.0
+date is	held	3.0
+is	whose length is	6.0
+hours	three	2.0
+a meeting on	meeting whose date is	2.0
+meeting whose date	meeting	2.0
+that	and whose	19.0
+attendee of	who went to	2.0
+show me all	date of meeting whose	2.0
+shares an attendee	person that is attendee	2.0
+end time	is the ending time	2.0
+average	how	10.0
+meeting whose location	what meetings do i have	3.0
+of	there	4.0
+meeting whose end time	meetings do i	2.0
+which ended	whose end time is	4.0
+whose end time is at	and ends at	2.0
+the meeting	time of meeting	2.0
+what time did the	start time of	8.0
+january 2nd with a length	jan 2 and whose length	2.0
+not before end time	at least end time	2.0
+is larger than	meetings after	2.0
+starting at	start time is	5.0
+the meeting that was	meeting whose length	2.0
+start time is 10am	starts at 10 am	2.0
+of meeting whose start	of the meeting that starts	5.0
+the total length	total length	15.0
+than the weekly	of weekly	2.0
+starting at 10am	start time is 10am	4.0
+length of the	length of	27.0
+on	date	94.0
+start time of	time did the	8.0
+hours whose date is	hours	3.0
+number of meeting	meeting number	2.0
+of meetings on	of meeting whose date is	2.0
+ends at	end time	2.0
+time of meeting whose	what time did the	5.0
+meeting whose length is three	three	3.0
+on or before	time is at most	2.0
+not before start time	is at least start time	2.0
+time or	at	3.0
+which ended at	whose end time is	4.0
+date is at least	on or after	4.0
+time	same time	5.0
+started at 10am	start time is 10am and	2.0
+length of	long was the	28.0
+time of	of	4.0
+over three hours	larger than three hours	3.0
+and whose	that	19.0
+least jan 2	after jan 2	4.0
+the meetings	of meeting	7.0
+length of meetings	length of meeting	11.0
+and ends at	whose end time is	2.0
+show me meetings	meeting whose	4.0
+10 am	is 10am	3.0
+when did the meeting	end time of meeting	2.0
+whose	me the meeting	2.0
+the jan 2	whose date is jan 2	2.0
+smaller than 10am or	before 10am	3.0
+is three hours	3 hours	2.0
+whose end time is	that ended at	12.0
+show me the number of	number of	2.0
+meeting whose	a meeting	3.0
+attendee	going	2.0
+time is smaller than 10am	before	7.0
+meeting whose start time is	meeting that starts	12.0
+with alice	whose attendee is alice and	2.0
+at the	time is at most	4.0
+location is greenberg cafe	greenberg cafe	11.0
+long or shorter	at most length	2.0
+meeting whose start	what	2.0
+long or shorter than weekly	at most length of weekly	2.0
+same	start	5.0
+meeting whose end time	meetings which ended	3.0
+in greenberg cafe	location is greenberg cafe	3.0
+at	were	3.0
+start time of weekly	the weekly	3.0
+of meetings which ended	of meeting whose end	2.0
+end time	the end	3.0
+that is less	whose length is smaller	2.0
+hours and whose end	hours and ended	2.0
+held	is	3.0
+what meeting on jan	meeting whose date is jan	2.0
+total length of meeting that	total length of meeting whose	3.0
+meeting on january 2nd	whose date is jan 2	2.0
+hour meeting on	hours and whose date	2.0
+length is	all meetings	3.0
+or after jan	is at least jan	3.0
+whose location	meeting	3.0
+or after	is at least	4.0
+most	the most	4.0
+larger than end time of	after end time of	3.0
+on	time is	4.0
+end time of meeting that	end time of meeting whose	5.0
+is smaller than three hours	shorter than three hours	3.0
+date is at least jan	on or after jan	3.0
+the jan 2 meeting that	jan 2 and whose	2.0
+end time	end	15.0
+or	is at	14.0
+the same time as weekly	time of weekly	3.0
+and whose end	that end	3.0
+attendee of meeting	who went to the meeting	3.0
+meetings that ended	meeting whose end	2.0
+most end	before the end	2.0
+length of	the length of	4.0
+meeting on january	whose date is jan	4.0
+whats	average	2.0
+show meeting	meeting	2.0
+meeting that ends	meeting whose end	14.0
+at the	location is	5.0
+my	larger	4.0
+of	time of	4.0
+whose start time is	that starts at	8.0
+at 10 am	time is 10am and whose	3.0
+is greenberg cafe and	greenberg cafe	3.0
+starts	start time	19.0
+average length	the average length	22.0
+jan 2 and	january 2	4.0
+whose end	which ended	9.0
+attendee	list attendees	2.0
+after jan	least jan	4.0
+of meeting	the	11.0
+jan 2 meeting	whose date is jan 2	2.0
+of meeting that starts	of meeting whose start	10.0
+of meeting whose	what meeting	2.0
+hours and	hours	4.0
+that	priority	2.0
+time of meeting whose	time of meeting that	5.0
+was the meeting that ended	of meeting whose end	4.0
+that start	whose start time	4.0
+end time of	time did the	6.0
+meeting	show meeting	2.0
+of meeting	of meetings	26.0
+start time is at	starts at the	3.0
+meeting on jan	whose date is jan	7.0
+end time of weekly	weekly	3.0
+of meeting whose start time	the meeting that started	3.0
+to	is attendee	2.0
+start time of the weekly	start time of weekly	3.0
+start time is at most	started at or before	3.0
+regular	start	2.0
+me all meetings	whose length	2.0
+whose attendee is alice and	that alice is attending	2.0
+that end	whose end time	3.0
+at least	not	5.0
+meeting whose end	meeting which ended	2.0
+start time of	what time does the	2.0
+time	end time	5.0
+how long was	total length	10.0
+show meetings	meeting	2.0
+is	location that is	2.0
+meeting whose length is	meeting that was	12.0
+number of meeting	how many meetings	9.0
+before 10am	smaller than 10am or 3pm	3.0
+later than weekly standup	of weekly standup	2.0
+alice is attending	whose attendee is alice	2.0
+greenberg cafe	greenberg cafe and	12.0
+time	does	10.0
+average length	on average how long	4.0
+total length	how long was	10.0
+end time is	are	2.0
+with	and	7.0
+location	me the location	2.0
+10am	1000 am	3.0
+or annual review	or annual review whose	2.0
+meeting whose end	meetings do	2.0
+three	hour	4.0
+number of meeting whose end	how many meetings do	2.0
+longer	length	13.0
+length is at most	was as long or shorter	2.0
+of the meetings	of meeting	6.0
+that started at or	whose start time is at	3.0
+of weekly standup	time of weekly standup	4.0
+is less than three	is smaller than three	2.0
+length is	for	2.0
+the	of meeting whose location is	2.0
+and ends at	whose end time is at	2.0
+length is	is	6.0
+location is greenberg cafe	have at greenberg cafe	3.0
+is	length	6.0
+review	review whose	2.0
+the greenberg cafe	is greenberg cafe	3.0
+jan 2	jan 2 or	2.0
+meeting whose	show me meetings that	5.0
+jan 2 with	is jan 2 and whose	2.0
+as the weekly	of weekly	3.0
+what time did the	time of meeting whose length	3.0
+show	average length of meeting	2.0
+the meeting that started	of meeting whose start time	3.0
+january 2nd that	jan 2 and whose	2.0
+length of	all	2.0
+least	takes	2.0
+meetings	of meeting	7.0
+alice	is alice	9.0
+three hours	three hours or	2.0
+whose date is jan	meeting on jan	7.0
+starts at 10am	start time is 10am	7.0
+jan 2 and whose	jan 2 which	2.0
+meeting that ends	meeting whose end time	6.0
+are the meetings	of meeting whose	2.0
+average	whats the average	2.0
+end time of meeting whose	end time of meeting that	5.0
+whose date is jan	on january	8.0
+of the	of	81.0
+of meeting	the meeting	66.0
+10am	least 10am	2.0
+of meeting	was the	2.0
+before 10am or 3pm	smaller than 10am or 3pm	2.0
+not	at least	5.0
+end time is at	ends at	7.0
+ended at 10am	end time is 10am	14.0
+start time is smaller than	started before	7.0
+ending time	end time	5.0
+of meeting whose date	of meeting on	5.0
+hour meeting	hours and	2.0
+whose	do i	5.0
+at most start	not after start	2.0
+meetings after	is larger than	2.0
+is the average length	average length	21.0
+whose length is at	that was as long or	2.0
+weekly standup	time of weekly standup	17.0
+the meetings on	of meeting whose date is	2.0
+hours	hours whose date	3.0
+10am on	10am whose date	2.0
+was the meeting that started	of meeting whose start	4.0
+smaller than 10am or 3pm	before 3pm start	2.0
+total length of	total length of the	9.0
+jan 2 started	jan 2 whose start	2.0
+date	show me dates	2.0
+whose	were	2.0
+ended	end time	18.0
+least	after the	2.0
+whose date is	that	2.0
+of meeting whose location is	the meeting at the	2.0
+before	most 10am or	3.0
+have at greenberg cafe	location is greenberg cafe whose	2.0
+2 that	2 whose	2.0
+end time is	ending at	3.0
+after	larger	42.0
+held on	date	6.0
+location	where	22.0
+jan	whose date is jan	3.0
+greenberg cafe	location is greenberg cafe	11.0
+that is	been	2.0
+than the ending time	than end time	2.0
+jan 2 and whose	jan 2 with	2.0
+than start time	than	2.0
+earlier than	smaller than start	2.0
+how long was the	average length of	3.0
+start time of weekly	before start time of weekly	2.0
+of meeting on	of meeting whose date	5.0
+was	length	51.0
+total length of	duration of the	2.0
+meeting whose end time is	meetings that ended	2.0
+meeting whose end	meetings which end	2.0
+start at 10am	start time is 10am	6.0
+or	at most	3.0
+of meeting	are the meetings	5.0
+weekly	week	4.0
+go	alice	2.0
+the end time of	end time of	8.0
+at least	or after	11.0
+date of the meeting	date of meeting	2.0
+length is	my	2.0
+time of	the same time as	3.0
+whose start time is	that starts	16.0
+no later	at most	7.0
+average how long are the	average length of	4.0
+least at the end time	least end time	2.0
+cafe and whose	cafe	3.0
+of meeting whose end time	of meeting that ends	4.0
+dates	date	7.0
+and whose start	that started	2.0
+average length of	the average length of	19.0
+not after	time is at most	2.0
+is	an	7.0
+at least three	three or more	4.0
+is	at	205.0
+smaller	within	3.0
+is	as	26.0
+three hour meeting	three hours	2.0
+was	of	26.0
+time	what time did	17.0
+that	same	7.0
+had	attendee is person	2.0
+time	when	3.0
+recent	start	2.0
+2	2 whose start	2.0
+which started	whose start	2.0
+alice	alices	2.0
+starts	start	48.0
+end time is 10am	10 am	2.0
+is three hours	three hour	10.0
+at least	or more	4.0
+length of meeting whose date	length of meeting on	2.0
+not before start time of	at least start time of	2.0
+length is smaller than three	shorter than three	2.0
+of meeting	meetings	7.0
+is larger than end	after end	2.0
+end on	end time is	2.0
+of	for the	3.0
+is	for	10.0
+ended at or before	end time is at most	5.0
+list the attendees of the	attendee of	2.0
+total length of	is the total length of	7.0
+at most	latest	3.0
+in	whose location	2.0
+meeting	meeting whose	47.0
+start time of weekly standup	the weekly standup	2.0
+are no later	is at most	2.0
+end time of	end time for the	2.0
+most	the latest	2.0
+shorter than three	smaller than three	4.0
+and whose length	with a length	3.0
+end time is after	end time is larger than	2.0
+end of	end time of	2.0
+long	whose length is	4.0
+meeting whose	what meeting	20.0
+whose length is smaller than	that is less than	2.0
+location of the	location of	2.0
+starts at the	start time is	2.0
+what is the start time	start time	4.0
+ends	whose end	2.0
+attendee is	with	6.0
+and whose	with a	3.0
+location that is	that is	2.0
+or one	one	2.0
+before	is smaller than end time	2.0
+the meeting that	meeting whose	3.0
+10am	most 10am	2.0
+standup	standup whose	7.0
+whose start time is	which start	2.0
+not before start	time is at least start	2.0
+standup length	standup	2.0
+the jan	date is jan	2.0
+meetings that start	meeting whose start	8.0
+location of the meeting that	location of meeting whose	2.0
+length of meeting whose	length of meeting that	8.0
+meeting which is	meeting whose	2.0
+at least at the end	time is at least end	2.0
+is	of	7.0
+is	on	7.0
+number of	me the number of	2.0
+start time of	when did the	7.0
+is	is the	3.0
+meeting with	meeting whose	3.0
+me all	whose	2.0
+review whose	review	2.0
+of meeting whose start	what is the	2.0
+shorter than	whose length is smaller than	2.0
+meetings on january	date is jan	2.0
+date of	day was the	11.0
+on	and	10.0
+the	of meeting whose length is	3.0
+is at least	takes	2.0
+smaller than 10am	before 10am	13.0
+is on	date is	2.0
+length is smaller than three	is less than three	2.0
+and whose	which	4.0
+a length of three	whose length is three	3.0
+a	meeting whose	2.0
+meeting whose end	meetings that end	4.0
+start	is the start	4.0
+list the attendees of meetings	attendee of meeting	2.0
+are the	of meeting whose	3.0
+hour	three	4.0
+length is	last	3.0
+length of meeting whose	show me all meetings	2.0
+not before	time is at least	4.0
+time is at least	not	4.0
+at	not	22.0
+and	where	2.0
+after end	time is larger than end	2.0
+3pm	start	3.0
+hour	one	12.0
+end on or	end time is at	2.0
+me the length	length	3.0
+is larger than	after	24.0
+length of	long are the	6.0
+than end	than the ending	2.0
+which ends at 10am	whose end time is 10am	2.0
+length	shorter	2.0
+more	least	6.0
+had the same	person that	2.0
+time of	did the	14.0
+time is 10am and	10 am	2.0
+long was the meeting that	length of meeting whose	20.0
+of	of meeting	4.0
+show me	or	3.0
+or before	at most	19.0
+show me all meetings that	of meeting whose length	2.0
+is three	3	2.0
+at the	and whose	2.0
+date of meeting	show	3.0
+end	do	3.0
+weekly standup	weekly standup whose	7.0
+what	meeting whose length is	2.0
+attendee	whose attendee	3.0
+time is at least	at least	3.0
+meeting whose date	meeting on	14.0
+at 10am	start time is 10am and	2.0
+or	between	4.0
+that	important	29.0
+at	and whose location is	4.0
+at	before	8.0
+the week	of weekly standup	2.0
+and whose	at the	2.0
+at least start	not before start	2.0
+how long	total length	7.0
+which	whose	53.0
+that ended at	whose end time is	12.0
+more than three	larger than three	3.0
+not before	is at least	5.0
+meeting whose date	meeting that	2.0
+person that	has	2.0
+the weekly standup meeting	of weekly standup	3.0
+jan 2	is jan 2 and whose	3.0
+are	length is	4.0
+3pm	later	3.0
+is smaller than 10am	before 10am	12.0
+the latest	at most	2.0
+whose length is larger than	that was over	2.0
+of meeting which	of meeting whose	2.0
+me the	whose	4.0
+of meeting whose end	the meeting that ends	3.0
+shorter than weekly	most length of weekly	2.0
+time of meeting whose start	did the meeting that started	3.0
+than	over	4.0
+jan 2 or	jan 2	2.0
+whose location is greenberg cafe	at the greenberg cafe	3.0
+end time of	ending time of the	5.0
+weekly standup or annual	the weekly standup or annual	2.0
+not before jan	at least jan	3.0
+show me meetings that	of meeting whose	3.0
+total length of meeting	how long was the meeting	9.0
+before end time	smaller than end time	4.0
+time of meeting that starts	time of meeting whose start	2.0
+weekly roundup	weekly standup	3.0
+time of meeting	time of meetings	2.0
+length is	was as	2.0
+2 and whose	2 with	2.0
+are before	is smaller than	2.0
+attendee is	attendee	2.0
+attendee is	attended	2.0
+and whose length is	with a length of	3.0
+of meeting whose	what is the	2.0
+start time of weekly standup	time as weekly standup	2.0
+average length	average how long	4.0
+than 10 am	than 10am	2.0
+location	have	9.0
+is jan 2 and whose	jan 2 that	4.0
+date is at	on	2.0
+and whose end time is	that ends at	5.0
+most	latest	3.0
+meetings after	larger than	2.0
+3pm start	or 3pm	3.0
+three hours whose date	three hours	3.0
+what is the start	start	4.0
+meetings	meeting whose	27.0
+whose location	in	2.0
+whose	meeting	127.0
+was the meeting that started	of meeting whose start time	2.0
+meeting whose end time is	meeting that ended at	7.0
+time of meeting	what	2.0
+meeting that starts	whose start time	2.0
+start time	the start	2.0
+that started	and whose start	2.0
+is	whose start	4.0
+after end time	is larger than end time	2.0
+me the meeting	whose	2.0
+how long are the	length of	6.0
+whose attendee is	meeting	4.0
+shares	person	2.0
+jan 2 start	is jan 2	3.0
+least at the end	at least end	2.0
+the location of meetings	location of meeting	3.0
+had the	is person	2.0
+hours	hours long	10.0
+at	location is	6.0
+whose length	that	7.0
+is important	as important	3.0
+what meeting ended	meeting whose end	3.0
+start	starts	48.0
+over three	larger than three	4.0
+meeting which	meeting whose	14.0
+location of	me the location of	3.0
+what is the duration	length	3.0
+of meeting whose end	of meeting that ends	4.0
+total	the total	15.0
+of meeting whose length is	the	3.0
+which ends at	and whose end time is	2.0
+total length	the length	2.0
+end	at the end	2.0
+the commencing time	start time	2.0
+whose date	that was on	2.0
+is the date of the	date of	2.0
+have	location is	2.0
+what	start	6.0
+10am on	10am whose date is	2.0
+meeting whose start	meetings which start	3.0
+show me meetings that	meeting whose	5.0
+longer	larger	10.0
+at	time is at most	7.0
+meetings that end	meeting whose end time	3.0
+2 start	2	4.0
+the average length of the	average length of	11.0
+end time of meeting	end time of the meeting	3.0
+start time is	starts	19.0
+that is attendee	attended	2.0
+me the location of meetings	location of meeting	2.0
+and whose end	meeting that ended	2.0
+whose start time is	meeting that starts	2.0
+start	before start	2.0
+start time is	start at	14.0
+average	on average how	4.0
+meeting	what is the	3.0
+attendee who	attendee is	2.0
+had	is person	2.0
+the duration	total length	2.0
+time is smaller than	before	31.0
+the end time for	end time	2.0
+and whose end	that ends	5.0
+start time is smaller	starts earlier	4.0
+standup	roundup	3.0
+show me all meetings on	length of meeting whose date	2.0
+is three hours whose	are three hours	3.0
+show me dates of	date of	2.0
+that is	an	5.0
+me the location	location	2.0
+of meeting	what	8.0
+longer than weekly	length of weekly	2.0
+2	2 or jan	3.0
+the length of the	length of	9.0
+meetings which ended	meeting whose end time	3.0
+meeting on january 2	whose date is jan 2	2.0
+whose start time	which started	2.0
+what attendee	attendee of meeting	2.0
+what is the date	date	3.0
+larger than	over	4.0
+is after	is larger than	2.0
+person that is	shares an	2.0
+are meetings	of meeting	2.0
+is	whose start time	3.0
+whose start time is	started at	2.0
+before 10am	smaller than 10am	13.0
+of meeting whose	of the meeting that	15.0
+on average how long are	average length	4.0
+that ends at 10 am	whose end time is 10am	5.0
+whose location is	at the	3.0
+at a	is	2.0
+2 and whose	2 that	4.0
+are three hours	is three hours	7.0
+that start	whose end time	2.0
+smaller than 10am	earlier than 10 am	2.0
+larger than three	more than three	3.0
+starts at the	start time is at most	2.0
+the location of the meeting	location of meeting	2.0
+length is three	three	10.0
+of meeting whose	the meetings that	4.0
+had the same	is person that	2.0
+end time is at least	ends not	3.0
+that is	is	5.0
+than the	than start time of	2.0
+length of meeting	length of the meetings	4.0
+of meeting whose	of meeting that	17.0
+end time	ends	12.0
+of meeting whose	meeting	2.0
+where was the meeting	location of meeting	7.0
+and whose end time is	which ended at	2.0
+has	is person	3.0
+are three hours long	length is three hours	2.0
+larger than 10am	after 10am	9.0
+is attendee	attendee	3.0
+what meeting was	meeting whose location is	2.0
+least end	the end	2.0
+three hours and whose date	three hour meeting on	2.0
+three hours or one	three hours	2.0
+meeting whose start time	meeting that starts	12.0
+what meeting	meeting whose location is	2.0
+at 10 am	time is 10am	13.0
+are held on	date is	2.0
+two	fewer	2.0
+length is larger than	was longer than	3.0
+is person that	had the same	2.0
+at or after 10am	time is at least 10am	2.0
+or	3	7.0
+whose start time	which starts	2.0
+or after jan 2	is at least jan 2	3.0
+meetings on	date	2.0
+meeting number	number of meeting	2.0
+is larger than three	more than three	2.0
+whose length	a length	3.0
+is the length of the	length of	9.0
+which starts	whose start time is	2.0
+length is	lasted	3.0
+end time of meeting whose	time did the meeting that	4.0
+start time is 10am	started at 10am	8.0
+ending at	end time is	3.0
+start	starting	7.0
+three or more	at least three	4.0
+at or	time is at	12.0
+attending the	attendee of	2.0
+who is attending the	attendee of	2.0
+end	ends	46.0
+3	or	7.0
+meeting whose location is location	what meeting	2.0
+at	same time or	2.0
+meeting whose date	meeting that was	2.0
+least	same	7.0
+start time is larger than	started after	4.0
+meeting whose start time is	meetings that start at	6.0
+been	that	3.0
+before	at most	6.0
+are on	date is	2.0
+meeting that ends at	meeting whose end time is	5.0
+that starts at	and whose start time is	2.0
+was before	smaller than	2.0
+is jan	for january	2.0
+show me	of meeting whose end	2.0
+time is 10am	10am	4.0
+attendee is	attendee who	2.0
+1000	10am	6.0
+end time	before	2.0
+average	average how	4.0
+end at 10am and	end time is 10am and	2.0
+larger	after	42.0
+longer than	larger than length	2.0
+important and	important	2.0
+than weekly	time of weekly	3.0
+meeting whose end time	meetings that end	3.0
+begins	start	2.0
+end time of weekly	the weekly	4.0
+time	time for	3.0
+at the	and whose location is	3.0
+of meeting	of meeting whose	9.0
+at greenberg	and whose location is greenberg	2.0
+whats the average length	average length	2.0
+average	whats	2.0
+end time is 10am	end at 10am	4.0
+at 10am	time is 10am	53.0
+3pm	10am or 3pm	13.0
+attendee of	attendees of the	3.0
+that starts	whose start time	16.0
+average	what is the average	12.0
+shorter than	smaller than	5.0
+is the duration of the	length of	5.0
+end time is	end	3.0
+on or before the	is at most	2.0
+end of weekly standup	end time of weekly standup	2.0
+of meeting whose location	the meeting	2.0
+are three	is three	7.0
+length of meeting	how long are the meetings	4.0
+starts at least	start time is at least	2.0
+meeting whose length is	meeting	3.0
+of meeting whose date is	of meeting on	5.0
+length of meeting	me the length of meetings	2.0
+time did the meeting that	start time of meeting whose	5.0
+weekly standup whose	weekly standup that	5.0
+of the meetings which	of meeting whose	2.0
+time of weekly	time as the weekly	2.0
+attendee	me the attendees	2.0
+at least end	not before end	2.0
+start time of weekly	the start of weekly	2.0
+not	most	10.0
+10am end	10am	5.0
+jan	the jan	2.0
+length is	all	2.0
+two meeting	conducted	2.0
+show me all	meeting whose length is	2.0
+10am on	10am and whose date is	5.0
+of weekly standup	than weekly standup length	2.0
+time of weekly standup whose	time of weekly standup	3.0
+length	long is	11.0
+with alice that	attendee is alice and whose	2.0
+meeting ended at	whose end time is	5.0
+or after the	at least	2.0
+that started	whose start	26.0
+not before end	at least end	2.0
+total length of meetings	total length of meeting	3.0
+earlier than	is smaller than	8.0
+commencing	start	4.0
+start time of meeting	time did the meeting	6.0
+location is greenberg cafe	at greenberg cafe	2.0
+time is at most	at or before	8.0
+attendee	to	22.0
+alice and	alice	6.0
+weekly standup	weekly standup ended	2.0
+meeting that starts	meeting whose start time	12.0
+that end at 10am	whose end time is 10am	4.0
+length is	are	4.0
+longer than	larger than	6.0
+before	smaller than 10am	9.0
+same	least	7.0
+what is	meeting whose length	3.0
+end time of	what time does the	2.0
+with	is	19.0
+is greenberg cafe	greenberg cafe	14.0
+on jan 2 start	date is jan 2	3.0
+3 hours long	three hours	3.0
+is alice	alice	9.0
+takes	least	2.0
+length	longer	13.0
+what time did the meeting	start time of meeting	6.0
+who went to the	attendee of	8.0
+meeting	whose location is location	2.0
+of meetings that start	of meeting whose start time	2.0
+length of	length	3.0
+2nd with a	2 and whose	2.0
+last	length	6.0
+time is at	later	4.0
+meeting whose location is	meeting at the	3.0
+have at	location is	3.0
+shorter than	most length of	2.0
+three or more hours long	at least three hours	2.0
+location of	the location of	5.0
+was the start time	start time	2.0
+after	at	7.0
+as long or shorter	is at most length	2.0
+with a length of	and whose length is	3.0
+meeting whose	what	12.0
+is greenberg cafe and	at greenberg cafe	3.0
+start time is	started at the	4.0
+length of	the duration of the	5.0
+is at	not	3.0
+shares an	person that	2.0
+meeting	whose attendee	4.0
+of meeting whose	of	2.0
+2 with	2 and whose	2.0
+length of meeting	long was the meeting	25.0
+as long or	is at	3.0
+long are	length of	2.0
+2nd with a length	2 and whose length	2.0
+whose attendee is alice	with alice as attendee	2.0
+length	the length	12.0
+10am	10 am	41.0
+at 10am	time is 10am and whose	13.0
+meetings lasted	meeting whose length	2.0
+weekly	length of weekly	4.0
+and whose end	which ends	2.0
+meetings on	date is	2.0
+what time does the	start time of	2.0
+what is the total length	total length	6.0
+whose start time is	that started at	15.0
+standup end	standup	4.0
+on or after	date is at least	4.0
+meeting whose start time is	meetings which start	2.0
+2 and	2	16.0
+show meetings	of meeting	2.0
+on jan 2	date is jan 2	34.0
+before the end	most end	2.0
+and whose end time is	that end at	3.0
+the weekly standup	start time of weekly standup	2.0
+on jan 2	date is jan 2 and	12.0
+meeting on	meeting whose date	14.0
+attendee is alice	with alice	6.0
+total length of the meeting	total length of meeting	2.0
+time is at most 10am	at or before 10am	3.0
+one hour	less	2.0
+show me	length of meeting whose	3.0
+on january 2	whose date is jan 2	4.0
+for	date is	2.0
+or before the	at most	3.0
+on or	time is at	3.0
+did	time of	2.0
+is jan 2 and	january 2	4.0
+meeting on	whose date is	11.0
+whose	which is	2.0
+meeting that started	meeting whose start time	5.0
+location of meeting	the locations of meetings	2.0
+on	and whose date is	10.0
+is smaller than end	before	3.0
+meeting was	whose location is	2.0
+starts	start time is	19.0
+end time of	end of	2.0
+is jan 2 and	jan 2 meeting	3.0
+before 10 am	smaller than 10am	2.0
+of meeting	are meetings	2.0
+long is the meeting	length of meeting	4.0
+total length	what is the total length	6.0
+least 10am	after 10am	5.0
+attendee who	attendee	2.0
+hours or	hours	2.0
+total length	is the duration	2.0
+on or after jan	date is at least jan	3.0
+length is three	are three	2.0
+start time	was the start time	2.0
+is location that is location	is location	3.0
+time of meeting	time did the meeting	10.0
+whose location is greenberg cafe	at greenberg cafe	2.0
+whose	with	14.0
+at least	or	2.0
+at most 10am	or before	3.0
+length of	longer than	2.0
+at most	or before	19.0
+average length of meetings which	average length of meeting whose	2.0
+the location	location	6.0
+length is three hours	are three hours	2.0
+meeting was in	whose location is location that	2.0
+time as	time	2.0
+start time is smaller than	start before	2.0
+was as	length is	2.0
+day was the	date of	11.0
+of the meeting which	of meeting whose	7.0
+location	located	2.0
+length of meeting whose	how long was the meeting	2.0
+meeting whose date	what meeting on	2.0
+than weekly standup	length of weekly standup	2.0
+ended after	end time is larger than	4.0
+january 2nd	jan 2	28.0
+places	location	2.0
+attendee	attending	9.0
+how long was	average length	3.0
+whose date	that	3.0
+length of meeting	long are	2.0
+no later than 10am	at most 10am	2.0
+at least	not before	8.0
+january 2	jan 2	13.0
+three hour meeting	three hours and whose	4.0
+is 10am and	10 am	2.0
+meeting whose date	a meeting on	2.0
+longer	hour	2.0
+meeting that starts	meeting whose start	20.0
+is smaller than	was before	2.0
+the average length of	average length of	19.0
+end time of	the end of	3.0
+length of meeting	long is the meeting	4.0
+time for the	time of	3.0
+time of weekly standup	the weekly roundup	2.0
+start time	is the start time	4.0
+weekly standup	weekly standup length	2.0
+whose date is larger than	after	2.0
+meeting whose end time is	meeting that ends	6.0
+than weekly	length of weekly	2.0
+number of	the number of	2.0
+whose date is	that was	2.0
+end time of weekly standup	weekly standup	2.0
+when did	end time	7.0
+person	also	2.0
+show me the number	number	2.0
+length is three hours	lasts three hours	2.0
+is larger than	is after	2.0
+the jan 2 meeting	date is jan 2 and	2.0
+hours	hours whose	4.0
+2 whose	2	4.0
+meeting	of meeting	8.0
+annual review	annual review whose	2.0
+time of weekly standup	than weekly standup	3.0
+location is location that	have	2.0
+length	is the length	8.0
+total length	how long is	5.0
+my	of	5.0
+before the end time	most end time	2.0
+attendee of	attendee	6.0
+whose end time is	and ends at	2.0
+whose	me meetings	4.0
+all	length of	2.0
+of meeting whose start	was the meeting that started	4.0
+do i have at	whose location is	3.0
+and whose location is	at	4.0
+of weekly standup whose	of weekly standup	3.0
+most length of	shorter than	2.0
+is at most	or before	5.0
+time of weekly standup	time of the weekly standup	20.0
+ends at 10am	end time is 10am and	2.0
+attendee of meeting whose	who is attending the meeting	2.0
+three hour	length is three hours and	3.0
+end	the end	28.0
+three hours	is three hours	6.0
+smaller than start time of	earlier than the	2.0
+what is the average length	average length	11.0
+whose attendee is alice	alice is attending	2.0
+fewer	less	2.0
+that started	whose start time	8.0
+10 am	end time is 10am	2.0
+time does the	end time of	2.0
+occur	start	2.0
+start time is	starts at the	2.0
+how long was the	length of	14.0
+three hour meeting on	three hours and whose date	2.0
+date is	is on	2.0
+smaller than start time	earlier than	2.0
+times	time	3.0
+what is	meeting whose	9.0
+three hours whose	three hours	4.0
+start time is at most	starts at	2.0
+what meeting on	meeting whose date is	2.0
+that is location of	the same place as	2.0
+average length of meeting that	average length of meeting whose	3.0
+time is 10am and	at 10am	22.0
+larger	my	4.0
+is smaller than	shorter than	3.0
+length of meeting	the length of meetings	2.0
+location of the meeting	location of meeting	2.0
+than length of weekly standup	than weekly standup	2.0
+three hours	three hour meeting	2.0
+meeting whose end time is	meetings end	3.0
+that end	and whose end	3.0
+that start at	and whose start time is	2.0
+whose start	which start	5.0
+long was	length	28.0
+date is jan 2	on jan 2 start	3.0
+is jan 2	the jan 2	2.0
+length of	show me the length of	2.0
+weekly standup start	weekly standup	3.0
+what	meeting	95.0
+is at most	on or before	4.0
+location is greenberg cafe and	at the greenberg cafe	5.0
+end time is 10am and	ends at 10am	2.0
+that ends	whose end	23.0
+whose length is	that was	12.0
+the	length of	4.0
+start time of weekly standup	start of weekly standup	2.0
+of meeting	of the meetings	6.0
+time did the	start time of meeting whose	2.0
+held	date is	3.0
+place	location	7.0
+larger than	after the	2.0
+than start	than	2.0
+that starts	whose start	30.0
+meeting that was	meeting whose date is	2.0
+hours	hours or one	2.0
+the meeting that started	of meeting whose start	13.0
+at 10am	time is 10am and	22.0
+least	least at	3.0
+of meetings which start	of meeting whose start	2.0
+2	2 whose	4.0
+what meeting ended at	meeting whose end time is	3.0
+on jan	whose date is jan	9.0
+start time of weekly	start of weekly	2.0
+is at least start	not before start	2.0
+before	smaller than end	3.0
+what time did the	start time of meeting	2.0
+which ended	whose end time	5.0
+2nd with a length of	2 and whose length is	2.0
+of meeting whose length is	was the meeting that was	3.0
+the meeting	meeting	4.0
+and whose end time is	which ends at	2.0
+end time of meeting	when did the meeting	2.0
+what time does	time	3.0
+start time	the commencing time	2.0
+meetings	is at	2.0
+is less than three	length is smaller than three	2.0
+length is	duration is	2.0
+meetings that end	whose end	2.0
+total	what is the total	6.0
+of the meeting that starts	of meeting whose start time	2.0
+over three hours	is larger than three hours	3.0
+that	locations	2.0
+location is greenberg	in greenberg	3.0
+attendee	who is attending	2.0
+of	as	15.0
+average length of the	average length of	9.0
+date is jan 2 and	jan 2 meeting	3.0
+attendee is person	attendee who has	2.0
+meeting	meetings are	2.0
+length of meeting that starts	length of meeting whose start	4.0
+are	meeting	2.0
+more than three hours	is larger than three hours	2.0
+time does	end time	2.0
+whose date is jan	the jan	2.0
+larger than length	longer than	2.0
+that is location of	same place as	2.0
+least at the end time	at least end time	2.0
+long is the meeting that	length of meeting whose	3.0
+held on	date is	5.0
+time is at most	on or before	2.0
+january	is jan	24.0
+date of	dates of	3.0
+2nd that	2 and whose	2.0
+what meeting	meeting	2.0
+meeting whose	what meeting was	4.0
+length of meeting whose end	length of meeting that ends	3.0
+of	is	7.0
+least 10am	10 am	2.0
+earlier than 10 am	time is smaller than 10am	2.0
+end time is	ends	10.0
+meeting	meeting whose length	4.0
+jan 2 which	jan 2 and whose	2.0
+that	the same	5.0
+that start	whose start	13.0
+is greenberg	at the greenberg	8.0
+least	least at the	3.0
+start time	what time does	2.0
+at 10 am	time is 10am and	3.0
+or	at	66.0
+of	my	5.0
+number	how many	11.0
+before 10am	10am	3.0
+after end time	larger than end time	3.0
+the meeting that was on	of meeting whose date	2.0
+meeting	show	63.0
+conducted	two meeting	2.0
+greenberg cafe	greenberg cafe whose	3.0
+least	the same	4.0
+whose end time is end	that ended at	2.0
+over	is larger than	4.0
+jan 2 meeting	is jan 2 and	3.0
+start time of meeting whose	when did the meeting that	4.0
+at most start time	not after start time	2.0
+long meeting	meeting whose length is	2.0
+is greenberg cafe whose	at greenberg cafe	2.0
+that end at	and whose end time is	3.0
+the end of weekly standup	end time of weekly standup	3.0
+on	is	7.0
+is larger than three hours	more than three hours	2.0
+is larger than three hours	over three hours	3.0
+whose location is greenberg cafe	in greenberg cafe	2.0
+same	that	7.0
+that alice is attending	whose attendee is alice and	2.0
+whose date is	that is on	2.0
+which meeting	meeting	2.0
+greenberg cafe and whose	greenberg cafe that	4.0
+shares an	person that is	2.0
+meeting whose date is jan	the jan	2.0
+ended at 10am and	end time is 10am whose	3.0
+2	jan	4.0
+time	time did	23.0
+at the greenberg cafe	whose location is greenberg cafe	3.0
+of meeting whose start time	of meetings that start	2.0
+the	time	2.0
+start time of	the	6.0
+alice as attendee	attendee is alice	2.0
+that ended	whose end time	9.0
+hours	hours or	2.0
+is the ending	end	2.0
+end time of weekly standup	the weekly standup	3.0
+date	held on	6.0
+at most 10am	no later than 10am	2.0
+than three	three	2.0
+start	what is the start	4.0
+2	2 and	16.0
+whose end time is at	that ended at or	4.0
+time as weekly standup	time of weekly standup	5.0
+end time of weekly	end of weekly	2.0
+are three hours	length is three hours	2.0
+attendee of meeting	what attendee	2.0
+start time is 10am and	starts at 10am	4.0
+of person	people	2.0
+meeting whose end	meeting	3.0
+what meeting	meeting whose location is location	2.0
+jan 2 and whose	january 2nd that	2.0
+is smaller than	earlier than the	3.0
+length	long was	28.0
+total length of meeting whose	total length of meetings which	3.0
+later than weekly	of weekly	2.0
+location is greenberg cafe whose	have at greenberg cafe	2.0
+start	regular	2.0
+time is at most	at the	4.0
+designated as	that is	2.0
+length of meeting whose	length of the meetings which	2.0
+time is smaller than	earlier than	7.0
+the weekly	end time of weekly	4.0
+at least three hours	three or more hours long	2.0
+most	shorter	4.0
+which is	whose	2.0
+meeting that starts	whose start	3.0
+on january 2nd with	date is jan 2 and	2.0
+or	to	5.0
+ending time of the weekly	end time of weekly	3.0
+that starts earlier	whose start time is smaller	2.0
+went to	attendee	8.0
+standup ended	standup	2.0
+me dates of meetings	date of meeting	2.0
+lasted	length is	3.0
+is at least	at least	4.0
+of meeting	show	12.0
+length	what is the length	6.0
+what	meeting whose location	3.0
+whose end	meeting that ends	2.0
+of meeting	the meetings	7.0
+time of meeting	time of the meeting	7.0
+meeting on or	meeting whose date is at	2.0
+of the meeting	of meeting whose	6.0
+whose start time is 10am	that started at 10am	4.0
+attendee of	the attendees of the	2.0
+2 and whose	2 meeting that	2.0
+meetings are	meeting	2.0
+weekly standup	of weekly standup	31.0
+did the meeting that	of meeting whose	2.0
+whose length is	a length of	3.0
+the weekly standup	weekly standup	3.0
+what is	meeting	5.0
+attendee	is attendee	3.0
+jan 2 meeting that	jan 2 and whose	2.0
+jan	date is jan	3.0
+attendee	the attendee	3.0
+whose length is three hours	a length of three hours	3.0
+list attendees of the	attendee of	2.0
+time is larger than 10am	after 10am	5.0
+2 and	2 meeting	3.0
+meeting that ended	meeting whose end	17.0
+the weekly standup	date of weekly standup	2.0
+10am and	10am and whose	2.0
+what time did the	end time of	6.0
+meeting whose	show me	19.0
+how long are the meetings	length of meeting	4.0
+length	all	13.0
+same time	least start time	2.0
+attendee is	went to	5.0
+location of meeting	where was the	2.0
+whose date is jan 2	the jan 2	2.0
+is three hours and whose	three hour meeting	4.0
+before	end	2.0
+whose length is	me all	2.0
+is larger than	longer than	3.0
+greenberg cafe	is greenberg cafe	14.0
+at	later	9.0
+time is smaller than end	before end	4.0
+what was the start time	start time	2.0
+date	what is the date	3.0
+that	whose	244.0
+was as long or	length is at	2.0
+with alice	is alice	2.0
+time of weekly standup	time of weekly standup whose	3.0
+start time of	before start time of	2.0
+after the	least	2.0
+of meetings that	of meeting whose	13.0
+starts earlier than the	start time is smaller than	2.0
+start time of weekly	commencing time of the weekly	2.0
+of weekly standup	as the weekly standup	3.0
+time of	times of	2.0
+which starts at	whose start time is	2.0
+or 3pm	3pm start	3.0
+what	of meeting whose	3.0
+meeting which starts	meeting whose start	5.0
+total length	length	4.0
+meeting whose	meetings that	21.0
+were	whose	2.0
+which	and whose	4.0
+end time of weekly standup	weekly standup ended	4.0
+10am or	10am	6.0
+than the	of	2.0
+larger than	longer than	6.0
+start time is 10am	starts at 10am	7.0
+total	is the total	15.0
+meeting whose start time is	meeting that started at	11.0
+is smaller than three hours	is less than three hours	2.0
+where	and	2.0
+start time is	starts at	14.0
+three hour	three hours and	5.0
+starts at	start time is at	7.0
+start time is 10am	starting at 10am	4.0
+no later than	at most	7.0
+standup	standup ended	2.0
+the weekly standup	time of weekly standup	9.0
+whose location is greenberg	greenberg	8.0
+end time of	the end time of the	14.0
+end time is 10am and	ended at 10am	6.0
+at the	is	8.0
+meeting that started at the	meeting whose start time is	4.0
+one	or one	2.0
+which start	whose start time	2.0
+the weekly	time of weekly	11.0
+or before 3pm	at most 10am or 3pm	3.0
+end time is end	ended at	2.0
+that	whose end	5.0
+how long was the meeting	length of meeting whose	2.0
+the ending	end	5.0
+start at	start time is	14.0
+time is 10am whose	at 10am	4.0
+attendee	attendee of	6.0
+time is 10am and whose	at 10am and	2.0
+on average	average	4.0
+started at	whose start time is	2.0
+date is jan 2	january 2	2.0
+the	of meeting whose	8.0
+the greenberg	is greenberg	3.0
+of less than	less than	2.0
+larger than	more than	3.0
+when did the	end time of	7.0
+is the meeting that starts	of meeting whose start	2.0
+of meeting whose start	of meetings that start	5.0
+what meeting	of meeting whose	2.0
+is at least three	three or more	2.0
+before 10am	smaller than 10am or	3.0
+are three	length is three	2.0
+is jan 2 and whose	jan 2 which	2.0
+10am or 3pm	3pm	13.0
+at most	most	4.0
+at most	long or shorter	2.0
+meeting	meeting whose location	5.0
+10am	time is 10am	4.0
+whose start time is 10am	that start at 10am	4.0
+at least	after	2.0
+when	start	7.0
+ends at	end time is at	7.0
+has attended	person that is attendee	2.0
+that are on	whose date is	2.0
+whose attendee is alice	that alice went to	2.0
+meeting at	meeting whose location is	2.0
+meeting whose end	meeting which ends	3.0
+at least three hours	is at least three hours	3.0
+no later than	time is at most	4.0
+marked	that	2.0
+most 10am	before 10am	5.0
+meeting on jan	and whose date is jan	5.0
+meeting with attendee who	meeting whose attendee	2.0
+that	marked	2.0
+of	how	17.0
+shorter than weekly standup	most length of weekly standup	2.0
+hours and ended	hours and whose end	2.0
+end time is at least	ends at	2.0
+me all	whose length is	2.0
+all	length is	2.0
+starts at 10 am	start time is 10am	2.0
+average	the average	23.0
+started	start	57.0
+before	at	8.0
+who went to	attendee	11.0
+whose start	which started	2.0
+time does the	time of	4.0
+do i have	whose end time is	3.0
+started after	start time is larger than	4.0
+is	as long	3.0
+was the meeting	of meeting	17.0
+date of meeting whose	day did the meeting that	2.0
+date	dates	7.0
+all meetings	length	4.0
+at the greenberg cafe	location is greenberg cafe and	5.0
+date	after	9.0
+more	is larger	2.0
+longer than	is larger than length of	2.0
+meeting whose length	meetings	2.0
+whose length	that was	15.0
+important	that is important	8.0
+time of meeting whose start	time of meeting that starts	2.0
+meeting whose end time	meetings that ended	2.0
+date	what day	12.0
+show me	meeting whose	19.0
+meeting that is	meeting whose	2.0
+ends not before	end time is at least	3.0
+is smaller	shorter	3.0
+hour meeting	hours and whose	4.0
+at the end	time is end	2.0
+more	larger	3.0
+show	meeting	63.0
+meeting whose location is greenberg	meeting at the greenberg	3.0
+length of meeting that ends	length of meeting whose end	3.0
+end time	end time for	2.0
+end time is 10am and	end at 10am and	2.0
+long was the	length of	28.0
+start time of weekly	time as weekly	2.0
+three hours long	three hours	3.0
+attending	attendee	9.0
+most length	shorter	2.0
+is at	are	2.0
+of meeting whose	show me all	2.0
+with alice	attendee is alice	6.0
+the jan 2	date is jan 2	2.0
+date is jan 2 and	the jan 2 meeting	2.0
+that was over	whose length is larger than	2.0
+of meeting whose start	the meeting that starts	3.0
+least at the end	least end	2.0
+three	meeting whose length is three	3.0
+was longer than	length is larger than length	2.0
+location of	is the location of the	2.0
+time	the	2.0
+later	at	9.0
+date	the date	4.0
+time is smaller than	earlier than the	3.0
+of meeting whose	did the meeting that	2.0
+the start time of	start time of	4.0
+with alice	whose attendee is alice	3.0
+started at the	start time is	4.0
+smaller than end time of	before end time of	4.0
+start time is	at	3.0
+time did the meeting	start time of meeting	6.0
+of three hours	is three hours	3.0
+whose date is jan 2	jan 2	3.0
+meeting whose date is	meeting that is on	2.0
+the length	total length	2.0
+larger than 10am	after 10 am	2.0
+show	of meeting whose	3.0
+meeting	whose	127.0
+show me the length of	length of	2.0
+average length of meeting	how long was the meeting	3.0
+location of	the locations of	2.0
+on january	and whose date is jan	4.0
+is jan 2	jan 2	44.0
+start time	at the start time	2.0
+meeting whose length is	what is	3.0
+start of weekly	start time of weekly	2.0
+smaller than end time	before	2.0
+weekly standup	length of weekly standup	4.0
+than weekly	than length of weekly	2.0
+of less	less	2.0
+stand	standup	2.0
+than weekly standup	time of weekly standup	3.0
+start time is	started at	20.0
+end time of	what time did the	6.0
+a meeting	meeting whose	3.0
+or before	at most 10am	3.0
+length is	length of	3.0
+what meeting was	meeting whose location	2.0
+location of	where was the	9.0
+of meeting whose start	of meetings which start	2.0
+three hours	three hours or one hour	2.0
+start time of	started	3.0
+whose date	that was	2.0
+and	whose	25.0
+2 and whose	2	4.0
+jan 2 meeting	date is jan 2 and	3.0
+least start time	same time	2.0
+or after	at least	11.0
+all	meeting	4.0
+attendee is	to	2.0
+start	whats	2.0
+standup	standup start	3.0
+show me meetings	meeting	3.0
+at least	or after the	2.0
+of meeting whose	the meetings	4.0
+ends at	end time is at most	4.0
+whose end time is	that ends	10.0
+is alice	with alice	2.0
+of meeting whose	of meetings that	13.0
+length	show me the length	2.0
+before end time of	smaller than end time of	4.0
+at least start time	not before start time	2.0
+meeting	is	59.0
+is at most	are no later than	2.0
+10 am	is 10am and	2.0
+show me dates	date	2.0
+total length of meeting	total length of meetings	3.0
+date of meeting	what day did the meeting	2.0
+of meeting whose	the meeting that was	3.0
+hours long	hours	10.0
+at least jan	not before jan	3.0
+meetings	whose	51.0
+the greenberg cafe	greenberg cafe and	4.0
+what meeting	meeting whose attendee is	4.0
+than	than end time	2.0
+attendee is alice	alice go to	2.0
+not after start	at most start	2.0
+what meeting	meeting whose attendee	4.0
+most 10am	10 am	5.0
+date of the	date of	2.0
+meeting whose location	meeting	5.0
+average	is the average	22.0
+what is the	meeting	3.0
+weekly	end time of weekly	3.0
+meeting whose start	meetings started	2.0
+meeting	what meeting	2.0
+is jan 2 and whose	january 2nd with a	2.0
+meeting whose	the meeting that	3.0
+that was	whose date is	2.0
+three hours whose date is	three hours	3.0
+after 10am	larger than 10am or	3.0
+than two meeting	conducted	2.0
+time is at least	at least at the	3.0
+meeting whose location is	what meeting was	2.0
+hour	hours	34.0
+10am	is 10am	5.0
+the weekly roundup	of weekly standup	2.0
+whose	meeting that	5.0
+was on	date	2.0
+also	person	2.0
+10 am	most 10am	5.0
+attended	attendee is	2.0
+at	long or	3.0
+location of meeting whose	location of the meeting that	2.0
+location is greenberg	greenberg	11.0
+whose end	and ends	3.0
+most end time	before the end time	2.0
+attendee	attendee is	2.0
+of	as the	3.0
+three hour	is three hours	10.0
+after 10am	least 10am	5.0
+than	than length of	2.0
+commencing time	start time	2.0
+in the same place as	that is location of	2.0
+start time is at	started at or	4.0
+attendee who has	attendee is person	2.0
+average length of meetings	average length of meeting	6.0
+is smaller than three	shorter than three	3.0
+than three hours	than three hours or one	2.0
+is smaller than	is less than	2.0
+is at least three	at least three	3.0
+dates of	date of	3.0
+weekly standup	weekly standup start	3.0
+ends	end	46.0
+before 10am or	is smaller than 10am or	2.0
+start time of	time as	2.0
+time is at least 10am	at 10 am	2.0
+that	whose date is	2.0
+hour meeting on	hours and whose date is	2.0
+location is	at the	5.0
+date of	is the date of the	2.0
+of meeting whose	is the meeting that	8.0
+jan	meeting whose date is jan	3.0
+jan 2 and whose	jan 2 meeting that	2.0
+end	what	4.0
+meetings are	of meeting whose	2.0
+weekly standup meeting	time of weekly standup	2.0
+whose end time	that ends	9.0
+whose length is smaller than	shorter than	2.0
+earlier than	smaller than start time	2.0
+what meeting	meeting whose location	2.0
+or after jan	at least jan	3.0
+meeting that ended	and whose end	2.0
+end	when	9.0
+jan 2 whose	jan 2	3.0
+smaller than three	shorter than three	4.0
+the greenberg cafe	location is greenberg cafe	3.0
+2 which	2 and whose	2.0
+three hours	three hours whose	4.0
+january	jan	52.0
+what time did the	end time of meeting	2.0
+of meeting	show meetings	2.0
+ended at or after	end time is at least	2.0
+is at least start time	not before start time	2.0
+least	more	6.0
+is larger than end time	after end time	2.0
+end time of	than	2.0
+date is jan 2 and	on january 2nd	4.0
+time of meeting whose	time did the	3.0
+smaller than 10am or 3pm	before 10am	3.0
+weekly standup started	start time of weekly standup	3.0
+start time of meeting	time did the	2.0
+2 or jan 3	2	2.0
+number of meeting whose length	how many meetings lasted	2.0
+is attendee of	to	2.0
+is smaller than 10am	earlier than 10 am	2.0
+location	place	7.0
+end	the ending	5.0
+not after start time	at most start time	2.0
+whose length is	long	4.0
+time is	at	122.0
+alice that	alice and whose	3.0
+date	when is	2.0
+what is	meeting whose start time	2.0
+meeting whose length is	what	2.0
+location of meeting whose start	location of meetings that start	2.0
+what meeting on	meeting whose date	2.0
+is jan 2 and	the jan 2 meeting	2.0
+date is jan 2	meetings on january 2nd	2.0
+january 2	is jan 2	8.0
+of meetings that start	of meeting whose start	5.0
+went	attendee	18.0
+location is greenberg cafe	the greenberg cafe	3.0
+of meeting whose	are the meetings that	3.0
+date of weekly standup	the weekly standup	2.0
+is at	as long or	3.0
+jan 2 and	the jan 2 meeting	2.0
+least 10am	10am	2.0
+meeting whose attendee	meeting with attendee who	2.0
+start time	commencing time	2.0
+what is the	of meeting whose	2.0
+meeting whose end time	meeting that ended	6.0
+meetings that ended	meeting whose end time is	2.0
+meeting whose attendee	what meeting	4.0
+within	smaller	3.0
+time of meeting whose	time did the meeting that	9.0
+whose date is jan 2	meeting on jan 2	7.0
+meeting that ends	whose end	2.0
+end time is 10am whose	ended at 10am and	3.0
+greenberg cafe	the greenberg cafe	9.0
+any	total	2.0
+that started at the	whose start time is	4.0
+meeting whose location	what meeting was	2.0
+list the attendees of	attendee of	3.0
+date of	me dates of	2.0
+than the weekly standup	of weekly standup	2.0
+the total length of	total length of	8.0
+3	three	9.0
+time is smaller	before	2.0
+not	least	8.0
+how long are the meetings	length of meeting whose	2.0
+start	beginning	3.0
+what time did	time	17.0
+three hour meeting	is three hours and	2.0
+is smaller than start time	earlier than	2.0
+meeting whose	show meeting	2.0
+than three hours	is three hours	3.0
+are three hours	is three hours whose date	2.0
+how	total	17.0
+the start of weekly standup	start time of weekly standup	2.0
+than weekly standup	than length of weekly standup	2.0
+of meeting	was the meeting	17.0
+meeting whose length	the meeting that was	2.0
+me all	whose length	3.0
+2 and whose length	2nd with a length	2.0
+is	with	19.0
+than start time of	than the	2.0
+hours	hour	34.0
+whose location is location	meeting was	2.0
+longer than	is larger than	3.0
+2 started	2 whose start	2.0
+of meetings that end	of meeting whose end time	3.0
+after 10am	larger than 10am	9.0
+jan 2	jan 2 and	11.0
+weekly standup or	the weekly standup or	2.0
+length of the meetings	length of meeting	4.0
+is the total length of	total length of	7.0
+an	that	8.0
+length is smaller	is less	2.0
+date	day	18.0
+the locations of meetings	location of meeting	2.0
+time is at	on or	3.0
+ends at 10am	end time is 10am	5.0
+person that is attendee	has attended	2.0
+end	ending	15.0
+earlier	smaller	8.0
+is	at the	8.0
+length of meeting	length of meeting whose	2.0
+that	whose date	3.0
+whose start time is	that started at the	4.0
+of weekly standup	of the weekly standup meeting	5.0
+is	that is	5.0
+the end time	end time	24.0
+larger than jan	after jan	2.0
+least at the	at least	3.0
+shorter	most	4.0
+three	whose length is three	7.0
+that ended	whose end time is	9.0
+length of meeting whose	long was the meeting	5.0
+weekly standup whose	weekly standup	7.0
+end time of weekly	than weekly	2.0
+and whose attendee is alice	with alice as attendee	3.0
+location is location that is	location is	3.0
+is alice and	alice is	2.0
+and	meeting	12.0
+end time of	ended	3.0
+time is	on	4.0
+standup	week	4.0
+on january 2nd	whose date is jan 2	4.0
+in the same	that	3.0
+time of meeting whose length	did the meeting that was	2.0
+with attendee who has	whose attendee is person	2.0
+start	start time is	7.0
+standup	standup length	2.0
+how long	length	11.0
+end time of	the end time of	8.0
+with alice as attendee	attendee is alice	2.0
+of weekly	was weekly	2.0
+meeting whose	show me the	3.0
+total length of	the total length of the	9.0
+start time is 10am and	started at 10am	2.0
+meeting whose end time	meeting	3.0
+greenberg	the greenberg	9.0
+location	the locations	2.0
+end time of weekly	the end time of weekly	3.0
+meeting was	whose location	2.0
+conducted	less than two meeting	2.0
+was longer than	length is larger than	3.0
+length of meeting whose	show me meetings that	2.0
+ends	end time is	10.0
+do i	whose end time	3.0
+earlier	time is smaller	7.0
+longer	is larger	4.0
+jan 2 that	jan 2 whose	2.0
+after 10am	is larger than 10am or	2.0
+long are the meetings	length of meeting	4.0
+average length of	how long was the	3.0
+of less than two	less than two	2.0
+length of meetings which	length of meeting whose	5.0
+length is at most length	was as long or shorter	2.0
+was longer	length is larger	3.0
+is at	at	8.0
+number of meeting whose	how many meetings	13.0
+ends not	end time is at least	3.0
+starting at 10am	start time is 10am and	2.0
+of meeting on	of meeting whose date is	5.0
+where	location	22.0
+start	3pm	3.0
+what is	meeting whose length is	3.0
+start time	when did	7.0
+duration of the	total length of	2.0
+january 2nd	jan 2 and	3.0
+meetings do i	meeting whose end time	2.0
+what is	meeting whose start	3.0
+is greenberg cafe and whose	at greenberg cafe that	2.0
+start time of	the start time of	4.0
+show me dates of meetings	date of meeting	2.0
+the	of meeting whose length	3.0
+end time is smaller than	ends before	3.0
+the most	at most	3.0
+lasts three hours	length is three hours	2.0
+the date of the	date of	2.0
+start time is larger than	starts after	5.0
+my	larger than	2.0
+is three hours	than three hours	3.0
+date	on	94.0
+or shorter	at most	3.0
+to	or	5.0
+whose location is greenberg cafe	the greenberg cafe	3.0
+whose end time is 10am	that end at 10am	4.0
+is person	had	2.0
+length is three hours	length of three hours	3.0
+started	start time is	12.0
+is person	has	3.0
+the total length of the	total length of	9.0
+of meeting	are the	2.0
+whose	me all	2.0
+before 10am	at most 10am	2.0
+number of person	how many people	2.0
+of meeting whose	of a meeting	2.0
+show	meeting whose	5.0
+after end	larger than end	3.0
+meeting that was	meeting whose length	15.0
+and whose start	that starts	2.0
+that was longer	whose length is larger	3.0
+of meeting whose	meetings are	2.0
+jan 2	date is jan 2	3.0
+whose location	meeting was	2.0
+meeting that	meeting whose date	2.0
+larger than length of weekly	longer than weekly	2.0
+location	where is	6.0
+length of meeting	duration of the meeting	4.0
+time	time of	3.0
+start time of	commencing time of the	2.0
+length is three	length of three	3.0
+weekly standup that	weekly standup whose	5.0
+time does	time	6.0
+me the attendees	attendee	2.0
+starts at least at the	start time is at least	2.0
+started	start time of	3.0
+hours and whose	hour meeting	4.0
+begins at	start time is at	2.0
+start time of	what time did the	8.0
+whose start time	that starts	16.0
+end time	is the end time for	2.0
+and whose end time is	meeting that ended at	2.0
+location of	where is the	4.0
+before end	smaller than end	4.0
+attendee is alice and whose	with alice that	2.0
+date is	held on	5.0
+most 10am or 3pm	before 3pm	3.0
+meeting which ends	meeting whose end	3.0
+start	started	57.0
+is the location	location	3.0
+date of	date of the	2.0
+longer	at	2.0
+end time	what is the end time	6.0
+time is at	at the	7.0
+ending at 10am	end time is 10am	3.0
+jan 2	the jan 2	2.0
+and end	whose end	2.0
+end time	end at	2.0
+than	than start	2.0
+up	at	2.0
+is at	or	14.0
+average length of	average length of the	9.0
+and whose location is greenberg	at the greenberg	3.0
+one hour	three hours or one hour	2.0
+length of meeting whose	show me	3.0
+is at least jan	or after jan	3.0
+ended before	end time is smaller than	7.0
+time	time do	2.0
+end time	time did	6.0
+end time is	ended at	27.0
+meetings that ended	meeting whose end time	2.0
+meeting whose length	meeting that was	15.0
+of meeting whose	of meetings	3.0
+who went to the meeting	attendee of meeting	3.0
+show meeting	meeting whose	2.0
+than	than end	2.0
+ended at	end time is end	2.0
+time	time as	2.0
+whose length	me all	3.0
+whose	that	244.0
+attendee of meeting that	attendee of meeting whose	2.0
+length of meeting whose	long is the meeting that	3.0
+time is 10am and whose	at 10am	13.0
+meeting whose length is	show me all meetings	3.0
+at	time or	3.0
+hours and	hour meeting	2.0
+time of meeting	time does the meeting	2.0
+average length	is the average length	21.0
+larger than end	after end	3.0
+at	time is	122.0
+at most	the latest	2.0
+and ended at	and whose end time is	2.0
+priority	that	2.0
+at	time	163.0
+any	whose	2.0
+meeting	what meetings	5.0
+whose date is jan 2	meeting on january 2nd	2.0
+meeting	whose location	3.0
+at most	the most	3.0
+meeting that ended at	and whose end time is	2.0
+shorter than three	length is smaller than three	2.0
+greenberg cafe that	greenberg cafe and whose	4.0
+three hours and whose	three hour meeting	4.0
+is 10am	at 10am	2.0
+the	of meeting whose location	3.0
+before start	start	2.0
+a length of three hours	whose length is three hours	3.0
+or before	is at most	5.0
+whose location is greenberg cafe	greenberg cafe	8.0
+the meeting on	of meeting whose date is	6.0
+meeting	a	7.0
+after	time is larger than	20.0
+is jan 2 whose	jan 2	2.0
+average length of	the average length of the	11.0
+what time does the	time of	2.0
+with alice as attendee	whose attendee is alice	2.0
+meeting whose length	meeting that	2.0
+is jan 2 and whose	the jan 2 meeting that	2.0
+meeting whose start time is	meeting that started at the	4.0
+what meeting	meeting whose	20.0
+attendee of	to	2.0
+for	whose length is	2.0
+jan 2 whose	jan 2 that	2.0
+of meeting whose	of the meeting that is	2.0
+whats	start	2.0
+what is the	length of meeting whose	2.0
+2 whose start	2	2.0
+length of meeting	the duration of the meeting	3.0
+with a	whose	2.0
+10am and whose date is	10am on	5.0
+how many meetings	number of meeting	9.0
+has attended	person that is attendee of	2.0
+how long are	total length of meeting	2.0
+time of meeting whose	time of the meeting which	3.0
+time is at	later than	4.0
+day was the meeting that	date of meeting whose	8.0
+of meetings	of meeting	26.0
+time as	start time of	2.0
+as long or shorter	is at most	2.0
+before	smaller	43.0
+me the location of	location of	3.0
+smaller than	before	43.0
+with attendee who	whose attendee is	2.0
+is at least	or after	4.0
+end time of	end time of the	14.0
+is at least	not before	5.0
+of	later than	2.0
+duration	total	3.0
+3 hours	is three hours	2.0
+is smaller than end	before end	4.0
+end time is 10am	ending at 10am	3.0
+whose date is jan	jan	3.0
+end time for the	end time of	2.0
+standup start	standup	3.0
+attend	person	2.0
+is jan	jan	46.0
+start	begins	2.0
+meeting that ended	meeting whose end time	6.0
+than two	conducted	2.0
+attendees of the	attendee of	3.0
+meeting	what is	5.0
+is greenberg	the greenberg	3.0
+location of meetings that start	location of meeting whose start	2.0
+start	occur	2.0
+one	hour	12.0
+end time is at most	ended at or before	5.0
+whose length	long	13.0
+on	date is	65.0
+hours whose	hours	4.0
+length of meeting that	length of meeting whose	8.0
+attended	attendee	13.0
+time of	time of the	33.0
+number	number of	3.0
+location that is	is	2.0
+whose end time is at	meeting ended at or	2.0
+whose length is three hours	three hour	6.0
+start time of meeting whose	time did the meeting that	5.0
+2 meeting that	2 and whose	2.0
+attendee	attended	13.0
+attendee of meeting whose start	attendee of meeting that starts	2.0
+total length of meeting	total length of the meeting	2.0
+than three hours	three hours	2.0
+is smaller than	are before	2.0
+time of	time for the	3.0
+over	than	4.0
+meeting that started	meeting whose start	18.0
+whose start time is	which start at	3.0
+who is attending the meeting	attendee of meeting whose	2.0
+the meetings	of meeting whose	4.0
+meeting whose length is	long meeting	2.0
+lengths	length	2.0
+meeting whose end	meetings which ended	4.0
+greenberg	meeting whose location is greenberg	3.0
+of weekly standup	than weekly standup	12.0
+at least 10am or 3pm	or after 10am	2.0
+of two meeting	of two meetings	2.0
+at greenberg cafe	is greenberg cafe and	3.0
+than length	than	2.0
+that started at	whose start time is	15.0
+what attendee	attendee of meeting whose	2.0
+whose	meetings	51.0
+meeting that starts at	meeting whose start time is	6.0
+on or	date is at	6.0
+have	location is location that	2.0
+is	meetings	17.0
+the duration of the meeting	length of meeting	3.0
+annual review that	annual review whose	2.0
+meetings that	meeting whose	21.0
+was before	is smaller than	2.0
+10	10am	45.0
+do i have	whose location	4.0
+at least start time of	not before start time of	2.0
+weekly standup	weekly standup whose date is	2.0
+duration	total length	2.0
+shorter	is smaller	3.0
+three	length is three	10.0
+of weekly standup	as weekly standup	5.0
+all meetings	length of	2.0
+of meeting whose length	was the meeting that was	5.0
+than	within	2.0
+as the meeting that was	is meeting whose length is	2.0
+time of meeting	what time did the meeting	10.0
+shorter than three hours	is smaller than three hours	3.0
+start time	starts	19.0
+before	time is smaller than	31.0
+length	lasted	5.0
+that ends	and whose end	5.0
+of weekly standup	the weekly roundup	2.0
+attendee is alice and	with alice	3.0
+that was	whose length is	12.0
+are	whose	3.0
+later than	at	7.0
+at least three	least three	4.0
+time of	did	2.0
+meeting whose date is	meetings on	5.0
+meeting that was	meeting whose length is	12.0
+which meeting	whose	2.0
+whose location is greenberg	in greenberg	2.0
+length	last	6.0
+whose length is	and was	2.0
+jan 2 start	jan 2	4.0
+meeting whose length	show me all	3.0
+before end time	end time	2.0
+than	before	40.0
+most 10am or	before	3.0
+is greenberg	at greenberg	8.0
+time of meeting	did the	2.0
+average length	average how long are	4.0
+meeting whose location is	what meeting	2.0
+after	date	9.0
+which starts	whose start	6.0
+when did the meeting that	start time of meeting whose	4.0
+whose start time	meeting that starts	2.0
+hours whose	hour meeting	2.0
+start time is	starting at	5.0
+alice	go	2.0
+two	conducted	2.0
+whose end time is 10am	that ends at 10 am	5.0
+later than weekly standup	time of weekly standup	2.0
+on average how	average	4.0
+end time is 10am	ended at 10am	14.0
+that was as long	whose length is	2.0
+end time of weekly	end time of the weekly	10.0
+time is at least	not before	4.0
+of two meetings	of two meeting	2.0
+did the meeting	of meeting	2.0
+and whose date is jan	on january	4.0
+of meeting whose	of the meeting	6.0
+whose end time is 10am	that ended at 10am	5.0
+end time	the ending time	5.0
+time did the	time of meeting whose	3.0
+what meetings do i have	meeting whose location	3.0
+whose end time is 10am	meeting ended at 10am	3.0
+is jan 2	jan 2 start	3.0
+time of meeting	did the meeting	7.0
+which meeting	meeting whose	3.0
+meetings that	whose	3.0
+hour	longer	2.0
+larger than three	over three	4.0
+date is jan 2	on january 2	7.0
+start before	start time is smaller than	2.0
+meeting whose date is jan	jan	3.0
+have at greenberg cafe	location is greenberg cafe	3.0
+location of meeting	the location of meetings	3.0
+whose	meeting was	4.0
+jan 2 with	jan 2 and whose	2.0
+did the meeting that started	time of meeting whose start	3.0
+time of meeting	what time did the	5.0
+is 10am	10 am	3.0
+whose end time is at	that ends at	3.0
+whose start time	that started	8.0
+whose end time	that	3.0
+at most length of weekly	long or shorter than weekly	2.0
+the attendee of	attendee of	2.0
+end time of weekly standup	than weekly standup	2.0
+is three hours whose date	are three hours	2.0
+at	longer	2.0
+jan	is jan	46.0
+the same time	least start time	2.0
+date of meeting	what day was the meeting	10.0
+that ends at	whose end time	2.0
+is smaller than end time	before	2.0
+of meeting whose	what	3.0
+dates of meetings	date of meeting	3.0
+an important	that is important	4.0
+is location of	place as	2.0
+three hours and	three hour	5.0
+on or before	is at most	4.0
+is larger	longer	4.0
+weekly	of weekly	34.0
+the end time of the	end time of	14.0
+length is smaller than	shorter than	2.0
+location of	location of the	2.0
+and whose date is jan	on jan	7.0
+on january 2nd	date is jan 2 and	4.0
+all	length	13.0
+that ends	whose end time is	10.0
+of the meeting	of meeting	26.0
+start time of weekly standup	weekly standup started	3.0
+had the	person	2.0
+the date of	date of	2.0
+whose date is jan 2	on january 2nd	4.0
+of the meeting that	of meeting whose	15.0
+10 am	least 10am	2.0
+of meeting whose date	of meetings on	2.0
+of meeting whose end	of meetings that end	4.0
+at the same time	time	2.0
+january 2nd with	is jan 2 and	2.0
+whose attendee	attendee	3.0
+of meeting	did the meeting	2.0
+meeting	of meeting whose	2.0
+cafe whose	cafe that	2.0
+location	show me the location	2.0
+what	of meeting	8.0
+three hours	three hours long	3.0
+was the meeting that was	of meeting whose length is	3.0
+10am	1000	6.0
+is alice	alice go	2.0
+2 at	2 and whose location is	2.0
+the three	three	2.0
+meeting whose	a	2.0
+length of	me the	2.0
+of weekly standup	was weekly standup	2.0
+is smaller than 10am or	before 10am or	2.0
+time did	time	23.0
+whose end time is	which ends at	4.0
+is alice	alice is	2.0
+whose date is jan 2	on jan 2	8.0
+after the end	larger than end	2.0
+the number of	number of	2.0
+the meeting that	of meeting whose	53.0
+show me	date of meeting whose	2.0
+did the	time of	14.0
+3pm start	10am or 3pm	3.0
+location is	have	2.0
+as important	is important	3.0
+long are	length	8.0
+less than two	conducted	2.0
+least	not	8.0
+no later	is at most	5.0
+standup	up	3.0
+is larger than three	over three	4.0
+meeting was	whose	4.0
+whose end	that	5.0
+meeting whose start time	meeting that started	5.0
+with attendee who	whose attendee	2.0
+2 and	2nd with	2.0
+three or more hours	at least three hours	2.0
+length of the meeting that	length of meeting whose	6.0
+smaller than 10am or	before	2.0
+average length of meeting	average length of the meeting	2.0
+who went to	attendee of	2.0
+is alice	alice as	4.0
+smaller	shorter	5.0
+length of	length is	3.0
+where is the meeting	location of meeting	4.0
+attendee is	is attending	2.0
+that ended at 10am	whose end time is 10am	5.0
+meeting	all	4.0
+length of meeting whose start	length of meetings that start	2.0
+later than	of	2.0
+meetings are	meeting whose	2.0
+that	attended	5.0
+whose	which	53.0
+is at most length of	as long or shorter than	2.0
+is	the	4.0
+length	me	2.0
+at the greenberg	whose location is greenberg	3.0
+show me	meeting whose end	2.0
+meeting whose	what is	9.0
+time did the	time of meeting	3.0
+of weekly standup that	of weekly standup whose	2.0
+is location	is location that is location	3.0
+day did	date	2.0
+time of weekly standup	weekly standup meeting	2.0
+end of weekly	end time of weekly	2.0
+hours	hours or one hour	2.0
+with alice	attendee is alice and	3.0
+whose end	meeting ended	6.0
+than end	than	2.0
+length	is	6.0
+at least jan 2	not before jan 2	3.0
+and whose date is	on	10.0
+of meeting whose end time	of meetings which ended	2.0
+length is at	was as long or	2.0
+meeting	and	12.0
+in	whose location is	2.0
+when	time	3.0
+meeting whose	meeting	47.0
+that was as	whose length is	2.0
+10 am or 3 pm	at most 10am or 3pm	2.0
+at the	and whose location	2.0
+on	and whose date	10.0
+review whose	review that	2.0
+shorter than	is smaller than	3.0
+from	at	2.0
+of meeting that ends	of meeting whose end time	4.0
+does	time	10.0
+is	have	4.0
+where was the	location of	9.0
+me the number	number	2.0
+which meetings	meeting whose	4.0
+is important	important	2.0
+is smaller than 10am or	before 10am	3.0
+earlier than	smaller than	8.0
+meeting	are	2.0
+after jan	larger than jan	2.0
+me all meetings	whose length is	3.0
+what meeting was	meeting whose	4.0
+3 hours	three hours	7.0
+when is	date	2.0
+starts before	start time is smaller than	4.0
+meeting whose location	what meeting	2.0
+before 3pm	smaller than 10am or 3pm	6.0
+smaller than	shorter than	5.0
+end at	end time	2.0
+time is at	at or	12.0
+weekly standup	end time of weekly standup	2.0
+meeting with attendee who	meeting whose attendee is	2.0
+location of meeting	where is the meeting	4.0
+three hour meeting	three hours whose	2.0
+at or before	time is at most	8.0
+total length of meeting	how long is the meeting	3.0
+the length	length	12.0
+all meetings	length is	3.0
+of meeting whose	of the meeting which	7.0
+end time of	the end time for the	2.0
+start time is smaller than	starts earlier than the	2.0
+meetings started	meeting whose start	2.0
+the end	end time	3.0
+what is the	length of meeting whose start	2.0
+start time is 10am and	starts at 10 am	2.0
+length is	long	6.0
+time did the meeting that	end time of meeting whose	4.0
+whose end time	that ended	9.0
+3pm	or 3pm	14.0
+least end time	least at the end time	2.0
+meeting whose date is at	meetings on or	3.0
+after 10am	is larger than 10am	6.0
+is three hours and	three hour meeting	2.0
+2 and whose	2nd with a	2.0
+the length of	length of	4.0
+show me the	meeting whose	3.0
+three	more	3.0
+time does the meeting	time of meeting	2.0
+whose start time is at	that started at or	3.0
+meeting whose date is at	meeting on or	2.0
+meeting whose end	show me	2.0
+are no later than	is at most	2.0
+the meeting that ended	of meeting whose end time	5.0
+starting	start	7.0
+start time is at most	starts at the	2.0
+at greenberg cafe that	is greenberg cafe and whose	2.0
+the	time of	17.0
+end time of meeting	time did the meeting	4.0
+ended	end time is	14.0
+10am	10	45.0
+time of the weekly	time of weekly	21.0
+attended	that is attendee	2.0
+jan 2 and	january 2nd with	2.0
+the start of weekly	start time of weekly	2.0
+time of meeting whose length	what time did the	3.0
+later than	time of	2.0
+time of the meeting	time of meeting	7.0
+conducted	two	2.0
+larger than	meetings after	2.0
+greenberg cafe	whose location is greenberg cafe	8.0
+least start	same	3.0
+at the	time is at	7.0
+attendee is person	had the	2.0
+ended	end time of	3.0
+who	attendee	29.0
+long is the	length of	11.0
+start at the	start time is	3.0
+less	hour	2.0
+a meeting	meeting	2.0
+lasts	length is	2.0
+january 2nd	is jan 2 and	2.0
+or shorter than weekly	at most length of weekly	2.0
+show	of meeting	12.0
+smaller than	earlier than	8.0
+not before	is at most	2.0
+on	date is at	2.0
+at the	time is	13.0
+time of	than	3.0
+of weekly	weekly	34.0
+is the end time	end time	9.0
+meeting whose	meetings are	2.0
+before end time	is smaller than end time	4.0
+has attended	is person that is attendee	2.0
+10am	10am at the	2.0
+time of weekly	time of the weekly	21.0
+weekly standup length	weekly standup	2.0
+meeting that was longer	meeting whose length is larger	3.0
+10am and	10am	13.0
+of weekly	time of weekly	4.0
+start	same	5.0
+meeting whose start	what is	3.0
+date is	on	65.0
+three hours	three hours whose date	3.0
+length of meeting whose start	length of meetings which start	2.0
+is at least jan 2	or after jan 2	3.0
+is larger than length of	longer than	2.0
+shorter than	length is smaller than	2.0
+time is at	at	21.0
+the meetings that	of meeting whose	4.0
+starts	whose start	2.0
+meeting that	whose	5.0
+what day	date	12.0
+were	length	5.0
+the weekly standup	end time of weekly standup	3.0
+shorter than three hours	smaller than three hours or	2.0
+whose date	meeting	2.0
+date is	are held on	2.0
+started before	start time is smaller than	7.0
+less	smaller	3.0
+start time of meeting	what time did the	2.0
+how many meetings lasted	number of meeting whose length	2.0
+times of	time of	2.0
+length of meeting whose	duration of the meeting that	3.0
+date of meeting whose	show me all	2.0
+attendee of	who is attending the	2.0
+do i have at greenberg	whose location is greenberg	3.0
+within	than	2.0
+length of meeting whose	show me all	2.0
+start	the start	13.0
+greenberg cafe	location is greenberg cafe and	2.0
+and whose	by	2.0
+the greenberg	whose location is greenberg	3.0
+whose location is greenberg	at greenberg	2.0
+between	or	4.0
+of meeting whose start time	of the meeting that starts	2.0
+that is less than	whose length is smaller than	2.0
+three hour meeting	is three hours and whose	4.0
+or after 10am	at least 10am or 3pm	2.0
+the end	least end	2.0
+three hour meeting	three hours and	2.0
+jan 2 that	is jan 2 and whose	4.0
+meeting whose	meeting which	14.0
+the jan 2 meeting	jan 2 and	2.0
+me the	length of	2.0
+of meeting whose date	the meeting on	6.0
+end time is larger than	end time is after	2.0
+show me the location	location	2.0
+lasted	length	5.0
+do	whose end	3.0
+the greenberg cafe	greenberg cafe and whose	2.0
+attendee of meeting whose	the attendee of meeting	2.0
+hours	hours whose date is	3.0
+average length of	average how long are the	4.0
+the	end time of	5.0
+whose end time is	that end at	5.0
+meeting whose start time is	meeting that started	5.0
+two meetings	two meeting	5.0
+was as long or shorter	length is at most length	2.0
+time is	at the	13.0
+larger than end	after the end	2.0
+whose location is	in	2.0
+how long was the meeting	total length of meeting whose	2.0
+meeting on jan 2	whose date is jan 2	7.0
+length is	was	16.0
+start time is	started	12.0
+or shorter	at most length	2.0
+10am and whose	10am and	2.0
+location	places	2.0
+shorter than three	is smaller than three	3.0
+which end	whose end	2.0
+time of	what time did the	17.0
+time is larger than	after	20.0
+time is at most 10am	at or before	3.0
+least three hours	at least three hours	4.0
+length	length of	3.0
+was the meeting that	of meeting whose	16.0
+time of the meeting which	time of meeting whose	3.0
+start time is 10am	start at 10am	6.0
+smaller than three	less than three	2.0
+after jan 2	least jan 2	4.0
+location is greenberg cafe and	greenberg cafe	2.0
+less	of less	2.0
+at the greenberg cafe	is greenberg cafe	8.0
+meeting that was	meeting whose	4.0
+three hours or one hour	one hour	2.0
+date is	for	2.0
+of meeting	of the meeting	26.0
+length	lengths	2.0
+smaller	earlier	8.0
+average length of	is the average length of	15.0
+meeting whose end	meeting that ended	17.0
+meeting which starts at	meeting whose start time is	2.0
+greenberg cafe and whose	greenberg cafe	3.0
+at most	not before	2.0
+meeting that starts	meeting whose start time is	12.0
+whose location is location that	meeting was in	2.0
+jan 2 meeting that	is jan 2 and whose	2.0
+larger than three hours	more than three hours	3.0
+the commencing	start	2.0
+end time	the end time for	2.0
+that is on	whose date is	2.0
+of meeting whose	of the meeting which is	2.0
+of meeting whose	the	8.0
+before	is smaller than 10am or	2.0
+and whose date	meeting on	6.0
+the start of	start time of	2.0
+hours and whose date	hour meeting on	2.0
+meetings end	meeting whose end time	2.0
+to	is attendee of	2.0
+january 2	whose date is jan 2	2.0
+what	meeting whose	12.0
+smaller than end	before	3.0
+three hours	3 hours	7.0
+weekly standup whose date is	weekly standup	2.0
+how long was	length	14.0
+2	2 or	3.0
+jan	january	52.0
+whose end	and end	2.0
+end time is 10am	ends at 10 am	8.0
+time of weekly	of weekly	4.0
+whose start time is 10am	that starts at 10am	5.0
+start time of meeting	what time did the meeting	6.0
+is smaller	before	3.0
+start time	the start time	10.0
+attending	alice	3.0
+end time is larger than	ends after	2.0
+cafe and	cafe	12.0
+week	standup	4.0
+is	as the	4.0
+longer than weekly	larger than length of weekly	2.0
+january	2	3.0
+is jan 2 and whose	jan 2 meeting that	2.0
+average length of meetings that	average length of meeting whose	4.0
+the average	average	23.0
+people	person	4.0
+as the meeting	is meeting	2.0
+meeting whose start	meetings that start	8.0
+time of	time	3.0
+before	is smaller than 10am	8.0
+before the	time is smaller than	2.0
+at most 10am	or before 10am	4.0
+with	and whose	2.0
+greenberg cafe whose	greenberg cafe	3.0
+total length of meeting	the total length of meetings	3.0
+the same time as	time of	3.0
+earlier than	is smaller than start	2.0
+is jan 2 and	january 2nd with	2.0
+whose location is	at	5.0
+meeting whose	show	5.0
+location is greenberg	at the greenberg	6.0
+is at most end	on or before the end	2.0
+that started	whose start time is	8.0
+at the most	time is at most	2.0
+meeting whose length	meetings lasted	2.0
+at least at the	time is at least	3.0
+of meeting whose	the meeting	16.0
+start time	what was the start time	2.0
+that is	whose	3.0
+at 10am and	time is 10am whose	4.0
+is the total length	total length	15.0
+at 10am	is 10am	2.0
+not after	at most	3.0
+and whose start time is	that starts at	2.0
+length	me the length	3.0
+meetings are	of meeting	2.0
+before	end time	2.0
+standup whose	standup	7.0
+how many meetings	number of meeting whose	13.0
+larger	later	4.0
+jan 2	january 2nd	28.0
+week	weekly	4.0
+meeting	whose attendee is	4.0
+at the greenberg	location is greenberg	6.0
+where is the meeting that	location of meeting whose	4.0
+larger	over	4.0
+meeting ended at 10am	whose end time is 10am	3.0
+than length of weekly	than weekly	2.0
+10 am	time is 10am	3.0
+whose start	is	4.0
+before 3pm	most 10am or 3pm	3.0
+meetings do	meeting whose end	2.0
+at least end	least at the end	2.0
+on january 2	date is jan 2 and	4.0
+where was the	location of meeting	2.0
+time of meeting that	time of meeting whose	5.0
+least at the	least	3.0
+on january	whose date is jan	8.0
+two meeting	two meetings	5.0
+whose end	that ends	23.0
+jan 2 and	jan 2	11.0
+has	attendee	2.0
+ends at	end time is	20.0
+smaller	before	43.0
+meeting whose end	what meeting ended	3.0
+attendee	the attendees	3.0
+average length	how long was	3.0
+2 and whose	2 which	2.0
+number of	number	3.0
+whose date is	on	17.0
+do	whose	7.0
+what	meeting whose location is	3.0
+that ends	whose end time	9.0
+that start	whose start time is	3.0
+meetings which start	meeting whose start time	2.0
+date	conducted	2.0
+before	time is smaller than 10am	7.0
+end time of	end time	2.0
+of meeting that	of meeting whose	17.0
+than end time	than	2.0
+whose location is	meeting	2.0
+at most 10am or 3pm	10 am or 3 pm	2.0
+was over three	length is larger than three	2.0
+location is greenberg	the greenberg	3.0
+2	2 or jan 3	2.0
+length is three hours	three hour	8.0
+end time is at least	ended at or after	2.0
+length of meeting whose	length of the meeting that	6.0
+the meeting that was	meeting whose length is	2.0
+average length of meeting	average length of meetings	6.0
+end time	ends at	2.0
+there	of	4.0
+most	to	3.0
+at most 10am or	10 am or 3	2.0
+whose date	meeting on	11.0
+how long was the meeting	average length of meeting	3.0
+whose end time is 10am	that ends at 10am	2.0
+smaller than three hours	shorter than three hours	4.0
+larger	more	3.0
+did the meeting that	time of meeting whose	6.0
+starts earlier than	start time is smaller than	4.0
+time is 10am	10 am	3.0
+at greenberg	location is greenberg	2.0
+earlier than	time is smaller than	7.0
+of	than the	2.0
+long	whose length	13.0
+list	start	2.0
+show	date of meeting	3.0
+time is larger than end	after end	2.0
+for january	date is jan	2.0
+the	of meeting	11.0
+total length of	is the duration of the	2.0
+hour	hours and	5.0
+meeting that ended	meeting whose end time is	6.0
+that starts at	whose start time is	8.0
+hours or one	hours	2.0
+of a meeting	of meeting whose	2.0
+no	most	8.0
+length	were	5.0
+length of meeting whose	long are the meetings	2.0
+whose length is three	a length of three	3.0
+meeting whose location is	what	3.0
+length	less	2.0
+larger than three hours	over three hours	3.0
+the	date of	3.0
+meeting whose date is	meeting that was	2.0
+of less	the	2.0
+january	whose date is jan	2.0
+is at most	are no later	2.0
+time of	what time does the	2.0
+meeting whose date is	meeting that	2.0
+least end	least at the end	2.0
+average length of the meeting	average length of meeting	2.0
+is at most	before	2.0
+designated	that	2.0
+more than	is larger than	2.0
+whose start	meeting started	2.0
+when did the	start time of	7.0
+at most	or	3.0
+place as	is location of	2.0
+and whose location	at the	2.0
+meeting whose start	meeting that started	18.0
+in	that	2.0
+meetings whose	meeting whose	2.0
+less	length	2.0
+the latest	most	2.0
+meetings on or	meeting whose date is at	3.0
+the end of weekly	end time of weekly	3.0
+whose start	that start	13.0
+larger than	after	37.0
+as long or shorter than	is at most length of	2.0
+meeting that	meeting whose length	2.0
+meeting	the meeting	4.0
+average length of meeting whose	average length of meetings that	4.0
+of meeting whose start time	was the meeting that started	2.0
+date is at most	on or before	2.0
+least at	least	3.0
+long are the	length of	6.0
+length of	how long are the	6.0
+location of meeting whose	where was the meeting that	7.0
+meeting whose end	meetings that ended	2.0
+is	than	6.0
+length of meeting whose start	what is the	2.0
+is	that	6.0
+the number	number	2.0
+jan 2	jan 2 and whose	3.0
+10am	am	47.0
+in greenberg cafe	whose location is greenberg cafe	2.0
+show me all	meeting whose	2.0
+average length of the meetings	average length of meeting	3.0
+whose start	starts	2.0
+no later than	is at most	5.0
+was the start	start	2.0
+whose attendee	meeting	4.0
+length of meeting	length of the meeting	9.0
+at most	before	6.0
+before	smaller than end time	2.0
+10 am or 3	at most 10am or	2.0
+attendee	with	12.0
+after the end time	larger than end time	2.0
+end time of weekly standup	the end of weekly standup	3.0
+meetings on	meeting whose date	5.0
+is greenberg cafe	at the greenberg cafe	8.0
+is at most length	as long or shorter	2.0
+than	than start time	2.0
+10am and	10am whose	4.0
+attendee	list	7.0
+3rd	3	4.0
+hours and	hour	5.0
+length of meeting	how long was the meeting	13.0
+an	that is	5.0
+earlier than the	smaller than start time of	2.0
+the same place as	that is location of	2.0
+time for	time	3.0
+last	length is	3.0
+is smaller	earlier	8.0
+show me the length	length	2.0
+the location of meetings that	location of meeting whose	2.0
+january 2	is jan 2 and	4.0
+are	is at	2.0
+on jan	date is jan	35.0
+start time is at least	starts at least at	2.0
+meeting whose end time is	meeting which ends at	2.0
+the weekly standup	of weekly standup	24.0
+time is at least start	not before start	2.0
+than three hours	than three hours or	2.0
+at least 10am	or after 10am	3.0
+location of	the location of the	2.0
+meetins	start	2.0
+2 and whose	2nd that	2.0
+more than three hours	larger than three hours	3.0
+after 10 am	larger than 10am	2.0
+going	attendee	2.0
+before	time is smaller	2.0
+is	held	3.0
+what time did the	time of meeting	5.0
+three hour	is three hours and	5.0
+start time is smaller than	starts earlier than	4.0
+smaller than end time	before end time	4.0
+the weekly	start time of weekly	3.0
+length of	length of the	27.0
+or after jan 2	at least jan 2	3.0
+total length of	how long	2.0
+on jan	and whose date is jan	7.0
+which last	whose length is	2.0
+end time of	time does the	2.0
+is at most	meetings before	3.0
+is smaller than 10am	before	8.0
+three	hours	2.0
+is	at a	2.0
+over three	is larger than three	4.0
+standup meeting	standup	11.0
+the location of	location of	5.0
+meeting	meeting whose end time is	4.0
+of meeting whose end time	the meeting that ended	5.0
+date of	dates	2.0
+three	than three	2.0
+of less than	the	2.0
+time is at most	at the most	2.0
+of meeting whose	of the meetings	2.0
+smaller than 10am or 3pm	before 10am or 3pm	2.0
+length is	was as long	2.0
+that start at 10am	whose start time is 10am	4.0
+time as the weekly standup	time of weekly standup	2.0
+located	location	2.0
+than	a	4.0
+end time for	end time	2.0
+larger than	my	2.0
+the duration	length	4.0
+date is jan	on jan	35.0
+what time did the	start time of meeting whose	2.0
+2 that	2 and whose	4.0
+than weekly standup	end time of weekly standup	2.0
+than 10am	10am	6.0
+location of meetings that	location of meeting whose	2.0
+was the meeting that was	of meeting whose length	5.0
+whose length	is	3.0
+that is	designated as	2.0
+larger than 10am or	after 10am	3.0
+before	smaller than	43.0
+important	that	29.0
+2 whose start	2 started	2.0
+end time is at	ended at or	8.0
+most	no	8.0
+of weekly	later than weekly	2.0
+duration	length	13.0
+end	ended	70.0
+which ends	and whose end	2.0
+or more	at least	4.0
+attendee of	list attendees of the	2.0
+and whose end	which ended	2.0
+that was	whose date	2.0
+meeting	meetings	152.0
+review that	review whose	2.0
+time does the meeting	time of meeting whose	2.0
+time is 10am and whose	at 10 am	3.0
+not before start	at least start	2.0
+of weekly standup	weekly standup	31.0
+and whose date is	meeting on	6.0
+of	was the	22.0
+that ends at	whose end time is	11.0
+time is after	time is larger than	2.0
+not	is at	3.0
+smaller than 10am	before	9.0
+of weekly standup	the week	2.0
+2	2nd	33.0
+time did the	start time of	8.0
+not after start time of	at most start time of	2.0
+the locations	location	2.0
+are	time is	2.0
+jan 2	jan 2 whose	3.0
+length of weekly standup	longer than weekly standup	2.0
+later	is at	5.0
+10 am	10am and	5.0
+date of weekly	the weekly	2.0
+whose length is	that are	2.0
+most	before	28.0
+the greenberg	greenberg	9.0
+person	had the	2.0
+date	standup	2.0
+later than	time is at	4.0
+than the ending	than end	2.0
+than weekly standup length	of weekly standup	2.0
+length of	the	4.0
+was as long or shorter	length is at most	2.0
+jan 2 and whose	january 2nd with a	2.0
+whose start	which starts	6.0
+end time is larger than	ended after	4.0
+week	weekly standup	4.0
+2 or jan	2	3.0
+of the weekly standup	of weekly standup	23.0
+whose end time	do i	3.0
+location is greenberg	have at greenberg	3.0
+same time	time	5.0
+location of meetings	location of meeting	3.0
+end time	ended	18.0
+meeting	and whose	9.0
+meeting	what	95.0
+three hour	three hours	21.0
+is at least	are	2.0
+me meetings	whose	4.0
+length of meeting whose	how long are the meetings	2.0
+attendee of meeting that starts	attendee of meeting whose start	2.0
+than 10am or	10am or	2.0
+least	after	21.0
+is larger than	over	4.0
+that was	whose	4.0
+length of meetings that start	length of meeting whose start	2.0
+which ends at	whose end time is	4.0
+three hours	than three hours	2.0
+me dates of	date of	2.0
+is the start time	start time	4.0
+alices	alice	2.0
+start time of	the start time of the	7.0
+meeting whose end time is	meetings do i have	2.0
+meeting that	meeting whose	114.0
+time did the	end time of	6.0
+date of meeting	me dates of meetings	2.0
+start time is	start	7.0
+2nd	2	33.0
+to	attendee	22.0
+than three hours or	than three hours	2.0
+meeting whose length is	the meeting that was	2.0
+january	jan 2	2.0
+ends after	end time is larger than	2.0
+is less	length is smaller	2.0
+is smaller than three	is less than three	2.0
+time of meeting whose	time of the meeting that	2.0
+at least	takes	2.0
+the weekly roundup	time of weekly standup	2.0
+time is at least 10am	at or after 10am	2.0
+alice go	alice	2.0
+number of	show me the number of	2.0
+the meetings on	of meeting whose date	2.0
+started at 10am	start time is 10am	8.0
+is the start	start	4.0
+shorter	most length	2.0
+10 am	time is 10am and	2.0
+with alice as attendee	and whose attendee is alice	3.0
+whose	with a	2.0
+length	long are	8.0
+how long	total length of	2.0
+length	how long are	7.0
+whose	which meeting	2.0
+least start	the same	3.0
+hours	hours and	4.0
+time	what time does	3.0
+were	at	3.0
+start time of	the start of	2.0
+show me all	meeting whose length	3.0
+meeting was	whose location is location	2.0
+10am	10am at	2.0
+of meetings that end	of meeting whose end	4.0
+which ended	whose end	9.0
+end time	what time does	2.0
+is jan 2	january 2nd	16.0
+jan 2	january	2.0
+of	the	323.0
+meeting at the	meeting whose location is	3.0
+meeting	which	3.0
+average length	on average how long are	4.0
+at greenberg cafe	is greenberg cafe	8.0
+is	whose length	3.0
+starts after	start time is larger than	5.0
+greenberg	is greenberg	14.0
+at least	least at	3.0
+time	the same time	2.0
+is	is location that is	5.0
+is less than	is smaller than	2.0
+the meeting	of meeting whose	16.0
+2 or	2	3.0
+start time	what is the start time	4.0
+whose location is greenberg	the greenberg	3.0
+of weekly	than weekly	12.0
+start	list	2.0
+the meeting at the	of meeting whose location is	2.0
+for the	of	3.0
+is the date	date	3.0
+more	three	3.0
+time is end	at the end	2.0
+end time	time	5.0
+meeting that starts	whose start time is	2.0
+show me the meeting	meeting whose	2.0
+up	standup	3.0
+for january	is jan	2.0
+is smaller than start	earlier than	2.0
+average how long	average length	4.0
+jan 2 or jan	jan 2	2.0
+time is at least	at or after	3.0
+time	within	4.0
+that ends at	whose end time is at	3.0
+of meetings which ended	of meeting whose end time	2.0
+meeting whose	meeting with	3.0
+at or before	time is at most 10am	3.0
+2 meeting	2 and	3.0
+is jan 2 and whose	jan 2	3.0
+at greenberg	whose location is greenberg	2.0
+location of meeting	where was the meeting	7.0
+hour meeting	hours	2.0
+2 meeting that ended	2 and whose end	2.0
+start time of meeting	when did the meeting	5.0
+that was longer than	whose length is larger than	3.0
+attendee is	as attendee	2.0
+number of meeting whose end	how many meetings end	2.0
+time of weekly	than weekly	3.0
+that	designated	2.0
+length of	the length of the	9.0
+at most	no later than	7.0
+is attending	attendee is	2.0
+meeting whose location	what	3.0
+at	start time is	3.0
+smaller than	before the	3.0
+person	shares	2.0
+attendee of meeting whose	attendee of meeting that	2.0
+alice and	by alice	3.0
+meetings which end	meeting whose end	2.0
+of meeting whose end	of the meeting that ends	4.0
+which meetings	of meeting whose	2.0
+when	date	3.0
+over	larger	4.0
+of meeting whose	meetings	7.0
+location of meeting whose	location of meetings that	2.0
+of meetings which	of meeting whose	8.0
+attendee	attendee who	2.0
+3	3rd	4.0
+me dates	date	2.0
+how long is the	total length of	5.0
+three hours whose	three hour meeting	2.0
+3pm	or	8.0
+and whose start time is	that started at	2.0
+attendee	show me the attendees	2.0
+2	2 and whose	4.0
+and whose start time is	that start at	2.0
+meetings end	meeting whose end	2.0
+date of meeting whose	day was the meeting that	8.0
+end time is	ended	14.0
+3pm	pm	6.0
+weekly standup	week	4.0
+meeting	meeting whose end	3.0
+how long was the	total length of	10.0
+on	whose date is	17.0
+whose start time is at	that starts at	5.0
+end	time	3.0
+whose start time is	which starts at	2.0
+length of three	length is three	3.0
+have	location is location	2.0
+is the meeting	meeting	2.0
+length of	long is the	11.0
+total	how	17.0
+not before	at most	2.0
+which	meeting	3.0
+a length of	whose length is	3.0
+is the ending time	end time	2.0
+start	what	6.0
+ends before	end time is smaller than	3.0
+meeting whose	meetings whose	2.0
+how many meetings end	number of meeting whose end	2.0
+10am whose	10am and	4.0
+before end time of	end time of	2.0
+and whose length is three	with a length of three	3.0
+by alice	is alice and	2.0
+date of	day did the	2.0
+three hour	whose length is three hours	6.0
+with	whose attendee is	4.0
+whose date is	meeting	3.0
+before end	end	2.0
+starts at 10am	start time is 10am and	4.0
+location is	have at	3.0
+date	when	3.0
+long is	length	11.0
+date of	what day was the	9.0
+location of	locations of	3.0
+the attendee	attendee	3.0
+same place as	that is location of	2.0
+earlier than the	is smaller than	3.0
+and ends	whose end	3.0
+larger than date of weekly	after date of weekly	2.0
+at the start	start	2.0
+meeting whose length	what	3.0
+what time did the	time of meeting whose	5.0
+time of	later than	2.0
+standup	stand up	2.0
+is meeting whose length is	as the meeting that was	2.0
+with a length of three	and whose length is three	3.0
+are the meetings	of meeting	5.0
+attended	that	5.0
+average how long are	average length	4.0
+alice go	is alice	2.0
+later than	is at	5.0
+before	smaller than 10am or	2.0
+before the	most	3.0
+at	is at	8.0
+or annual review whose	or annual review	2.0
+show me the attendees	attendee	2.0
+time is smaller than end	before	3.0
+did	time	41.0
+the	of less than	2.0
+start time of weekly standup	the start of weekly standup	2.0
+meeting	which is the meeting	2.0
+meeting whose location is	meeting at	2.0
+when did the meeting that	end time of meeting whose	2.0
+meeting whose end	meetings end	2.0
+date of meeting	day did the meeting	2.0
+started at	start time is	20.0
+at most	not	7.0
+time of weekly standup	time as the weekly standup	2.0
+of meetings	of meeting whose	3.0
+jan 2	is jan 2 whose	2.0
+list attendees	attendee	2.0
+at greenberg cafe	location is greenberg cafe and	2.0
+person that	had the same	2.0
+and whose date	on	10.0
+or after 10am	at least 10am or	2.0
+meeting whose date is jan	meeting on jan	11.0
+of meeting	of meeting whose date is	4.0
+january 2nd with a	is jan 2 and whose	2.0
+meetings after	date is larger than	2.0
+locations of	location of	3.0
+are	end time is	2.0
+jan 2 meeting that ended	jan 2 and whose end	2.0
+as the	of	3.0
+of meeting whose start time	of meeting that starts	9.0
+as the meeting that was	is meeting whose length	2.0
+my	start	4.0
+length of meeting	length of meetings	11.0
+average	on average	4.0
+the duration of the	length of	5.0
+location is	location is location that is	3.0
+of weekly	than the weekly	2.0
+standup that	standup whose	5.0
+is at most	not after	2.0
+show me all meetings that	meeting whose length	4.0
+jan 2 whose start	jan 2 started	2.0
+is 10am and	at 10am	3.0
+as the	is	4.0
+and whose	and	7.0
+of meeting whose date is	of meeting	4.0
+most	before the	3.0
+alice is	is alice and	2.0
+jan 2	january 2	13.0
+of weekly standup	weekly standup meeting	2.0
+hours and whose	hours and	2.0
+what was the start	start	2.0
+time is at least end	at least at the end	2.0
+jan 2 and whose	the jan 2 meeting that	2.0
+conducted	less than two	2.0
+attendee	who	29.0
+meeting that started	meeting whose start time is	5.0
+after	than	42.0
+or before the end	at most end	2.0
+important meeting	that is important and whose	2.0
+whose start time	which start	2.0
+10am and whose date	10am on	5.0
+10am	10am or	6.0
+10am	10am whose	6.0
+smaller than 10am or 3pm	before 3pm	6.0
+important	priority	2.0
+locations of meetings	location of meeting	2.0
+is less than three hours	is smaller than three hours	2.0
+weekly standup	the weekly standup	3.0
+after	at least	2.0
+date is jan 2 and	on jan 2	12.0
+10am whose date is	10am on	2.0
+is jan 2 and	jan 2	11.0
+january 2nd with	jan 2 and	2.0
+start	what was the start	2.0
+start	when	7.0
+is jan 2 whose start	jan 2 started	2.0
+of meeting whose date is	the meetings on	2.0
+starts not after	start time is at most	2.0
+date	day did	2.0
+at 10 am	time is at least 10am	2.0
+length	what is the duration	3.0
+date is	are	2.0
+time of weekly	later than weekly	2.0
+meeting whose	what meetings do i	4.0
+meeting	meeting whose length is	3.0
+day	date	18.0
+hours and	hours and whose	2.0
+the start	start time	2.0
+total length	the total length	15.0
+of meetings on	of meeting whose date	2.0
+of meeting whose	of meetings which	8.0
+at most	or shorter	3.0
+to	attendee is	2.0
+length of	how long was the	14.0
+is at most	no later	5.0
+is the end time of	end time of	2.0
+10am on	10am and whose date	5.0
+time of the meeting	time of meeting whose	2.0
+is larger than 10am	after 10am	6.0
+how many	number of	27.0
+later	time is at	4.0
+than	time of	3.0
+cafe and whose	cafe that	4.0
+whose date is	that are on	2.0
+a	than	4.0
+length of meeting	the length of the meeting	5.0
+that	has	3.0
+three	is three	19.0
+at most 10am or 3pm	or before 3pm	3.0
+date	was on	2.0
+whose start time is	is	2.0
+whose date is	meeting on	11.0
+the start	start	13.0
+at 10am	start time is 10am	2.0
+to	attendee of	2.0
+at the end time	end time	2.0
+ended	end	70.0
+later	larger	4.0
+at most	no later	7.0
+that ends at	and whose end time is	5.0
+than end time	than the ending time	2.0
+is alice and	by alice	2.0
+three	the three	2.0
+meeting that	meeting whose date is	2.0
+that	whose end time	3.0
+meeting whose start time is	meeting that starts at	6.0
+of three	is three	3.0
+smaller than	earlier than the	3.0
+whose date	on	17.0
+went to	attendee is	5.0
+meeting whose	show me the meeting	2.0
+length of meetings that end	length of meeting whose end	3.0
+time is	i have	2.0
+end time of the weekly	end time of weekly	10.0
+less than two meeting	conducted	2.0
+long are the meetings	length of meeting whose	2.0
+and	by	6.0
+or after 10am	at least 10am	3.0
+locations	that	2.0
+person	people	4.0
+what day did	date	2.0
+and	at	33.0
+length of weekly standup	weekly standup	4.0
+length of	long are	2.0
+end	least end	2.0
+the	is	4.0
+after date of weekly	larger than date of weekly	2.0
+ends	end time	12.0
+date of meeting	date of the meeting	2.0
+meeting	meeting whose date	2.0
+start time is 10am and	at 10am	2.0
+number	many	28.0
+attendee is alice	alice is attending	4.0
+date of meeting	day was the meeting	9.0
+end at	end time is	8.0
+time	at the	5.0
+someone	person	2.0
+end time is	ends at	20.0
+at	or later	4.0
+end time	before end time	2.0
+the jan	jan	2.0
+at	whose location is	5.0
+is the length	length	8.0
+whose length is	that is	4.0
+length of	me the length of	4.0
+attendee is person that	had the same	2.0
+show	or	3.0
+the	of	323.0
+attend	that	3.0
+time as	time is	2.0
+whose start time is	that start	3.0
+and	is	9.0
+than	after	42.0
+do i	whose	5.0
+how	of	17.0
+date of	show me dates of	2.0
+the most	most	4.0
+at 10am end	time is 10am and	2.0
+time is at most	no later	4.0
+is person that is attendee	has attended	2.0
+end time is 10am	ends at 10am	5.0
+is the end time for	end time	2.0
+location is greenberg	at greenberg	2.0
+the meeting	of meeting whose end	2.0
+attendee of	list the attendees of	3.0
+meeting whose attendee is	what meeting	4.0
+and	on	10.0
+length of	duration of the	5.0
+what	meeting whose start	2.0
+time as	time of	5.0
+of meeting whose start	of the meeting which starts	3.0
+jan 2 which	is jan 2 and whose	2.0
+smaller than 10am	before 10 am	2.0
+end time of meeting whose	what time did the	2.0
+what day was the	date of	9.0
+time is	are	2.0
+most	fewer	3.0
+time did	end time	6.0
+at	and	33.0
+time is 10am whose	at 10am and	4.0
+show me	of meeting whose	8.0
+of meeting whose start	the meeting that started	13.0
+length of meeting whose date	show me all meetings on	2.0
+is three hours	are three hours	7.0
+that are	whose length is	2.0
+meeting on	whose date	11.0
+whose start time is at	that begins at	2.0
+and whose	meeting that	3.0
+end time	end times	2.0
+at or after	time is at least	3.0
+location	what is the location	3.0
+at most length	or shorter	2.0
+2nd with	2 and	2.0
+date is jan 2 and	on january 2nd with	2.0
+of the meetings	of meeting whose	2.0
+at	are	2.0
+is at most	not before	2.0
+many	number	28.0
+within	time	4.0
+of	was	26.0
+whose	that was	4.0
+annual review whose	annual review	2.0
+jan 2 started	is jan 2 whose start	2.0
+a meeting on january	meeting whose date is jan	2.0
+meeting	is the meeting	2.0
+of weekly	of the weekly	24.0
+the greenberg cafe	whose location is greenberg cafe	3.0
+on jan 2	date is jan 2 whose	2.0
+meeting started	whose start	2.0
+length of three hours	length is three hours	3.0
+after 10am	time is larger than 10am	5.0
+length is	lasts	2.0
+meetings that start	meeting whose start time	2.0
+meeting whose date	meetings on	5.0
+where is	location	6.0
+whose length is smaller	that is less	2.0
+was the	of meeting	2.0
+alice is	is alice	2.0
+whose start time is smaller	which starts earlier	2.0
+whose attendee is person	with attendee who has	2.0
+of meeting	of a	2.0
+start time is at least	starts at least	2.0
+total length of	the total length of	8.0
+my	length is	2.0
+at 10am	is 10am and	3.0
+time of meeting whose	did the meeting that	6.0
+time is smaller than 10am	before 10am	10.0
+of meeting whose end	the meeting	2.0
+is at	later than	5.0
+least	at least	9.0
+10am at the	10am	2.0
+and whose	meeting	9.0
+latest	at most	3.0
+meeting	whose date is	3.0
+meeting	whose date	2.0
+my	location	4.0
+is smaller than	before	36.0
+start time is at most	starts not after	2.0
+meeting whose length	show me all meetings that	4.0
+of	are the	8.0
+meeting whose length is	meeting that was as	2.0
+of weekly standup	of the weekly standup	23.0
+how long is	total length	5.0
+that start at	whose start time is	8.0
+greenberg cafe	is greenberg cafe and	3.0
+than	end time of	2.0
+is greenberg cafe	the greenberg cafe	3.0
+whose end	that end	10.0
+meetings on january 2nd	date is jan 2	2.0
+is three	than three	3.0
+of meeting whose end	the meeting that ended	11.0
+duration of the meeting that	length of meeting whose	3.0
+date is jan 2 and	on january 2	4.0
+time is larger than	time is after	2.0
+conducted	than two	2.0
+what meeting was	meeting whose location is location	2.0
+start time is at least	starts at least at the	2.0
+long was the meeting	length of meeting whose	5.0
+most	at most	4.0
+the average length of meetings	average length of meeting	6.0
+at greenberg	is greenberg	8.0
+end time of	before end time of	2.0
+time	time does	6.0
+that was	whose length	15.0
+attendee is alice and	attended by alice	2.0
+before end	is smaller than end	4.0
+greenberg	location is greenberg	11.0
+least	or	4.0
+what is the total	total	6.0
+three hours and	three hour meeting	2.0
+after	least	21.0
+that	an	8.0
+whose date is jan	january	2.0
+duration is	length is	2.0
+than	is	6.0
+three hours or	three hours	2.0
+end time is at most	ends at	4.0
+whose	that is	3.0
+is less	is smaller	2.0
+standup	date	2.0
+which ended at	and whose end time is	2.0
+2 and	2nd	3.0
+whats the average	average	2.0
+i	time	2.0
+with a length	and whose length	3.0
+length of the meetings which	length of meeting whose	2.0
+than	than length	2.0
+whose attendee is alice	with alice	3.0
+locations	location	8.0
+how many meetings do	number of meeting whose end	2.0
+of	than	12.0
+length of weekly	than weekly	2.0
+end time of the	end time of	14.0
+or before	at most 10am or	3.0
+are the	of	8.0
+at the end	end	2.0
+of meeting whose length is	the meeting that was	7.0
+at least	least	9.0
+3	is three	2.0
+length	total length	4.0
+is larger than	more than	2.0
+than	of	12.0
+that	is	6.0
+at or before 10am	time is at most 10am	3.0
+that	in	2.0
+whose end time is 10am	which ends at 10am	2.0
+show me the location of	location of	3.0
+the end of	end time of	3.0
+to	most	3.0
+end time	the end time	24.0
+total length of the	total length of	9.0
+start time	what time did	8.0
+attendee of meeting	attendee of meeting whose	3.0
+the end	end	28.0
+whose length is three	three	7.0
+ending time of the	end time of	5.0
+how many	number	11.0
+standup	standup whose date is	2.0
+my	time	3.0
+of meeting whose date is	of meetings on	2.0
+the greenberg cafe	greenberg cafe	9.0
+attendee is alice	with alice as attendee	2.0
+or	at least	2.0
+meeting whose attendee is person	meeting with attendee who has	2.0
+by	and	6.0
+the same	least start	3.0
+end time of	the	5.0
+time of meeting	time did the	3.0
+cafe	cafe and	12.0
+after	date is larger than	3.0
+which starts earlier	whose start time is smaller	2.0
+for three	is three	2.0
+of the weekly	of weekly	24.0
+smaller than	less than	2.0
+date is jan	the jan	2.0
+average length of meeting whose	average length of meetings which	2.0
+weekly standup	weekly standup date	2.0
+what is the end	end	6.0
+is the end	end	9.0
+or	3pm	8.0
+over	larger than	4.0
+meeting	are meetings	2.0
+is three hours	of three hours	3.0
+whose length is larger than	that was longer than	3.0
+smaller than	was before	2.0
+weekly standup	weekly roundup	3.0
+location	locations	8.0
+alice as	is alice	4.0
+had the same	attendee is person that	2.0
+day was the meeting	date of meeting	9.0
+start time is smaller than	starts before	4.0
+whose end time	which ended	5.0
+the end time of weekly	end time of weekly	3.0
+meeting whose start time is	meeting which starts at	2.0
+is at least	not	4.0
+person that is attendee	shares an attendee	2.0
+meeting	a meeting	2.0
+the weekly	weekly	3.0
+total length of	the duration of the	2.0
+10am	10am end	5.0
+length	lasts	4.0
+10am or 3pm	3pm start	3.0
+whose attendee is	with attendee who	2.0
+that alice went to	whose attendee is alice	2.0
+jan 2	jan 2 start	4.0
+before end	time is smaller than end	4.0
+whose start	meeting that starts	3.0
+meeting whose end time is	meeting	4.0
+is at	later	5.0
+show	length of meeting	5.0
+weekly standup ended	end time of weekly standup	4.0
+than length of	than	2.0
+total length of	how long is the	5.0
+meeting whose end time is	what meeting ended at	3.0
+me	whose end	2.0
+show me all meetings	meeting whose length	2.0
+length is three hours	are three hours long	2.0
+meeting whose location is location	what meeting was	2.0
+time of meeting whose	time does the meeting	2.0
+of	of meeting whose	2.0
+hours and whose date is	hour meeting on	2.0
+lasts three	length is three	2.0
+meetings on	and whose date	2.0
+meeting on jan	meeting whose date is jan	11.0
+was the	of	22.0
+least three	three	2.0
+at least	least at the	3.0
+the jan	is jan	2.0
+is greenberg cafe	at greenberg cafe	8.0
+time is smaller	earlier	7.0
+at	after	7.0
+time of	time does the	4.0
+which started	whose start time	2.0
+start	the commencing	2.0
+meetings on	meeting whose date is	5.0
+whose location is greenberg	do i have at greenberg	3.0
+is smaller than 10am or	before	2.0
+meeting that	and whose	3.0
+2	2 start	4.0
+shorter	smaller	5.0
+whose date	meetings on	3.0
+at least at	time is at least	3.0
+time do	time	2.0
+what time does	start time	2.0
+time is smaller than 10am	earlier than 10 am	2.0
+than the	than	4.0
+is jan	january	24.0
+greenberg cafe and	the greenberg cafe	4.0
+is larger than 10am	after 10 am	2.0
+time of weekly	weekly	18.0
+start time is 10am and	starting at 10am	2.0
+the jan 2	is jan 2	2.0
+the attendees	attendee	3.0
+meetings	meeting	152.0
+whose	meetings that	3.0
+date is jan 2 whose	on jan 2	2.0
+is three hours	three hours	6.0
+lasts	length	4.0
+most length of weekly	shorter than weekly	2.0
+whose end time is	that ends at	11.0
+date is jan 2	jan 2	3.0
+pm	3pm	6.0
+on january	date is jan	21.0
+meeting whose date is	meeting on	14.0
+on average how long	average length	4.0
+that end at	whose end time is	5.0
+after date	larger than date	2.0
+before	is at most	2.0
+one	less	2.0
+whose date is jan	on jan	9.0
+on or before	date is at most	2.0
+date of the meeting that	date of meeting whose	2.0
+what time did the	time of	17.0
+of the weekly standup meeting	of weekly standup	5.0
+meeting whose	which meetings	4.0
+people	of person	2.0
+end times	end time	2.0
+meetings that start at	meeting whose start time is	6.0
+end	before end	2.0
+end time of	the ending time of the	5.0
+time	did	41.0
+was over	length is larger than	2.0
+date is jan	jan	3.0
+meeting whose length is	show me all	2.0
+that is attendee	an attendee	3.0
+of meeting whose date	the meeting that was on	2.0
+10am	10am or 3pm	6.0
+commencing time of the	start time of	2.0
+the start time	start time	10.0
+hours whose date	hours	3.0
+meeting on	and whose date is	6.0
+time of meeting	the meeting	2.0
+meeting that started at	meeting whose start time is	11.0
+location is location	have	2.0
+end time	is the end time	9.0
+one hour	one	12.0
+weekly standup	weekly standup meeting	11.0
+start of weekly standup	start time of weekly standup	2.0
+starts at	start time is at least	2.0
+is 10am	10am	5.0
+or more	is at least	2.0
+the meeting	of meeting whose end time	2.0
+average length of	how long is the average	5.0
+end time is	end on	2.0
+at most end	or before the end	2.0
+average length	what is the average length	11.0
+three hours and	three hours	2.0
+after the	larger than	2.0
+cafe whose	cafe	3.0
+than	length of	2.0
+show me all meetings	meeting whose length is	3.0
+standup	standup end	4.0
+of weekly standup	later than weekly standup	2.0
+that starts	and whose start	2.0
+whose length is	for	2.0
+was weekly	of weekly	2.0
+is larger	more	2.0
+10am whose	10am	6.0
+smaller than 10am or	before 10am or	2.0
+of weekly standup	of weekly standup whose	3.0
+meeting whose	meetings	27.0
+at the greenberg cafe	is greenberg cafe and	6.0
+start time of weekly	start time of the weekly	3.0
+which start	whose start time is	2.0
+time	times	3.0
+and whose date	meetings on	2.0
+how long was the meeting	length of meeting	13.0
+jan 2 that	jan 2 and whose	4.0
+on jan 2	whose date is jan 2	8.0
+january 2nd	is jan 2	16.0
+of meeting whose date	the meetings on	2.0
+date is jan	for january	2.0
+time is 10am	at 10 am	13.0
+whose length is	is	6.0
+number	the number	2.0
+meeting whose date is jan	what meeting on jan	2.0
+is three hours and	three hour	5.0
+start time of meeting whose	time did the	2.0
+1000 am	10am	3.0
+on january 2	date is jan 2	7.0
+meetings	of meeting whose	7.0
+the jan 2 meeting that	is jan 2 and whose	2.0
+of meeting whose	are the	3.0
+end time of weekly	the end of weekly	3.0
+attendee is alice	alice as attendee	2.0
+jan 2	is jan 2 and	11.0
+at the	time	5.0
+time is 10am	at 10am	53.0
+fewer	most	3.0
+how long are	length	7.0
+of meeting that ends	of meeting whose end	4.0
+time of weekly	the same time as weekly	3.0
+meeting whose end time	meetings end	2.0
+before	is smaller than	36.0
+before 10am	time is smaller than 10am	10.0
+length of meeting whose	what is the	2.0
+whose attendee is alice and	with alice	2.0
+is the meeting	of meeting	10.0
+least at	at least	3.0
+roundup	standup	3.0
+time of weekly standup	later than weekly standup	2.0
+three	least three	2.0
+meeting which ends at	meeting whose end time is	2.0
+what is the length	length	6.0
+date of meeting whose	date of the meeting that	2.0
+total length of meetings which	total length of meeting whose	3.0
+whose start time is	that started	8.0
+weekly standup whose date	weekly standup	2.0
+is jan 2	january 2	8.0
+time of	time as	5.0
+and whose end time is	and ended at	2.0
+with	whose	14.0
+or 3pm	3pm	14.0
+me the number of	number of	2.0
+ends at	end time is at least	2.0
+not	at	22.0
+or before the end time	at most end time	2.0
+average length of meeting whose	average length of meeting that	3.0
+what is the location	location	3.0
+at	later than	7.0
+and whose location is greenberg	at greenberg	2.0
+at	time is at least	5.0
+did the	of	3.0
+that	been	3.0
+end time is smaller than	ended before	7.0
+meetings end	meeting whose end time is	3.0
+what is the average	average	12.0
+important	is important	2.0
+weekly standup end	weekly standup	4.0
+cafe	cafe whose	3.0
+jan 2 and	jan 2 meeting	3.0
+end time of weekly	ending time of the weekly	3.0
+takes	is at least	2.0
+time of the meeting that	time of meeting whose	2.0
+length is smaller than	is less than	2.0
+most 10am	before	3.0
+length of meeting	long are the meetings	4.0
+start time is 10am	at 10am	2.0
+later	3pm	3.0
+person	had	6.0
+is	whose	17.0
+jan 2	jan 2 or jan	2.0
+person	has	6.0
+meeting	show me meetings	3.0
+or	least	4.0
+and whose end	and ended	2.0
+end	what is the end	6.0
+is smaller than	earlier than	8.0
+whose end time	that end	3.0
+whose	are	3.0
+least jan	after jan	4.0
+meetings after	whose date is larger than	2.0
+whose date is jan 2	on january 2	4.0
+what	end	4.0
+ends at	whose end time is	2.0
+date is jan 2	the jan 2	2.0
+where was the meeting that	location of meeting whose	7.0
+after date of	larger than date of	2.0
+not before start	is at least start	2.0
+whose attendee	with attendee who	2.0
+of weekly standup	the weekly standup	24.0
+is three	for three	2.0
+time	i	2.0
+at most length of	long or shorter than	2.0
+before	than	40.0
+not before	at least	8.0
+which ended at 10am	whose end time is 10am	3.0
+are	at	2.0
+am	10am	47.0
+whose	and	25.0
+meeting that was as long	meeting whose length is	2.0
+are three hours	is three hours whose	3.0
+what meetings	meeting	5.0
+whose	any	2.0
+is meeting whose	as the meeting that	2.0
+the length of meetings	length of meeting	2.0
+end time is	end at	8.0
+the meeting that was	of meeting whose length is	7.0
+of the meeting that starts	of meeting whose start	5.0
+date	me dates	2.0
+meetings that end	meeting whose end	4.0
+2 and whose length is	2nd with a length of	2.0
+meeting whose end time	meeting that ends	6.0
+of	did the	3.0
+date of meeting whose	show me	2.0
+date of	the date of	2.0
+meeting which ended	meeting whose end	2.0
+beginning	start	3.0
+when	end	9.0
+the total length of meetings	total length of meeting	3.0
+is smaller than	before the	2.0
+before	is smaller	3.0
+time is 10am and	at 10am end	2.0
+whose end time	that ends at	2.0
+standup date	standup	2.0
+long or	at	3.0
+the meeting that was	of meeting whose length	9.0
+end	end time	15.0
+that is	whose length is	4.0
+has	person that	2.0
+length of weekly standup	than weekly standup	2.0
+whose end time is	which ended at	4.0
+are	is	24.0
+location of	show me the location of	3.0
+day did the meeting	date of meeting	2.0
+meeting whose	meeting that is	2.0
+of weekly	as weekly	5.0
+list	attendee	7.0
+at most	or before the	3.0
+the ending time of the	end time of	5.0
+time	my	3.0
+i	whose	7.0
+that starts at	whose start time is at	5.0
+location is	at	6.0
+day did the meeting that	date of meeting whose	2.0
+what day did the	date of	2.0
+attendee	attendees	17.0
+day did the	date of	2.0
+end time of weekly standup	end of weekly standup	2.0
+meeting number that	number of meeting whose	2.0
+meetings	is	17.0
+date is jan	meetings on january	2.0
+whose	a	8.0
+end time	ending time	5.0
+before	time is smaller than end	3.0
+whose	i	7.0
+before	most 10am	3.0
+at least	time is at least	3.0
+length	duration	13.0
+whose length is smaller	shorter	2.0
+starts earlier	start time is smaller	4.0
+starts at	start time is at most	2.0
+person	someone	2.0
+where is the	location of	4.0
+what time did	end time	7.0
+meeting on	meeting whose date is	14.0
+most length of weekly standup	shorter than weekly standup	2.0
+earlier than the	time is smaller than	3.0
+is greenberg cafe and whose	at the greenberg cafe	2.0
+before 3pm start	smaller than 10am or 3pm	2.0
+total length	duration	2.0
+has	that	3.0
+attendee	has	2.0
+long are	length of meeting	2.0
+the attendees of the	attendee of	2.0
+at least 10am or	or after 10am	2.0
+long or shorter	at most	2.0
+date	what day did	2.0
+the meeting that ends	of meeting whose end	3.0
+a length	whose length	3.0
+january 2nd with a	jan 2 and whose	2.0
+date is jan	january	2.0
+time	start time	4.0
+started	whose start	3.0
+time	recent	3.0
+meeting whose length is larger	meeting that was longer	3.0
+at least three hours	three or more hours	2.0
+the jan 2	jan 2	2.0
+location is	in	4.0
+is jan 2 and whose	jan 2 with	2.0
+after jan 2	larger than jan 2	2.0
+time is at least	at least at	3.0
+end time	what time did	7.0
+alice	alice and	6.0
+length is larger than three	was over three	2.0
+an attendee	that is attendee	3.0
+whose length	which last	2.0
+in	location is	4.0
+whose length is larger	that was longer	3.0
+date of	what day did the	2.0
+me	whose	38.0
+length	is the duration	4.0
+on or before the end	is at most end	2.0
+as attendee	attendee is	2.0
+start time of the	start time of	7.0
+three hour	length is three hours	8.0
+end time is at least	ends not before	3.0
+three hours or one hour	three hours	2.0
+shorter	length	2.0
+is the duration	length	4.0
+meeting on	and whose date	6.0
+how	number	29.0
+the total	total	15.0
+long	length of	3.0
+at least end time	not before end time	2.0
+start time	time did	8.0
+whose length	me all meetings	2.0
+me the length of meetings	length of meeting	2.0
+long	length is	6.0
+of the meeting which is	of meeting whose	2.0
+less	fewer	2.0
+of	of the	81.0
+a	whose	8.0
+is jan	the jan	2.0
+which is the meeting	meeting	2.0
+time	at	163.0
+start time of	start time of the	7.0
+of meeting	meeting	8.0
+end time	end time of	2.0
+meeting that is on	meeting whose date is	2.0
+of meeting whose	show	3.0
+person that	shares an	2.0
+location of meeting whose	where is the meeting that	4.0
+the weekly standup or annual	weekly standup or annual	2.0
+same time or	at	2.0
+length is larger than length	was longer than	2.0
+weekly standup date	weekly standup	2.0
+whose length is	that was as	2.0
+that alice is attending	whose attendee is alice	4.0
+meeting	show meetings	2.0
+starts at the	start time is at	3.0
+whose date is jan	meeting on january	4.0
+long or shorter than	at most length of	2.0
+jan 2 and whose	jan 2 that	4.0
+total	duration	3.0
+end	is the end	9.0
+is the total	total	15.0
+less	one hour	2.0
+than three	is three	3.0
+start	at the start	2.0
+smaller than three hours	less than three hours	2.0
+time	end	3.0
+at most length	long or shorter	2.0
+is at most	as long or shorter	2.0
+location	the location	6.0
+length of	is the duration of the	5.0
+time of the	time of	33.0
+meeting that ends	meeting whose end time is	6.0
+that is important	designated as important	2.0
+alice is attending	attendee is alice and	2.0
+meetings do i have	meeting whose end time is	2.0
+standup	standup meeting	11.0
+conducted	date	2.0
+as long	is	3.0
+location is greenberg cafe	in greenberg cafe	3.0
+of meeting whose end	of meetings which ended	2.0
+show meetings	meeting whose	2.0
+time is at most	not after	2.0
+alice	attending	3.0
+meeting whose date	meeting that was on	2.0
+at least jan	or after jan	3.0
+at least jan 2	or after jan 2	3.0
+held	date	7.0
+a	meeting	7.0
+meeting	meeting whose end time	3.0
+was weekly standup	of weekly standup	2.0
+how long is the average	average length of	5.0
+is larger than 10am or	after 10am	2.0
+of meeting whose end time	the meeting	2.0
+at the greenberg	is greenberg	8.0
+ending	end	15.0
+meeting whose	meeting which is	2.0
+i have	time is	2.0
+most	not	10.0
+end	before	2.0
+meeting whose length	show me all meetings	2.0
+of meeting whose end	was the meeting that ended	4.0
+standup whose	standup that	5.0
+or	show	3.0
+before the	smaller than	3.0
+earlier than 10 am	is smaller than 10am	2.0
+attendee of meeting whose	what attendee	2.0
+at most 10am	before 10am	2.0
+whose start time	is	3.0
+in	location	6.0
+greenberg cafe and whose	the greenberg cafe	2.0
+alice	alice go	2.0
+average length of meeting	the average length of meetings	6.0
+than	than the	4.0
+date is jan	on january	21.0
+was as long	length is	2.0
+10am	10am and whose	8.0
+not before start time	at least start time	2.0
+10 am	10am	41.0
+time is at most	at	7.0
+conducted	than two meeting	2.0
+ended at 10am	end time is 10am and	6.0
+longer than	larger than length of	2.0
+an	is	7.0
+at 10am and	time is 10am and	3.0
+in greenberg	location is greenberg	3.0
+are the	of meeting	2.0
+time is at least	at	5.0
+is smaller	is less	2.0
+greenberg cafe	greenberg cafe and whose	3.0
+10am	than 10am	6.0
+of meeting whose date is	the meeting on	6.0
+or before 10am	at most 10am	4.0
+of meeting whose location is	the	2.0
+start	commencing	4.0
+long are the meetings that	length of meeting whose	3.0
+meeting ended at or	whose end time is at	2.0
+of meeting whose end time	of meetings that end	3.0
+commencing time of the weekly	start time of weekly	2.0
+as	is	26.0
+person	attend	2.0
+time of weekly	the weekly	11.0
+whose location	do i have	4.0
+end time of weekly	before end time of weekly	2.0
+at	is	205.0
+which ends	whose end	6.0
+at the greenberg cafe	location is greenberg cafe	6.0
+after end time of	larger than end time of	3.0
+least start time	the same time	2.0
+time is at most	no later than	4.0
+length is larger than	was over	2.0
+of meeting whose	of the meetings which	2.0
+by	and whose	2.0
+meetings on	whose date	3.0
+was	length is	16.0
+weekly	time of weekly	18.0
+which ended	and whose end	2.0
+as weekly	of weekly	5.0
+whose start time	that start	4.0
+alice go to	attendee is alice	2.0
+2nd	2 and	3.0
+meeting whose location is greenberg	greenberg	3.0
+number of meeting whose	how many meetings are	2.0
+the greenberg	location is greenberg	3.0
+the length of the meeting	length of meeting	5.0
+time is larger than 10am	after 10 am	2.0
+at greenberg cafe	location is greenberg cafe	2.0
+whose location is greenberg	at the greenberg	3.0
+larger than date	after date	2.0
+the duration of the	total length of	2.0
+time did the	start time of meeting	2.0
+as	of	15.0
+number	how	29.0
+ended at	end time is	27.0
+is	length is	6.0
+of meeting whose	which meetings	2.0
+at	or	66.0
+whose end time is	meeting ended at	5.0
+and whose	with	2.0
+total	any	2.0
+not after	is at most	2.0
+start	was the start	2.0
+show me all meetings	length of meeting whose	2.0
+that is important and whose	important meeting	2.0
+that ends at 10am	whose end time is 10am	2.0
+whose start	started	3.0
+on	whose date	17.0
+how many people	number of person	2.0
+meeting whose end	meeting that ends	14.0
+of meeting whose length	show me all meetings that	2.0
+time of	time did the	22.0
+what	meeting whose length	3.0
+had	person	6.0
+the same	least	4.0
+whose start time is	that start at	8.0
+three hours	3 hours long	3.0
+how long was the meeting	total length of meeting	9.0
+location of meeting	locations of meetings	2.0
+10am at	10am	2.0
+than weekly standup	of weekly standup	12.0
+is the duration of the	total length of	2.0
+is meeting whose length	as the meeting that was	2.0
+at	up	2.0
+2 and whose end	2 meeting that ended	2.0
+ends at 10 am	end time is 10am	8.0
+date	held	7.0
+at most 10am or	or before	3.0
+10am or	than 10am or	2.0
+have	is	4.0
+greenberg	whose location is greenberg	8.0
+starts at least at	start time is at least	2.0
+jan 2 and	january 2nd	3.0
+not before end time of	at least end time of	2.0
+attendee of	attending the	2.0
+meeting	whose location is	2.0
+not	is at least	4.0
+date of	the date of the	2.0
+before 10am	most 10am	5.0
+the jan	whose date is jan	2.0
+smaller than end	before end	4.0
+what	time of meeting	2.0
+starts at	start time is	14.0
+what time does the	end time of	2.0
+whose date is jan 2	meeting on january 2	2.0
+takes	at least	2.0
+is attendee	to	2.0
+location of meeting	me the location of meetings	2.0
+attendee of	list the attendees of the	2.0
+of meeting whose location	the	3.0
+are	is at least	2.0
+greenberg cafe whose	greenberg cafe that	2.0
+average length of meeting	average length of the meetings	3.0
+least end	end	2.0
+meeting whose length	what is	3.0
+for	length is	2.0
+larger	longer	10.0
+whose length	that lasts	3.0
+attendees	attendee	17.0
+meeting whose start time	meetings that start	2.0
+larger than length of	longer than	2.0
+that end	whose end	10.0
+whose length is	that was as long	2.0
+time of weekly standup	time as weekly standup	5.0
+length	was	51.0
+start	my	4.0
+location	is the location	3.0
+at least	is at least	4.0
+time is	time as	2.0
+10am	before 10am	3.0
+meetings which ended	meeting whose end time is	2.0
+length of meeting whose	length of meetings that	5.0
+is at least three hours	at least three hours	3.0
+meetings before	is at most	3.0
+length is larger	was longer	3.0
+after 10am	larger than 10am or 3pm	3.0
+how	average	10.0
+which last	whose length	2.0
+meeting whose	meeting that	114.0
+larger than 10am or 3pm	after 10am	3.0
+of meeting whose	show me	8.0
+duration of the meeting	length of meeting	4.0
+did the	time of meeting	2.0
+less than three	smaller than three	2.0
+meeting whose end time is	meetings which ended	2.0
+at most	not after	3.0
+end time is at	end on or	2.0
+of weekly standup	the weekly standup meeting	3.0
+before the	is smaller than	2.0
+10am and	10 am	5.0
+not	at most	7.0
+meeting that ended at	meeting whose end time is	7.0
+of meeting whose	are the meetings	2.0
+end time of meeting	what time did the meeting	4.0
+most 10am	10am	2.0
+that ended at	whose end time is end	2.0
+of meeting whose length	the	3.0
+location	in	6.0
+of the meeting that ends	of meeting whose end	4.0
+at most length of	or shorter than	2.0
+time did the	time of	22.0
+total length	the duration	2.0
+what is the	of meeting whose start	2.0
+that	in the same	3.0
+attendee is alice	alice went to	4.0
+started at or before	start time is at most	3.0
+length is smaller	shorter	2.0
+of weekly standup whose	of weekly standup that	2.0
+of meeting whose	was the meeting that	16.0
+whose date is larger than	meetings after	2.0
+start time is at	starts at	7.0
+is at most	no later than	5.0
+location	my	4.0
+have at greenberg	location is greenberg	3.0
+after 10 am	time is larger than 10am	2.0
+than weekly	end time of weekly	2.0
+the locations of	location of	2.0
+at least end time	least at the end time	2.0
+that starts	whose start time is	16.0
+end	end time is	3.0
+average length	whats the average length	2.0
+show me all	length of meeting whose	2.0
+larger than end time	after the end time	2.0
+attendee is alice whose	alice go to that	2.0
+of the meeting that is	of meeting whose	2.0
+stand up	standup	2.0
+length is three	lasts three	2.0
+average how	average	4.0
+longer than	length of	2.0
+location of meeting	location of meeting whose	2.0
+length	all meetings	4.0
+has	person	6.0
+longer than weekly standup	length of weekly standup	2.0
+the jan 2 meeting	is jan 2 and	2.0
+the attendee of meeting	attendee of meeting whose	2.0
+meeting whose	meeting that was	4.0
+of weekly standup	than the weekly standup	2.0
+number of	how many	27.0
+the meeting that was	of meeting whose	3.0
+jan 2 meeting	jan 2 and	3.0
+that was on	whose date	2.0
+jan 2	is jan 2	44.0
+when did	start time	7.0
+time is smaller than	before the	2.0
+at most length of weekly	or shorter than weekly	2.0
+whose date is jan 2	jan 2 meeting	2.0
+in greenberg	whose location is greenberg	2.0
+jan 2 and whose	jan 2	3.0
+standup whose date is	standup	2.0
+attendee of	the attendee of	2.0
+start at 10am	start time is 10am and	2.0
+at the	whose location is	3.0
+end time of the meeting	end time of meeting	3.0
+length of meeting whose	long are the meetings that	3.0
+whose	me	38.0
+before	most	28.0
+of meeting that starts	of meeting whose start time	9.0
+start of	start time of	2.0
+of meeting whose start	is the meeting that starts	2.0
+date of meeting	show me dates of meetings	2.0
+time of meeting whose	time of the meeting	2.0
+location of meeting whose	the location of meetings that	2.0
+do	end	3.0
+is the location of the	location of	2.0
+start time	time	4.0
+meeting	meeting whose date is	5.0
+whose end time is	that ended	9.0
+length of meetings that	length of meeting whose	5.0
+and ended	and whose end	2.0
+whose location is location	meeting	2.0
+before	is smaller than end	3.0
+meeting ended	whose end	6.0
+date of meeting	dates of meetings	3.0
+and whose date is jan	meeting on jan	5.0
+with	attendee is	6.0
+jan	2	4.0
+january 2	jan 2 and	4.0
+end at 10am	end time is 10am	4.0
+after 10 am	is larger than 10am	2.0
+whose	is	17.0
+started	start time	20.0
+2	january	3.0
+whose end time is 10am	which ended at 10am	3.0
+duration of the	length of	5.0
+time did the meeting	end time of meeting	4.0
+at greenberg cafe	is greenberg cafe whose	2.0
+2 and whose location is	2 at	2.0
+time of	the	17.0
+how many meetings are	number of meeting whose	2.0
+the weekly standup or	weekly standup or	2.0
+whose start	that started	26.0
+long	length	75.0
+at the start time	start time	2.0
+length	long	75.0
+what time did the meeting	end time of meeting	4.0
+meeting whose start	meeting which starts	5.0
+whose	do	7.0
+and was	whose length is	2.0
+length of weekly	weekly	4.0
+10am and whose	10am	8.0
+with	attendee	12.0
+that is important	important	8.0
+standup	standup whose date	2.0
+of meeting whose	the meeting that	53.0
+time of meeting whose length	time did the	3.0
+that is	location that is	2.0
+of meeting whose	show me meetings that	3.0
+end time	time does	2.0
+date is jan 2	on january 2nd	14.0
+length of meeting whose start	length of meeting that starts	4.0
+what time did	start time	8.0
+that started at	and whose start time is	2.0
+date is larger than	meetings after	2.0
+of meeting whose	of meeting	9.0
+designated as important	that is important	2.0
+more than	larger than	3.0
+standup	stand	2.0
+number	show me the number	2.0
+the three hour	three hours	2.0
+length of meetings which start	length of meeting whose start	2.0
+location of meeting	location of the meeting	2.0
+is meeting	as the meeting	2.0
+as the weekly standup	of weekly standup	3.0
+length of	long	3.0
+time did	start time	8.0
+is the average length of	average length of	15.0
+starts at 10 am	start time is 10am and	2.0
+start time of	the commencing time of the	2.0
+time of the weekly standup	time of weekly standup	20.0
+start time	before start time	2.0
+cafe that	cafe whose	2.0
+january	date is jan	2.0
+dates	date of	2.0
+weekly standup	weekly standup end	4.0
+time of weekly standup	weekly standup	17.0
+the jan	meeting whose date is jan	2.0
+the start time of the	start time of	7.0
+are meetings	meeting	2.0
+what time did the	end time of meeting whose	2.0
+least	longer	2.0
+is jan 2 and	january 2nd	2.0
+before 10am	is smaller than 10am or	3.0
+shorter than three hours	smaller than three hours	4.0
+larger than jan 2	after jan 2	2.0
+start	start time	11.0
+before 10am	is smaller than 10am	12.0
+before end time of weekly	end time of weekly	2.0
+less than	smaller than	2.0
+what day was the meeting	date of meeting	10.0
+whose location is	do i have at	3.0
+date of meeting	the date of the meeting	2.0
+meeting whose	which meeting	3.0
+how long is the meeting	total length of meeting	3.0
+which starts	whose start time	2.0
+the meeting	of meeting whose location	2.0
+length of the meeting	length of meeting	9.0
+meeting whose date is	meeting	5.0
+total length of meeting	how long are	2.0
+larger than date of	after date of	2.0
+time did the	time of meeting whose length	3.0
+is three	of three	3.0
+whose end	which end	2.0
+before start time of	start time of	2.0
+whose start time is smaller	that starts earlier	2.0
+me the length of	length of	4.0
+meeting that was as	meeting whose length is	2.0
+alice went to	attendee is alice	4.0
+earlier	is smaller	8.0
+is at least	or more	2.0
+the date	date	4.0
+length of	all meetings	2.0
+end time of meeting	what time did the	2.0
+at least three hours	least three hours	4.0
+location is greenberg cafe and	at greenberg cafe	2.0
+after	larger than	37.0
+of meeting whose end	show me	2.0
+larger than end time	after end time	3.0
+of weekly	the weekly	26.0
+what time did the meeting	time of meeting	10.0
+of meeting	of	4.0
+is less than	length is smaller than	2.0
+is	and	9.0
+of a	of meeting	2.0
+weekly standup	weekly standup whose date	2.0
+length	how long	11.0
+meetings which ended	meeting whose end	4.0
+the location of the	location of	2.0
+whose date is jan 2	january 2	2.0
+end time	when did	7.0
+is at	meetings	2.0
+meeting whose end time is	meeting that ends at	5.0
+with a	and whose	3.0
+at most end time	or before the end time	2.0
+time did the meeting	time of meeting	10.0
+location of meeting	location of meetings	3.0
+time as weekly	start time of weekly	2.0
+meetings which	meeting whose	15.0
+smaller than three hours or	shorter than three hours	2.0
+10am	10am and	13.0
+time is 10am and	at 10 am	3.0
+that ended	whose end	25.0
+as the meeting that	is meeting whose	2.0
+what time does	end time	2.0
+what meetings do i	meeting whose	4.0
+is	are	24.0
+of meeting whose start	of meeting that starts	10.0
+date is larger than	after	3.0
+weekly standup meeting	weekly standup	11.0
+and	and whose	7.0
+attendee	went	18.0
+as weekly standup	of weekly standup	5.0
+and whose location is	at the	3.0
+greenberg cafe that	greenberg cafe whose	2.0
+before start time	start time	2.0
+whose attendee is alice	that alice is attending	4.0
+that was as long or	whose length is at	2.0
+at 10am	time is 10am whose	4.0
+end time	at the end time	2.0
+the average length	average length	22.0
+date	meetings on	2.0
+time as the weekly	time of weekly	2.0
+that	attend	3.0
+than three hours or one	than three hours	2.0
+start time	start	11.0
+shorter	length is smaller	2.0
+at least three	is at least three	3.0
+is person	had the	2.0
+length of meeting	show	5.0
+less	one	2.0
+show me meetings that	length of meeting whose	2.0
+meeting whose	show me all	2.0
+what is the end time	end time	6.0
+total length of meeting whose	how long was the meeting	2.0
+three hours	three hour	21.0
+attendee of meeting	list the attendees of meetings	2.0
+started at or	start time is at	4.0
+or later	at	4.0
+whose start	that starts	30.0
+standup or annual review whose	standup or annual review	2.0
+at	from	2.0
+jan 2 and whose end	jan 2 meeting that ended	2.0
+smaller than start	earlier than	2.0
+alice is attending	attendee is alice	4.0
+time of	time as the	2.0
+at most start time of	not after start time of	2.0
+that	whose length	7.0
+are the meetings that	of meeting whose	3.0
+alice go to that	attendee is alice whose	2.0
+meeting whose start time	meetings which start	2.0
+is location that is	is	5.0
+of weekly	as the weekly	3.0
+attendee is person	had	2.0
+hour	less	2.0
+whose location is	meeting was	2.0
+is smaller than end time	before end time	4.0
+length of meeting whose	long was the meeting that	20.0
+not before jan 2	at least jan 2	3.0
+three hours	three hours whose date is	3.0
+smaller	less	3.0
+than 10am	than 10 am	2.0
+is the	of	19.0
+had the	attendee is person	2.0
+date is	meetings on	2.0
+cafe that	cafe and whose	4.0
+same	least start	3.0
+on january 2nd	date is jan 2	14.0
+did the meeting	time of meeting	7.0
+attendee	who went to	11.0
+total length of	how long was the	10.0
+location of meeting whose	location of meeting	2.0
+length of	than	2.0
+is the	is	3.0
+the commencing time of the	start time of	2.0
+the ending time	end time	5.0
+length is three hours and	three hour	3.0
+priority	important	2.0
+longer	least	2.0
+the meeting that ended	of meeting whose end	11.0
+standup or annual review	standup or annual review whose	2.0
+length of meeting whose	length of meeting	2.0
+the same	that	5.0
+end time of	is the end time of	2.0
+is greenberg	greenberg	14.0
+cafe	cafe and whose	3.0
+less than	of less than	2.0
+less than two	of less than two	2.0
+meetings	meeting whose length	2.0
+whose end	ends	2.0
+which start	whose start	5.0
+meeting whose length is	meeting that was as long	2.0
+me	length	2.0
+longer than	is larger than length	2.0
+start time is 10am and	start at 10am	2.0
+whose	me the	4.0
+attendee is alice and	alice is attending	2.0
+of meeting	meetings are	2.0
+meeting whose date is	a meeting on	2.0
+recent	time	3.0
+the meeting that starts	of meeting whose start	3.0
+earlier than	is smaller than start time	2.0
+number	me the number	2.0
+whose end time is	ends at	2.0
+start time is at	begins at	2.0
+hour meeting	hours whose	2.0
+more than three	is larger than three	2.0
+10am or 3pm	10am	6.0
+january 2	date is jan 2	2.0
+that begins at	whose start time is at	2.0
+or	show me	3.0
+is three	are three	7.0
+length of meeting whose	length of meetings which	5.0
+which start at	whose start time is	3.0
+start time of	start of	2.0
+before start time of weekly	start time of weekly	2.0
+three or more	is at least three	2.0
+at 10am and	time is 10am and whose	2.0
+meeting whose attendee is	meeting with attendee who	2.0
+length	the duration	4.0
+weekly	the weekly	3.0
+whose length is	which last	2.0
+meeting whose start time	what is	2.0
+is at	on or	5.0
+annual review whose	annual review that	2.0
+end time of meeting whose	when did the meeting that	2.0
+greenberg cafe and	greenberg cafe	12.0
+earlier than the	smaller than	3.0
+total length	is the total length	15.0
+when did the meeting	start time of meeting	5.0
+length of weekly	longer than weekly	2.0
+meeting whose date is	what meeting on	2.0
+the date of the meeting	date of meeting	2.0
+that is location of	in the same place as	2.0
+before 10am or	smaller than 10am or	2.0
+fewer	two	2.0
+than weekly	of weekly	12.0
+10am whose date	10am on	2.0
+start time is at least	starts at	2.0
+the weekly	date of weekly	2.0
+person that is attendee of	has attended	2.0
+of	is the	19.0
+at least end time of	not before end time of	2.0
+date of	the	3.0
+are	date is	2.0
+shorter	whose length is smaller	2.0
+meeting whose start	meeting that starts	20.0
+three hours	three hours or one	2.0
+whose end	do	3.0
+meeting that was on	meeting whose date	2.0
+date	is the date	3.0
+latest	most	3.0
+whose end	which ends	6.0
+three hours	three hours and	2.0
+is greenberg cafe and	at the greenberg cafe	6.0
+meeting whose	show meetings	2.0
+standup	standup date	2.0
+is three	three	19.0
+end	is the ending	2.0
+whose end time is	which ended	4.0
+date is jan 2	on jan 2	34.0
+the meeting	of meeting	66.0
+length of meeting on	length of meeting whose date	2.0
+start	meetins	2.0
+whose length is	me all meetings	3.0
+hours or one hour	hours	2.0
+one	one hour	12.0
+total length of meeting whose	total length of meeting that	3.0
+whose end	that ended	25.0
+on or	is at	5.0
+location is greenberg cafe	at the greenberg cafe	6.0
+time as weekly	time of weekly	5.0
+by alice	alice and	3.0
+at the greenberg cafe	is greenberg cafe and whose	2.0
+the end time for the	end time of	2.0
+that starts at 10am	whose start time is 10am	5.0
+whose end	me	2.0
+meeting whose length	meeting	4.0
+at the greenberg	and whose location is greenberg	3.0
+of meeting whose	of meeting which	2.0
+or shorter than	at most length of	2.0
+whose end time is	do i have	3.0
+meetings which start	meeting whose start	3.0
+that ended at or	whose end time is at	4.0
+the same time	time	2.0
+of meeting	is the meeting	10.0
+whose end	meetings that end	2.0
+start time	started	20.0
+three	3	9.0
+is	whose start time is	2.0
+the meeting on	of meeting whose date	6.0
+meeting whose date is jan	a meeting on january	2.0
+average length of meeting	show	2.0
+of the meeting which starts	of meeting whose start	3.0
+time of weekly standup	the weekly standup	9.0
+attendee	went to	8.0
+time of weekly	time as weekly	5.0
+attended by alice	attendee is alice and	2.0
+number of meeting whose	meeting number that	2.0
+did the meeting that was	time of meeting whose length	2.0
+after end	is larger than end	2.0
+start time is	start at the	3.0
+location of meeting	the location of the meeting	2.0
+whose attendee is	with	4.0
+length of	is the length of the	9.0
+at	time is at	21.0
+date is at	on or	6.0
+is the average	average	22.0
+total length	how long	7.0
+time of meetings	time of meeting	2.0
+and	with	7.0
+meeting	which meeting	2.0
+of meeting whose length	the meeting that was	9.0
+than two meeting	than two meetings	3.0
+time	at the same time	2.0
+after	is larger than	24.0
+the	start time of	6.0
+meeting whose end time is	meeting that ended	6.0
+have	location	9.0
+what day did the meeting	date of meeting	2.0
+three hours	the three hour	2.0
+time as weekly standup	start time of weekly standup	2.0
+whose end time	that start	2.0
+attendee of meeting whose	attendee of meeting	3.0
+is the meeting that	of meeting whose	8.0
+not	time is at least	4.0
+time as the	time of	2.0
+standup whose date	standup	2.0
+length of meeting whose end	length of meetings that end	3.0
+that started at 10am	whose start time is 10am	4.0
+long was the meeting	length of meeting	25.0
+is larger than length	longer than	2.0
+the	of less	2.0
+is the duration	total length	2.0
+important	important and	2.0
+time did the meeting that	time of meeting whose	9.0
+jan 2	whose date is jan 2	3.0
+hours	hour meeting	2.0
+time is 10am and	at 10am and	3.0
+meeting whose	show me meetings	4.0
+show me all	of meeting whose	2.0
+earlier than 10 am	smaller than 10am	2.0
+at greenberg cafe	whose location is greenberg cafe	2.0
+whose start time is	which starts	2.0
+weekly standup ended	weekly standup	2.0
+attendee of	who went to the	8.0
+who is attending	attendee	2.0
+that is important	an important	4.0
+time of weekly standup	of weekly standup	4.0
+alice and whose	alice that	3.0
+than two meetings	than two meeting	3.0
+meeting whose	meetings which	15.0
+been	that is	2.0
+after	whose date is larger than	2.0
+start time of meeting whose	what time did the	2.0
+for	is	10.0
+2 whose	2 that	2.0
+a meeting on	meeting whose date	2.0
+is	meeting	59.0
+weekly standup meeting	of weekly standup	2.0
+least three	at least three	4.0
+no later	time is at most	4.0

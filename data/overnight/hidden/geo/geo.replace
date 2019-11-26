@@ -1,0 +1,133 @@
+# Replacement logical forms
+
+(population:i (the $0 (and (major:t $0) (loc:t $0 wisconsin:s) (city:t $0))))
+(population:i (and (major:t $0) (loc:t $0 wisconsin:s) (city:t $0)))
+
+(lambda $0 e (exists $1 (and (state:t $1) (loc:t mississippi_river:r $1) (= (population:i $1) $0))))
+(lambda $0 e (exists $1 (and (state:t $1) (river_loc:t mississippi_river:r $1) (population:t $1 $0))))
+
+(argmax $0 (and (place:t $0) (loc:t $0 (the $1 (and (state:t $1) (capital:t $1 des_moines_ia:c))))) (elevation:i $0))
+(argmax $0 (and (place:t $0) (exists $1 (and (state:t $1) (capital:t $1 des_moines_ia:c) (loc:t $0 $1)))) (elevation:i $0))
+
+(argmax $0 (and (river:t $0) (loc:t $0 (the $1 (and (state:t $1) (loc:t (argmax $2 (place:t $2) (elevation:i $2)) $1))))) (len:i $0))
+(argmax $0 (and (river:t $0) (exists $1 (and (state:t $1) (loc:t (argmax $2 (place:t $2) (elevation:i $2)) $1) (river_loc:t $0 $1)))) (len:i $0))
+
+(count $0 (and (river:t $0) (loc:t $0 (the $1 (and (state:t $1) (loc:t (argmax $2 (place:t $2) (elevation:i $2)) $1))))))
+(count $0 (and (river:t $0) (exists $1 (and (state:t $1) (loc:t (argmax $2 (place:t $2) (elevation:i $2)) $1) (river_loc:t $0 $1)))))
+
+(lambda $0 e (and (major:t $0) (city:t $0) (exists $1 (and (state:t $1) (loc:t $0 $1) (loc:t (the $2 (and (river:t $2) (major:t $2) (loc:t $2 virginia:s))) $1)))))
+(lambda $0 e (and (major:t $0) (city:t $0) (exists $1 (and (state:t $1) (loc:t $0 $1) (exists $2 (and (river:t $2) (major:t $2) (river_loc:t $2 virginia:s) (loc $2 $1)))))))
+
+(capital:c (the $1 (and (state:t $1) (loc:t (argmax $2 (place:t $2) (elevation:i $2)) $1))))
+(capital:c (and (state:t $1) (loc:t (argmax $2 (place:t $2) (elevation:i $2)) $1)))
+
+(lambda $0 e (and (state:t $0) (loc:t (argmax $1 (place:t $1) (elevation:i $1)) $0)))
+(argmax $1 (state:t $1) (elevation:i $1))
+
+(lambda $0 e (and (state:t $0) (equals:t (capital:c $0) columbus_oh:c)))
+(lambda $0 e (and (state:t $0) (capital:t $0 columbus_oh:c)))
+
+(area:i (the $0 (and (state:t $0) (capital:t $0 albany:c))))
+(area:i (and (state:t $0) (capital:t $0 albany:c)))
+
+(lambda $0 e (and (state:t $0) (equals:t (capital:c $0) dover_de:c)))
+(lambda $0 e (and (state:t $0) (capital:t $0 dover_de:c)))
+
+(argmax $0 (and (state:t $0) (next_to:t $0 (the $1 (and (state:t $1) (loc:t (argmin $2 (and (place:t $2) (loc:t $2 usa:co)) (elevation:i $2)) $1))))) (size:i $0))
+(argmax $0 (and (state:t $0) (exists $1 (and (state:t $1) (loc:t (argmin $2 (and (place:t $2) (loc:t $2 usa:co)) (elevation:i $2)) $1) (next_to:t $0 $1)))) (size:i $0))
+
+(argmax $0 (and (place:t $0) (loc:t $0 (the $1 (and (state:t $1) (capital:t $1 des_moines_ia:c))))) (elevation:i $0))
+(argmax $0 (and (place:t $0) (exists $1 (and (state:t $1) (capital:t $1 des_moines_ia:c) (loc:t $0 $1)))) (elevation:i $0))
+
+(lambda $0 e (and (river:t $0) (loc:t $0 (the $1 (and (state:t $1) (loc:t (argmin $2 (and (place:t $2) (loc:t $2 usa:co)) (elevation:i $2)) $1))))))
+(lambda $0 e (and (river:t $0) (exists $1 (and (state:t $1) (loc:t (argmin $2 (and (place:t $2) (loc:t $2 usa:co)) (elevation:i $2)) $1) (river_loc:t $0 $1)))))
+
+(count $0 (and (river:t $0) (not (loc:t $0 (the $1 (and (state:t $1) (capital:t $1 albany_ny:c)))))))
+(count $0 (and (river:t $0) (exists $1 (and (state:t $1) (capital:t $1 albany_ny:c) (not (river_loc:t $0 $1))))))
+
+(lambda $2 e (named:t (the $0 (and (state:t $0) (loc:t (argmin $1 (place:t $1) (elevation:i $1)) $0))) $2))
+(lambda $2 e (exists $0 (and (named:t $0 $2) (state:t $0) (loc:t (argmin $1 (place:t $1) (elevation:i $1)) $0))))
+
+(lambda $0 e (and (river:t $0) (exists $1 (and (state:t $1) (loc:t $0 $1) (next_to:t $1 (the $2 (and (state:t $2) (capital:t $2 atlanta_ga:c))))))))
+(lambda $0 e (and (river:t $0) (exists $1 (and (state:t $1) (river_loc:t $0 $1) (exists $2 (and (next_to:t $1 $2) (state:t $2) (capital:t $2 atlanta_ga:c)))))))
+
+(lambda $0 e (and (state:t $0) (equals:t (capital:c $0) sacramento_ca:c)))
+(lambda $0 e (and (state:t $0) (capital:t $0 sacramento_ca:c)))
+
+(count $0 (and (state:t $0) (next_to:t $0 (the $1 (and (state:t $1) (capital:t $1 boston_ma:c))))))
+(count $0 (and (state:t $0) (exists $1 (and (next_to:t $0 $1) (state:t $1) (capital:t $1 boston_ma:c)))))
+
+(lambda $0 e (and (state:t $0) (loc:t (argmax $1 (and (river:t $1) (loc:t $1 usa:co)) (len:i $1)) $0)))
+(lambda $0 e (and (state:t $0) (loc:t (argmax $1 (and (river:t $1) (loc:t $1 usa:co)) (size:i $1)) $0)))
+
+(lambda $0 e (and (river:t $0) (loc:t $0 (the $1 (and (state:t $1) (loc:t (argmax $2 (and (city:t $2) (loc:t $2 usa:co)) (size:i $2)) $1))))))
+(lambda $0 e (and (river:t $0) (exists $1 (and (river_loc:t $0 $1) (state:t $1) (loc:t (argmax $2 (and (city:t $2) (loc:t $2 usa:co)) (size:i $2)) $1)))))
+
+(population:i (the $0 (and (major:t $0) (loc:t $0 wisconsin:s) (city:t $0))))
+(population:i (and (major:t $0) (loc:t $0 wisconsin:s) (city:t $0)))
+
+(count $0 (and (state:t $0) (loc:t $0 usa:co) (loc:t (argmin $1 (river:t $1) (len:i $1)) $0)))
+(count $0 (and (state:t $0) (loc:t $0 usa:co) (river_loc:t (argmin $1 (river:t $1) (len:i $1)) $0)))
+
+(lambda $0 e (and (river:t $0) (loc:t $0 (argmin $1 (and (state:t $1) (loc:t $1 usa:co)) (elevation:i $1)))))
+(lambda $0 e (and (river:t $0) (river_loc:t $0 (argmin $1 (and (state:t $1) (loc:t $1 usa:co)) (elevation:i $1)))))
+
+(lambda $0 e (and (state:t $0) (loc:t mississippi_river:r $0) (loc:t (argmin $1 (and (place:t $1) (exists $2 (and (state:t $2) (loc:t mississippi_river:r $2) (loc:t $1 $2)))) (elevation:i $1)) $0)))
+(lambda $0 e (and (state:t $0) (river_loc:t mississippi_river:r $0) (loc:t (argmin $1 (and (place:t $1) (exists $2 (and (state:t $2) (river_loc:t mississippi_river:r $2) (loc:t $1 $2)))) (elevation:i $1)) $0)))
+
+(argmin $0 (and (place:t $0) (exists $1 (and (state:t $1) (loc:t mississippi_river:r $1) (loc:t $0 $1)))) (elevation:i $0))
+(argmin $0 (and (place:t $0) (exists $1 (and (state:t $1) (river_loc:t mississippi_river:r $1) (loc:t $0 $1)))) (elevation:i $0))
+
+(argmax $0 (and (place:t $0) (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (river:t $2) (loc:t $2 $1)))))) (elevation:i $0))
+(argmax $0 (and (place:t $0) (loc:t $0 (argmax $1 (state:t $1) (count $2 (and (river:t $2) (river_loc:t $2 $1)))))) (elevation:i $0))
+
+(lambda $0 e (and (state:t $0) (loc:t (argmax $1 (and (river:t $1) (loc:t $1 usa:co)) (len:i $1)) $0)))
+(lambda $0 e (and (state:t $0) (loc:t (argmax $1 (and (river:t $1) (river_loc:t $1 usa:co)) (len:i $1)) $0)))
+
+(argmax $0 (and (river:t $0) (loc:t $0 (argmin $1 (and (state:t $1) (loc:t $1 usa:co)) (size:i $1)))) (len:i $0))
+(argmax $0 (and (river:t $0) (river_loc:t $0 (argmin $1 (and (state:t $1) (loc:t $1 usa:co)) (size:i $1)))) (len:i $0))
+
+(argmax $0 (and (river:t $0) (loc:t $0 texas:s)) (size:i $0))
+(argmax $0 (and (river:t $0) (river_loc:t $0 texas:s)) (len:i $0))
+
+(capital:c (the $1 (and (state:t $1) (next_to:t (the $2 (and (state:t $2) (next_to:t $2 texas:s))) $1))))
+(capital:c (and (state:t $0) (next_to:t $0 (and (state:t $1) (next_to:t $1 texas:s)))))
+
+(lambda $0 e (and (state:t $0) (exists $1 (and (state:t $1) (loc:t mississippi_river:r $1) (next_to:t $0 $1)))))
+(lambda $0 e (and (state:t $0) (exists $1 (and (state:t $1) (river_loc:t mississippi_river:r $1) (next_to:t $0 $1)))))
+
+(lambda $0 e (and (state:t $0) (loc:t potomac_river:r $0)))
+(lambda $0 e (and (state:t $0) (river_loc:t potomac_river:r $0)))
+
+(lambda $0 e (and (state:t $0) (loc:t mississippi_river:r $0)))
+(lambda $0 e (and (state:t $0) (river_loc:t mississippi_river:r $0)))
+
+(lambda $0 e (and (state:t $0) (next_to:t $0 mississippi_river:r)))
+(lambda $0 e (and (state:t $0) (river_loc:t mississippi_river:r $0)))
+
+(argmax $0 (and (state:t $0) (loc:t rio_grande_river:r $0)) (size:i $0))
+(argmax $0 (and (state:t $0) (river_loc:t rio_grande_river:r $0)) (size:i $0))
+
+(population:i (capital:c (argmax $1 (and (state:t $1) (loc:t mississippi_river:r $1)) (size:i $1))))
+(population:i (capital:c (argmax $1 (and (state:t $1) (river_loc:t mississippi_river:r $1)) (size:i $1))))
+
+(count $0 (and (state:t $0) (loc:t mississippi_river:r $0)))
+(count $0 (and (state:t $0) (river_loc:t mississippi_river:r $0)))
+
+(lambda $0 e (and (river:t $0) (exists $1 (and (state:t $1) (next_to:t $1 (the $2 (and (state:t $2) (capital:t $2 austin_tx:c)))) (river_loc:t $0 $1)))))
+(lambda $0 e (and (river:t $0) (exists $1 (and (state:t $1) (next_to:t $1 (and (state:t $2) (capital:t $2 austin_tx:c))) (river_loc:t $0 $1)))))
+
+(lambda $0 e (and (state:t $0) (exists $1 (and (state:t $1) (loc:t ohio_river:r $1) (next_to:t $0 $1)))))
+(lambda $0 e (and (state:t $0) (exists $1 (and (state:t $1) (river_loc:t ohio_river:r $1) (next_to:t $0 $1)))))
+
+(lambda $0 e (and (state:t $0) (loc:t missouri_river:r $0)))
+(lambda $0 e (and (state:t $0) (river_loc:t missouri_river:r $0)))
+
+(lambda $0 e (and (state:t $0) (next_to:t $0 missouri_river:r)))
+(lambda $0 e (and (state:t $0) (river_loc:t missouri_river:r $0)))
+
+(lambda $0 e (and (major:t $0) (city:t $0) (exists $1 (and (state:t $1) (loc:t mississippi_river:r $1) (loc:t $0 $1)))))
+(lambda $0 e (and (major:t $0) (city:t $0) (exists $1 (and (state:t $1) (river_loc:t mississippi_river:r $1) (loc:t $0 $1)))))
+
+(argmax $0 (and (city:t $0) (loc:t $0 (argmin $1 (and (state:t $1) (loc:t mississippi_river:r $1)) (size:i $1)))) (size:i $0))
+(argmax $0 (and (city:t $0) (loc:t $0 (argmin $1 (and (state:t $1) (river_loc:t mississippi_river:r $1)) (size:i $1)))) (size:i $0))

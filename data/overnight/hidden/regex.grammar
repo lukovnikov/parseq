@@ -1,0 +1,54 @@
+# Agile grammar for regex
+(include general.grammar)
+
+#Types
+(rule $TypeNP (line) (ConstantFn (lambda x (var x))))
+# word/number modify in different way from line so I made it a function
+(rule $TypeNP (word) (ConstantFn (lambda x (call + (string "\\\\b\(") (string "[a-zA-Z]+&\(") (var x) (string "\)\)\\\\b")))))
+# line that contains at least three word
+(rule $TypeNP (word) (ConstantFn (string "\\\\b[a-zA-Z]+\\\\b"))) # line that contains at least three word
+(rule $TypeNP (number) (ConstantFn (lambda x (call + (string "\\\\b\(") (string "[0-9]+&\(") (var x ) (string "\)\)\\\\b")))))
+(rule $TypeNP (number) (ConstantFn (string "\\\\b[0-9]+\\\\b"))) # line that contains at least three word
+
+#Modifiers
+(rule $VP/NP1 (contains) (ConstantFn (lambda x (call + (string ".*") (var x) (string ".*")))))
+(rule $VP/NP (starts with) (ConstantFn (lambda x (call + (var x) (string ".*")))))
+(rule $VP/NP (ends with) (ConstantFn (lambda x (call + (string ".*") (var x) ))))
+#Conjunctions
+(rule $BinaryOp (after) (ConstantFn (lambda x (lambda y (call .concat (var x) (call .concat (string ".*") (var y))))))) 
+(rule $BinaryOp (before) (ConstantFn (lambda x (lambda y (call .concat (var y) (call .concat (string ".*") (var x)))))))
+
+#Numbers
+(rule $Number (two) (ConstantFn (number 2))) 
+(rule $Num ($Number) (lambda x (call .toString (var x))))
+
+#Constants
+(rule $EntityNP1 (vowel) (ConstantFn (string "[AEIOUaeiou]")))
+(rule $EntityNP1 (letter) (ConstantFn (string "[A-Za-z]")))
+(rule $EntityNP1 (capital letter) (ConstantFn (string "[A-Z]")))
+(rule $EntityNP1 (lowercase letter) (ConstantFn (string "[a-z]")))
+(rule $EntityNP1 (character) (ConstantFn (string ".")))
+(rule $EntityNP2 (digit) (ConstantFn (string "[0-9]")))
+(rule $TypeNP (vowel) (ConstantFn (string "[AEIOUaeiou]")))
+(rule $TypeNP (letter) (ConstantFn (string "[A-Za-z]")))
+(rule $TypeNP (capital letter) (ConstantFn (string "[A-Z]")))
+(rule $TypeNP (lowercase letter) (ConstantFn (string "[a-z]")))
+(rule $TypeNP (character) (ConstantFn (string ".")))
+(rule $TypeNP (digit) (ConstantFn (string "[0-9]")))
+
+(rule $String ($PHRASE) (FilterPosTagFn span reverse ' ` '' ``) (anchored 1))
+(rule $QuotedString (` $String ') (IdentityFn) (anchored 1))
+(rule $QuotedString (`` $String '') (IdentityFn) (anchored 1))
+
+(rule $EntityNP1 ($QuotedString) (IdentityFn) (anchored 1))
+(rule $EntityNP2 ($QuotedString) (IdentityFn) (anchored 1))
+
+(rule $QuotedString (`` abc '') (ConstantFn (string "abc"))) 
+(rule $QuotedString (`` 123 '') (ConstantFn (string "123"))) 
+(rule $EntityNP1 ($QuotedString) (IdentityFn))
+
+(rule $EntityNP1 (the word $QuotedString) (lambda x (call + (string "\\\\b\(") (string "[a-zA-Z]+&\(") (var x) (string "\)\)\\\\b"))))
+(rule $EntityNP2 (the number $QuotedString) (lambda x (call + (string "\\\\b\(") (string "[0-9]+&\(") (var x) (string "\)\)\\\\b"))))
+
+
+

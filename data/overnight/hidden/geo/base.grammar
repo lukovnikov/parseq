@@ -1,0 +1,175 @@
+# Include this file after named entity definitions
+
+# Macros to simplify Freebase expressions
+(include geo.macros)
+
+# Lexicon lookup of named entities
+
+(when (not hardcode)
+  # Matching unaries (SimpleNounPhrase)
+
+  (rule $Noun ($LEMMA_TOKEN) (FilterPosTagFn token WRB WP NN NNS NNP NNPS))
+  (rule $SimpleNounPhrase ($Noun) (ConcatFn " "))
+  (rule $SimpleNounPhrase ($Noun $SimpleNounPhrase) (ConcatFn " "))
+
+  # Matching binaries (CompositeRel)
+
+  (rule $Verb ($LEMMA_TOKEN) (FilterPosTagFn token VB VBD VBN VBG VBP VBZ VBD-AUX))
+  (rule $Particle ($LEMMA_TOKEN) (FilterPosTagFn token RP))
+  (rule $Prep ($LEMMA_TOKEN) (FilterPosTagFn token IN TO))
+  (rule $Adj ($LEMMA_TOKEN) (FilterPosTagFn token JJ))
+
+  (rule $Rel ($LEMMA_TOKEN) (FilterPosTagFn token NN NNS NNP NNPS VB VBD VBN VBG VBP VBZ IN VBD-AUX JJ))
+  (rule $BaseRel ($Rel) (IdentityFn)) # parents
+  (rule $BaseRel ($Verb $SimpleNounPhrase) (ConcatFn " "))
+  (rule $BaseRel ($Verb $Particle) (ConcatFn " ")) # grow up
+  (rule $CompositeRel ($BaseRel) (ConcatFn " ")) # grow up, parents
+  (rule $CompositeRel ($BaseRel $Prep) (ConcatFn " ")) # grow up in, parents of
+
+  # Lexicon lookup of unaries and binaries
+
+  (rule $Unary ($SimpleNounPhrase) (LexiconFn unary)) # Example: "city"
+  (rule $Binary ($CompositeRel) (LexiconFn binary)) # Example: "capital", "developed"
+)
+
+# Hard-coded unaries and binaries
+
+(when hardcode
+  # Hard-coded unaries
+
+  (for @x (state states) (rule $Unary (@x) (ConstantFn (@type @state))))
+  (for @x (river rivers) (rule $Unary (@x) (ConstantFn (@type @river))))
+  (for @x (point points mountain mountains) (rule $Unary (@x) (ConstantFn (@type @mountain))))
+  (for @x (city cities town towns) (rule $Unary (@x) (ConstantFn (@type @city))))
+  (for @x (lake lakes) (rule $Unary (@x) (ConstantFn (@type @lake))))
+  (for @x (capital capitals) (rule $Unary (@x) (ConstantFn ((reverse @capital) (@type @state)))))
+
+  # TODO Try integrating into something else, issue re-assigning to unary after join
+  # and the betaReduce
+  (rule $BetaReduce (major) (ConstantFn (lambda x (and (var x) (@area (>= 200)))) (-> @location @city)))
+  (rule $BetaReduce (major) (ConstantFn (lambda x (and (var x) (@length (>= 2000)))) (-> @location @river)))
+  (rule $BetaReduce (major) (ConstantFn (lambda x (and (var x) (@surface_area (>= 2000)))) (-> @location @lake)))
+  (for @x (named called) (rule $BetaReduce (@x) (ConstantFn has_name (-> @topic @topic))))
+  (rule $Unary ($BetaReduce ($Padding optional) $Unary) (JoinFn forward betaReduce))  # FIXME
+  (rule $Unary ($BetaReduce ($Padding optional) $NamedEntity) (JoinFn forward betaReduce))  # FIXME
+
+  # Hard-coded binaries
+
+  (for @x (where in contains) $Binary (@x) (ConstantFn contains (-> @location @location)))
+  (for @x (in run runs pass passes flow flows flowing cross crosses) $Binary (@x) (ConstantFn river_containedby (-> @location @river)))
+  (rule $Binary (go through) (ConstantFn river_containedby (-> @location @river)))
+  (for @x (border borders bordering next neighbor neighbors neighboring surrounding adjoin adjoins) $Binary (@x) (ConstantFn adjoins (-> @location @location)))
+  (rule $Binary (capital) (ConstantFn (reverse capital) (-> @location @city)))
+
+  # Numerical properties
+  (for @x (big size area large) $Binary (@x) (ConstantFn (reverse area) (-> @location @fb_number)))
+  (for @x (long length) $Binary (@x) (ConstantFn (reverse length) (-> @river @fb_number)))
+  (for @x (high height elevation) $Binary (@x) (ConstantFn (reverse elevation) (-> @location @fb_number)))
+  (for @x (population populous populated inhabitants citizens people) $Binary (@x) (ConstantFn latitude (-> @location @fb_number)))
+  (rule $Binary (density) (ConstantFn longitude (-> @location @fb_number)))
+  (rule $Binary (population density) (ConstantFn longitude (-> @location @fb_number)))
+  (rule $Binary (average population) (ConstantFn longitude (-> @location @fb_number)))
+
+  # Named / called (e.g. how many states have a city named austin)
+  (rule $Binary (named called) (ConstantFn (reverse name) (-> @location @fb_string)))
+)
+
+# Skip / padding
+
+(rule $Padding ($PHRASE) (IdentityFn))
+
+# Aggregation
+
+(rule $CountStr (how many) (ConstantFn null null))
+(rule $CountStr (number of) (ConstantFn null null))
+(rule $Operator ($CountStr) (ConstantFn (lambda x (count (var x))) (-> @topic @fb_number)))
+
+# Superlatives
+
+(rule $Super ($LEMMA_TOKEN) (FilterPosTagFn token JJS RBS))
+
+# NOTE Think hurts performance to make types more specific because sometimes have sets like {mountains, rivers and cities}
+
+(rule $MetaOperator ($Super) (ConstantFn (lambda degree (lambda head (argmax 1 1 (var head) (reverse (var degree))))) (-> (-> @topic @fb_number) @topic @topic)))
+(rule $MetaOperator ($Super) (ConstantFn (lambda degree (lambda head (argmin 1 1 (var head) (reverse (var degree))))) (-> (-> @topic @fb_number) @topic @topic)))
+
+# most / least
+(rule $MetaMetaOperator (most) (ConstantFn (lambda set (lambda pred (lambda head (argmax 1 1 (var head) (reverse (lambda c (count (and (var set) ((var pred) (var c))))))))))
+    (-> @topic (-> (-> @topic @topic) @topic @topic))))  # what state has the most cities
+(rule $MetaMetaOperator (least) (ConstantFn (lambda set (lambda pred (lambda head (argmin 1 1 (var head) (reverse (lambda c (count (and (var set) ((var pred) (var c))))))))))
+    (-> @topic (-> (-> @topic @topic) @topic @topic))))
+(rule $MetaOperator2 ($MetaMetaOperator ($Padding optional) $Unary) (JoinFn binary,unary unaryCanBeArg1 betaReduce))
+
+(when join
+  (rule $Operator ($MetaOperator $Binary) (JoinFn binary,unary unaryCanBeArg1 betaReduce))
+  (rule $Operator ($Binary $MetaOperator) (JoinFn unary,binary unaryCanBeArg1 betaReduce))
+  (rule $Operator ($MetaOperator2 $Binary) (JoinFn binary,unary unaryCanBeArg1 betaReduce))
+  (rule $Operator ($Binary $MetaOperator2) (JoinFn unary,binary unaryCanBeArg1 betaReduce))
+)
+
+(rule $Operator (longest) (ConstantFn (lambda x (argmax 1 1 (var x) length)) (-> @topic location)))
+(rule $Operator (shortest) (ConstantFn (lambda x (argmin 1 1 (var x) length)) (-> @topic location)))
+(for @x (highest tallest) (rule $Operator (@x) (ConstantFn (lambda x (argmax 1 1 (var x) elevation)) (-> @topic location))))
+(rule $Operator (lowest) (ConstantFn (lambda x (argmin 1 1 (var x) elevation)) (-> @topic location)))
+(for @x (largest biggest) (rule $Operator (@x) (ConstantFn (lambda x (argmax 1 1 (var x) area)) (-> @topic location))))
+(rule $Operator (smallest) (ConstantFn (lambda x (argmin 1 1 (var x) area)) (-> @topic location)))
+
+# Sets
+
+## BaseSet
+
+(when join
+  (rule $BaseSet ($NamedEntity ($Padding optional) $Binary) (JoinFn unary,binary unaryCanBeArg0 unaryCanBeArg1))
+  (rule $BaseSet ($Binary ($Padding optional) $NamedEntity) (JoinFn binary,unary unaryCanBeArg0 unaryCanBeArg1))
+)  # Combine unary and binary
+(rule $BaseSet ($Unary) (IdentityFn))
+
+# Negation
+# TODO Integrate w/ other part of grammar, issue right now is the
+# join w/ beta-reduction and restriction to unaryCanBeArg1
+
+(for @x (no not) (rule $Negation (@x) (ConstantFn (lambda y (lambda x (not ((var y) (var x))))) (-> (-> @topic @topic) @topic @topic))))
+(when join
+  (rule $NegatedBinary ($Binary $Negation) (JoinFn unary,binary unaryCanBeArg1 betaReduce))
+  (rule $NegatedBinary ($Negation $Binary) (JoinFn binary,unary unaryCanBeArg1 betaReduce))
+  (rule $BaseSet ($NegatedBinary ($Padding optional) $NamedEntity) (JoinFn binary,unary unaryCanBeArg1 betaReduce))
+  (rule $Set ($NegatedBinary ($Padding optional) $BaseSet) (JoinFn binary,unary unaryCanBeArg1 betaReduce))
+)
+
+## Merging
+
+(rule $Set ($BaseSet) (IdentityFn))
+(rule $Set ($Unary ($Padding optional) $BaseSet) (MergeFn and))
+
+# Bridging
+
+(when bridge
+  # (1) bridge
+  # NOTE Can pass in set of binaries to use with the option BridgeFn.binaries
+  (rule $BaseSet ($Unary ($Padding optional) $NamedEntity) (BridgeFn unary headFirst))
+  (rule $BaseSet ($NamedEntity ($Padding optional) $Unary) (BridgeFn unary headLast))
+  (rule $Set ($Unary ($Padding optional) $Set) (BridgeFn unary headFirst))
+  (rule $Set ($Set ($Padding optional) $Unary) (BridgeFn unary headLast))
+  (rule $Set ($Unary ($Padding optional) $MetaOperator2) (BridgeFn unary headFirst))
+  # TODO Clean this rest up
+  #(rule $BaseSet ($NamedEntity) (BridgeFn entity headLast))
+  ## (2) inject
+  #(rule $BaseSet ($BaseSet ($Padding optional) $NamedEntity) (BridgeFn inject headFirst))
+  #(rule $BaseSet ($NamedEntity ($Padding optional) $BaseSet) (BridgeFn inject headLast))
+)
+
+# More compositional
+
+(when join
+  (rule $Set ($Operator ($Padding optional) $Set) (JoinFn forward betaReduce))
+  (rule $Set ($Unary ($Padding optional) $Operator) (JoinFn backward betaReduce))   # which state is the biggest
+
+  (rule $Set ($Binary ($Padding optional) $Set) (JoinFn binary,unary unaryCanBeArg0 unaryCanBeArg1))
+  (rule $Set ($Set ($Padding optional) $Binary) (JoinFn unary,binary unaryCanBeArg0 unaryCanBeArg1))
+)
+
+(rule $Set ($Set ($Padding optional) $Set) (MergeFn and))
+
+# ROOT
+
+(rule $ROOT (($Padding optional) $Set ($Padding optional)) (IdentityFn))

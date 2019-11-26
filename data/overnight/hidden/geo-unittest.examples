@@ -1,0 +1,53 @@
+# Unittest
+
+# R1
+(example (utterance "states whose capital is california"))
+(example (utterance "states whose capital is not sacramento"))
+(example (utterance "states whose capital is capital of california"))
+(example (utterance "mountains whose elevation is smaller than two"))
+(example (utterance "mountains whose elevation is smaller than elevation of mount whitney"))
+(example (utterance "mountains whose elevation is larger than two"))
+(example (utterance "mountains whose elevation is larger than elevation of mount whitney"))
+(example (utterance "mountains whose elevation is at most two"))
+(example (utterance "mountains whose elevation is at least two"))
+(example (utterance "states that contain sacramento and that contain mount whitney"))
+
+# R2
+(example (utterance "states that contain sacramento"))
+(example (utterance "states that not contain sacramento"))
+(example (utterance "states that contain capital of california"))
+# R3
+# R4
+(example (utterance "cities that california contain"))
+(example (utterance "cities that california not contain"))
+(example (utterance "rivers that capital of california traverse"))
+# R5
+(example (utterance "cities that is major"))
+
+# S1
+(example (utterance "cities that have the largest area"))
+(example (utterance "cities that have the smallest area"))
+# S2
+(example (utterance "cities that have the most population"))
+(example (utterance "cities that have the least population"))
+# S3
+(example (utterance "states that border the most states"))
+(example (utterance "states that border the least states"))
+
+# C1
+(example (utterance "states that contain two cities"))
+(example (utterance "states that contain more than two cities"))
+(example (utterance "states that contain less than two cities"))
+(example (utterance "states that contain at most two cities"))
+(example (utterance "states that contain at least two cities"))
+
+# T1
+(example (utterance "population of sacramento"))
+# T2: TODO
+# T3
+(example (utterance "california or texas"))
+# T4
+# A1
+(example (utterance "number of lakes"))
+# A2
+(example (utterance "total elevation of mountains"))
