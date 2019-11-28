@@ -104,85 +104,11 @@ class StateBatch(_StateBase):
         self.states = states if states is not None else []
         self._list = []
         self._attr_keys = set()
-        self.batch()
-
-    def batch(self):
-        """
-         Re-batch the states contained in this StateBatch.
-        """
-        first_state_keys = None
-        for state in self.states:
-            first_state_keys = state.all_attr_keys if first_state_keys is None else first_state_keys
-            if not first_state_keys == state.all_attr_keys:
-                print("nono")
-            assert(first_state_keys == state.all_attr_keys)
-
-        if first_state_keys is not None:
-            for i in range(len(self.states[0]._list)):      # integers are indexing the list in states
-                if isinstance(self.states[0][i], (State, torch.Tensor)):
-                    vs = [state[i] for state in self.states]
-                    v = batch(vs)
-                    self.append(v)
-            for k in self.states[0]._attr_keys:
-                if isinstance(self.states[0][k], (State, torch.Tensor)):
-                    vs = [state[k] for state in self.states]
-                    v = batch(vs)
-                    self[k] = v
-
-        self.batch_own()
-        return self
-
-    def batch_own(self):
-        """
-        Called on .batch(), after batching and attaching substates.
-        This method is for batching any non-State attributes.
-        """
-        pass
-
-    def unbatch(self):
-        """
-        Un-batch the individual states states contained in this StateBatch and return them.
-        """
-        for j in range(len(self._list)):
-            if isinstance(self[j], (StateBatch, torch.Tensor)):
-                vs = unbatch(self[j])
-                for i, state_v in enumerate(vs):
-                    if i == len(self.states):
-                        self.states.append(State())
-                    if i < len(self.states):
-                        selfstate = self.states[i]
-                        if j == 0:
-                            selfstate._list = []
-                    else:
-                        raise Exception("Something wrong")
-                    selfstate._list.append(state_v)
-        for k in self._attr_keys:
-            if isinstance(self[k], (StateBatch, torch.Tensor)):
-                vs = unbatch(self[k])
-                for i, state_v in enumerate(vs):
-                    if i == len(self.states):
-                        self.states.append(State())
-                    if i < len(self.states):
-                        selfstate = self.states[i]
-                    else:
-                        raise Exception("Something wrong.")
-                    selfstate[k] = state_v
-
-        self.unbatch_own()
-        return self.states
-
-    def unbatch_own(self):
-        """
-        Called on .unbatch(), after unbatching substates and attaching them to contained states.
-        """
-        pass
 
     def to(self, device):
         """
         Move all torch tensors onto given device.
         """
-        # 1. move states to device
-        self.states = [state.to(device) for state in self.states]
         # 2. move any attached statebatches to device
         for k in self.all_attr_keys:
             if isinstance(self[k], (torch.Tensor, StateBatch)):

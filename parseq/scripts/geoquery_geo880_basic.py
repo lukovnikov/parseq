@@ -104,10 +104,9 @@ class GeoQueryDataset(object):
 
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
         for inp, out, split in zip(inputs, outputs, splits):
-            gs = BasicState(inp, out, self.sentence_encoder, self.query_encoder)
             if split not in self.data:
                 self.data[split] = []
-            self.data[split].append(gs)
+            self.data[split].append((inp, out))
 
     def get_split(self, split:str):
         return DatasetSplitProxy(self.data[split])
