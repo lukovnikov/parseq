@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import torch
 
-from parseq.states import State, batch, unbatch, make_copy
+from parseq.states import State, batch, unbatch, make_copy, StateBatch
 
 
 class Test_tensor_state_batch(TestCase):
@@ -71,3 +71,27 @@ class Test_tensor_state_batch(TestCase):
         print(unstates[0].a)
         print(unstates[0][0])
         print(unstates[0][0] is states[0][0])
+
+    def test_unbatch_created_statebatch(self):
+        batched = StateBatch()
+        batched[0] = torch.randn(3, 5)
+        unbatched = batched.unbatch()
+        for i, state in enumerate(unbatched):
+            print(state[0])
+            self.assertTrue(torch.allclose(batched[0][i], state[0]))
+
+    def test_unbatch_statebatch_after_substate_addition(self):
+        states = [State(torch.randn(5)) for _ in range(3)]
+        batched = batch(states)
+
+        batched[1] = StateBatch()
+        batched[1]["a"] = torch.randn(3, 4)
+
+        unbatched = unbatch(batched)
+
+        print(states[0][0])
+        print(unbatched[0][0])
+        self.assertTrue(states[0][0] is unbatched[0][0])
+        print(states[0][1]["a"])
+        print(unbatched[0][1]["a"])
+        self.assertTrue(torch.allclose(states[0][1]["a"], batched[1]["a"][0]))
