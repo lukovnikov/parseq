@@ -109,19 +109,64 @@ class TestBeamTransition(TestCase):
 
         beamsize = 5
         beam_xs = [x.make_copy(detach=False, deep=True) for _ in range(beamsize)]
-        beam_states = BeamState(*beam_xs)
+        beam_states = BeamState(beam_xs)
 
         print(len(beam_xs))
         print(len(beam_states))
 
         bt = BeamTransition(model, beamsize, maxtime=10)
         i = 0
-        y = bt(x, i)
+        _, y = bt(x, i)
         i += 1
-        y = bt(y, i)
+        _, y = bt(y, i)
 
         while not y.all_terminated():
-            y = bt(y, i)
+            _, y = bt(y, i)
             i += 1
 
         print(y)
+
+    def test_beam_search_vs_greedy(self):
+        with torch.no_grad():
+            texts = ["a b"] * 20
+            from parseq.vocab import SentenceEncoder
+            se = SentenceEncoder(tokenizer=lambda x: x.split())
+            for t in texts:
+                se.inc_build_vocab(t)
+            se.finalize_vocab()
+            x = BasicDecoderState(texts, texts, se, se)
+            x.start_decoding()
+
+            class Model(TransitionModel):
+                transition_tensor = torch.tensor([[0, 0, 0, .51, .49],
+                                                  [0, 0, 0, .51, .49],
+                                                  [0, 0, 0, .51, .49],
+                                                  [0, 0, 0, .51, .49],
+                                                  [0, 0, 0, .01, .99]])
+                def forward(self, x: BasicDecoderState):
+                    prev = x.prev_actions
+                    outprobs = self.transition_tensor[prev]
+                    outprobs = torch.log(outprobs)
+                    return outprobs, x
+
+            model = Model()
+
+            beamsize = 15
+            beam_xs = [x.make_copy(detach=False, deep=True) for _ in range(beamsize)]
+            beam_states = BeamState(beam_xs)
+
+            print(len(beam_xs))
+            print(len(beam_states))
+
+            bt = BeamTransition(model, beamsize, maxtime=100)
+            i = 0
+            _, y = bt(x, i)
+            i += 1
+            _, y = bt(y, i)
+
+            while not y.all_terminated():
+                _, y = bt(y, i)
+                i += 1
+
+            print(y)
+            print(y.bstates.get(0).followed_actions)
