@@ -3,21 +3,21 @@ from typing import Union, Dict
 
 import torch
 
-from parseq.states import StateBatch, State, batch, DecodableState, DecodableStateBatch
+from parseq.states import State, DecodableState
 
 
 class StateMetric(ABC):
     @abstractmethod
-    def forward(self, x:Union[State, StateBatch]):
+    def forward(self, x:State):
         pass
 
-    def __call__(self, x:Union[State, StateBatch]):
+    def __call__(self, x:State):
         return self.forward(x)
 
 
 class StateLoss(torch.nn.Module, ABC):
     @abstractmethod
-    def forward(self, x: Union[State, StateBatch])->Dict:
+    def forward(self, x: State)->Dict:
         pass
 
 

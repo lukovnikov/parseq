@@ -2,7 +2,8 @@ from unittest import TestCase
 import numpy as np
 import torch
 
-from parseq.states import State
+from parseq.states import State, BasicDecoderState
+from parseq.vocab import SentenceEncoder
 
 
 class Test_State(TestCase):
@@ -33,7 +34,7 @@ class Test_State(TestCase):
         y.set(s=ysub)
         y.set(l=["sqdf", "qdsf"])
         z = State.merge([x, y])
-        print(z._merge_keys)
+        print(z._schema_keys)
         print(z.k)
         print(x.k)
         print(y.k)
@@ -128,3 +129,40 @@ class Test_State(TestCase):
         y.k[:] = "q"
         print(x.k)
         print(y.k)
+
+
+class TestBasicDecoderState(TestCase):
+    def test_create(self):
+        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        texts = ["i went to chocolate", "awesome is @PAD@ @PAD@", "the meaning of life"]
+        for t in texts:
+            se.inc_build_vocab(t)
+        se.finalize_vocab()
+        x = [BasicDecoderState([t], [t], se, se) for t in texts]
+        merged_x = x[0].merge(x)
+        texts = ["i went to chocolate", "awesome is", "the meaning of life"]
+        batch_x = BasicDecoderState(texts, texts, se, se)
+        print(merged_x.inp_tensor)
+        print(batch_x.inp_tensor)
+        self.assertTrue(torch.allclose(merged_x.inp_tensor, batch_x.inp_tensor))
+        self.assertTrue(torch.allclose(merged_x.gold_tensor, batch_x.gold_tensor))
+
+    def test_decoder_API(self):
+        texts = ["i went to chocolate", "awesome is", "the meaning of life"]
+        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        for t in texts:
+            se.inc_build_vocab(t)
+        se.finalize_vocab()
+        x = BasicDecoderState(texts, texts, se, se)
+        print(x.inp_tensor)
+        print("terminated")
+        print(x.is_terminated())
+        print(x.all_terminated())
+        print("prev_actions")
+        x.start_decoding()
+        print(x.prev_actions)
+        print("step")
+        x.step(["i", torch.tensor([7]), "the"])
+        print(x.prev_actions)
+        print(x.followed_actions)
+

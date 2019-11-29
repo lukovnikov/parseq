@@ -5,7 +5,7 @@ import qelos as q
 import numpy as np
 
 from parseq.eval import StateLoss, StateMetric
-from parseq.states import DecodableStateBatch
+from parseq.states import DecodableState, TrainableDecodableState, ListState, State, BasicDecoderState
 from parseq.transitions import TransitionModel
 
 
@@ -15,16 +15,24 @@ class SeqDecoder(torch.nn.Module):
         self.model = model
         self._metrics = eval
 
-    def forward(self, sb:DecodableStateBatch) -> Dict:
+    def forward(self, x:DecodableState) -> Dict:
         # sb = sb.make_copy()
-        sb.start_decoding()
+        x.start_decoding()
 
-        while not sb.all_terminated():
-            self.model(sb)
+        outprobs = []
 
-        metrics = [metric(sb) for metric in self._metrics]
+        i = 0
+
+        while not x.all_terminated():
+            probs, x = self.model(x, timestep=i)
+            outprobs.append(probs)
+            i += 1
+
+        outprobs = torch.stack(outprobs, 1)
+
+        metrics = [metric(outprobs, x) for metric in self._metrics]
         metrics = merge_dicts(*metrics)
-        return metrics
+        return metrics, x
 
 
 def merge_dicts(*dicts):
@@ -38,10 +46,12 @@ def merge_dicts(*dicts):
 
 
 class SeqDecoderTransition(TransitionModel):
+    endtoken = "@END@"
+    padtoken = "@PAD@"
     """
     States must have a "out_probs" substate and "gold_actions"
     """
-    def __init__(self, model, **kw):
+    def __init__(self, model:TransitionModel, **kw):
         super(SeqDecoderTransition, self).__init__(**kw)
         self.model = model
 
@@ -50,152 +60,122 @@ class TFTransition(SeqDecoderTransition):
     """
     Teacher forcing transition.
     """
-    padtoken = "@PAD@"
-    def forward(self, x:DecodableStateBatch):
+    def forward(self, x:TrainableDecodableState, timestep:int):
         actionprobs, x = self.model(x)
-        # store predictions
-        x.out_probs.append(actionprobs)
         # feed next
-        # goldactions = [state.gold_actions[state.get_decoding_step()]
-        #                if len(state.gold_actions) > state.get_decoding_step()
-        #                else self.padtoken
-        #                for state in x.states]
-        goldactions = [state.gold_tensor[state.get_decoding_step()]
-                       if not state.is_terminated() else self.padtoken
-                       for state in x.states]
+        goldactions = x.get_gold(timestep)
+        # goldactions = [x.gold_tensor[i][x.get_decoding_step()[i]]
+        #                if not x.is_terminated()[i] else self.padtoken
+        #                for i in range(len(x))]
         x.step(goldactions)
-        return x
+        return actionprobs, x
 
 
 class FreerunningTransition(SeqDecoderTransition):
     """
     Freerunning transition.
     """
-    endtoken = "@END@"
-    def __init__(self, model, maxtime=100, **kw):
+    def __init__(self, model:TransitionModel, maxtime=100, **kw):
         super(FreerunningTransition, self).__init__(model, **kw)
         self.maxtime = maxtime
 
-    def forward(self, x:DecodableStateBatch):
+    def forward(self, x:DecodableState, timestep:int):
         actionprobs, x = self.model(x)
-        # store predictions
-        x.out_probs.append(actionprobs)
         # feed next
         _, predactions = actionprobs.max(-1)
-        if self.maxtime == x.states[0].get_decoding_step():
-            predactions = [self.endtoken for _ in x.states]
+        predactions = [predactions[i] if timestep != self.maxtime else self.endtoken for i in range(len(x))]
         x.step(predactions)
-        return x
+        return actionprobs, x
 
 
-# TODO: convert to use new state-transition API
-class BeamActionSeqDecoder(torch.nn.Module):
-    def __init__(self, model:TransitionModel, beamsize=1, maxsteps=25, **kw):
-        super(BeamActionSeqDecoder, self).__init__(**kw)
-        self.model = model
+class BeamState(DecodableState):
+    def __init__(self, *states:DecodableState, scores=None):
+        bstates = ListState(*states)
+        batsize, beamsize = len(bstates), len(states)
+        bscores = torch.zeros(batsize, beamsize) if scores is None else scores
+        super(BeamState, self).__init__(bstates=bstates, bscores=bscores)
+
+    def start_decoding(self):
+        raise Exception("states must have already been started decoding.")
+
+    def is_terminated(self)-> List[List[bool]]:
+        """
+        Returns a list (over beam elements) of lists (over batch size) of booleans whether each elem in this state is terminated.
+        """
+        return [x.is_terminated() for x in self.bstates._list]
+
+    def all_terminated(self):
+        return all([all(ist) for ist in self.is_terminated()])
+
+    def step(self, action:Union[torch.Tensor, List[Union[str, torch.Tensor]]]=None):
+        raise Exception("this should not be used")
+
+
+class BeamTransition(SeqDecoderTransition):
+    """
+    Transition for beam search.
+    """
+    def __init__(self, model:TransitionModel, beamsize=1, maxtime=100, **kw):
+        super(BeamTransition, self).__init__(model, **kw)
+        self.maxtime = maxtime
         self.beamsize = beamsize
-        self.maxsteps = maxsteps
 
-    def forward(self, fsb:DecodableStateBatch):
-        hasgold = []
-        with torch.no_grad():
-            fsb_original = fsb
-            fsb = fsb_original.make_copy()
-            states = fsb.unbatch()
-            numex = 0
-            for state in states:
-                hasgold.append(state.has_gold)
-                state.use_gold = False  # disable gold
-                state.start_decoding()
-                numex += 1
+    def do_single_state_init(self, x):
+        actionprobs, x = self.model(x)
+        logprobs, actionids = torch.sort(actionprobs, 1, descending=True)
+        beamstates = []
+        for i in range(self.beamsize):
+            x_copy = x.make_copy(detach=False, deep=True)
+            x_copy.step(actionids[:, min(i, actionids.size(1) - 1)])
+            beamstates.append(x_copy)
+        y = BeamState(*beamstates, scores=logprobs[:, :min(self.beamsize, actionids.size(1))])
+        return y
 
-            assert(all([_hg is True for _hg in hasgold]) or all([_hg is False for _hg in hasgold]))
-            hasgold = hasgold[0]
+    @classmethod
+    def gather_states(cls, x:List[State], indexes:torch.Tensor)->List[State]:
+        ret = []
+        for i in range(indexes.size(1)): # for every element in new beam
+            proto = x[0].make_copy(detach=True, deep=True)
+            uniq = indexes[:, i].unique()
+            for x_id in uniq:            # for every id pointing to a batch in current beam
+                x_id = x_id.cpu().item()
+                idxs_where_x_id = torch.where(indexes[:, i] == x_id)[0]
+                proto[idxs_where_x_id] = x[x_id][idxs_where_x_id].make_copy(detach=False, deep=True)
+            ret.append(proto)
+        return ret
 
-            all_terminated = False
-
-            beam_batches = None
-
-            step = 0
-            while not all_terminated:
-                all_terminated = True
-                if beam_batches is None:    # first time
-                    fsb.batch()
-                    probs, fsb = self.model(fsb)
-                    fsb.unbatch()
-                    best_probs, best_actions = (-torch.log(probs)).topk(self.beamsize, -1, largest=False)    # (batsize, beamsize) scores and action ids, sorted
-                    if (best_probs == np.infty).any():
-                        print("whut")
-                    beam_batches = [fsb.make_copy() for _ in range(self.beamsize)]
-                    best_actions_ = best_actions.cpu().numpy()
-                    for i, beam_batch in enumerate(beam_batches):
-                        for j, state in enumerate(beam_batch.states):
-                            if not state.is_terminated:
-                                open_node = state.open_nodes[0]
-                                action_str = state.query_encoder.vocab_actions(best_actions_[j, i])
-                                state.apply_action(open_node, action_str)
-                                all_terminated = False
-                else:
-                    out_beam_batches = []
-                    out_beam_actions = []
-                    out_beam_probs = []
-                    for k, beam_batch in enumerate(beam_batches):
-                        beam_batch.batch()
-                        beam_probs, beam_batch = self.model(beam_batch)
-                        beam_batch.unbatch()
-                        beam_best_probs, beam_best_actions = (-torch.log(beam_probs)).topk(self.beamsize, -1, largest=False)
-                        out_beam_probs.append(beam_best_probs + best_probs[:, k:k+1])
-                        out_beam_batches.append([k]*self.beamsize)
-                        out_beam_actions.append(beam_best_actions)
-                    out_beam_probs = torch.cat(out_beam_probs, 1)
-                    out_beam_batches = [xe for x in out_beam_batches for xe in x]
-                    out_beam_actions = torch.cat(out_beam_actions, 1)
-
-                    beam_best_probs, beam_best_k = torch.topk(out_beam_probs, self.beamsize, -1, largest=False)
-                    out_beam_actions_ = out_beam_actions.cpu().numpy()
-                    beam_best_k_ = beam_best_k.cpu().numpy()
-                    new_beam_batches = []
-                    for i in range(beam_best_k.shape[1]):
-                        _state_batch = []
-                        for j in range(beam_best_k.shape[0]):
-                            _state = beam_batches[out_beam_batches[beam_best_k_[j, i]]].states[j]
-                            _state = _state.make_copy()
-                            if not _state.is_terminated:
-                                all_terminated = False
-                                open_node = _state.open_nodes[0]
-                                action_id = out_beam_actions_[j, beam_best_k_[j, i]]
-                                action_str = _state.query_encoder.vocab_actions(action_id)
-                                _state.apply_action(open_node, action_str)
-                            _state_batch.append(_state)
-                        _state_batch = fsb.new(_state_batch)
-                        new_beam_batches.append(_state_batch)
-                    beam_batches = new_beam_batches
-                    best_probs = beam_best_probs
-                step += 1
-                if step >= self.maxsteps:
-                    break
-            pass
-
-        all_out_states = beam_batches       # states for whole beam
-        all_out_probs = best_probs
-
-        best_out_states = all_out_states[0]
-        best_out_probs = all_out_probs[0]
-
-        if hasgold:     # compute accuracies (seq and tree) with top scoring states
-            seqaccs = 0
-            treeaccs = 0
-            # elemaccs = 0
-            total = 0
-            for best_out_state in best_out_states.states:
-                seqaccs += float(best_out_state.out_rules == best_out_state.gold_rules)
-                treeaccs += float(str(best_out_state.out_tree) == str(best_out_state.gold_tree))
-                # elemaccs += float(best_out_state.out_rules[:len(best_out_state.gold_rules)] == best_out_state.gold_rules)
-                total += 1
-            return {"output": best_out_states, "output_probs": best_out_probs,
-                    "seq_acc": seqaccs/total, "tree_acc": treeaccs/total}
+    def forward(self, x:Union[DecodableState, BeamState], timestep:int):
+        if timestep == 0:
+            assert(isinstance(x, DecodableState))
+            y = self.do_single_state_init(x)
+            return y
         else:
-            return {"output": all_out_states, "probs": all_out_probs}
-
-
-
+            assert(isinstance(x, BeamState))
+            # gather logprobs and actionids from individual beam elements in batches
+            logprobses, actionidses = [], []
+            modul = None
+            for i in range(len(x.bstates._list)):
+                actionprobs, xi = self.model(x.bstates.get(i))      # get i-th batched state in beam, run model over it
+                logprobs, actionids = torch.sort(actionprobs, 1, descending=True)   # sort output actions
+                logprobs = logprobs[:, :min(self.beamsize, actionids.size(1))]  # clip logprob to beamsize
+                logprobs = logprobs + x.bscores[:, i:i+1]                       # compute logprob of whole seq so far
+                actionids = actionids[:, :min(self.beamsize, actionids.size(1))]# clip actionids to beamsize
+                logprobses.append(logprobs)         # save
+                actionidses.append(actionids)       # save
+                modul = actionids.size(1) if modul is None else modul   # make sure modul is correct and consistent (used later for state copying)
+                assert(modul == actionids.size(1))
+            logprobses = torch.cat(logprobses, 1)       # concatenate
+            actionidses = torch.cat(actionidses, 1)     # concatenate
+            # sort and select actionids for new beam, update logprobs etc
+            logprobs, selection_ids = torch.sort(logprobses, 1, descending=True)     # sort: selection_ids are the ids in logprobses
+            logprobs = logprobs[:, :min(self.beamsize, selection_ids.size(1))]       # clip to beamsize
+            selection_ids = selection_ids[:, :min(self.beamsize, selection_ids.size(1))]       # clip to beamsize
+            actionids = actionidses.gather(1, selection_ids)         # select action ids using beam_ids
+            stateids = selection_ids % modul        # select state ids based on modul and selection_ids
+            gatheredstates = self.gather_states(x.bstates._list, stateids)    # gatheredstates is a ListState
+            # apply selected actions to selected states
+            for i in range(actionids.size(1)):
+                gatheredstates[i].step(actionids[:, i] if timestep != self.maxtime else [self.endtoken]*len(gatheredstates[i]))
+            # create new beamstate from updated selected states
+            y = BeamState(*gatheredstates, scores=logprobs)
+            return y
