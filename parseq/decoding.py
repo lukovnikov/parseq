@@ -141,19 +141,20 @@ class BeamTransition(SeqDecoderTransition):
 
     @classmethod
     def gather_states(cls, x:List[State], indexes:torch.Tensor)->List[State]:
+        # TODO: make more efficient: avoid repeated conversion of indexes from tensor to lists in __getitem__ and __setitem__
         ret = []
         for i in range(indexes.size(1)): # for every element in new beam
             uniq = indexes[:, i].unique()
             if len(uniq) == 1:
                 x_id = uniq[0].cpu().item()
-                proto = x[x_id].make_copy(detach=False, deep=True)
+                proto = x[x_id].make_copy(detach=False, deep=False)
             else:
-                proto = x[0].make_copy(detach=True, deep=True)
+                proto = x[0].make_copy(detach=True, deep=False)
                 for x_id in uniq:            # for every id pointing to a batch in current beam
                     # x_x_id_copy = x[x_id].make_copy(detach=False, deep=True)
                     x_id = x_id.cpu().item()
                     idxs_where_x_id = torch.where(indexes[:, i] == x_id)[0]
-                    proto[idxs_where_x_id] = x[x_id][idxs_where_x_id].make_copy(detach=False, deep=True)
+                    proto[idxs_where_x_id] = x[x_id][idxs_where_x_id].make_copy(detach=False, deep=False)
                     # proto[idxs_where_x_id] = x_x_id_copy[idxs_where_x_id]
             ret.append(proto)
         return ret

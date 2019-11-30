@@ -85,6 +85,7 @@ class State(object):
         return ret
 
     def __getitem__(self, item:Union[int, slice, List[int], np.ndarray, torch.Tensor]):    # slicing and getitem
+        # TODO: make more efficient
         if isinstance(item, int):
             item = slice(item, item+1)
         ret = type(self)()
@@ -103,6 +104,7 @@ class State(object):
 
     def __setitem__(self, item:Union[int, slice, List[int], np.ndarray, torch.Tensor],
                     value:'State'):     # value should be of same type as self
+        # TODO: make more efficient
         assert(type(self) == type(value))
         assert(self._schema_keys == value._schema_keys)
         if isinstance(item, int):
@@ -369,6 +371,7 @@ class BasicDecoderState(TrainableDecodableState):
                                                    device=self.inp_tensor.device, dtype=torch.long))
 
     def step(self, tokens:Union[torch.Tensor, List[Union[str, torch.Tensor]]]):
+        # TODO: make more efficient
         qe = self.query_encoder
         assert(len(tokens) == len(self))
         for i, token in enumerate(tokens):

@@ -151,7 +151,7 @@ class TestBeamTransition(TestCase):
 
             model = Model()
 
-            beamsize = 15
+            beamsize = 50
             beam_xs = [x.make_copy(detach=False, deep=True) for _ in range(beamsize)]
             beam_states = BeamState(beam_xs)
 
