@@ -17,7 +17,7 @@ class StateMetric(ABC):
 
 class StateLoss(torch.nn.Module, ABC):
     @abstractmethod
-    def forward(self, x: State)->Dict:
+    def forward(self, x:State)->Dict:
         pass
 
 

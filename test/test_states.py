@@ -165,7 +165,7 @@ class TestBasicDecoderState(TestCase):
         print("step")
         x.step(["i", torch.tensor([7]), "the"])
         print(x.prev_actions)
-        print(x.followed_actions)
+        print(x.out_actions)
 
     def test_np_array_of_states(self):
         texts = ["i went to chocolate", "awesome is", "the meaning of life"]

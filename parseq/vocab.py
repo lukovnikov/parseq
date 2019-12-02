@@ -16,9 +16,10 @@ class Vocab(_Vocab):
     unktoken = "@UNK@"
     starttoken = "@START@"
     endtoken = "@END@"
-    def __init__(self, padid:int=0, unkid:int=1, startid:int=2, **kw):
+    def __init__(self, padid:int=0, unkid:int=1, startid:int=2, endid:int=3, **kw):
         self.D = {self.padtoken: padid, self.unktoken: unkid}
         self.D[self.starttoken] = startid
+        self.D[self.endtoken] = endid
         self.counts = {k: np.infty for k in self.D.keys()}
         self.rare_tokens = set()
         self.rare_ids = set()
@@ -99,6 +100,13 @@ class Vocab(_Vocab):
             return item in self.RD
         else:
             raise Exception("illegal argument")
+
+    def print(self, x:Union[np.ndarray, torch.Tensor]):
+        if isinstance(x, torch.Tensor):
+            x = x.detach().cpu().numpy()
+        x = list(np.vectorize(lambda e: self(e))(x))
+        x = [e for e in x if e != self.padtoken]
+        return " ".join(list(x))
 
 
 class FixedVocab(Vocab):
