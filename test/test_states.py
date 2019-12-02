@@ -1,3 +1,4 @@
+from copy import deepcopy
 from unittest import TestCase
 import numpy as np
 import torch
@@ -13,7 +14,7 @@ class Test_State(TestCase):
         xsub = State()
         xsub.set(v=torch.rand(3, 2))
         x.set(s=xsub)
-        x.set(l=["sqdf", "qdsf", "qdsf"])
+        x.set(l=np.asarray(["sqdf", "qdsf", "qdsf"]))
         print(x)
         print(x._schema_keys)
         print(x.k)
@@ -26,13 +27,13 @@ class Test_State(TestCase):
         xsub = State()
         xsub.set(v=torch.rand(3, 2))
         x.set(s=xsub)
-        x.set(l=["sqdf", "qdsf", "qdsf"])
+        x.set(l=np.asarray(["sqdf", "qdsf", "qdsf"]))
         y = State()
         y.set(k=torch.randn(2, 4))
         ysub = State()
         ysub.set(v=torch.rand(2, 2))
         y.set(s=ysub)
-        y.set(l=["sqdf", "qdsf"])
+        y.set(l=np.asarray(["b", "a"]))
         z = State.merge([x, y])
         print(z._schema_keys)
         print(z.k)
@@ -47,7 +48,7 @@ class Test_State(TestCase):
         xsub = State()
         xsub.set(v=torch.rand(5, 2))
         x.set(s=xsub)
-        x.set(l=["sqdf", "qdsf", "qdsf", "qf", "qsd"])
+        x.set(l=np.asarray(["a", "b", "c", "d", "e"]))
         y = x[2]
         print(x[2].k)
         print(x[2].l)
@@ -62,13 +63,13 @@ class Test_State(TestCase):
         xsub = State()
         xsub.set(v=torch.rand(5, 2))
         x.set(s=xsub)
-        x.set(l=["sqdf", "qdsf", "qdsf", "a", "b"])
+        x.set(l=np.asarray(["sqdf", "qdsf", "qdsf", "a", "b"]))
         y = State()
         y.set(k=torch.ones(2, 4))
         ysub = State()
         ysub.set(v=torch.ones(2, 2))
         y.set(s=ysub)
-        y.set(l=["o", "o"])
+        y.set(l=np.asarray(["o", "o"]))
 
         x[1:3] = y
         print(x.k)
@@ -76,7 +77,7 @@ class Test_State(TestCase):
         print(x.l)
 
     def test_slicing_by_indexes(self):
-        x = State(k=torch.rand(6, 3), s="a b c d e f".split())
+        x = State(k=torch.rand(6, 3), s=np.asarray("a b c d e f".split()))
         print(x.k)
         print(x[[1, 2]].k)
         print(x[[1, 2]].s)
@@ -88,22 +89,22 @@ class Test_State(TestCase):
         print(x[torch.tensor([1, 2])].s)
 
     def test_seting_by_indexes(self):
-        x = State(k=torch.rand(6, 3), s="a b c d e f".split())
-        y = State(k=torch.zeros(2, 3), s="o o".split())
+        x = State(k=torch.rand(6, 3), s=np.asarray("a b c d e f".split()))
+        y = State(k=torch.zeros(2, 3), s=np.asarray("o o".split()))
 
         x[[1, 3]] = y
         print(x.k)
         print(x.s)
 
-        x = State(k=torch.rand(6, 3), s="a b c d e f".split())
-        y = State(k=torch.zeros(2, 3), s="o o".split())
+        x = State(k=torch.rand(6, 3), s=np.asarray("a b c d e f".split()))
+        y = State(k=torch.zeros(2, 3), s=np.asarray("o o".split()))
 
         x[np.asarray([1, 3])] = y
         print(x.k)
         print(x.s)
 
-        x = State(k=torch.rand(6, 3), s="a b c d e f".split())
-        y = State(k=torch.zeros(2, 3), s="o o".split())
+        x = State(k=torch.rand(6, 3), s=np.asarray("a b c d e f".split()))
+        y = State(k=torch.zeros(2, 3), s=np.asarray("o o".split()))
 
         x[torch.tensor([1, 3])] = y
         print(x.k)
@@ -124,7 +125,7 @@ class Test_State(TestCase):
         print(y.k)
 
     def test_copy_deep(self):
-        x = State(k=["a", "b", "c"])
+        x = State(k=np.asarray(["a", "b", "c"]))
         y = x.make_copy(deep=False)
         y.k[:] = "q"
         print(x.k)
@@ -165,4 +166,39 @@ class TestBasicDecoderState(TestCase):
         x.step(["i", torch.tensor([7]), "the"])
         print(x.prev_actions)
         print(x.followed_actions)
+
+    def test_np_array_of_states(self):
+        texts = ["i went to chocolate", "awesome is", "the meaning of life"]
+        texts = np.asarray(texts)
+        print(texts[[1]])
+        class A(object):
+            def __init__(self, x):
+                super(A, self).__init__()
+                self.x = x
+            def __str__(self):
+                return f"A: {self.x}"
+            def __repr__(self):
+                return str(self)
+
+        class B(object):
+            def __init__(self, x):
+                super(B, self).__init__()
+                self.x = x
+                self.y = [x]
+            def __str__(self):
+                return f"B: {self.x}, {self.y}"
+            def __repr__(self):
+                return str(self)
+
+        l = [A("a"), B(1), A(1), B(["qsdf"])]
+        l = np.asarray(l)
+        print(l)
+        print(l.dtype)
+        k = deepcopy(l)
+        k[-1].y.append("qsdf")
+        print(l)
+        print(l[[1,3]])
+
+        print(k)
+        print(isinstance(k, np.ndarray))
 

@@ -28,7 +28,7 @@ class State(object):
         for k, v in kw.items():
             if hasattr(self, k) and not k in self._schema_keys:
                 raise AttributeError(f"Key {k} cannot be assigned to this {type(self)}, attribute taken.")
-            if not (isinstance(v, (list, torch.Tensor, State, type(None)))):
+            if not (isinstance(v, (np.ndarray, torch.Tensor, State, type(None)))):
                 raise Exception(f"argument {k} has type {type(v)}. Only list, torch.Tensor and State are allowed.")
             self._length = len(v) if self._length is None and v is not None else self._length
             assert(v is None or self._length == len(v))
@@ -71,8 +71,8 @@ class State(object):
         for k in merge_schema:
             vs = [state.get(k) for state in states]
 
-            if all([isinstance(vse, (list,)) for vse in vs]):
-                v = [vsee for vse in vs for vsee in vse]
+            if all([isinstance(vse, (np.ndarray,)) for vse in vs]):
+                v = np.concatenate(vs, 0)
             elif all([isinstance(vse, (torch.Tensor,)) for vse in vs]):
                 v = torch.cat(vs, 0)
             elif all([isinstance(vse, (State,)) for vse in vs]):
@@ -89,16 +89,12 @@ class State(object):
         if isinstance(item, int):
             item = slice(item, item+1)
         ret = type(self)()
+        item_cpu = item.detach().cpu().numpy() if isinstance(item, torch.Tensor) else item
         for k in self._schema_keys:
             v = getattr(self, k)
-            if not isinstance(item, slice) and isinstance(v, list):
-                if isinstance(item, torch.Tensor):
-                    item = item.detach().cpu().numpy()
-                if isinstance(item, np.ndarray):
-                    item = list(item)
-                vslice = [v[item_e] for item_e in item]
-            else:
-                vslice = v[item]
+            if isinstance(v, np.ndarray):
+                item = item_cpu
+            vslice = v[item]
             ret.set(**{k:vslice})
         return ret
 
@@ -111,24 +107,19 @@ class State(object):
             item = slice(item, item+1)
         ret = self[item]
         assert(len(ret) == len(value))
+        item_cpu = item.detach().cpu().numpy() if isinstance(item, torch.Tensor) else item
         for k in self._schema_keys:
             v = getattr(self, k)
             assert(True)        # TODO: assert type match
-            if not isinstance(item, slice) and isinstance(v, list):
-                if isinstance(item, torch.Tensor):
-                    item = item.detach().cpu().numpy()
-                if isinstance(item, np.ndarray):
-                    item = list(item)
-                for i, item_e in enumerate(item):
-                    v[item_e] = value.get(k)[i]
-            else:
-                v[item] = value.get(k)
+            if isinstance(v, np.ndarray):
+                item = item_cpu
+            v[item] = value.get(k)
         return ret
 
     def to(self, device):
         for k in self._schema_keys:
             v = getattr(self, k)
-            if isinstance(v, list):
+            if isinstance(v, np.ndarray):
                 if len(set([type(ve) for ve in v]) & {torch.Tensor, State}) > 0:
                     for i in range(len(v)):
                         v[i] = v[i].to(device)
@@ -310,28 +301,30 @@ class BasicDecoderState(TrainableDecodableState):
             super(BasicDecoderState, self).__init__(**kw)
         else:
             kw = kw.copy()
-            kw.update({"inp_strings": inp_strings, "gold_strings": gold_strings})
+            kw.update({"inp_strings": np.asarray(inp_strings), "gold_strings": np.asarray(gold_strings)})
             super(BasicDecoderState, self).__init__(**kw)
 
             self.sentence_encoder = sentence_encoder
             self.query_encoder = query_encoder
 
-            self.set(followed_actions = [[] for _ in self.inp_strings])
-            self.set(_is_terminated = [False for _ in self.inp_strings])
-            self.set(_timesteps = [0 for _ in self.inp_strings])
+            self.set(followed_actions = np.asarray([None for _ in self.inp_strings]))
+            for i in range(len(self.followed_actions)):
+                self.followed_actions[i] = []
+            self.set(_is_terminated = np.asarray([False for _ in self.inp_strings]))
+            self.set(_timesteps = np.asarray([0 for _ in self.inp_strings]))
 
             if sentence_encoder is not None:
                 x = [sentence_encoder.convert(x, return_what="tensor,tokens") for x in self.inp_strings]
                 x = list(zip(*x))
                 x = {"inp_tensor": batchstack(x[0]),
-                     "inp_tokens": list(x[1])}
+                     "inp_tokens": np.asarray(list(x[1]))}
                 self.set(**x)
             if self.gold_strings is not None:
                 if query_encoder is not None:
                     x = [query_encoder.convert(x, return_what="tensor,tokens") for x in self.gold_strings]
                     x = list(zip(*x))
                     x = {"gold_tensor": batchstack(x[0]),
-                         "gold_tokens": list(x[1])}
+                         "gold_tokens": np.asarray(list(x[1]))}
                     self.set(**x)
 
     # State API override implementation
@@ -370,18 +363,35 @@ class BasicDecoderState(TrainableDecodableState):
         self.set(prev_actions=torch.tensor([qe.vocab[qe.vocab.starttoken] for _ in self.inp_strings],
                                                    device=self.inp_tensor.device, dtype=torch.long))
 
-    def step(self, tokens:Union[torch.Tensor, List[Union[str, torch.Tensor]]]):
+    def step(self, tokens:Union[torch.Tensor, np.ndarray, List[Union[str, np.ndarray, torch.Tensor]]]):
         # TODO: make more efficient
         qe = self.query_encoder
         assert(len(tokens) == len(self))
-        for i, token in enumerate(tokens):
-            if isinstance(token, torch.Tensor):
-                token = qe.vocab(int(token.detach().cpu().item()))
+        tokens_np = np.zeros((len(tokens),), dtype="int64")
+
+        if isinstance(tokens, list):
+            for i, token in enumerate(tokens):
+                if isinstance(token, str):
+                    tokens_np[i] = qe.vocab[token]
+                elif isinstance(token, np.ndarray):
+                    assert(token.shape == (1,))
+                    tokens_np[i] = token[0]
+                elif isinstance(token, torch.Tensor):
+                    assert(token.size() == (1,))
+                    tokens_np[i] = token.detach().cpu().item()
+        elif isinstance(tokens, torch.Tensor):
+            tokens_np = tokens.detach().cpu().numpy()
+        tokens_pt = torch.tensor(tokens_np).to(self.inp_tensor.device)
+        tokens_str = np.vectorize(lambda x: qe.vocab(x))(tokens_np)
+
+        mask = torch.tensor(self._is_terminated).to(self.prev_actions.device)
+        self.prev_actions = self.prev_actions * (mask).long() + tokens_pt * (~mask).long()
+        self._timesteps[~self._is_terminated] += 1
+        self._is_terminated |= tokens_str == self.endtoken
+
+        for i, token in enumerate(tokens_str):
             if not self.is_terminated()[i]:
-                self.prev_actions[i] = qe.vocab[token] if isinstance(token, str) else token.to(self.inp_tensor.device)
                 self.followed_actions[i].append(token)
-                self._timesteps[i] += 1
-                self._is_terminated[i] |= token == self.endtoken
 
     def get_gold(self, i):
         return self.gold_tensor[:, i]
