@@ -85,7 +85,6 @@ class State(object):
         return ret
 
     def __getitem__(self, item:Union[int, slice, List[int], np.ndarray, torch.Tensor]):    # slicing and getitem
-        # TODO: make more efficient
         if isinstance(item, int):
             item = slice(item, item+1)
         ret = type(self)()
@@ -100,7 +99,6 @@ class State(object):
 
     def __setitem__(self, item:Union[int, slice, List[int], np.ndarray, torch.Tensor],
                     value:'State'):     # value should be of same type as self
-        # TODO: make more efficient
         assert(type(self) == type(value))
         assert(self._schema_keys == value._schema_keys)
         if isinstance(item, int):
@@ -268,7 +266,7 @@ class DecodableState(State, ABC):
 
 class TrainableState(State, ABC):
     @abstractmethod
-    def get_gold(self, i:int) -> torch.Tensor:
+    def get_gold(self, i:int=None) -> torch.Tensor:
         pass
 
 
@@ -307,25 +305,31 @@ class BasicDecoderState(TrainableDecodableState):
             self.sentence_encoder = sentence_encoder
             self.query_encoder = query_encoder
 
-            # self.set(out_actions_str = np.asarray([None for _ in self.inp_strings]))
-            # for i in range(len(self.out_actions_str)):
-            #     self.out_actions_str[i] = []
-            self.set(out_actions = torch.zeros(len(inp_strings), 0, dtype=torch.long))
+            # self.set(followed_actions_str = np.asarray([None for _ in self.inp_strings]))
+            # for i in range(len(self.followed_actions_str)):
+            #     self.followed_actions_str[i] = []
+            self.set(followed_actions = torch.zeros(len(inp_strings), 0, dtype=torch.long))
             self.set(_is_terminated = np.asarray([False for _ in self.inp_strings]))
             self.set(_timesteps = np.asarray([0 for _ in self.inp_strings]))
 
             if sentence_encoder is not None:
                 x = [sentence_encoder.convert(x, return_what="tensor,tokens") for x in self.inp_strings]
                 x = list(zip(*x))
+                inp_tokens = np.asarray([None for _ in range(len(x[1]))], dtype=np.object)
+                for i, inp_tokens_e in enumerate(x[1]):
+                    inp_tokens[i] = tuple(inp_tokens_e)
                 x = {"inp_tensor": batchstack(x[0]),
-                     "inp_tokens": np.asarray(list(x[1]))}
+                     "inp_tokens": inp_tokens}
                 self.set(**x)
             if self.gold_strings is not None:
                 if query_encoder is not None:
                     x = [query_encoder.convert(x, return_what="tensor,tokens") for x in self.gold_strings]
                     x = list(zip(*x))
+                    gold_tokens = np.asarray([None for _ in range(len(x[1]))])
+                    for i, gold_tokens_e in enumerate(x[1]):
+                        gold_tokens[i] = tuple(gold_tokens_e)
                     x = {"gold_tensor": batchstack(x[0]),
-                         "gold_tokens": np.asarray(list(x[1]))}
+                         "gold_tokens": gold_tokens}
                     self.set(**x)
 
     # State API override implementation
@@ -393,289 +397,24 @@ class BasicDecoderState(TrainableDecodableState):
 
         mask = torch.tensor(self._is_terminated).to(self.prev_actions.device)
         self.prev_actions = self.prev_actions * (mask).long() + tokens_pt * (~mask).long()
-        self._timesteps[~self._is_terminated] += 1
+        self._timesteps[~self._is_terminated] = self._timesteps[~self._is_terminated] + 1
 
         # for i, token in enumerate(tokens_str):
         #     if not self.is_terminated()[i]:
-        #         self.out_actions_str[i] = self.out_actions_str[i] + [token]
+        #         self.followed_actions_str[i] = self.followed_actions_str[i] + [token]
 
-        self.out_actions = torch.cat([self.out_actions, tokens_pt[:, None]], 1)
+        self.followed_actions = torch.cat([self.followed_actions, tokens_pt[:, None]], 1)
 
         # self._is_terminated |= tokens_str == self.endtoken
-        self._is_terminated |= (tokens_np == self.query_encoder.vocab[self.endtoken])
+        self._is_terminated = self._is_terminated | (tokens_np == self.query_encoder.vocab[self.endtoken])
 
-    def get_gold(self, i):
-        return self.gold_tensor[:, i]
-
-
-# class _StateBase(object):
-#     def __init__(self):
-#         super(_StateBase, self).__init__()
-#         self._list = []
-#         self._attr_keys = set()
-#
-#     @property
-#     def all_attr_keys(self):
-#         return set(range(len(self._list))) | set(self._attr_keys)
-#
-#     def __getitem__(self, item):
-#         if isinstance(item, str):
-#             return getattr(self, item)
-#         elif isinstance(item, int):
-#             return self._list[item]
-#
-#     def __setitem__(self, item, v):
-#         if isinstance(item, str):
-#             if item in self.__dict__:
-#                 assert (item in self._attr_keys)
-#             self._attr_keys.add(item)
-#             setattr(self, item, v)
-#         elif isinstance(item, int):
-#             self._list[item] = v
-#
-#     def __contains__(self, item):
-#         return item in self.all_attr_keys
-#
-#     def append(self, item):
-#         self._list.append(item)
-#
-#     def listlen(self):
-#         return len(self._list)
-#
-#     def dictlen(self):
-#         return len(self._attr_keys)
-#
-#     def alllen(self):
-#         return self.listlen() + self.dictlen()
-#
-#
-# class State(_StateBase):
-#     """
-#     Describes a single state, corresponding to one example.
-#     May contain other states as its immediate arguments. These states are taken care of automatically in batching.
-#
-#     Attributes passed during construction or assigned using __setitem__
-#         are registered as batchable, copyable and movable attributes.
-#         These attributes are automatically copied, batched and moved to a different device
-#         when .make_copy(), batching calls or .to() are done.
-#
-#     All other attributes on the State object are not automatically handled in copy, batching, or moving
-#     by State and are considered the responsibility of subclasses.
-#     """
-#     def __init__(self, *argattrs, **kwattrs):
-#         super(State, self).__init__()
-#         self._list = []
-#         self._attr_keys = set(kwattrs.keys())
-#         for k, v in kwattrs.items():
-#             self[k] = v
-#         for i, v in enumerate(argattrs):
-#             self.append(v)
-#
-#     def make_copy(self, ret=None):
-#         """
-#         Make and return a deep copy of this state.
-#         Only deepcopies keys in self.all_attr_keys.
-#         Doesn't copy anything else.
-#         """
-#         ret = type(self)() if ret is None else ret
-#         for k in self.all_attr_keys:
-#             ret[k] = make_copy(self[k])
-#         return ret
-#
-#     def to(self, device):
-#         """
-#         Move all torch Tensors to given device.
-#         """
-#         # check dict for any tensors or other states, and call .to on them.
-#         for k in self.all_attr_keys:
-#             if isinstance(self[k], (torch.Tensor, State)):
-#                 self[k] = self[k].to(device)
-#         return self
-#
-#     def get_batch_class(self): return StateBatch
-#
-#
-# class StateBatch(_StateBase):
-#     def __init__(self, states:List=None, **kw):
-#         super(StateBatch, self).__init__(**kw)
-#         self.states = states if states is not None else []
-#         self._list = []
-#         self._attr_keys = set()
-#
-#     def to(self, device):
-#         """
-#         Move all torch tensors onto given device.
-#         """
-#         # 2. move any attached statebatches to device
-#         for k in self.all_attr_keys:
-#             if isinstance(self[k], (torch.Tensor, StateBatch)):
-#                 self[k] = self[k].to(device)
-#         # 3. move anything else to device
-#         self.to_own(device)
-#         return self
-#
-#     def to_own(self, device):
-#         pass
-#
-#     def make_copy(self):
-#         """
-#         Make and return a copy of this state batch.
-#         :return:
-#         """
-#         states = [state.make_copy() for state in self.states]
-#         ret = type(self)(states)
-#         return ret
-#
-#     def __len__(self):
-#         return len(self.states)
+    def get_gold(self, i:int=None):
+        if i is None:
+            return self.gold_tensor
+        else:
+            return self.gold_tensor[:, i]
 
 
-# def batch(states:Union[List[State], List[torch.Tensor]]):
-#     if isinstance(states[0], torch.Tensor):
-#         return torch.stack(states, 0)
-#     elif isinstance(states[0], State):
-#         return states[0].get_batch_class()(states)
-#     else:
-#         raise Exception(f"unsupported type: '{type(states[0])}'")
-#
-#
-# def unbatch(statebatch:Union[StateBatch, torch.Tensor]):
-#     if isinstance(statebatch, torch.Tensor):
-#         return [x[0] for x in torch.split(statebatch, 1, 0)]
-#     elif isinstance(statebatch, StateBatch):
-#         return statebatch.unbatch()
-#     else:
-#         raise Exception(f"unsupported type: '{type(statebatch)}'")
-#
-#
-# def make_copy(v):
-#     if isinstance(v, torch.Tensor):
-#         return v.clone().detach()
-#     elif isinstance(v, State):
-#         return v.make_copy()
-#     else:
-#         return deepcopy(v)
-
-
-# class DecodableState(State, ABC):
-#     """
-#     Subclasses must have "out_probs" substate and a "gold_actions" attribute for use with TF/Free/..-transitions in decoding
-#     """
-#     @abstractmethod
-#     def start_decoding(self):
-#         pass
-#
-#     @abstractmethod
-#     def is_terminated(self):
-#         pass
-#
-#     @abstractmethod
-#     def get_decoding_step(self):
-#         pass
-#
-#     @abstractmethod
-#     def step(self, action:Union[torch.Tensor, str]=None):
-#         pass
-#
-#     @abstractmethod
-#     def get_action_scores(self):
-#         pass
-#
-#     def get_batch_class(self): return DecodableStateBatch
-#
-#
-# class DecodableStateBatch(StateBatch):
-#     def start_decoding(self):
-#         self.unbatch()
-#         for state in self.states:
-#             state.start_decoding()
-#         self.batch()
-#
-#     def all_terminated(self):
-#         return all([state.is_terminated() for state in self.states])
-#
-#     def step(self, actions:Union[torch.Tensor, List[Union[torch.Tensor, str]], List[str]]=None):
-#         self.unbatch()
-#         if actions is not None:
-#             [state.step(action) for state, action in zip(self.states, actions)]
-#         else:
-#             [state.step() for state in self.states]
-#         self.batch()
-#
-#     def get_action_scores(self):
-#         return torch.stack([state.get_action_scores() for state in self.states], 0)
-#
-#
-# class BasicState(DecodableState):
-#     """
-#     Basic state object for seq2seq
-#     """
-#     endtoken = "@END@"
-#     def __init__(self, inp:str=None, out:str=None,
-#                  sentence_encoder:SentenceEncoder=None,
-#                  query_encoder:SentenceEncoder=None, **kw):
-#         super(BasicState, self).__init__(**kw)
-#         self.inp_string, self.gold_string = inp, out
-#         self.sentence_encoder, self.query_encoder = sentence_encoder, query_encoder
-#         self.inp_tensor = None
-#         self._timestep = 0
-#
-#         self.followed_actions = []
-#         self._is_terminated = False
-#
-#         self["out_probs"] = State()
-#         self["nn_state"] = State()
-#
-#         self.initialize()
-#
-#     def initialize(self):
-#         if self.sentence_encoder is not None:
-#             self.inp_tensor, self.inp_actions = self.sentence_encoder.convert(self.inp_string, return_what="tensor,tokens")
-#         if self.gold_string is not None:
-#             if self.query_encoder is not None:
-#                 self["gold_tensor"], self.gold_actions = self.query_encoder.convert(self.gold_string, return_what="tensor,tokens")
-#         if self.inp_tensor is not None:
-#             self.nn_state["inp_tensor"] = self.inp_tensor
-#
-#
-#     def make_copy(self, ret=None):
-#         ret = type(self)(deepcopy(self.inp_string), deepcopy(self.gold_string)) if ret is None else ret
-#         ret = super(BasicState, self).make_copy(ret)
-#         do_shallow = {"sentence_encoder", "query_encoder"}
-#         for k, v in self.__dict__.items():
-#             if k in self.all_attr_keys:
-#                 pass        # already copied by State
-#             elif k in do_shallow:
-#                 setattr(ret, k, v)  # shallow copy
-#             else:
-#                 setattr(ret, k, deepcopy(v))
-#         return ret
-#
-#     def is_terminated(self):
-#         return self._is_terminated
-#
-#     def start_decoding(self):
-#         # initialize prev_action
-#         self.nn_state["prev_action"] = torch.tensor(self.query_encoder.vocab[self.query_encoder.vocab.starttoken],
-#                                                    device=self.nn_state["inp_tensor"].device, dtype=torch.long)
-#
-#     def get_decoding_step(self):
-#         return self._timestep
-#
-#     def step(self, token:Union[torch.Tensor, str]):
-#         if isinstance(token, torch.Tensor):
-#             token = self.query_encoder.vocab(int(token.detach().cpu().numpy()))
-#         if not self.is_terminated():
-#             self.nn_state["prev_action"] = torch.tensor(self.query_encoder.vocab[token],
-#                                                        device=self.nn_state["inp_tensor"].device, dtype=torch.long)
-#             self.followed_actions.append(token)
-#             self._timestep += 1
-#             if token == self.endtoken:
-#                 self._is_terminated = True
-#
-#     def get_action_scores(self):
-#         return self.out_probs[-1]
-#
 #
 # class FuncTreeState(State):
 #     """

@@ -3,7 +3,7 @@ from typing import Set
 
 import torch
 
-from parseq.states import StateBatch
+from parseq.states import State
 from parseq.vocab import Vocab
 
 
@@ -110,7 +110,7 @@ class SumPtrGenOutput(torch.nn.Module):
                 self._inp_to_act[inp_v] = out_v
                 self._act_from_inp[out_v] = inp_v
 
-    def forward(self, x:torch.Tensor, statebatch:StateBatch, attn_scores:torch.Tensor):  # (batsize, hdim), (batsize, numactions)
+    def forward(self, x:torch.Tensor, statebatch:State, attn_scores:torch.Tensor):  # (batsize, hdim), (batsize, numactions)
 
         # region build action masks
         actionmasks = []
@@ -212,7 +212,7 @@ class PtrGenOutput(torch.nn.Module):
                 self._inp_to_act[inp_v] = out_v
                 self._act_from_inp[out_v] = inp_v
 
-    def forward(self, x:torch.Tensor, statebatch:StateBatch, attn_scores:torch.Tensor):  # (batsize, hdim), (batsize, numactions)
+    def forward(self, x:torch.Tensor, statebatch:State, attn_scores:torch.Tensor):  # (batsize, hdim), (batsize, numactions)
 
         # region build action masks
         actionmasks = []

@@ -19,10 +19,10 @@ from torch.utils.data import DataLoader
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
-from parseq.eval import StateLoss, StateMetric
+from parseq.eval import StateCELoss, StateSeqAccuracies
 from parseq.grammar import prolog_to_pas
 from parseq.nn import TokenEmb, BasicGenOutput
-from parseq.states import BasicState, batch, StateBatch, DecodableStateBatch, DecodableState
+from parseq.states import DecodableState, BasicDecoderState, State
 from parseq.transitions import TransitionModel, LSTMCellTransition
 from parseq.vocab import SentenceEncoder
 
@@ -104,9 +104,10 @@ class GeoQueryDataset(object):
 
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
         for inp, out, split in zip(inputs, outputs, splits):
+            state = BasicDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
             if split not in self.data:
                 self.data[split] = []
-            self.data[split].append((inp, out))
+            self.data[split].append(state)
 
     def get_split(self, split:str):
         return DatasetSplitProxy(self.data[split])
@@ -115,24 +116,53 @@ class GeoQueryDataset(object):
     def collate_fn(data:Iterable):
         goldmaxlen = 0
         inpmaxlen = 0
+        data = [state.make_copy(detach=True, deep=True) for state in data]
         for state in data:
-            goldmaxlen = max(goldmaxlen, state.gold_tensor.size(0))
-            inpmaxlen = max(inpmaxlen, state.nn_state.inp_tensor.size(0))
+            goldmaxlen = max(goldmaxlen, state.gold_tensor.size(1))
+            inpmaxlen = max(inpmaxlen, state.inp_tensor.size(1))
         for state in data:
             state.gold_tensor = torch.cat([
                 state.gold_tensor,
-                state.gold_tensor.new_zeros(goldmaxlen - state.gold_tensor.size(0))], 0)
-            state.nn_state.inp_tensor = torch.cat([
-                state.nn_state.inp_tensor,
-                state.nn_state.inp_tensor.new_zeros(inpmaxlen - state.nn_state.inp_tensor.size(0))], 0)
-        ret = batch(data)
+                state.gold_tensor.new_zeros(1, goldmaxlen - state.gold_tensor.size(1))], 1)
+            state.inp_tensor = torch.cat([
+                state.inp_tensor,
+                state.inp_tensor.new_zeros(1, inpmaxlen - state.inp_tensor.size(1))], 1)
+        ret = data[0].merge(data)
         return ret
+
+    def dataloader(self, split:str=None, batsize:int=5):
+        if split is None:   # return all splits
+            ret = {}
+            for split in self.data.keys():
+                ret[split] = self.dataloader(batsize=batsize, split=split)
+            return ret
+        else:
+            assert(split in self.data.keys())
+            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split=="train",
+             collate_fn=GeoQueryDataset.collate_fn)
+            return dl
 
 
 def try_dataset():
     tt = q.ticktock("dataset")
     tt.tick("building dataset")
     ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=lambda x: x.split()))
+    train_dl = ds.dataloader("train", batsize=19)
+    test_dl = ds.dataloader("test", batsize=20)
+    examples = set()
+    examples_list = []
+    duplicates = []
+    for b in train_dl:
+        print(len(b))
+        for i in range(len(b)):
+            example = b.inp_strings[i] + " --> " + b.gold_strings[i]
+            if example in examples:
+                duplicates.append(example)
+            examples.add(example)
+            examples_list.append(example)
+            # print(example)
+        pass
+    print(f"duplicates within train: {len(duplicates)} from {len(examples_list)} total")
     tt.tock("dataset built")
 
 
@@ -148,14 +178,6 @@ class DatasetSplitProxy(object):
         return len(self.data)
 
 
-def get_dataloaders(ds:GeoQueryDataset, batsize:int=5):
-    dls = {}
-    for split in ds.data.keys():
-        dls[split] = DataLoader(ds.get_split(split), batch_size=batsize, shuffle=split=="train",
-             collate_fn=GeoQueryDataset.collate_fn)
-    return dls
-
-
 class BasicGenModel(TransitionModel):
     def __init__(self, inp_emb, inp_enc, out_emb, out_rnn:LSTMCellTransition,
                  out_lin, att, dropout=0., enc_to_dec=None, feedatt=False, **kw):
@@ -168,7 +190,7 @@ class BasicGenModel(TransitionModel):
         self.dropout = torch.nn.Dropout(dropout)
         self.feedatt = feedatt
 
-    def forward(self, x:StateBatch):
+    def forward(self, x:State):
         if "ctx" not in x.nn_state:
             # encode input
             inptensor = x.nn_state["inp_tensor"]
@@ -245,7 +267,7 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
 
 def do_rare_stats(ds:GeoQueryDataset):
     # how many examples contain rare words, in input and output, in both train and test
-    def get_rare_portions(examples:List[BasicState]):
+    def get_rare_portions(examples:List[State]):
         total = 0
         rare_in_question = 0
         rare_in_query = 0
@@ -282,38 +304,6 @@ def do_rare_stats(ds:GeoQueryDataset):
     return
 
 
-class StateCELoss(StateLoss):
-    def __init__(self, weight=None, reduction="mean", ignore_index=-100, mode="logits", **kw):
-        super(StateCELoss, self).__init__(**kw)
-        self.ce = q.CELoss(weight=weight, reduction=reduction, ignore_index=ignore_index, mode=mode)
-
-    def forward(self, x:DecodableStateBatch):   # must be BasicStates
-        # collect all probs:
-        probs = torch.stack([x.out_probs[i] for i in range(x.out_probs.listlen())], 1)
-        # collect all golds:
-        golds = x.gold_tensor
-        probs = probs[:, :x.gold_tensor.size(1)]
-        loss = self.ce(probs, golds)
-        return {"loss": loss}
-
-
-class StateSeqAccuracies(StateMetric):
-    def forward(self, x:DecodableStateBatch):   # must be BasicStates
-        # x has a batched .gold_tensor tensor and a batched State-list of .out_probs tensors
-        # collect all probs:
-        probs = torch.stack([x.out_probs[i] for i in range(x.out_probs.listlen())], 1)
-        golds = x.gold_tensor
-        probs = probs[:, :x.gold_tensor.size(1)]
-        _, preds = probs.max(-1)
-        mask = golds != 0
-        same = golds == preds
-        seq_accs = (same | ~mask).all(1)
-        elem_accs = (same & mask).sum(1) / mask.sum(1)
-        ret = {"seq_acc": seq_accs.sum().detach().cpu().item() / seq_accs.size(0),
-               "elem_acc": elem_accs.sum().detach().cpu().item() / elem_accs.size(0)}
-        return ret
-
-
 def run(lr=0.001,
         batsize=20,
         epochs=50,
@@ -343,7 +333,7 @@ def run(lr=0.001,
     stemmer = PorterStemmer()
     tokenizer = lambda x: [stemmer.stem(xe) for xe in x.split()]
     ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
-    dls = get_dataloaders(ds, batsize=batsize)
+    dls = ds.dataloader(batsize=batsize)
     train_dl = dls["train"]
     test_dl = dls["test"]
     tt.tock("data loaded")
@@ -415,5 +405,5 @@ def run(lr=0.001,
 
 if __name__ == '__main__':
     # try_build_grammar()
-    # try_dataset()
-    q.argprun(run)
+    try_dataset()
+    # q.argprun(run)

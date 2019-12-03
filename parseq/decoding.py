@@ -20,18 +20,21 @@ class SeqDecoder(torch.nn.Module):
         x.start_decoding()
 
         outprobs = []
+        predactions = []
 
         i = 0
 
         all_terminated = x.all_terminated()
         while not all_terminated:
-            probs, x, all_terminated = self.model(x, timestep=i)
+            probs, preds, x, all_terminated = self.model(x, timestep=i)
             outprobs.append(probs)
+            predactions.append(preds)
             i += 1
 
         outprobs = torch.stack(outprobs, 1)
+        predactions = torch.stack(predactions, 1)
 
-        metrics = [metric(outprobs, x) for metric in self._metrics]
+        metrics = [metric(outprobs, predactions, x) for metric in self._metrics]
         metrics = merge_dicts(*metrics)
         return metrics, x
 
@@ -63,10 +66,11 @@ class TFTransition(SeqDecoderTransition):
     """
     def forward(self, x:TrainableDecodableState, timestep:int):
         actionprobs, x = self.model(x)
+        _, predactions = actionprobs.max(-1)
         # feed next
         goldactions = x.get_gold(timestep)
         x.step(goldactions)
-        return actionprobs, x, x.all_terminated()
+        return actionprobs, predactions, x, x.all_terminated()
 
 
 class FreerunningTransition(SeqDecoderTransition):
@@ -82,11 +86,40 @@ class FreerunningTransition(SeqDecoderTransition):
         # feed next
         _, predactions = actionprobs.max(-1)
         x.step(predactions)
-        return actionprobs, x, x.all_terminated() or timestep >= self.maxtime - 1
+        return actionprobs, predactions, x, x.all_terminated() or timestep >= self.maxtime - 1
+
+
+class BeamDecoder(SeqDecoder):
+    def __init__(self, model:TransitionModel, eval:List[Union[StateMetric, StateLoss]]=tuple(), eval_beam:List[Union[StateMetric, StateLoss]]=None,
+                 beamsize=1, maxtime=100, copy_deep=False, **kw):
+        model = BeamTransition(model, beamsize=beamsize, maxtime=maxtime, copy_deep=copy_deep)
+        super(BeamDecoder, self).__init__(model, eval, **kw)
+        self._beam_metrics = eval_beam
+
+    def forward(self, x:DecodableState) -> Dict:
+        # sb = sb.make_copy()
+        x.start_decoding()
+
+        i = 0
+
+        all_terminated = x.all_terminated()
+        outprobs = None
+        while not all_terminated:
+            outprobs, predactions, x, all_terminated = self.model(x, timestep=i)
+            i += 1
+
+        beam_metrics = [metric(outprobs, predactions, x) for metric in self._beam_metrics]
+        beam_metrics = merge_dicts(*beam_metrics)
+        # get top of the beam and run eval on top of the beam
+        top_outprobs, top_predactions, top_x = outprobs[:, 0], predactions[:, 0], x.bstates.get(0)
+        metrics = [metric(top_outprobs, top_predactions, top_x) for metric in self._metrics]
+        metrics = merge_dicts(beam_metrics, *metrics)
+        return metrics, x
 
 
 class BeamState(DecodableState):
-    def __init__(self, states:List[DecodableState], scores:torch.Tensor=None, actionprobs:List[torch.Tensor]=None):
+    def __init__(self, states:List[DecodableState], scores:torch.Tensor=None,
+                 actionprobs:List[torch.Tensor]=None, predactions:torch.Tensor=None):
         bstates = ListState(*states)
         batsize, beamsize = len(bstates), len(states)
         bscores = torch.zeros(batsize, beamsize) if scores is None else scores
@@ -94,6 +127,7 @@ class BeamState(DecodableState):
         if actionprobs is not None:
             actionprobs = ListState(*actionprobs)
             kw["actionprobs"] = actionprobs
+        kw["predactions"] = predactions
         super(BeamState, self).__init__(**kw)
 
     def start_decoding(self):
@@ -116,11 +150,10 @@ class BeamTransition(SeqDecoderTransition):
     """
     Transition for beam search.
     """
-    def __init__(self, model:TransitionModel, beamsize=1, maxtime=100, return_all=False, copy_deep=False, **kw):
+    def __init__(self, model:TransitionModel, beamsize=1, maxtime=100, copy_deep=False, **kw):
         super(BeamTransition, self).__init__(model, **kw)
         self.maxtime = maxtime
         self.beamsize = beamsize
-        self.return_all = return_all
         self.copy_deep = copy_deep
 
     def do_single_state_init(self, x):
@@ -134,11 +167,11 @@ class BeamTransition(SeqDecoderTransition):
             beamstates.append(x_copy)
         y = BeamState(beamstates,
                       scores=logprobs[:, :beamsize],
-                      actionprobs=[actionprobs.clone()[:, None, :] for _ in range(beamsize)])
+                      actionprobs=[actionprobs.clone()[:, None, :] for _ in range(beamsize)],
+                      predactions=actionids[:, :beamsize, None])
         return y
 
     def gather_states(self, x:List[State], indexes:torch.Tensor)->List[State]:
-        # TODO: make more efficient: avoid repeated conversion of indexes from tensor to lists in __getitem__ and __setitem__
         ret = []
         for i in range(indexes.size(1)): # for every element in new beam
             uniq = indexes[:, i].unique()
@@ -190,6 +223,8 @@ class BeamTransition(SeqDecoderTransition):
             actionids = actionidses.gather(1, selection_ids)         # select action ids using beam_ids
             stateids = selection_ids // modul        # select state ids based on modul and selection_ids
             actionprobs = actionprobses.gather(1, stateids[:, :, None, None].repeat(1, 1, actionprobses.size(2), actionprobses.size(3)))
+            predactions = x.predactions.gather(1, stateids[:, :, None].repeat(1, 1, x.predactions.size(2)))
+            predactions = torch.cat([predactions, actionids[:, :, None]], 2)
             gatheredstates = self.gather_states(x.bstates._list, stateids)    # gatheredstates is a ListState
 
             # apply selected actions to selected states
@@ -197,10 +232,5 @@ class BeamTransition(SeqDecoderTransition):
                 gatheredstates[i].step(actionids[:, i])         # if timestep != self.maxtime-1 else [self.endtoken]*len(gatheredstates[i]))
 
             # create new beamstate from updated selected states
-            y = BeamState(gatheredstates, scores=logprobs, actionprobs=[e[:, 0] for e in actionprobs.split(1, 1)])
-        return torch.stack(y.actionprobs._list, 1), y, y.all_terminated() or timestep >= self.maxtime - 1
-        # TODO: returns
-        # if self.return_all:
-        #     return torch.stack(y.actionprobs._list, 1), y.bstates
-        # else:
-        #     return y.actionprobs.get(0), y.bstates.get(0)       # most probable states
+            y = BeamState(gatheredstates, scores=logprobs, actionprobs=[e[:, 0] for e in actionprobs.split(1, 1)], predactions=predactions)
+        return torch.stack(y.actionprobs._list, 1), y.predactions, y, y.all_terminated() or timestep >= self.maxtime - 1

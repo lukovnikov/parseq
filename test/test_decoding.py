@@ -4,7 +4,8 @@ from unittest import TestCase
 import torch
 import numpy as np
 
-from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamTransition, BeamState
+from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamTransition, BeamState, BeamDecoder
+from parseq.eval import StateCELoss, StateSeqAccuracies, BeamSeqAccuracy
 from parseq.states import BasicDecoderState, ListState, State
 from parseq.transitions import TransitionModel
 from parseq.vocab import SentenceEncoder
@@ -27,8 +28,8 @@ class TestSeqDecoder(TestCase):
         dec = SeqDecoder(TFTransition(Model()))
 
         y = dec(x)
-        print(y[1].out_actions)
-        outactions = y[1].out_actions.detach().cpu().numpy()
+        print(y[1].followed_actions)
+        outactions = y[1].followed_actions.detach().cpu().numpy()
         print(outactions[0])
         print(se.vocab.print(outactions[0]))
         print(se.vocab.print(outactions[1]))
@@ -58,10 +59,84 @@ class TestSeqDecoder(TestCase):
         dec = SeqDecoder(FreerunningTransition(Model(), maxtime=MAXTIME))
 
         y = dec(x)
-        print(y[1].out_actions)
-        print(max([len(y[1].out_actions[i]) for i in range(len(y[1]))]))
-        print(min([len(y[1].out_actions[i]) for i in range(len(y[1]))]))
-        self.assertTrue(max([len(y[1].out_actions[i]) for i in range(len(y[1]))]) <= MAXTIME + 1)
+        print(y[1].followed_actions)
+        print(max([len(y[1].followed_actions[i]) for i in range(len(y[1]))]))
+        print(min([len(y[1].followed_actions[i]) for i in range(len(y[1]))]))
+        self.assertTrue(max([len(y[1].followed_actions[i]) for i in range(len(y[1]))]) <= MAXTIME + 1)
+
+    def test_tf_decoder_with_losses(self):
+        texts = ["i went to chocolate @END@", "awesome is @END@", "the meaning of life @END@"]
+        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        for t in texts:
+            se.inc_build_vocab(t)
+        se.finalize_vocab()
+        x = BasicDecoderState(texts, texts, se, se)
+
+        class Model(TransitionModel):
+            def forward(self, x:BasicDecoderState):
+                outprobs = torch.rand(len(x), x.query_encoder.vocab.number_of_ids())
+                outprobs = torch.nn.functional.log_softmax(outprobs, -1)
+                return outprobs, x
+
+        celoss = StateCELoss(ignore_index=0)
+        accs = StateSeqAccuracies()
+
+        dec = SeqDecoder(TFTransition(Model()), eval=[celoss, accs])
+
+        y = dec(x)
+
+        print(y[0])
+        print(y[1].followed_actions)
+        print(y[1].get_gold())
+
+        # print(y[1].followed_actions)
+        outactions = y[1].followed_actions.detach().cpu().numpy()
+        # print(outactions[0])
+        # print(se.vocab.print(outactions[0]))
+        # print(se.vocab.print(outactions[1]))
+        # print(se.vocab.print(outactions[2]))
+        self.assertTrue(se.vocab.print(outactions[0]) == texts[0])
+        self.assertTrue(se.vocab.print(outactions[1]) == texts[1])
+        self.assertTrue(se.vocab.print(outactions[2]) == texts[2])
+
+    def test_tf_decoder_with_losses_with_gold(self):
+        texts = ["i went to chocolate @END@", "awesome is @END@", "the meaning of life @END@"]
+        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        for t in texts:
+            se.inc_build_vocab(t)
+        se.finalize_vocab()
+        x = BasicDecoderState(texts, texts, se, se)
+
+        class Model(TransitionModel):
+            def forward(self, x:BasicDecoderState):
+                outprobs = torch.zeros(len(x), x.query_encoder.vocab.number_of_ids())
+                golds = x.get_gold().gather(1, torch.tensor(x._timesteps).to(torch.long)[:, None])
+                outprobs.scatter_(1, golds, 1)
+                return outprobs, x
+
+        celoss = StateCELoss(ignore_index=0)
+        accs = StateSeqAccuracies()
+
+        dec = SeqDecoder(TFTransition(Model()), eval=[celoss, accs])
+
+        y = dec(x)
+
+        print(y[0])
+        print(y[1].followed_actions)
+        print(y[1].get_gold())
+
+        self.assertEqual(y[0]["seq_acc"], 1)
+        self.assertEqual(y[0]["elem_acc"], 1)
+
+        # print(y[1].followed_actions)
+        outactions = y[1].followed_actions.detach().cpu().numpy()
+        # print(outactions[0])
+        # print(se.vocab.print(outactions[0]))
+        # print(se.vocab.print(outactions[1]))
+        # print(se.vocab.print(outactions[2]))
+        self.assertTrue(se.vocab.print(outactions[0]) == texts[0])
+        self.assertTrue(se.vocab.print(outactions[1]) == texts[1])
+        self.assertTrue(se.vocab.print(outactions[2]) == texts[2])
 
 
 class TestBeamTransition(TestCase):
@@ -125,18 +200,31 @@ class TestBeamTransition(TestCase):
 
         bt = BeamTransition(model, beamsize, maxtime=maxtime)
         i = 0
-        _, y, _ = bt(x, i)
+        _, _, y, _ = bt(x, i)
         i += 1
-        _, y, _ = bt(y, i)
+        _, _, y, _ = bt(y, i)
 
         all_terminated = y.all_terminated()
         while not all_terminated:
-            _, y, all_terminated = bt(y, i)
+            _, predactions, y, all_terminated = bt(y, i)
             i += 1
 
         print("timesteps done:")
         print(i)
         print(y)
+        print(predactions[0])
+        for i in range(beamsize):
+            print("-")
+            # print(y.bstates[0].get(i).followed_actions)
+            # print(predactions[0, i, :])
+            pa = predactions[0, i, :]
+            # print((pa == se.vocab[se.vocab.endtoken]).cumsum(0))
+            pa = ((pa == se.vocab[se.vocab.endtoken]).long().cumsum(0) < 1).long() * pa
+            yb = y.bstates[0].get(i).followed_actions[0, :]
+            yb = yb * (yb != se.vocab[se.vocab.endtoken]).long()
+            print(pa)
+            print(yb)
+            self.assertTrue(torch.allclose(pa, yb))
 
     def test_beam_search_vs_greedy(self):
         with torch.no_grad():
@@ -174,21 +262,21 @@ class TestBeamTransition(TestCase):
 
             bt = BeamTransition(model, beamsize, maxtime=maxtime)
             i = 0
-            _, y, _ = bt(x, i)
+            _, _, y, _ = bt(x, i)
             i += 1
-            _, y, _ = bt(y, i)
+            _, _, y, _ = bt(y, i)
 
             all_terminated = y.all_terminated()
             while not all_terminated:
                 start_time = time.time()
-                _, y, all_terminated = bt(y, i)
+                _, _, y, all_terminated = bt(y, i)
                 i += 1
                 # print(i)
                 end_time = time.time()
                 print(f"{i}: {end_time - start_time}")
 
             print(y)
-            print(y.bstates.get(0).out_actions)
+            print(y.bstates.get(0).followed_actions)
 
     def test_beam_search_stored_probs(self):
         with torch.no_grad():
@@ -228,23 +316,23 @@ class TestBeamTransition(TestCase):
 
             bt = BeamTransition(model, beamsize, maxtime=maxtime)
             i = 0
-            _, y, _ = bt(x, i)
+            _, _, y, _ = bt(x, i)
             i += 1
-            _, y, _ = bt(y, i)
+            _, _, y, _ = bt(y, i)
 
             all_terminated = False
             while not all_terminated:
                 start_time = time.time()
-                _, y, all_terminated = bt(y, i)
+                _, _, y, all_terminated = bt(y, i)
                 i += 1
                 # print(i)
                 end_time = time.time()
                 print(f"{i}: {end_time - start_time}")
 
             print(y)
-            print(y.bstates.get(0).out_actions)
+            print(y.bstates.get(0).followed_actions)
 
-            best_actions = y.bstates.get(0).out_actions
+            best_actions = y.bstates.get(0).followed_actions
             best_actionprobs = y.actionprobs.get(0)
             for i in range(len(best_actions)):
                 print(i)
@@ -256,6 +344,33 @@ class TestBeamTransition(TestCase):
                 print(i_prob)
                 print(y.bscores[i, 0])
                 self.assertTrue(torch.allclose(i_prob, y.bscores[i, 0]))
+
+    def test_beam_search(self):
+        texts = ["i went to chocolate @END@", "awesome is @END@", "the meaning of life @END@"]
+        from parseq.vocab import SentenceEncoder
+        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        for t in texts:
+            se.inc_build_vocab(t)
+        se.finalize_vocab()
+        x = BasicDecoderState(texts, texts, se, se)
+        x.start_decoding()
+
+        class Model(TransitionModel):
+            def forward(self, x: BasicDecoderState):
+                outprobs = torch.randn(len(x), x.query_encoder.vocab.number_of_ids())
+                outprobs = torch.nn.functional.log_softmax(outprobs, -1)
+                return outprobs, x
+
+        model = Model()
+
+        beamsize = 50
+        maxtime = 10
+        bs = BeamDecoder(model, eval=[StateCELoss(ignore_index=0), StateSeqAccuracies()], eval_beam=[BeamSeqAccuracy()],
+                         beamsize=beamsize, maxtime=maxtime)
+
+        y = bs(x)
+        print(y)
+
 
 
 
