@@ -2,7 +2,7 @@ from typing import Dict, List
 
 import torch
 
-from parseq.states import State
+from parseq.states import State, ListState
 
 
 class TransitionModel(torch.nn.Module): pass
@@ -11,9 +11,7 @@ class TransitionModel(torch.nn.Module): pass
 class LSTMState(State): pass
 
 
-class MultiLSTMState(State):
-    def __init__(self, *layersstates:List[LSTMState], **kw):
-        super(MultiLSTMState, self).__init__(*layersstates, **kw)
+class MultiLSTMState(ListState): pass
 
 
 class LSTMCellTransition(TransitionModel):
@@ -22,19 +20,14 @@ class LSTMCellTransition(TransitionModel):
         self.cells = torch.nn.ModuleList(cells)
         self.dropout = torch.nn.Dropout(dropout)
 
-    def get_init_state(self, batsize, device):
+    def get_init_state(self, batsize, device=torch.device("cpu")):
         states = []
         for i in range(len(self.cells)):
             state = LSTMState()
-            state["h.dropout"] = self.dropout(
-                torch.ones(batsize,
-                self.cells[i].hidden_size,
-                device=device))
-            state["c.dropout"] = self.dropout(
-                torch.ones_like(state["h.dropout"])
-            )
-            state["h"] = torch.zeros_like(state["h.dropout"])
-            state["c"] = torch.zeros_like(state["h.dropout"])
+            state.set(h_dropout=self.dropout(torch.ones(batsize, self.cells[i].hidden_size, device=device)))
+            state.set(c_dropout=self.dropout(torch.ones_like(state.get("h_dropout"))))
+            state.set("h", torch.zeros_like(state.get("h_dropout")))
+            state.set("c", torch.zeros_like(state.get("h_dropout")))
             states.append(state)
         ret = MultiLSTMState(*states)
         return ret
@@ -43,9 +36,9 @@ class LSTMCellTransition(TransitionModel):
         x = inp
         for i in range(len(self.cells)):
             _x = self.dropout(x)
-            state = states[i]
-            x, c = self.cells[i](_x, (state["h"] * state["h.dropout"],
-                                      state["c"] * state["c.dropout"]))
-            state["h"] = x
-            state["c"] = c
-        return x
+            state = states.get(i)
+            x, c = self.cells[i](_x, (state.get("h") * state.get("h_dropout"),
+                                      state.get("c") * state.get("c_dropout")))
+            state.set(h=x)
+            state.set(c=c)
+        return x, states

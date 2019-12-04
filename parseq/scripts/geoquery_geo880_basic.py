@@ -191,39 +191,42 @@ class BasicGenModel(TransitionModel):
         self.feedatt = feedatt
 
     def forward(self, x:State):
-        if "ctx" not in x.nn_state:
+        if not x.has("mstate"):
+            x.set("mstate", State())
+        mstate = x.get("mstate")
+        if not mstate.has("ctx"):
             # encode input
-            inptensor = x.nn_state["inp_tensor"]
+            inptensor = x.get("inp_tensor")
             mask = inptensor != 0
             inpembs = self.inp_emb(inptensor)
             # inpembs = self.dropout(inpembs)
             inpenc, final_enc = self.inp_enc(inpembs, mask)
             final_enc = final_enc.view(final_enc.size(0), -1).contiguous()
             final_enc = self.enc_to_dec(final_enc)
-            x.nn_state["ctx"] = inpenc
-            x.nn_state["ctx_mask"] = mask
+            mstate.set("ctx", inpenc)
+            mstate.set("ctx_mask", mask)
 
-        ctx = x.nn_state["ctx"]
-        ctx_mask = x.nn_state["ctx_mask"]
+        ctx = mstate.get("ctx")
+        ctx_mask = mstate.get("ctx_mask")
 
-        emb = self.out_emb(x.nn_state["prev_action"])
+        emb = self.out_emb(x.get("prev_action"))
 
-        if "rnn" not in x:
+        if not mstate.has("rnnstate"):
             init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
             # uncomment next line to initialize decoder state with last state of encoder
             # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
-            x.nn_state["rnn"] = init_rnn_state
+            mstate.set("rnnstate", init_rnn_state)
 
-        # DONE: concat previous attention summary to emb
         if "prev_summ" not in x:
-            x.nn_state["prev_summ"] = torch.zeros_like(ctx[:, 0])
+            mstate.set("prev_summ", torch.zeros_like(ctx[:, 0]))
         _emb = emb
         if self.feedatt == True:
-            _emb = torch.cat([_emb, x.nn_state["prev_summ"]], 1)
-        enc = self.out_rnn(_emb, x.nn_state["rnn"])
+            _emb = torch.cat([_emb, mstate.get("prev_summ")], 1)
+        enc, new_rnnstate = self.out_rnn(_emb, mstate.get("rnnstate"))
+        mstate.set("rnnstate", new_rnnstate)
 
         alphas, summ, scores = self.att(enc, ctx, ctx_mask)
-        x.nn_state["prev_summ"] = summ
+        mstate.set("prev_summ", summ)
         enc = torch.cat([enc, summ], -1)
 
         outs = self.out_lin(enc)
@@ -275,8 +278,8 @@ def do_rare_stats(ds:GeoQueryDataset):
         rare_in_either = 0
         for example in examples:
             total += 1
-            question_tokens = example.inp_actions
-            query_tokens = example.gold_actions
+            question_tokens = example.inp_tokens[0]
+            query_tokens = example.gold_tokens[0]
             both = True
             either = False
             if len(set(question_tokens) & example.sentence_encoder.vocab.rare_tokens) > 0:
@@ -327,15 +330,14 @@ def run(lr=0.001,
     # DONE: beam search
     # DONE: lr scheduler
     tt = q.ticktock("script")
-    ttt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
     stemmer = PorterStemmer()
     tokenizer = lambda x: [stemmer.stem(xe) for xe in x.split()]
     ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
     dls = ds.dataloader(batsize=batsize)
-    train_dl = dls["train"]
-    test_dl = dls["test"]
+    train_dl = ds.dataloader("train", batsize=batsize)
+    test_dl = ds.dataloader("test", batsize=batsize)
     tt.tock("data loaded")
 
     do_rare_stats(ds)
@@ -344,6 +346,8 @@ def run(lr=0.001,
     # print(batch)
     # print("input graph")
     # print(batch.batched_states)
+
+    sys.exit()
 
     model = create_model(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
@@ -405,5 +409,5 @@ def run(lr=0.001,
 
 if __name__ == '__main__':
     # try_build_grammar()
-    try_dataset()
-    # q.argprun(run)
+    # try_dataset()
+    q.argprun(run)

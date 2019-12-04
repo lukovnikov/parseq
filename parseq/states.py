@@ -24,8 +24,14 @@ class State(object):
         if len(kwdata) > 0:
             self.set(**kwdata)
 
-    def set(self, **kw):
+    def set(self, k:str=None, v=None, **kw):
+        if k is not None:
+            if k in kw:
+                raise Exception("Key {k} already in kwargs.")
+            kw = kw.copy()
+            kw.update({k: v})
         for k, v in kw.items():
+            assert("." not in k)
             if hasattr(self, k) and not k in self._schema_keys:
                 raise AttributeError(f"Key {k} cannot be assigned to this {type(self)}, attribute taken.")
             if not (isinstance(v, (np.ndarray, torch.Tensor, State, type(None)))):
@@ -37,6 +43,12 @@ class State(object):
 
     def get(self, k:str):
         return getattr(self, k)
+
+    def has(self, k:str=None)->Union[bool, typing.Set[str]]:
+        if k is not None:
+            return k in self._schema_keys
+        else:
+            return self._schema_keys
 
     def make_copy(self, ret=None, detach=None, deep=True):
         detach = deep if detach is None else detach
