@@ -1,4 +1,4 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Tuple
 
 import torch
 import qelos as q
@@ -15,7 +15,7 @@ class SeqDecoder(torch.nn.Module):
         self.model = model
         self._metrics = eval
 
-    def forward(self, x:DecodableState) -> Dict:
+    def forward(self, x:DecodableState) -> Tuple[Dict, State]:
         # sb = sb.make_copy()
         x.start_decoding()
 

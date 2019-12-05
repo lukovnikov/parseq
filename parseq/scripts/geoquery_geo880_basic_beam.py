@@ -397,8 +397,8 @@ def run(lr=0.001,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
-    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=test_dl, losses=vlosses, device=device)
-    # validepoch = partial(q.test_epoch, model=tfdecoder, dataloader=test_dl, losses=vlosses, device=device)
+    # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=test_dl, losses=vlosses, device=device)
+    validepoch = partial(q.test_epoch, model=tfdecoder, dataloader=test_dl, losses=vlosses, device=device)
 
     # 7. run training
     tt.tick("training")

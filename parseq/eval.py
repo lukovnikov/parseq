@@ -7,6 +7,29 @@ import torch
 from parseq.states import State, DecodableState, TrainableDecodableState
 
 
+class SelectedLoss(q.SelectedLinearLoss):
+    """ Same as LinearLoss, but with selection from tuple of outputs from model (that specifies losses)
+        To be used to output multiple losses from the model/ select one model output as training loss
+    """
+    def forward(self, model_outs, gold, **kw):
+        metrics, state = model_outs
+        x = metrics[self.which]
+        if self.reduction in ["elementwise_mean", "mean"]:
+            ret = x.mean()
+        elif self.reduction == "sum":
+            ret = x.sum()
+        else:
+            ret = x
+        return ret
+
+
+def make_loss_array(*lossnames):
+    ret = []
+    for lossname in lossnames:
+        ret.append(q.LossWrapper(SelectedLoss(lossname, reduction=None)))
+    return ret
+
+
 class StateMetric(ABC):
     @abstractmethod
     def forward(self, probs, predactions, x:State) -> Dict:
@@ -29,7 +52,14 @@ class StateCELoss(StateLoss):
 
     def forward(self, probs, predactions, x:TrainableDecodableState):   # must be BasicStates
         golds = x.get_gold()
-        probs = probs[:, :golds.size(1)]
+        if probs.size(1) < golds.size(1):
+            extension = torch.ones(probs.size(0), golds.size(1) - probs.size(1), probs.size(2), dtype=probs.dtype, device=probs.device)
+            extension /= extension.size(2)  # makes uniform dist
+            probs = torch.cat([probs, extension], 1)
+        else:
+            probs = probs[:, :golds.size(1)]
+        if probs.size(1) != golds.size(1):
+            print(probs, golds)
         loss = self.ce(probs, golds)
         return {"loss": loss}
 
@@ -38,7 +68,11 @@ class StateSeqAccuracies(StateMetric):
     def forward(self, probs, predactions, x:TrainableDecodableState):   # must be BasicStates
         golds = x.get_gold()
         mask = golds != 0
-        predactions = predactions[:, :golds.size(1)]
+        if predactions.size(1) < golds.size(1):
+            extension = torch.zeros(predactions.size(0), golds.size(1) - predactions.size(1), dtype=predactions.dtype, device=predactions.device)
+            predactions = torch.cat([predactions, extension], 1)
+        else:
+            predactions = predactions[:, :golds.size(1)]
         same = golds == predactions
         seq_accs = (same | ~mask).all(1).float()
         elem_accs = (same & mask).sum(1).float() / mask.sum(1).float()

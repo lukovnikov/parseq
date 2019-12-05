@@ -51,7 +51,7 @@ class Vocab(_Vocab):
             where = +1
             while True:
                 i += where * len(tokens_with_counts)//divider
-                if tokens_with_counts[i][1] == min_freq - 1 and tokens_with_counts[i-1][1] == min_freq:
+                if (i == len(tokens_with_counts)) or (tokens_with_counts[i][1] <= min_freq - 1 and tokens_with_counts[i - 1][1] >= min_freq):
                     break   # found
                 elif tokens_with_counts[i][1] < min_freq:   # go up
                     where = -1

@@ -24,6 +24,9 @@ class State(object):
         if len(kwdata) > 0:
             self.set(**kwdata)
 
+    def is_empty(self):
+        return len(self._schema_keys) == 0
+
     def set(self, k:str=None, v=None, **kw):
         if k is not None:
             if k in kw:
@@ -36,10 +39,22 @@ class State(object):
                 raise AttributeError(f"Key {k} cannot be assigned to this {type(self)}, attribute taken.")
             if not (isinstance(v, (np.ndarray, torch.Tensor, State, type(None)))):
                 raise Exception(f"argument {k} has type {type(v)}. Only list, torch.Tensor and State are allowed.")
-            self._length = len(v) if self._length is None and v is not None else self._length
-            assert(v is None or self._length == len(v))
-            setattr(self, k, v)
+            if isinstance(v, State):
+                self._length = v._length if self._length is None and v is not None else self._length
+                assert(len(v) == self._length or v.is_empty())
+                if v.is_empty():
+                    v._length = self._length
+            else:
+                self._length = len(v) if self._length is None and v is not None else self._length
+                assert(v is None or self._length == len(v))
+            self.__dict__[k] = v
             self._schema_keys.add(k)
+
+    def __setattr__(self, key, value):
+        if isinstance(value, (np.ndarray, torch.Tensor, State)):
+            self.set(key, value)
+        else:
+            self.__dict__[key] = value
 
     def get(self, k:str):
         return getattr(self, k)
@@ -64,7 +79,13 @@ class State(object):
         return ret
 
     def __len__(self):
-        return self._length
+        return self._length if self._length is not None else 0
+
+    def __contains__(self, item):
+        if isinstance(item, str):
+            return self.has(item)
+        else:
+            raise Exception(f"Unsupported item type: {type(item)}")
 
     @classmethod
     def merge(cls, states:List['State'], ret=None):
@@ -96,7 +117,9 @@ class State(object):
 
         return ret
 
-    def __getitem__(self, item:Union[int, slice, List[int], np.ndarray, torch.Tensor]):    # slicing and getitem
+    def __getitem__(self, item:Union[str, int, slice, List[int], np.ndarray, torch.Tensor]):    # slicing and getitem
+        if isinstance(item, str):
+            return self.get(item)
         if isinstance(item, int):
             item = slice(item, item+1)
         ret = type(self)()
@@ -109,22 +132,27 @@ class State(object):
             ret.set(**{k:vslice})
         return ret
 
-    def __setitem__(self, item:Union[int, slice, List[int], np.ndarray, torch.Tensor],
+    def __setitem__(self, item:Union[str, int, slice, List[int], np.ndarray, torch.Tensor],
                     value:'State'):     # value should be of same type as self
-        assert(type(self) == type(value))
-        assert(self._schema_keys == value._schema_keys)
-        if isinstance(item, int):
-            item = slice(item, item+1)
-        ret = self[item]
-        assert(len(ret) == len(value))
-        item_cpu = item.detach().cpu().numpy() if isinstance(item, torch.Tensor) else item
-        for k in self._schema_keys:
-            v = getattr(self, k)
-            assert(True)        # TODO: assert type match
-            if isinstance(v, np.ndarray):
-                item = item_cpu
-            v[item] = value.get(k)
-        return ret
+        if isinstance(item, str):
+            ret = self.get(item)
+            self.set(item, value)
+            return ret
+        else:
+            assert(type(self) == type(value))
+            assert(self._schema_keys == value._schema_keys)
+            if isinstance(item, int):
+                item = slice(item, item+1)
+            ret = self[item]
+            assert(len(ret) == len(value))
+            item_cpu = item.detach().cpu().numpy() if isinstance(item, torch.Tensor) else item
+            for k in self._schema_keys:
+                v = getattr(self, k)
+                assert(True)        # TODO: assert type match
+                if isinstance(v, np.ndarray):
+                    item = item_cpu
+                v[item] = value.get(k)
+            return ret
 
     def to(self, device):
         for k in self._schema_keys:
