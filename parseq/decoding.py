@@ -147,6 +147,8 @@ class BeamState(DecodableState):
 
 
 class BeamTransition(SeqDecoderTransition):
+    # TODO: problem: beam search is continuing from terminated states
+    # ==> TODO: don't expand terminated states (??? what about preference for shorter sequences under beam search?)
     """
     Transition for beam search.
     """
@@ -158,6 +160,7 @@ class BeamTransition(SeqDecoderTransition):
 
     def do_single_state_init(self, x):
         actionprobs, x = self.model(x)
+        is_term = torch.tensor(x.is_terminated()).to(actionprobs.device)
         logprobs, actionids = torch.sort(actionprobs, 1, descending=True)
         beamstates = []
         beamsize = min(self.beamsize, actionids.size(1))
@@ -165,8 +168,15 @@ class BeamTransition(SeqDecoderTransition):
             x_copy = x.make_copy(detach=False, deep=True)
             x_copy.step(actionids[:, i])
             beamstates.append(x_copy)
+        scores = logprobs[:, :beamsize]
+        # take into account terminated states
+        if is_term.any().cpu().item():
+            scores[is_term, 0] = 0
+            scores[is_term, 1:] = -np.infty
+            raise Exception("terminated after first timestep! wtf!")
+        # create beam state
         y = BeamState(beamstates,
-                      scores=logprobs[:, :beamsize],
+                      scores=scores,
                       actionprobs=[actionprobs.clone()[:, None, :] for _ in range(beamsize)],
                       predactions=actionids[:, :beamsize, None])
         return y
@@ -197,28 +207,32 @@ class BeamTransition(SeqDecoderTransition):
             assert(isinstance(x, BeamState))
 
             # gather logprobs and actionids from individual beam elements in batches
-            logprobses, actionidses, actionprobses = [], [], []
+            scoreses, actionidses, actionprobses = [], [], []
             modul = None
             for i in range(len(x.bstates._list)):
                 actionprobs, xi = self.model(x.bstates.get(i))      # get i-th batched state in beam, run model over it
+                is_term = torch.tensor(xi.is_terminated()).to(actionprobs.device)
                 x.bstates.set(i, xi)
                 logprobs, actionids = torch.sort(actionprobs, 1, descending=True)   # sort output actions
                 beamsize = min(self.beamsize, actionids.size(1))
                 _actionprobs = torch.cat([x.actionprobs.get(i), actionprobs[:, None, :]], 1)
                 actionprobses.append(_actionprobs)
-                logprobs = logprobs[:, :beamsize]  # clip logprob to beamsize
-                logprobs = logprobs + x.bscores[:, i:i+1]                       # compute logprob of whole seq so far
+                scores = logprobs[:, :beamsize]  # clip logprob to beamsize
+                if is_term.any().cpu().item():
+                    scores[is_term, 0] = 0
+                    scores[is_term, 1:] = -np.infty
+                scores = scores + x.bscores[:, i:i+1]                       # compute logprob of whole seq so far
                 actionids = actionids[:, :beamsize]# clip actionids to beamsize
-                logprobses.append(logprobs)         # save
+                scoreses.append(scores)         # save
                 actionidses.append(actionids)       # save
                 modul = beamsize if modul is None else modul   # make sure modul is correct and consistent (used later for state copying)
                 assert(modul == actionids.size(1))
-            logprobses, actionidses, actionprobses = torch.cat(logprobses, 1), torch.cat(actionidses, 1), torch.stack(actionprobses, 1)       # concatenate
+            scoreses, actionidses, actionprobses = torch.cat(scoreses, 1), torch.cat(actionidses, 1), torch.stack(actionprobses, 1)       # concatenate
 
             # sort and select actionids for new beam, update logprobs etc
-            logprobs, selection_ids = torch.sort(logprobses, 1, descending=True)     # sort: selection_ids are the ids in logprobses
+            scores, selection_ids = torch.sort(scoreses, 1, descending=True)     # sort: selection_ids are the ids in logprobses
             beamsize = min(self.beamsize, selection_ids.size(1))
-            logprobs = logprobs[:, :beamsize]       # clip to beamsize
+            scores = scores[:, :beamsize]       # clip to beamsize
             selection_ids = selection_ids[:, :beamsize]       # clip to beamsize
             actionids = actionidses.gather(1, selection_ids)         # select action ids using beam_ids
             stateids = selection_ids // modul        # select state ids based on modul and selection_ids
@@ -232,5 +246,5 @@ class BeamTransition(SeqDecoderTransition):
                 gatheredstates[i].step(actionids[:, i])         # if timestep != self.maxtime-1 else [self.endtoken]*len(gatheredstates[i]))
 
             # create new beamstate from updated selected states
-            y = BeamState(gatheredstates, scores=logprobs, actionprobs=[e[:, 0] for e in actionprobs.split(1, 1)], predactions=predactions)
+            y = BeamState(gatheredstates, scores=scores, actionprobs=[e[:, 0] for e in actionprobs.split(1, 1)], predactions=predactions)
         return torch.stack(y.actionprobs._list, 1), y.predactions, y, y.all_terminated() or timestep >= self.maxtime - 1

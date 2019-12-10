@@ -204,6 +204,20 @@ class ListState(State):
         else:
             return self._list[i]
 
+    def make_copy(self, ret=None, detach=None, deep=True):
+        detach = deep if detach is None else detach
+        ret = type(self)() if ret is None else ret
+        for i in range(len(self._list)):
+            v = self._list[i]
+            if isinstance(v, torch.Tensor):
+                ret.append(v.clone.detach() if detach else v.clone())
+            elif isinstance(v, State):
+                ret.append(v.make_copy(detach=detach, deep=deep))
+            else:
+                ret.append(deepcopy(v) if deep else copy(v))
+            assert(len(ret._list) == i + 1)
+        return ret
+
     @classmethod
     def merge(cls, states:List['ListState'], ret=None):
         ret = cls() if ret is None else ret

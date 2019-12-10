@@ -7,319 +7,27 @@ from typing import *
 import torch
 
 import qelos as q
-from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
 from nltk import PorterStemmer
 
-from torch.utils.data import DataLoader
-
-# from funcparse.decoding import TransitionModel, TFActionSeqDecoder, LSTMCellTransition, BeamActionSeqDecoder, \
-#     GreedyActionSeqDecoder, TFTokenSeqDecoder
-# from funcparse.grammar import FuncGrammar, passtr_to_pas
-# from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
-# from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
-# from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
-from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array
-from parseq.grammar import prolog_to_pas
-from parseq.nn import TokenEmb, BasicGenOutput
-from parseq.states import DecodableState, BasicDecoderState, State
-from parseq.transitions import TransitionModel, LSTMCellTransition
+from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamDecoder, BeamTransition
+from parseq.eval import StateCELoss, StateSeqAccuracies, BeamSeqAccuracies, make_loss_array
+from parseq.scripts.geoquery_geo880_basic import GeoQueryDataset, do_rare_stats, create_model
 from parseq.vocab import SentenceEncoder
-
-
-def stem_id_words(pas, idparents, stem=False, stemmer=None):
-    if stem is True:
-        assert(not isinstance(pas, tuple))
-    if not isinstance(pas, tuple):
-        if stem is True:
-            return stemmer.stem(pas)
-        else:
-            return pas
-    else:
-        tostem = pas[0] in idparents
-        children = [stem_id_words(k, idparents, stem=tostem, stemmer=stemmer)
-                    for k in pas[1]]
-        return (pas[0], children)
-
-
-def pas2toks(pas):
-    if not isinstance(pas, tuple):
-        return [pas]
-    else:
-        children = [pas2toks(k) for k in pas[1]]
-        ret = [pas[0]] if pas[0] != "@NAMELESS@" else []
-        ret.append("(")
-        for child in children:
-            ret += child
-            # ret.append(",")
-        # ret.pop(-1)
-        ret.append(")")
-        return ret
-
-
-def basic_query_tokenizer(x:str, stem=True):
-    stemmer = PorterStemmer()
-    pas = prolog_to_pas(x)
-    idpreds = set("_cityid _countryid _stateid _riverid _placeid".split(" "))
-    pas = stem_id_words(pas, idpreds, stemmer=stemmer)
-    ret = pas2toks(pas)
-    return ret
-
-
-class GeoQueryDataset(object):
-    def __init__(self,
-                 geoquery_path:str="../../data/geo880/",
-                 train_file:str="geo880_train600.tsv",
-                 test_file:str="geo880_test280.tsv",
-                 sentence_encoder:SentenceEncoder=None,
-                 min_freq:int=2,
-                 **kw):
-        super(GeoQueryDataset, self).__init__(**kw)
-        self.data = {}
-
-        self.sentence_encoder = sentence_encoder
-
-        train_lines = [x.strip() for x in open(os.path.join(geoquery_path, train_file), "r").readlines()]
-        test_lines = [x.strip() for x in open(os.path.join(geoquery_path, test_file), "r").readlines()]
-        train_pairs = [x.split("\t") for x in train_lines]
-        test_pairs = [x.split("\t") for x in test_lines]
-        inputs = [x[0].strip() for x in train_pairs] + [x[0] for x in test_pairs]
-        outputs = [x[1] for x in train_pairs] + [x[1] for x in test_pairs]
-        outputs = [x.replace("' ", "") for x in outputs]
-        split_infos = ["train" for _ in train_pairs] + ["test" for _ in test_pairs]
-
-        # build input vocabulary
-        for i, (inp, split_id) in enumerate(zip(inputs, split_infos)):
-            self.sentence_encoder.inc_build_vocab(inp, seen=split_id == "train")
-        self.sentence_encoder.finalize_vocab(min_freq=min_freq)
-
-        self.query_encoder = SentenceEncoder(tokenizer=basic_query_tokenizer, add_end_token=True)
-
-        # build output vocabulary
-        for i, (out, split_id) in enumerate(zip(outputs, split_infos)):
-            self.query_encoder.inc_build_vocab(out, seen=split_id == "train")
-        self.query_encoder.finalize_vocab(min_freq=min_freq)
-
-        self.build_data(inputs, outputs, split_infos)
-
-    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
-        for inp, out, split in zip(inputs, outputs, splits):
-            state = BasicDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
-            if split not in self.data:
-                self.data[split] = []
-            self.data[split].append(state)
-
-    def get_split(self, split:str):
-        return DatasetSplitProxy(self.data[split])
-
-    @staticmethod
-    def collate_fn(data:Iterable):
-        goldmaxlen = 0
-        inpmaxlen = 0
-        data = [state.make_copy(detach=True, deep=True) for state in data]
-        for state in data:
-            goldmaxlen = max(goldmaxlen, state.gold_tensor.size(1))
-            inpmaxlen = max(inpmaxlen, state.inp_tensor.size(1))
-        for state in data:
-            state.gold_tensor = torch.cat([
-                state.gold_tensor,
-                state.gold_tensor.new_zeros(1, goldmaxlen - state.gold_tensor.size(1))], 1)
-            state.inp_tensor = torch.cat([
-                state.inp_tensor,
-                state.inp_tensor.new_zeros(1, inpmaxlen - state.inp_tensor.size(1))], 1)
-        ret = data[0].merge(data)
-        return ret
-
-    def dataloader(self, split:str=None, batsize:int=5):
-        if split is None:   # return all splits
-            ret = {}
-            for split in self.data.keys():
-                ret[split] = self.dataloader(batsize=batsize, split=split)
-            return ret
-        else:
-            assert(split in self.data.keys())
-            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split=="train",
-             collate_fn=GeoQueryDataset.collate_fn)
-            return dl
-
-
-def try_dataset():
-    tt = q.ticktock("dataset")
-    tt.tick("building dataset")
-    ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=lambda x: x.split()))
-    train_dl = ds.dataloader("train", batsize=19)
-    test_dl = ds.dataloader("test", batsize=20)
-    examples = set()
-    examples_list = []
-    duplicates = []
-    for b in train_dl:
-        print(len(b))
-        for i in range(len(b)):
-            example = b.inp_strings[i] + " --> " + b.gold_strings[i]
-            if example in examples:
-                duplicates.append(example)
-            examples.add(example)
-            examples_list.append(example)
-            # print(example)
-        pass
-    print(f"duplicates within train: {len(duplicates)} from {len(examples_list)} total")
-    tt.tock("dataset built")
-
-
-class DatasetSplitProxy(object):
-    def __init__(self, data, **kw):
-        super(DatasetSplitProxy, self).__init__(**kw)
-        self.data = data
-
-    def __getitem__(self, item):
-        return self.data[item].make_copy()
-
-    def __len__(self):
-        return len(self.data)
-
-
-class BasicGenModel(TransitionModel):
-    def __init__(self, inp_emb, inp_enc, out_emb, out_rnn:LSTMCellTransition,
-                 out_lin, att, dropout=0., enc_to_dec=None, feedatt=False, **kw):
-        super(BasicGenModel, self).__init__(**kw)
-        self.inp_emb, self.inp_enc = inp_emb, inp_enc
-        self.out_emb, self.out_rnn, self.out_lin = out_emb, out_rnn, out_lin
-        self.enc_to_dec = enc_to_dec
-        self.att = att
-        # self.ce = q.CELoss(reduction="none", ignore_index=0, mode="probs")
-        self.dropout = torch.nn.Dropout(dropout)
-        self.feedatt = feedatt
-
-    def forward(self, x:State):
-        if not "mstate" in x:
-            x.mstate = State()
-        mstate = x.mstate
-        if not "ctx" in mstate:
-            # encode input
-            inptensor = x.inp_tensor
-            mask = inptensor != 0
-            inpembs = self.inp_emb(inptensor)
-            # inpembs = self.dropout(inpembs)
-            inpenc, final_enc = self.inp_enc(inpembs, mask)
-            final_enc = final_enc.view(final_enc.size(0), -1).contiguous()
-            final_enc = self.enc_to_dec(final_enc)
-            mstate.ctx = inpenc
-            mstate.ctx_mask = mask
-
-        ctx = mstate.ctx
-        ctx_mask = mstate.ctx_mask
-
-        emb = self.out_emb(x.prev_actions)
-
-        if not "rnnstate" in mstate:
-            init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
-            # uncomment next line to initialize decoder state with last state of encoder
-            # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
-            mstate.rnnstate = init_rnn_state
-
-        if "prev_summ" not in mstate:
-            mstate.prev_summ = torch.zeros_like(ctx[:, 0])
-        _emb = emb
-        if self.feedatt == True:
-            _emb = torch.cat([_emb, mstate.prev_summ], 1)
-        enc, new_rnnstate = self.out_rnn(_emb, mstate.rnnstate)
-        mstate.rnnstate = new_rnnstate
-
-        alphas, summ, scores = self.att(enc, ctx, ctx_mask)
-        mstate.prev_summ = summ
-        enc = torch.cat([enc, summ], -1)
-
-        outs = self.out_lin(enc)
-        outs = (outs,) if not q.issequence(outs) else outs
-        # _, preds = outs.max(-1)
-        return outs[0], x
-
-
-def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
-                 sentence_encoder:SentenceEncoder=None,
-                 query_encoder:SentenceEncoder=None,
-                 feedatt=False):
-    inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
-    inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
-    encoder_dim = hdim
-    encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2]*numlayers), bidir=True, dropout_in=dropout)
-    # encoder = PytorchSeq2SeqWrapper(
-    #     torch.nn.LSTM(embdim, hdim, num_layers=numlayers, bidirectional=True, batch_first=True,
-    #                   dropout=dropout))
-    decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
-    decoder_emb = TokenEmb(decoder_emb, rare_token_ids=query_encoder.vocab.rare_ids, rare_id=1)
-    dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
-    decoder_rnn = [torch.nn.LSTMCell(dec_rnn_in_dim, hdim)]
-    for i in range(numlayers - 1):
-        decoder_rnn.append(torch.nn.LSTMCell(hdim, hdim))
-    decoder_rnn = LSTMCellTransition(*decoder_rnn, dropout=dropout)
-    decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
-    attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
-    enctodec = torch.nn.Sequential(
-        torch.nn.Linear(encoder_dim, hdim),
-        torch.nn.Tanh()
-    )
-    model = BasicGenModel(inpemb, encoder,
-                          decoder_emb, decoder_rnn, decoder_out,
-                          attention,
-                          dropout=dropout,
-                          enc_to_dec=enctodec,
-                          feedatt=feedatt)
-    return model
-
-
-def do_rare_stats(ds:GeoQueryDataset):
-    # how many examples contain rare words, in input and output, in both train and test
-    def get_rare_portions(examples:List[State]):
-        total = 0
-        rare_in_question = 0
-        rare_in_query = 0
-        rare_in_both = 0
-        rare_in_either = 0
-        for example in examples:
-            total += 1
-            question_tokens = example.inp_tokens[0]
-            query_tokens = example.gold_tokens[0]
-            both = True
-            either = False
-            if len(set(question_tokens) & example.sentence_encoder.vocab.rare_tokens) > 0:
-                rare_in_question += 1
-                either = True
-            else:
-                both = False
-            if len(set(query_tokens) & example.query_encoder.vocab.rare_tokens) > 0:
-                either = True
-                rare_in_query += 1
-            else:
-                both = False
-            if both:
-                rare_in_both += 1
-            if either:
-                rare_in_either += 1
-        return rare_in_question / total, rare_in_query/total, rare_in_both/total, rare_in_either/total
-    print("RARE STATS:::")
-    print("training data:")
-    ris, riq, rib, rie = get_rare_portions(ds.data["train"])
-    print(f"\t In question: {ris} \n\t In query: {riq} \n\t In both: {rib} \n\t In either: {rie}")
-    print("test data:")
-    ris, riq, rib, rie = get_rare_portions(ds.data["test"])
-    print(f"\t In question: {ris} \n\t In query: {riq} \n\t In both: {rib} \n\t In either: {rie}")
-    return
 
 
 def run(lr=0.001,
         batsize=20,
-        epochs=50,
+        epochs=100,
         embdim=100,
         encdim=200,
         numlayers=1,
-        dropout=.0,
+        dropout=.2,
         wreg=1e-6,
         cuda=False,
         gpu=0,
         minfreq=2,
         gradnorm=3.,
-        beamsize=1,
+        beamsize=5,
         smoothing=0.,
         fulltest=False,
         cosine_restarts=-1.,
@@ -354,9 +62,9 @@ def run(lr=0.001,
                            [StateCELoss(ignore_index=0, mode="logits"),
                             StateSeqAccuracies()])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(FreerunningTransition(model, maxtime=100),
-                             [StateCELoss(ignore_index=0, mode="logits"),
-                              StateSeqAccuracies()])
+    freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=40,
+                              eval=[StateCELoss(ignore_index=0, mode="logits")],
+                              eval_beam=[BeamSeqAccuracies()])
 
     # # test
     # tt.tick("doing one epoch")
@@ -375,7 +83,7 @@ def run(lr=0.001,
     # print(dict(tfdecoder.named_parameters()).keys())
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc")
-    vlosses = make_loss_array("loss", "elem_acc", "seq_acc")
+    vlosses = make_loss_array("loss", "beam_seq_acc", "beam_recall", "beam_recall_top3", "beam_seq_acc_bottom")
 
     # 4. define optim
     optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
@@ -397,8 +105,8 @@ def run(lr=0.001,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
-    # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=test_dl, losses=vlosses, device=device)
-    validepoch = partial(q.test_epoch, model=tfdecoder, dataloader=test_dl, losses=vlosses, device=device)
+    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=test_dl, losses=vlosses, device=device)
+    # validepoch = partial(q.test_epoch, model=tfdecoder, dataloader=test_dl, losses=vlosses, device=device)
 
     # 7. run training
     tt.tick("training")

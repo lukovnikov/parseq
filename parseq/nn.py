@@ -30,11 +30,12 @@ class TokenEmb(torch.nn.Module):
 
 
 class BasicGenOutput(torch.nn.Module):
-    def __init__(self, h_dim:int, vocab:Vocab=None, **kw):
+    def __init__(self, h_dim:int, vocab:Vocab=None, dropout:float=0., **kw):
         super(BasicGenOutput, self).__init__(**kw)
         self.gen_lin = torch.nn.Linear(h_dim, vocab.number_of_ids(), bias=True)
         self.sm = torch.nn.Softmax(-1)
         self.logsm = torch.nn.LogSoftmax(-1)
+        self.dropout = torch.nn.Dropout(dropout)
 
         self.vocab = vocab
 
@@ -50,10 +51,11 @@ class BasicGenOutput(torch.nn.Module):
             self.register_buffer("out_map", None)
 
     def forward(self, x:torch.Tensor):
+        x = self.dropout(x)
         # - generation probs
         gen_probs = self.gen_lin(x)
         if self.out_map is not None:
-            gen_probs = gen_probs.index_select(1, self.out_map)
+            gen_probs = gen_probs.index_select(-1, self.out_map)
         gen_probs = self.logsm(gen_probs)
         return gen_probs
 

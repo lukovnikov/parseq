@@ -18,11 +18,12 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
+from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, merge_dicts
 from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
 from parseq.grammar import prolog_to_pas
 from parseq.nn import TokenEmb, BasicGenOutput
 from parseq.states import DecodableState, BasicDecoderState, State
+from parseq.tm import TransformerConfig, Transformer
 from parseq.transitions import TransitionModel, LSTMCellTransition
 from parseq.vocab import SentenceEncoder, Vocab
 
@@ -151,83 +152,6 @@ class GeoQueryDataset(object):
             return dl
 
 
-class GeoQueryDatasetOLD(object):
-    def __init__(self,
-                 geoquery_path:str="../../data/geo880/",
-                 train_file:str="geo880_train600.tsv",
-                 test_file:str="geo880_test280.tsv",
-                 sentence_encoder:SentenceEncoder=None,
-                 min_freq:int=2,
-                 **kw):
-        super(GeoQueryDatasetOLD, self).__init__(**kw)
-        self.data = {}
-
-        self.sentence_encoder = sentence_encoder
-
-        train_lines = [x.strip() for x in open(os.path.join(geoquery_path, train_file), "r").readlines()]
-        test_lines = [x.strip() for x in open(os.path.join(geoquery_path, test_file), "r").readlines()]
-        train_pairs = [x.split("\t") for x in train_lines]
-        test_pairs = [x.split("\t") for x in test_lines]
-        inputs = [x[0].strip() for x in train_pairs] + [x[0] for x in test_pairs]
-        outputs = [x[1] for x in train_pairs] + [x[1] for x in test_pairs]
-        outputs = [x.replace("' ", "") for x in outputs]
-        split_infos = ["train" for _ in train_pairs] + ["test" for _ in test_pairs]
-
-        # build input vocabulary
-        for i, (inp, split_id) in enumerate(zip(inputs, split_infos)):
-            self.sentence_encoder.inc_build_vocab(inp, seen=split_id == "train")
-        self.sentence_encoder.finalize_vocab(min_freq=min_freq)
-
-        self.query_encoder = SentenceEncoder(tokenizer=basic_query_tokenizer, add_end_token=True)
-
-        # build output vocabulary
-        for i, (out, split_id) in enumerate(zip(outputs, split_infos)):
-            self.query_encoder.inc_build_vocab(out, seen=split_id == "train")
-        self.query_encoder.finalize_vocab(min_freq=min_freq)
-
-        self.build_data(inputs, outputs, split_infos)
-
-    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
-        for inp, out, split in zip(inputs, outputs, splits):
-            state = BasicDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
-            if split not in self.data:
-                self.data[split] = []
-            self.data[split].append(state)
-
-    def get_split(self, split:str):
-        return DatasetSplitProxy(self.data[split])
-
-    @staticmethod
-    def collate_fn(data:Iterable):
-        goldmaxlen = 0
-        inpmaxlen = 0
-        data = [state.make_copy(detach=True, deep=True) for state in data]
-        for state in data:
-            goldmaxlen = max(goldmaxlen, state.gold_tensor.size(1))
-            inpmaxlen = max(inpmaxlen, state.inp_tensor.size(1))
-        for state in data:
-            state.gold_tensor = torch.cat([
-                state.gold_tensor,
-                state.gold_tensor.new_zeros(1, goldmaxlen - state.gold_tensor.size(1))], 1)
-            state.inp_tensor = torch.cat([
-                state.inp_tensor,
-                state.inp_tensor.new_zeros(1, inpmaxlen - state.inp_tensor.size(1))], 1)
-        ret = data[0].merge(data)
-        return ret
-
-    def dataloader(self, split:str=None, batsize:int=5):
-        if split is None:   # return all splits
-            ret = {}
-            for split in self.data.keys():
-                ret[split] = self.dataloader(batsize=batsize, split=split)
-            return ret
-        else:
-            assert(split in self.data.keys())
-            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split=="train",
-             collate_fn=GeoQueryDataset.collate_fn)
-            return dl
-
-
 def try_dataset():
     tt = q.ticktock("dataset")
     tt.tick("building dataset")
@@ -263,91 +187,46 @@ class DatasetSplitProxy(object):
         return len(self.data)
 
 
-class BasicGenModel(TransitionModel):
-    def __init__(self, inp_emb, inp_enc, out_emb, out_rnn:LSTMCellTransition,
-                 out_lin, att, enc_to_dec=None, feedatt=False, **kw):
-        super(BasicGenModel, self).__init__(**kw)
-        self.inp_emb, self.inp_enc = inp_emb, inp_enc
-        self.out_emb, self.out_rnn, self.out_lin = out_emb, out_rnn, out_lin
-        self.enc_to_dec = enc_to_dec
-        self.att = att
-        # self.ce = q.CELoss(reduction="none", ignore_index=0, mode="probs")
-        self.feedatt = feedatt
+class NARTMModel(TransitionModel):
+    def __init__(self, tm, out, maxinplen=50, maxoutlen=50, numinpids:int=None, eval=tuple(), **kw):
+        super(NARTMModel, self).__init__(**kw)
+        self.tm = tm
+        self.out = out
+        self.maxinplen = maxinplen
+        self.maxoutlen = maxoutlen
+        self._metrics = eval
+        self._numinpids = numinpids
 
     def forward(self, x:State):
-        if not "mstate" in x:
-            x.mstate = State()
-        mstate = x.mstate
-        if not "ctx" in mstate:
-            # encode input
-            inptensor = x.inp_tensor
-            mask = inptensor != 0
-            inpembs = self.inp_emb(inptensor)
-            # inpembs = self.dropout(inpembs)
-            inpenc, final_enc = self.inp_enc(inpembs, mask)
-            final_enc = final_enc.view(final_enc.size(0), -1).contiguous()
-            final_enc = self.enc_to_dec(final_enc)
-            mstate.ctx = inpenc
-            mstate.ctx_mask = mask
+        inpseq = x.inp_tensor
+        position_ids = torch.arange(inpseq.size(1), dtype=torch.long, device=inpseq.device)[None, :].repeat(inpseq.size(0), 1)
+        inpseq = torch.cat([inpseq, torch.arange(self.maxoutlen, dtype=inpseq.dtype, device=inpseq.device)[None, :].repeat(inpseq.size(0), 1)+self._numinpids], 1)
+        position_ids_out = torch.arange(self.maxoutlen, dtype=torch.long, device=inpseq.device)[None, :].repeat(inpseq.size(0), 1) + self.maxinplen
+        position_ids = torch.cat([position_ids, position_ids_out], 1)
+        attention_mask = (inpseq != 0)
+        y = self.tm(inpseq, attention_mask=attention_mask, position_ids=position_ids)
+        outprobs = self.out(y[0])
+        outprobs = outprobs[:, self.maxinplen:]
+        _, predactions = outprobs.max(-1)
 
-        ctx = mstate.ctx
-        ctx_mask = mstate.ctx_mask
-
-        emb = self.out_emb(x.prev_actions)
-
-        if not "rnnstate" in mstate:
-            init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
-            # uncomment next line to initialize decoder state with last state of encoder
-            # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
-            mstate.rnnstate = init_rnn_state
-
-        if "prev_summ" not in mstate:
-            mstate.prev_summ = torch.zeros_like(ctx[:, 0])
-        _emb = emb
-        if self.feedatt == True:
-            _emb = torch.cat([_emb, mstate.prev_summ], 1)
-        enc, new_rnnstate = self.out_rnn(_emb, mstate.rnnstate)
-        mstate.rnnstate = new_rnnstate
-
-        alphas, summ, scores = self.att(enc, ctx, ctx_mask)
-        mstate.prev_summ = summ
-        enc = torch.cat([enc, summ], -1)
-
-        outs = self.out_lin(enc)
-        outs = (outs,) if not q.issequence(outs) else outs
-        # _, preds = outs.max(-1)
-        return outs[0], x
+        metrics = [metric(outprobs, predactions, x) for metric in self._metrics]
+        metrics = merge_dicts(*metrics)
+        return metrics, x
 
 
-def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
+def create_model(hdim=128, dropout=0., numlayers:int=1, numheads:int=4,
                  sentence_encoder:SentenceEncoder=None,
                  query_encoder:SentenceEncoder=None,
-                 feedatt=False):
-    inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+                 feedatt=False, maxtime=100):
+    inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids()+maxtime, hdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
-    encoder_dim = hdim
-    encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2]*numlayers), bidir=True, dropout_in=dropout)
-    # encoder = PytorchSeq2SeqWrapper(
-    #     torch.nn.LSTM(embdim, hdim, num_layers=numlayers, bidirectional=True, batch_first=True,
-    #                   dropout=dropout))
-    decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
-    decoder_emb = TokenEmb(decoder_emb, rare_token_ids=query_encoder.vocab.rare_ids, rare_id=1)
-    dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
-    decoder_rnn = [torch.nn.LSTMCell(dec_rnn_in_dim, hdim)]
-    for i in range(numlayers - 1):
-        decoder_rnn.append(torch.nn.LSTMCell(hdim, hdim))
-    decoder_rnn = LSTMCellTransition(*decoder_rnn, dropout=dropout)
-    decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
-    attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
-    enctodec = torch.nn.Sequential(
-        torch.nn.Linear(encoder_dim, hdim),
-        torch.nn.Tanh()
-    )
-    model = BasicGenModel(inpemb, encoder,
-                          decoder_emb, decoder_rnn, decoder_out,
-                          attention,
-                          enc_to_dec=enctodec,
-                          feedatt=feedatt)
+    tm_config = TransformerConfig(vocab_size=inpemb.emb.num_embeddings, num_attention_heads=numheads,
+                                  num_hidden_layers=numlayers, hidden_size=hdim, intermediate_size=hdim*4,
+                                  hidden_dropout_prob=dropout)
+    tm = Transformer(tm_config)
+    tm.embeddings.word_embeddings = inpemb
+    decoder_out = BasicGenOutput(hdim, query_encoder.vocab)
+    model = NARTMModel(tm, decoder_out, maxinplen=maxtime, maxoutlen=maxtime, numinpids=sentence_encoder.vocab.number_of_ids())
     return model
 
 
@@ -438,21 +317,17 @@ def run(lr=0.001,
         batsize=20,
         epochs=100,
         embdim=100,
-        encdim=200,
-        numlayers=1,
-        dropout=.2,
+        encdim=164,
+        numlayers=4,
+        numheads=4,
+        dropout=.0,
         wreg=1e-10,
         cuda=False,
         gpu=0,
         minfreq=2,
-        gradnorm=3.,
+        gradnorm=3000.,
         cosine_restarts=1.,
         ):
-    # DONE: Porter stemmer
-    # DONE: linear attention
-    # DONE: grad norm
-    # DONE: beam search
-    # DONE: lr scheduler
     print(locals())
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
@@ -472,38 +347,17 @@ def run(lr=0.001,
     # print("input graph")
     # print(batch.batched_states)
 
-    model = create_model(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+    model = create_model(hdim=encdim, dropout=dropout, numlayers=numlayers, numheads=numheads,
+                         sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder)
 
-    tfdecoder = SeqDecoder(TFTransition(model),
-                           [StateCELoss(ignore_index=0, mode="logprobs"),
-                            StateSeqAccuracies()])
-    # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(FreerunningTransition(model, maxtime=100),
-                             [StateCELoss(ignore_index=0, mode="logprobs"),
-                              StateSeqAccuracies()])
-
-    # # test
-    # tt.tick("doing one epoch")
-    # for batch in iter(train_dl):
-    #     batch = batch.to(device)
-    #     ttt.tick("start batch")
-    #     # with torch.no_grad():
-    #     out = tfdecoder(batch)
-    #     ttt.tock("end batch")
-    # tt.tock("done one epoch")
-    # print(out)
-    # sys.exit()
-
-    # beamdecoder(next(iter(train_dl)))
-
-    # print(dict(tfdecoder.named_parameters()).keys())
+    model._metrics = [StateCELoss(ignore_index=0, mode="logprobs"),
+                      StateSeqAccuracies()]
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc")
     vlosses = make_loss_array("loss", "seq_acc")
 
     # 4. define optim
-    optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
+    optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wreg)
     # optim = torch.optim.SGD(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
 
     # lr schedule
@@ -517,13 +371,13 @@ def run(lr=0.001,
         reduce_lr = []
 
     # 6. define training function (using partial)
-    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
+    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(model.parameters(), gradnorm)
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=train_dl, optim=optim, losses=losses,
+    trainepoch = partial(q.train_epoch, model=model, dataloader=train_dl, optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
-    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=test_dl, losses=vlosses, device=device)
+    validepoch = partial(q.test_epoch, model=model, dataloader=test_dl, losses=vlosses, device=device)
     # validepoch = partial(q.test_epoch, model=tfdecoder, dataloader=test_dl, losses=vlosses, device=device)
 
     # 7. run training

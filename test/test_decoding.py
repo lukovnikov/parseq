@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamTransition, BeamState, BeamDecoder
-from parseq.eval import StateCELoss, StateSeqAccuracies, BeamSeqAccuracy
+from parseq.eval import StateCELoss, StateSeqAccuracies, BeamSeqAccuracies
 from parseq.states import BasicDecoderState, ListState, State
 from parseq.transitions import TransitionModel
 from parseq.vocab import SentenceEncoder
@@ -365,7 +365,7 @@ class TestBeamTransition(TestCase):
 
         beamsize = 50
         maxtime = 10
-        bs = BeamDecoder(model, eval=[StateCELoss(ignore_index=0), StateSeqAccuracies()], eval_beam=[BeamSeqAccuracy()],
+        bs = BeamDecoder(model, eval=[StateCELoss(ignore_index=0), StateSeqAccuracies()], eval_beam=[BeamSeqAccuracies()],
                          beamsize=beamsize, maxtime=maxtime)
 
         y = bs(x)
