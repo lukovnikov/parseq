@@ -111,22 +111,22 @@ class BeamSeqAccuracies(StateMetric):
         else:
             predactions = predactions[:, :, :golds.size(1)]
         same = golds[:, None, :] == predactions
-        seq_accs = (same | ~mask[:, None, :]).all(2).any(1).float()
-        _seq_accs_agg = (same | ~mask[:, None, :]).all(2).float().sum(-1)
-        assert(torch.allclose((_seq_accs_agg <= 1).float(), torch.ones_like(_seq_accs_agg)))
-        seq_accs_top3 = torch.zeros(same.size(0))
-        if same.size(1) >= 3:
-            seq_accs_top3 = (same[:, :3] | ~mask[:, None, :]).all(2).any(1).float()
-        seq_accs_bottom = (same[:, -1] | ~mask).all(1).float()
-        seq_accs_top1 = (same[:, 0] | ~mask).all(1).float()
+        seq_accs = (same | ~mask[:, None, :]).all(2)   # (batsize, beamsize)
+        assert(torch.allclose((seq_accs.float().sum(-1) <= 1).float(), torch.ones_like(seq_accs[:, 0]).float()))
+        batsize, beamsize = seq_accs.size(0), seq_accs.size(1)
+        seq_accs_cum = (seq_accs.cumsum(-1) > 0).float()
+        seq_accs_cum_sum = list((seq_accs_cum.sum(0) / batsize).detach().cpu().numpy())      # (beamsize,)
+
+        ret = {}
+        for j in range(0, beamsize):
+            ret[f"beam_seq_recall_at{j+1}"] = seq_accs_cum_sum[j]
+        ret["beam_recall"] = seq_accs_cum_sum[-1]
+        ret["beam_seq_acc"] = seq_accs_cum_sum[0]
+        ret["beam_seq_acc_bottom"] = seq_accs[:, -1].float().sum().detach().cpu().item() / batsize
+
         elem_accs = (same & mask[:, None, :]).sum(2).float() / mask[:, None, :].sum(2).float()
         elem_accs = elem_accs.max(1)[0]
-        ret = {"beam_recall": seq_accs.sum().detach().cpu().item() / seq_accs.size(0),
-               "beam_best_elem_acc": elem_accs.sum().detach().cpu().item() / elem_accs.size(0),
-               "beam_seq_acc": seq_accs_top1.sum().detach().cpu().item() / seq_accs_top1.size(0),
-               "beam_recall_top3": seq_accs_top3.sum().detach().cpu().item() / seq_accs_top3.size(0),
-               "beam_seq_acc_bottom": seq_accs_bottom.sum().detach().cpu().item() / seq_accs_bottom.size(0)
-               }
+        ret["beam_best_elem_acc"] = elem_accs.sum().detach().cpu().item() / batsize
         return ret
 
 
