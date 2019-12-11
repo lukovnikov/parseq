@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
 from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
 from parseq.grammar import prolog_to_pas
-from parseq.nn import TokenEmb, BasicGenOutput
+from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput
 from parseq.states import DecodableState, BasicDecoderState, State
 from parseq.transitions import TransitionModel, LSTMCellTransition
 from parseq.vocab import SentenceEncoder, Vocab
@@ -36,7 +36,7 @@ def stem_id_words(pas, idparents, stem=False, strtok=None):
             if re.match(r"'([^']+)'", pas):
                 pas = re.match(r"'([^']+)'", pas).group(1)
                 pas = strtok(pas)
-                return [("_str", pas)]
+                return [("str", pas)]
             else:
                 return [pas]
         else:
@@ -55,18 +55,18 @@ def pas2toks(pas):
     else:
         children = [pas2toks(k) for k in pas[1]]
         ret = [pas[0]] if pas[0] != "@NAMELESS@" else []
-        ret[0] += "("
+        ret[0] = f"_{ret[0]}("
         for child in children:
             ret += child
             # ret.append(",")
         # ret.pop(-1)
-        ret.append(")")
+        ret.append("_)")
         return ret
 
 
 def basic_query_tokenizer(x:str, strtok=None):
     pas = prolog_to_pas(x)
-    idpreds = set("_cityid _countryid _stateid _riverid _placeid".split(" "))
+    # idpreds = set("_cityid _countryid _stateid _riverid _placeid".split(" "))
     idpreds = set("cityid stateid countryid riverid placeid".split(" "))
     pas = stem_id_words(pas, idpreds, strtok=strtok)[0]
     ret = pas2toks(pas)
@@ -105,87 +105,12 @@ class GeoQueryDataset(object):
         for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
             self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
             self.query_encoder.inc_build_vocab(query, seen=split=="train")
+        for word, wordid in self.sentence_encoder.vocab.D.items():
+            self.query_encoder.vocab.add_token(word, seen=False)
         self.sentence_encoder.finalize_vocab(min_freq=min_freq)
         self.query_encoder.finalize_vocab(min_freq=min_freq)
 
         self.build_data(questions, queries, splits)
-
-    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
-        for inp, out, split in zip(inputs, outputs, splits):
-            state = BasicDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
-            if split not in self.data:
-                self.data[split] = []
-            self.data[split].append(state)
-
-    def get_split(self, split:str):
-        return DatasetSplitProxy(self.data[split])
-
-    @staticmethod
-    def collate_fn(data:Iterable):
-        goldmaxlen = 0
-        inpmaxlen = 0
-        data = [state.make_copy(detach=True, deep=True) for state in data]
-        for state in data:
-            goldmaxlen = max(goldmaxlen, state.gold_tensor.size(1))
-            inpmaxlen = max(inpmaxlen, state.inp_tensor.size(1))
-        for state in data:
-            state.gold_tensor = torch.cat([
-                state.gold_tensor,
-                state.gold_tensor.new_zeros(1, goldmaxlen - state.gold_tensor.size(1))], 1)
-            state.inp_tensor = torch.cat([
-                state.inp_tensor,
-                state.inp_tensor.new_zeros(1, inpmaxlen - state.inp_tensor.size(1))], 1)
-        ret = data[0].merge(data)
-        return ret
-
-    def dataloader(self, split:str=None, batsize:int=5):
-        if split is None:   # return all splits
-            ret = {}
-            for split in self.data.keys():
-                ret[split] = self.dataloader(batsize=batsize, split=split)
-            return ret
-        else:
-            assert(split in self.data.keys())
-            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split=="train",
-             collate_fn=GeoQueryDataset.collate_fn)
-            return dl
-
-
-class GeoQueryDatasetOLD(object):
-    def __init__(self,
-                 geoquery_path:str="../../data/geo880/",
-                 train_file:str="geo880_train600.tsv",
-                 test_file:str="geo880_test280.tsv",
-                 sentence_encoder:SentenceEncoder=None,
-                 min_freq:int=2,
-                 **kw):
-        super(GeoQueryDatasetOLD, self).__init__(**kw)
-        self.data = {}
-
-        self.sentence_encoder = sentence_encoder
-
-        train_lines = [x.strip() for x in open(os.path.join(geoquery_path, train_file), "r").readlines()]
-        test_lines = [x.strip() for x in open(os.path.join(geoquery_path, test_file), "r").readlines()]
-        train_pairs = [x.split("\t") for x in train_lines]
-        test_pairs = [x.split("\t") for x in test_lines]
-        inputs = [x[0].strip() for x in train_pairs] + [x[0] for x in test_pairs]
-        outputs = [x[1] for x in train_pairs] + [x[1] for x in test_pairs]
-        outputs = [x.replace("' ", "") for x in outputs]
-        split_infos = ["train" for _ in train_pairs] + ["test" for _ in test_pairs]
-
-        # build input vocabulary
-        for i, (inp, split_id) in enumerate(zip(inputs, split_infos)):
-            self.sentence_encoder.inc_build_vocab(inp, seen=split_id == "train")
-        self.sentence_encoder.finalize_vocab(min_freq=min_freq)
-
-        self.query_encoder = SentenceEncoder(tokenizer=basic_query_tokenizer, add_end_token=True)
-
-        # build output vocabulary
-        for i, (out, split_id) in enumerate(zip(outputs, split_infos)):
-            self.query_encoder.inc_build_vocab(out, seen=split_id == "train")
-        self.query_encoder.finalize_vocab(min_freq=min_freq)
-
-        self.build_data(inputs, outputs, split_infos)
 
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
         for inp, out, split in zip(inputs, outputs, splits):
@@ -313,7 +238,7 @@ class BasicGenModel(TransitionModel):
         mstate.prev_summ = summ
         enc = torch.cat([enc, summ], -1)
 
-        outs = self.out_lin(enc)
+        outs = self.out_lin(enc, x.inp_tensor, scores)
         outs = (outs,) if not q.issequence(outs) else outs
         # _, preds = outs.max(-1)
         return outs[0], x
@@ -337,7 +262,9 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     for i in range(numlayers - 1):
         decoder_rnn.append(torch.nn.LSTMCell(hdim, hdim))
     decoder_rnn = LSTMCellTransition(*decoder_rnn, dropout=dropout)
-    decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
+    # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
+    decoder_out = PtrGenOutput(hdim + encoder_dim, out_vocab=query_encoder.vocab)
+    decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
     attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
     enctodec = torch.nn.Sequential(
         torch.nn.Linear(encoder_dim, hdim),

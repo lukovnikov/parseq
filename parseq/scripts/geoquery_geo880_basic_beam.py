@@ -83,7 +83,7 @@ def run(lr=0.001,
     # print(dict(tfdecoder.named_parameters()).keys())
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc")
-    vlosses = make_loss_array("loss", "beam_seq_acc", "beam_recall", "beam_seq_recall_at3")
+    vlosses = make_loss_array("loss", "beam_seq_acc", "beam_seq_recall_at2", "beam_seq_recall_at3", "beam_seq_recall_at4", "beam_recall")
 
     # 4. define optim
     optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
