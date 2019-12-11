@@ -31,6 +31,7 @@ def run(lr=0.001,
         smoothing=0.,
         fulltest=False,
         cosine_restarts=-1.,
+        nocopy=False,
         ):
     # DONE: Porter stemmer
     # DONE: linear attention
@@ -56,7 +57,7 @@ def run(lr=0.001,
     # print(batch.batched_states)
 
     model = create_model(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True, nocopy=nocopy)
 
     tfdecoder = SeqDecoder(TFTransition(model),
                            [StateCELoss(ignore_index=0, mode="logprobs"),
@@ -65,22 +66,6 @@ def run(lr=0.001,
     freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=40,
                               eval=[StateCELoss(ignore_index=0, mode="logprobs")],
                               eval_beam=[BeamSeqAccuracies()])
-
-    # # test
-    # tt.tick("doing one epoch")
-    # for batch in iter(train_dl):
-    #     batch = batch.to(device)
-    #     ttt.tick("start batch")
-    #     # with torch.no_grad():
-    #     out = tfdecoder(batch)
-    #     ttt.tock("end batch")
-    # tt.tock("done one epoch")
-    # print(out)
-    # sys.exit()
-
-    # beamdecoder(next(iter(train_dl)))
-
-    # print(dict(tfdecoder.named_parameters()).keys())
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc")
     vlosses = make_loss_array("beam_seq_acc", "beam_seq_recall_at2", "beam_seq_recall_at3", "beam_seq_recall_at4", "beam_recall")

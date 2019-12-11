@@ -190,7 +190,7 @@ class DatasetSplitProxy(object):
 
 class BasicGenModel(TransitionModel):
     def __init__(self, inp_emb, inp_enc, out_emb, out_rnn:LSTMCellTransition,
-                 out_lin, att, enc_to_dec=None, feedatt=False, **kw):
+                 out_lin, att, enc_to_dec=None, feedatt=False, nocopy=False, **kw):
         super(BasicGenModel, self).__init__(**kw)
         self.inp_emb, self.inp_enc = inp_emb, inp_enc
         self.out_emb, self.out_rnn, self.out_lin = out_emb, out_rnn, out_lin
@@ -198,6 +198,7 @@ class BasicGenModel(TransitionModel):
         self.att = att
         # self.ce = q.CELoss(reduction="none", ignore_index=0, mode="probs")
         self.feedatt = feedatt
+        self.nocopy = nocopy
 
     def forward(self, x:State):
         if not "mstate" in x:
@@ -238,7 +239,10 @@ class BasicGenModel(TransitionModel):
         mstate.prev_summ = summ
         enc = torch.cat([enc, summ], -1)
 
-        outs = self.out_lin(enc, x.inp_tensor, scores)
+        if self.nocopy is True:
+            outs = self.out_lin(enc)
+        else:
+            outs = self.out_lin(enc, x.inp_tensor, scores)
         outs = (outs,) if not q.issequence(outs) else outs
         # _, preds = outs.max(-1)
         return outs[0], x
@@ -247,7 +251,7 @@ class BasicGenModel(TransitionModel):
 def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
                  sentence_encoder:SentenceEncoder=None,
                  query_encoder:SentenceEncoder=None,
-                 feedatt=False):
+                 feedatt=False, nocopy=False):
     inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
     encoder_dim = hdim
@@ -274,7 +278,7 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
                           decoder_emb, decoder_rnn, decoder_out,
                           attention,
                           enc_to_dec=enctodec,
-                          feedatt=feedatt)
+                          feedatt=feedatt, nocopy=nocopy)
     return model
 
 
