@@ -48,9 +48,13 @@ class StateLoss(torch.nn.Module, ABC):
 
 
 class StateCELoss(StateLoss):
-    def __init__(self, weight=None, reduction="mean", ignore_index=-100, mode="logits", **kw):
+    def __init__(self, weight=None, reduction="mean", ignore_index=-100, mode="logits", smoothing:float=0., **kw):
         super(StateCELoss, self).__init__(**kw)
         self.ce = q.CELoss(weight=weight, reduction=reduction, ignore_index=ignore_index, mode=mode)
+        if smoothing != 0.:
+            assert(smoothing < 1. and smoothing > 0.)
+            assert(mode in ["logits", "logprobs"])
+            self.ce = q.SmoothedCELoss(reduction=reduction, ignore_index=ignore_index, smoothing=smoothing, mode=mode, weight=weight)
 
     def forward(self, probs, predactions, x:TrainableDecodableState):   # must be BasicStates
         golds = x.get_gold()

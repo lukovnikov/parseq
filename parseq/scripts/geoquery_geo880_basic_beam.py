@@ -33,11 +33,7 @@ def run(lr=0.001,
         cosine_restarts=-1.,
         nocopy=False,
         ):
-    # DONE: Porter stemmer
-    # DONE: linear attention
-    # DONE: grad norm
-    # DONE: beam search
-    # DONE: lr scheduler
+    print(locals().copy())
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
@@ -60,11 +56,11 @@ def run(lr=0.001,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True, nocopy=nocopy)
 
     tfdecoder = SeqDecoder(TFTransition(model),
-                           [StateCELoss(ignore_index=0, mode="logprobs"),
+                           [StateCELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
                             StateSeqAccuracies()])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=40,
-                              eval=[StateCELoss(ignore_index=0, mode="logprobs")],
+                              eval=[StateCELoss(ignore_index=0, mode="logprobs", smoothing=smoothing)],
                               eval_beam=[BeamSeqAccuracies()])
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc")
