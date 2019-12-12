@@ -11,7 +11,7 @@ from nltk import PorterStemmer
 
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamDecoder, BeamTransition
 from parseq.eval import StateCELoss, StateSeqAccuracies, BeamSeqAccuracies, make_loss_array
-from parseq.scripts.geoquery_geo880_basic import GeoQueryDataset, do_rare_stats, create_model
+from parseq.scripts.geoquery_geo880_basic import GeoQueryDatasetSub as GeoQueryDataset, do_rare_stats, create_model
 from parseq.vocab import SentenceEncoder
 
 
@@ -31,15 +31,16 @@ def run(lr=0.001,
         smoothing=0.,
         fulltest=False,
         cosine_restarts=1.,
-        nocopy=False,
+        nocopy=True,
         validinter=5,
         ):
     print(locals().copy())
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
-    stemmer = PorterStemmer()
-    tokenizer = lambda x: [stemmer.stem(xe) for xe in x.split()]
+    # stemmer = PorterStemmer()
+    # tokenizer = lambda x: [stemmer.stem(xe) for xe in x.split()]
+    tokenizer = lambda x: x.split()
     ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
     dls = ds.dataloader(batsize=batsize)
     train_dl = ds.dataloader("train", batsize=batsize)

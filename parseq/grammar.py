@@ -59,6 +59,15 @@ def pas_to_lisp(x):
         return x
 
 
+def pas_to_prolog(x):
+    if isinstance(x, tuple):
+        head = x[0]
+        children = [pas_to_prolog(e) for e in x[1]]
+        return f"{head} ( {', '.join(children)} )"
+    else:
+        return x
+
+
 def pas_to_expression(x):
     # flatten out the lists, replace tuples with lists
     if isinstance(x, tuple):

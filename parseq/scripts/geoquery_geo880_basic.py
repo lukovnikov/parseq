@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
 from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
-from parseq.grammar import prolog_to_pas
+from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2
 from parseq.states import DecodableState, BasicDecoderState, State
 from parseq.transitions import TransitionModel, LSTMCellTransition
@@ -79,43 +79,15 @@ def try_basic_query_tokenizer():
     # print(y)
 
 
-class GeoQueryDataset2(object):
-    def __init__(self,
-                 p="../../data/geo880dong/",
-                 sentence_encoder:SentenceEncoder=None,
-                 min_freq:int=2, **kw):
-        super(GeoQueryDataset2, self).__init__(**kw)
-        self.data = {}
-        self.sentence_encoder = sentence_encoder
-        trainlines = [x.strip() for x in open(os.path.join(p, "train.txt"), "r").readlines()]
-        testlines = [x.strip() for x in open(os.path.join(p, "test.txt"), "r").readlines()]
-        splits = ["train"]*len(trainlines) + ["test"] * len(testlines)
-        questions, queries = zip(*[x.split("\t") for x in trainlines])
-        testqs, testxs = zip(*[x.split("\t") for x in testlines])
-        questions += testqs
-        queries += testxs
-
-        queries = self.lisp2prolog()
-
-        self.query_encoder = SentenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
-
-        # build vocabularies
-        for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
-            self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
-            self.query_encoder.inc_build_vocab(query, seen=split=="train")
-        for word, wordid in self.sentence_encoder.vocab.D.items():
-            self.query_encoder.vocab.add_token(word, seen=False)
-        self.sentence_encoder.finalize_vocab(min_freq=min_freq)
-        self.query_encoder.finalize_vocab(min_freq=min_freq)
-
-        self.build_data(questions, queries, splits)
-
-class GeoQueryDataset(object):
+class GeoQueryDatasetFunQL(object):
     def __init__(self,
                  p="../../data/geoquery/",
                  sentence_encoder:SentenceEncoder=None,
                  min_freq:int=2, **kw):
-        super(GeoQueryDataset, self).__init__(**kw)
+        super(GeoQueryDatasetFunQL, self).__init__(**kw)
+        self._initialize(p, sentence_encoder, min_freq)
+
+    def _initialize(self, p, sentence_encoder:SentenceEncoder, min_freq:int):
         self.data = {}
         self.sentence_encoder = sentence_encoder
         questions = [x.strip() for x in open(os.path.join(p, "questions.txt"), "r").readlines()]
@@ -180,8 +152,50 @@ class GeoQueryDataset(object):
         else:
             assert(split in self.data.keys())
             dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split=="train",
-             collate_fn=GeoQueryDataset.collate_fn)
+             collate_fn=GeoQueryDatasetFunQL.collate_fn)
             return dl
+
+
+class GeoQueryDatasetSub(GeoQueryDatasetFunQL):
+    def __init__(self,
+                 p="../../data/geo880dong/",
+                 sentence_encoder:SentenceEncoder=None,
+                 min_freq:int=2, **kw):
+        super(GeoQueryDatasetSub, self).__init__(p, sentence_encoder, min_freq, **kw)
+
+    def _initialize(self, p, sentence_encoder:SentenceEncoder, min_freq:int):
+        self.data = {}
+        self.sentence_encoder = sentence_encoder
+        trainlines = [x.strip() for x in open(os.path.join(p, "train.txt"), "r").readlines()]
+        testlines = [x.strip() for x in open(os.path.join(p, "test.txt"), "r").readlines()]
+        splits = ["train"]*len(trainlines) + ["test"] * len(testlines)
+        questions, queries = zip(*[x.split("\t") for x in trainlines])
+        testqs, testxs = zip(*[x.split("\t") for x in testlines])
+        questions += testqs
+        queries += testxs
+
+        queries = self.lisp2prolog(queries)
+
+        self.query_encoder = SentenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
+
+        # build vocabularies
+        for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
+            self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
+            self.query_encoder.inc_build_vocab(query, seen=split=="train")
+        for word, wordid in self.sentence_encoder.vocab.D.items():
+            self.query_encoder.vocab.add_token(word, seen=False)
+        self.sentence_encoder.finalize_vocab(min_freq=min_freq)
+        self.query_encoder.finalize_vocab(min_freq=min_freq)
+
+        self.build_data(questions, queries, splits)
+
+    def lisp2prolog(self, data:List[str]):
+        ret = []
+        for x in data:
+            pas = lisp_to_pas(x)
+            prolog = pas_to_prolog(pas)
+            ret.append(prolog)
+        return ret
 
 
 def try_dataset():
@@ -313,7 +327,7 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     return model
 
 
-def do_rare_stats(ds:GeoQueryDataset):
+def do_rare_stats(ds:GeoQueryDatasetSub):
     # how many examples contain rare words, in input and output, in both train and test
     def get_rare_portions(examples:List[State]):
         total = 0
