@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
 from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
 from parseq.grammar import prolog_to_pas
-from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput
+from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2
 from parseq.states import DecodableState, BasicDecoderState, State
 from parseq.transitions import TransitionModel, LSTMCellTransition
 from parseq.vocab import SentenceEncoder, Vocab
@@ -267,7 +267,7 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
         decoder_rnn.append(torch.nn.LSTMCell(hdim, hdim))
     decoder_rnn = LSTMCellTransition(*decoder_rnn, dropout=dropout)
     # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
-    decoder_out = PtrGenOutput(hdim + encoder_dim, out_vocab=query_encoder.vocab)
+    decoder_out = PtrGenOutput2(hdim + encoder_dim, out_vocab=query_encoder.vocab)
     decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
     attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
     enctodec = torch.nn.Sequential(
