@@ -17,7 +17,7 @@ from parseq.vocab import SentenceEncoder
 
 def run(lr=0.001,
         batsize=20,
-        epochs=100,
+        epochs=101,
         embdim=100,
         encdim=200,
         numlayers=1,
@@ -32,6 +32,7 @@ def run(lr=0.001,
         fulltest=False,
         cosine_restarts=1.,
         nocopy=False,
+        validinter=5,
         ):
     print(locals().copy())
     tt = q.ticktock("script")
@@ -91,7 +92,7 @@ def run(lr=0.001,
 
     # 7. run training
     tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, validinter=5)
+    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, validinter=validinter)
     tt.tock("done training")
 
 

@@ -79,6 +79,37 @@ def try_basic_query_tokenizer():
     # print(y)
 
 
+class GeoQueryDataset2(object):
+    def __init__(self,
+                 p="../../data/geo880dong/",
+                 sentence_encoder:SentenceEncoder=None,
+                 min_freq:int=2, **kw):
+        super(GeoQueryDataset2, self).__init__(**kw)
+        self.data = {}
+        self.sentence_encoder = sentence_encoder
+        trainlines = [x.strip() for x in open(os.path.join(p, "train.txt"), "r").readlines()]
+        testlines = [x.strip() for x in open(os.path.join(p, "test.txt"), "r").readlines()]
+        splits = ["train"]*len(trainlines) + ["test"] * len(testlines)
+        questions, queries = zip(*[x.split("\t") for x in trainlines])
+        testqs, testxs = zip(*[x.split("\t") for x in testlines])
+        questions += testqs
+        queries += testxs
+
+        queries = self.lisp2prolog()
+
+        self.query_encoder = SentenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
+
+        # build vocabularies
+        for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
+            self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
+            self.query_encoder.inc_build_vocab(query, seen=split=="train")
+        for word, wordid in self.sentence_encoder.vocab.D.items():
+            self.query_encoder.vocab.add_token(word, seen=False)
+        self.sentence_encoder.finalize_vocab(min_freq=min_freq)
+        self.query_encoder.finalize_vocab(min_freq=min_freq)
+
+        self.build_data(questions, queries, splits)
+
 class GeoQueryDataset(object):
     def __init__(self,
                  p="../../data/geoquery/",
