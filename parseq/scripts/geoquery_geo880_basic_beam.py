@@ -72,7 +72,7 @@ def run(lr=0.001,
 
     # lr schedule
     if cosine_restarts >= 0:
-        t_max = epochs * len(train_dl)
+        t_max = epochs # * len(train_dl)
         print(f"Total number of updates: {t_max} ({epochs} * {len(train_dl)})")
         lr_schedule = q.WarmupCosineWithHardRestartsSchedule(optim, 0, t_max, cycles=cosine_restarts)
         reduce_lr = [lambda: lr_schedule.step()]
@@ -80,7 +80,7 @@ def run(lr=0.001,
         reduce_lr = []
 
     # 6. define training function (using partial)
-    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
+    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm(tfdecoder.parameters(), gradnorm)
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=train_dl, optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
