@@ -306,6 +306,69 @@ class PtrGenOutput2(PtrGenOutput):
         if inptensor is None:
             assert(attn_scores is None)
             return self.logsm(gen_probs)
+
+        else:
+            assert(attn_scores is not None)
+
+            # - point or generate probs
+            ptr_or_gen_probs = self.copy_or_gen(x)  # (batsize, 2)
+            if out_mask is not None:
+                cancopy_mask = self._inp_actmask.unsqueeze(0) * out_mask
+                cancopy_mask = cancopy_mask.sum(
+                    1) > 0  # if any overlap between allowed actions and actions doable by copy, set mask to 1
+                cancopy_mask = torch.stack([torch.ones_like(cancopy_mask), cancopy_mask], 1)
+                ptr_or_gen_probs = ptr_or_gen_probs + torch.log(cancopy_mask.float())
+            ptr_or_gen_probs = self.sm(ptr_or_gen_probs)
+
+            # - copy probs
+            # self.naningrad = torch.nn.Parameter(self.naningrad[:attn_scores.size(0), :attn_scores.size(1)])
+            # attn_scores = attn_scores + self.naningrad
+            attn_probs = self.sm(attn_scores)
+            # get distributions over input vocabulary
+            ctx_ids = inptensor
+            inpdist = torch.zeros(gen_probs.size(0), self.inp_vocab.number_of_ids(), dtype=torch.float,
+                                  device=gen_probs.device)
+            inpdist.scatter_add_(1, ctx_ids, attn_probs)
+
+            # map to distribution over output actions
+            ptr_scores = torch.zeros(gen_probs.size(0), self.out_vocab.number_of_ids(),
+                                     dtype=torch.float, device=gen_probs.device)  # - np.infty
+            ptr_scores.scatter_(1, self._inp_to_act.unsqueeze(0).repeat(gen_probs.size(0), 1),
+                                inpdist)
+            # ptr_scores_infmask = ptr_scores == 0
+            # ptr_scores = ptr_scores + self.naningrad2
+            # ptr_probs = ptr_probs + self.naningrad2
+
+            # - mix
+            out_probs = ptr_or_gen_probs[:, 0:1] * self.sm(gen_probs) + ptr_or_gen_probs[:, 1:2] * ptr_scores
+            out_probs = torch.log(out_probs)
+
+            # out_probs = out_probs.masked_fill(out_probs == 0, 0)
+            return out_probs, ptr_or_gen_probs, self.sm(gen_probs), attn_probs
+
+
+class PtrGenOutput3(PtrGenOutput):
+    def forward(self, x:torch.Tensor, inptensor:torch.Tensor=None, attn_scores:torch.Tensor=None, out_mask:torch.Tensor=None):  # (batsize, hdim), (batsize, numactions)
+        """
+        :param x:               (batsize, hdim)
+        :param inptensor:       (batsize, seqlen, encdim)
+        :param attn_scores:     (batsize, seqlen)
+        :param out_mask:        (batsize, outvocsize)
+        :return:
+        """
+        if self.training:       # !!!! removing action mask stuff during training !!! probably want to put back
+            out_mask = None
+
+        # - generation probs
+        gen_probs = self.gen_lin(x)
+        if self.out_map is not None:
+            gen_probs = gen_probs.index_select(1, self.out_map)
+        if out_mask is not None:
+            gen_probs = gen_probs + torch.log(out_mask.float())
+
+        if inptensor is None:
+            assert(attn_scores is None)
+            return self.logsm(gen_probs)
         else:
             assert(attn_scores is not None)
 
@@ -333,7 +396,7 @@ class PtrGenOutput2(PtrGenOutput):
 
             # - mix
             out_probs = torch.stack([ptr_or_gen_scores[:, 0:1] + gen_probs, ptr_or_gen_scores[:, 1:2] + ptr_scores], 1)
-            out_probs = self.logsm(out_probs)
+            out_probs = self.logsm(out_probs.sum(1))
 
             # out_probs = out_probs.masked_fill(out_probs == 0, 0)
             return out_probs, ptr_or_gen_scores, gen_probs, self.sm(attn_scores)

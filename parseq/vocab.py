@@ -101,12 +101,17 @@ class Vocab(_Vocab):
         else:
             raise Exception("illegal argument")
 
-    def print(self, x:Union[np.ndarray, torch.Tensor]):
+    def tostr(self, x:Union[np.ndarray, torch.Tensor]):
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
         x = list(np.vectorize(lambda e: self(e))(x))
         x = [e for e in x if e != self.padtoken]
-        return " ".join(list(x))
+        ret = []
+        for xe in x:
+            if len(ret) > 0 and ret[-1] == self.endtoken:
+                break
+            ret.append(xe)
+        return " ".join(ret)
 
 
 class FixedVocab(Vocab):
