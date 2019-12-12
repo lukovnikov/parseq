@@ -59,12 +59,11 @@ def run(lr=0.001,
                            [StateCELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
                             StateSeqAccuracies()])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=40,
-                              eval=[StateCELoss(ignore_index=0, mode="logprobs", smoothing=smoothing)],
+    freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=60,
                               eval_beam=[BeamSeqAccuracies()])
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc")
-    vlosses = make_loss_array("beam_seq_acc", "beam_seq_recall_at2", "beam_seq_recall_at3", "beam_seq_recall_at4", "beam_recall")
+    vlosses = make_loss_array([f"beam_seq_recall_at{i}" for i in range(1, min(beamsize, 4))] + ["beam_recall"])
 
     # 4. define optim
     optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
