@@ -13,68 +13,75 @@ def pas_to_str(x):
         return x
 
 
-def lisp_to_pas(x:str):
+class LispToPas(object):
+    def __init__(self, x:str=None):
+        super(LispToPas, self).__init__()
+        self.stack = [[]]
+        self.curstring = None
+        self.stringmode = None
+        self.prevescape = 0
+
+        if x is not None:
+            self.feed(x)
+
+    def feed(self, x:str):
+        xsplits = re.split("([\(\)\s'\"])", x)
+        queue = list(xsplits)
+        while len(queue) > 0:
+            next_token = queue.pop(0)
+            if self.curstring is not None:
+                if next_token == "\\":
+                    self.prevescape = 2
+                elif next_token == "":
+                    continue
+                self.curstring += next_token
+                if self.curstring[-1] == self.stringmode and self.prevescape == 0:  # closing string
+                    self.stack[-1].append(self.curstring)
+                    self.curstring = None
+                    self.stringmode = None
+                self.prevescape = max(self.prevescape - 1, 0)
+            else:
+                next_token = next_token.strip()
+                self.prevescape = False
+                if next_token == "(":
+                    # add one level on stack
+                    self.stack.append([])
+                elif next_token == ")":
+                    # close last level on stack, merge into subtree
+                    siblings = self.stack.pop(-1)
+                    self.stack[-1].append((siblings[0], siblings[1:]))
+                elif next_token == "" or next_token == " ":
+                    pass  # do nothing
+                elif next_token == "'":
+                    self.curstring = next_token
+                    self.stringmode = "'"
+                elif next_token == '"':
+                    self.curstring = next_token
+                    self.stringmode = '"'
+                else:
+                    self.stack[-1].append(next_token)
+        if len(self.stack) != 1 or len(self.stack[-1]) != 1:
+            return None
+        else:
+            return self.stack[-1][-1]
+
+
+def lisp_to_pas(x:str, self:LispToPas=None):
     """
     :param x: lisp-style string
     strings must be surrounded by single quotes (') and may not contain anything but single quotes
     :return:
     """
-    xsplits = re.split("([\(\)\s'])", x)
-    stack = [[]]
-    queue = list(xsplits)
-    curstring = None
-    while len(queue) > 0:
-        next_token = queue.pop(0)
-        if curstring is not None:
-            curstring += next_token
-            if curstring[-1] == "'":   # closing string
-                stack[-1].append(curstring)
-                curstring = None
+    if self is not None:
+        ret = self.feed(x)
+        return ret, self
+    else:
+        self = LispToPas(x) if self is None else self
+        ret = self.feed("")
+        if ret is None:
+            return None, self
         else:
-            next_token = next_token.strip()
-            if next_token == "(":
-                # add one level on stack
-                stack.append([])
-            elif next_token == ")":
-                # close last level on stack, merge into subtree
-                siblings = stack.pop(-1)
-                stack[-1].append((siblings[0], siblings[1:]))
-            elif next_token == "" or next_token == " ":
-                pass    # do nothing
-            elif next_token == "'":
-                curstring = next_token
-            else:
-                stack[-1].append(next_token)
-    assert(len(stack) == 1)
-    assert(len(stack[-1]) == 1)
-    return stack[-1][-1]
-
-
-def pas_to_lisp(x):
-    if isinstance(x, tuple):    # has children
-        head = x[0]
-        children = [pas_to_lisp(e) for e in x[1]]
-        return f"({head} {' '.join(children)})"
-    else:
-        return x
-
-
-def pas_to_prolog(x):
-    if isinstance(x, tuple):
-        head = x[0]
-        children = [pas_to_prolog(e) for e in x[1]]
-        return f"{head} ( {', '.join(children)} )"
-    else:
-        return x
-
-
-def pas_to_expression(x):
-    # flatten out the lists, replace tuples with lists
-    if isinstance(x, tuple):
-        return [x[0]] + [pas_to_expression(xe) for xe in x[1]]
-    else:
-        return x
-
+            return ret
 
 
 def prolog_to_pas(x:str):
@@ -120,6 +127,32 @@ def prolog_to_pas(x:str):
     assert (len(stack) == 1)  # if everything parsed correctly, only one tree left on stack
     assert (len(stack[-1]) == 1)
     return stack[-1][-1]
+
+
+def pas_to_lisp(x):
+    if isinstance(x, tuple):    # has children
+        head = x[0]
+        children = [pas_to_lisp(e) for e in x[1]]
+        return f"({head} {' '.join(children)})"
+    else:
+        return x
+
+
+def pas_to_prolog(x):
+    if isinstance(x, tuple):
+        head = x[0]
+        children = [pas_to_prolog(e) for e in x[1]]
+        return f"{head} ( {', '.join(children)} )"
+    else:
+        return x
+
+
+def pas_to_expression(x):
+    # flatten out the lists, replace tuples with lists
+    if isinstance(x, tuple):
+        return [x[0]] + [pas_to_expression(xe) for xe in x[1]]
+    else:
+        return x
 
 
 def try_str_to_pas():
