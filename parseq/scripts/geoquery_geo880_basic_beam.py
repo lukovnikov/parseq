@@ -91,7 +91,7 @@ def run(lr=0.001,
 
     # 7. run training
     tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
+    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, validinter=5)
     tt.tock("done training")
 
 
