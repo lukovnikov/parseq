@@ -67,6 +67,7 @@ def run(lr=0.001,
 
     # 4. define optim
     optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
+
     # optim = torch.optim.SGD(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
 
     # lr schedule
