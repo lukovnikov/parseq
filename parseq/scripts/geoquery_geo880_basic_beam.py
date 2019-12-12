@@ -15,7 +15,7 @@ from parseq.scripts.geoquery_geo880_basic import GeoQueryDatasetSub as GeoQueryD
 from parseq.vocab import SentenceEncoder
 
 
-def run(lr=0.001,
+def run(lr=0.01,
         batsize=20,
         epochs=101,
         embdim=100,
@@ -68,7 +68,7 @@ def run(lr=0.001,
     vlosses = make_loss_array(*([f"beam_seq_recall_at{i}" for i in range(1, min(beamsize, 5))] + ["beam_recall"]))
 
     # 4. define optim
-    optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
+    optim = torch.optim.RMSprop(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
 
     # optim = torch.optim.SGD(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
 
