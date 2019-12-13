@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
 from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
-from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree
+from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2
 from parseq.states import DecodableState, BasicDecoderState, State
 from parseq.transitions import TransitionModel, LSTMCellTransition
@@ -89,6 +89,10 @@ class OvernightDataset(object):
         self._initialize(p, domain, sentence_encoder, min_freq)
 
     def lines_to_examples(self, lines:List[str]):
+        maxsize_before = 0
+        avgsize_before = []
+        maxsize_after = 0
+        avgsize_after = []
         afterstring = set()
         def simplify_tree(t:Tree):
             if t.label() == "call":
@@ -135,7 +139,18 @@ class OvernightDataset(object):
 
         def simplify_further(t):
             # TODO: flatten filters with type selectors etc?
-            # TODO: do something about countSuperlatives and countComparatives?
+            # replace countSuperlatives with specific ones
+            if t.label() == "SW:countSuperlative":
+                assert(t[1].label() in ["arg:max", "arg:min"])
+                t.set_label(f"SW:CNT-{t[1].label()}")
+                del t[1]
+            elif t.label() == "SW:countComparative":
+                assert(t[2].label() in ["arg:<", "arg:<=", "arg:>", "arg:>=", "arg:=", "arg:!="])
+                t.set_label(f"SW:CNT-{t[2].label()}")
+                del t[2]
+            else:
+                pass
+            t[:] = [simplify_further(tc) for tc in t]
             return t
 
         ret = []
@@ -143,13 +158,21 @@ class OvernightDataset(object):
         for i, line in enumerate(lines):
             z, ltp = lisp_to_pas(line, ltp)
             if z is not None:
-                lf = simplify_tree(pas_to_tree(z[1][2][1][0]))
+                ztree = pas_to_tree(z[1][2][1][0])
+                maxsize_before = max(maxsize_before, tree_size(ztree))
+                avgsize_before.append(tree_size(ztree))
+                lf = simplify_tree(ztree)
                 lf = simplify_further(lf)
                 ret.append((z[1][0][1][0], lf))
                 ltp = None
+                maxsize_after = max(maxsize_after, tree_size(lf))
+                avgsize_after.append(tree_size(lf))
 
                 print(f"{ret[-1][0]}\n{ret[-1][1]}\n{pas_to_tree(z[1][2][1][0])}")
                 print()
+
+        avgsize_before = sum(avgsize_before) / len(avgsize_before)
+        avgsize_after = sum(avgsize_after) / len(avgsize_after)
 
         return ret
 

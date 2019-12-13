@@ -193,6 +193,12 @@ def pas_to_tree(x):
     return node
 
 
+def tree_size(x:Tree):
+    ret = sum([tree_size(xe) for xe in x])
+    ret += 1
+    return ret
+
+
 class ActionTree(ParentedTree):
     orderless = ["and", "or"]
     singlechildcollapse = ["and", "or"]
