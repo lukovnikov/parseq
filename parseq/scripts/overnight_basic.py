@@ -25,7 +25,7 @@ from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
 from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp
-from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2
+from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings
 from parseq.states import DecodableState, BasicDecoderState, State
 from parseq.transitions import TransitionModel, LSTMCellTransition
 from parseq.vocab import SentenceEncoder, Vocab
@@ -494,12 +494,16 @@ class BasicGenModel(TransitionModel):
         return outs[0], x
 
 
-def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
+def create_model(embdim=300, hdim=100, dropout=0., numlayers:int=1,
                  sentence_encoder:SentenceEncoder=None,
                  query_encoder:SentenceEncoder=None,
                  feedatt=False, nocopy=False):
     inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+    _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D, p="../../data/glove/glove300uncased")     # load glove embeddings where possible into the inner embedding class
+    inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
+    # TODO: use fasttext
+    # TODO: disable training of glove embeddings
     encoder_dim = hdim
     encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2]*numlayers), bidir=True, dropout_in=dropout)
     # encoder = PytorchSeq2SeqWrapper(
@@ -528,7 +532,7 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     return model
 
 
-def do_rare_stats(ds):
+def do_rare_stats(ds, sentence_rare_tokens=None, query_rare_tokens=None):
     # how many examples contain rare words, in input and output, in both train and test
     def get_rare_portions(examples:List[State]):
         total = 0
@@ -542,12 +546,14 @@ def do_rare_stats(ds):
             query_tokens = example.gold_tokens[0]
             both = True
             either = False
-            if len(set(question_tokens) & example.sentence_encoder.vocab.rare_tokens) > 0:
+            _sentence_rare_tokens = example.sentence_encoder.vocab.rare_tokens if sentence_rare_tokens is None else sentence_rare_tokens
+            if len(set(question_tokens) & _sentence_rare_tokens) > 0:
                 rare_in_question += 1
                 either = True
             else:
                 both = False
-            if len(set(query_tokens) & example.query_encoder.vocab.rare_tokens) > 0:
+            _query_rare_tokens = example.query_encoder.vocab.rare_tokens if query_rare_tokens is None else query_rare_tokens
+            if len(set(query_tokens) & _query_rare_tokens) > 0:
                 either = True
                 rare_in_query += 1
             else:
@@ -614,7 +620,7 @@ def tensor2tree(x, D:Vocab=None):
 def run(lr=0.001,
         batsize=20,
         epochs=100,
-        embdim=100,
+        embdim=300,
         encdim=200,
         numlayers=1,
         dropout=.2,
@@ -651,6 +657,9 @@ def run(lr=0.001,
 
     model = create_model(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+
+    sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
+    do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
 
     tfdecoder = SeqDecoder(TFTransition(model),
                            [StateCELoss(ignore_index=0, mode="logprobs"),
@@ -709,14 +718,8 @@ def run(lr=0.001,
     tt.tock("done training")
 
 
-def preprocess_glove(p, outp):
-    from qelos.word import VectorLoader
-    VectorLoader.transform_to_format(p, outp)
-
-
 if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
-    preprocess_glove("../../data/glove/glove.42B.300d.txt", "../../data/glove/glove300uncased")
-    # q.argprun(run)
+    q.argprun(run)

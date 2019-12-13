@@ -16,9 +16,14 @@ class TokenEmb(torch.nn.Module):
         self.emb = emb
         self.rare_token_ids = rare_token_ids
         self.rare_id = rare_id
-        if rare_id is not None and rare_token_ids is not None:
+        self._do_rare()
+
+    def _do_rare(self, rare_token_ids:Set[int]=None, rare_id:int=None):
+        self.rare_token_ids = self.rare_token_ids if rare_token_ids is None else rare_token_ids
+        self.rare_id = self.rare_id if rare_id is None else rare_id
+        if self.rare_id is not None and self.rare_token_ids is not None:
             # build id mapper
-            id_mapper = torch.arange(emb.num_embeddings)
+            id_mapper = torch.arange(self.emb.num_embeddings)
             for id in self.rare_token_ids:
                 id_mapper[id] = self.rare_id
             self.register_buffer("id_mapper", id_mapper)
@@ -32,16 +37,20 @@ class TokenEmb(torch.nn.Module):
         return ret
 
 
-def load_pretrained(emb, D, p="../data/glove/glove300uncased"):
+def load_pretrained_embeddings(emb, D, p="../data/glove/glove300uncased"):
     W = np.load(p + ".npy")
     with open(p + ".words") as f:
         words = ujson.load(f)
         preD = dict(zip(words, range(len(words))))
     # map D's indexes onto preD's indexes
     select = np.zeros(emb.num_embeddings, dtype="int64") - 1
+    covered_words = set()
+    covered_word_ids = set()
     for k, v in D.items():
         if k in preD:
             select[v] = preD[k]
+            covered_words.add(k)
+            covered_word_ids.add(v)
     selectmask = select != -1
     select = select * selectmask.astype("int64")
     subW = W[select, :]
@@ -49,6 +58,7 @@ def load_pretrained(emb, D, p="../data/glove/glove300uncased"):
     selectmask = torch.tensor(selectmask).to(emb.weight.device).to(torch.float)
     emb.weight.data = emb.weight.data * (1-selectmask[:, None]) + subW * selectmask[:, None]        # masked set or something else?
     print("done")
+    return covered_words, covered_word_ids
 
 
 class BasicGenOutput(torch.nn.Module):
