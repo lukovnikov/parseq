@@ -1,10 +1,13 @@
+import math
 import os
+import random
 import re
 import sys
 from functools import partial
 from typing import *
 
 import torch
+import ujson
 
 import qelos as q
 from allennlp.modules.seq2seq_encoders import PytorchSeq2SeqWrapper
@@ -20,7 +23,8 @@ from torch.utils.data import DataLoader
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
 from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
-from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size
+from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
+    tree_to_lisp
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2
 from parseq.states import DecodableState, BasicDecoderState, State
 from parseq.transitions import TransitionModel, LSTMCellTransition
@@ -55,19 +59,20 @@ def pas2toks(pas):
     else:
         children = [pas2toks(k) for k in pas[1]]
         ret = [pas[0]] if pas[0] != "@NAMELESS@" else []
-        ret[0] = f"_{ret[0]}("
+        ret.insert(0, "(")
         for child in children:
             ret += child
             # ret.append(",")
         # ret.pop(-1)
-        ret.append("_)")
+        ret.append(")")
         return ret
 
 
 def basic_query_tokenizer(x:str, strtok=None):
-    pas = prolog_to_pas(x)
+    pas = lisp_to_pas(x)
     # idpreds = set("_cityid _countryid _stateid _riverid _placeid".split(" "))
-    idpreds = set("cityid stateid countryid riverid placeid".split(" "))
+    # idpreds = set("cityid stateid countryid riverid placeid".split(" "))
+    idpreds = set()
     pas = stem_id_words(pas, idpreds, strtok=strtok)[0]
     ret = pas2toks(pas)
     return ret
@@ -81,11 +86,17 @@ def try_basic_query_tokenizer():
 
 class OvernightDataset(object):
     def __init__(self,
-                 p="../../data/overnightData/",
+                 p="../../datasets/overnightData/",
+                 pcache="../../datasets/overnightCache/",
                  domain:str="restaurants",
                  sentence_encoder:SentenceEncoder=None,
+                 usecache=True,
                  min_freq:int=2, **kw):
         super(OvernightDataset, self).__init__(**kw)
+        self._simplify_filters = True        # if True, filter expressions are converted to orderless and-expressions
+        self._pcache = pcache if usecache else None
+        self._domain = domain
+        self._usecache = usecache
         self._initialize(p, domain, sentence_encoder, min_freq)
 
     def lines_to_examples(self, lines:List[str]):
@@ -94,6 +105,7 @@ class OvernightDataset(object):
         maxsize_after = 0
         avgsize_after = []
         afterstring = set()
+
         def simplify_tree(t:Tree):
             if t.label() == "call":
                 assert(len(t[0]) == 0)
@@ -138,67 +150,182 @@ class OvernightDataset(object):
                 return t
 
         def simplify_further(t):
-            # TODO: flatten filters with type selectors etc?
+            """ simplifies filters and count expressions """
+            # replace filters with ands
+            if t.label() == "SW:filter" and self._simplify_filters is True:
+                if len(t) not in (2, 4):
+                    raise Exception(f"filter expression should have 2 or 4 children, got {len(children)}")
+                children = [simplify_further(tc) for tc in t]
+                startset = children[0]
+                if len(children) == 2:
+                    condition = Tree("cond:has", [children[1]])
+                elif len(children) == 4:
+                    condition = Tree(f"cond:{children[2].label()}", [children[1], children[3]])
+                conditions = [condition]
+                if startset.label() == "op:and":
+                    conditions = startset[:] + conditions
+                else:
+                    conditions = [startset] + conditions
+                # check for same conditions:
+                i = 0
+                while i < len(conditions) - 1:
+                    j = i + 1
+                    while j < len(conditions):
+                        if conditions[i] == conditions[j]:
+                            print(f"SAME!: {conditions[i]}, {conditions[j]}")
+                            del conditions[j]
+                            j -= 1
+                        j += 1
+                    i += 1
+
+                ret = Tree(f"op:and", conditions)
+                return ret
             # replace countSuperlatives with specific ones
-            if t.label() == "SW:countSuperlative":
+            elif t.label() == "SW:countSuperlative":
                 assert(t[1].label() in ["arg:max", "arg:min"])
                 t.set_label(f"SW:CNT-{t[1].label()}")
                 del t[1]
+                t[:] = [simplify_further(tc) for tc in t]
             elif t.label() == "SW:countComparative":
                 assert(t[2].label() in ["arg:<", "arg:<=", "arg:>", "arg:>=", "arg:=", "arg:!="])
                 t.set_label(f"SW:CNT-{t[2].label()}")
                 del t[2]
+                t[:] = [simplify_further(tc) for tc in t]
             else:
-                pass
-            t[:] = [simplify_further(tc) for tc in t]
+                t[:] = [simplify_further(tc) for tc in t]
             return t
+
+        def simplify_furthermore(t):
+            """ replace reverse rels"""
+            if t.label() == "arg:!type":
+                t.set_label("arg:~type")
+                return t
+            elif t.label() == "SW:reverse":
+                assert(len(t) == 1)
+                assert(t[0].label().startswith("arg:"))
+                assert(len(t[0]) == 0)
+                t.set_label(f"arg:~{t[0].label()[4:]}")
+                del t[0]
+                return t
+            elif t.label().startswith("cond:arg:"):
+                assert(len(t) == 2)
+                head = t[0]
+                head = simplify_furthermore(head)
+                assert(head.label().startswith("arg:"))
+                assert(len(head) == 0)
+                headlabel = f"arg:~{head.label()[4:]}"
+                headlabel = headlabel.replace("~~", "")
+                head.set_label(headlabel)
+                body = simplify_furthermore(t[1])
+                if t.label()[len("cond:arg:"):] != "=":
+                    body = Tree(t.label()[5:], [body])
+                head.append(body)
+                return head
+            else:
+                t[:] = [simplify_furthermore(tc) for tc in t]
+                return t
+
+        def simplify_final(t):
+            assert(t.label() == "SW:listValue")
+            assert(len(t) == 1)
+            return t[0]
 
         ret = []
         ltp = None
+        j = 0
         for i, line in enumerate(lines):
             z, ltp = lisp_to_pas(line, ltp)
             if z is not None:
+                print(f"Example {j}:")
                 ztree = pas_to_tree(z[1][2][1][0])
                 maxsize_before = max(maxsize_before, tree_size(ztree))
                 avgsize_before.append(tree_size(ztree))
                 lf = simplify_tree(ztree)
                 lf = simplify_further(lf)
-                ret.append((z[1][0][1][0], lf))
+                lf = simplify_furthermore(lf)
+                lf = simplify_final(lf)
+                question = z[1][0][1][0]
+                assert(question[0] == '"' and question[-1] == '"')
+                ret.append((question[1:-1], lf))
+                print(ret[-1][0])
+                print(ret[-1][1])
                 ltp = None
                 maxsize_after = max(maxsize_after, tree_size(lf))
                 avgsize_after.append(tree_size(lf))
 
-                print(f"{ret[-1][0]}\n{ret[-1][1]}\n{pas_to_tree(z[1][2][1][0])}")
+                print(pas_to_tree(z[1][2][1][0]))
                 print()
+                j += 1
 
         avgsize_before = sum(avgsize_before) / len(avgsize_before)
         avgsize_after = sum(avgsize_after) / len(avgsize_after)
 
+        print("Simplification results ({j} examples):")
+        print(f"\t Max, Avg size before: {maxsize_before}, {avgsize_before}")
+        print(f"\t Max, Avg size after: {maxsize_after}, {avgsize_after}")
+
         return ret
+
+    def _load_cached(self):
+        train_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.train.json"), "r"))
+        trainexamples = [(x, Tree.fromstring(y)) for x, y in train_cached]
+        test_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.test.json"), "r"))
+        testexamples = [(x, Tree.fromstring(y)) for x, y in test_cached]
+        print("loaded from cache")
+        return trainexamples, testexamples
+
+    def _cache(self, trainexamples:List[Tuple[str, Tree]], testexamples:List[Tuple[str, Tree]]):
+        train_cached, test_cached = None, None
+        if os.path.exists(os.path.join(self._pcache, f"{self._domain}.train.json")):
+            try:
+                train_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.train.json"), "r"))
+                test_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.test.json"), "r"))
+            except (IOError, ValueError) as e:
+                pass
+        trainexamples = [(x, str(y)) for x, y in trainexamples]
+        testexamples = [(x, str(y)) for x, y in testexamples]
+
+        if train_cached != trainexamples:
+            with open(os.path.join(self._pcache, f"{self._domain}.train.json"), "w") as f:
+                ujson.dump(trainexamples, f, indent=4, sort_keys=True)
+        if test_cached != testexamples:
+            with open(os.path.join(self._pcache, f"{self._domain}.test.json"), "w") as f:
+                ujson.dump(testexamples, f, indent=4, sort_keys=True)
+        print("saved in cache")
 
     def _initialize(self, p, domain, sentence_encoder:SentenceEncoder, min_freq:int):
         self.data = {}
         self.sentence_encoder = sentence_encoder
 
-        trainlines = [x.strip() for x in
-                     open(os.path.join(p, f"{domain}.paraphrases.train.examples"), "r").readlines()]
-        testlines = [x.strip() for x in
-                    open(os.path.join(p, f"{domain}.paraphrases.train.examples"), "r").readlines()]
+        trainexamples, testexamples = None, None
+        if self._usecache:
+            try:
+                trainexamples, testexamples = self._load_cached()
+            except (IOError, ValueError) as e:
+                pass
 
-        trainexamples = self.lines_to_examples(trainlines)
-        testexamples = self.lines_to_examples(testlines)
+        if trainexamples is None:
 
-        questions = [x.strip() for x in open(os.path.join(p, "questions.txt"), "r").readlines()]
-        queries = [x.strip() for x in open(os.path.join(p, "queries.funql"), "r").readlines()]
-        trainidxs = set([int(x.strip()) for x in open(os.path.join(p, "train_indexes.txt"), "r").readlines()])
-        testidxs = set([int(x.strip()) for x in open(os.path.join(p, "test_indexes.txt"), "r").readlines()])
-        splits = [None]*len(questions)
-        for trainidx in trainidxs:
-            splits[trainidx] = "train"
-        for testidx in testidxs:
-            splits[testidx] = "test"
-        if any([split == None for split in splits]):
-            print(f"{len([split for split in splits if split == None])} examples not assigned to any split")
+            trainlines = [x.strip() for x in
+                         open(os.path.join(p, f"{domain}.paraphrases.train.examples"), "r").readlines()]
+            testlines = [x.strip() for x in
+                        open(os.path.join(p, f"{domain}.paraphrases.test.examples"), "r").readlines()]
+
+            trainexamples = self.lines_to_examples(trainlines)
+            testexamples = self.lines_to_examples(testlines)
+
+            if self._usecache:
+                self._cache(trainexamples, testexamples)
+
+        questions, queries = tuple(zip(*(trainexamples + testexamples)))
+        queries = [tree_to_lisp(x) for x in queries]
+        trainlen = int(round(0.8 * len(trainexamples)))
+        validlen = int(round(0.2 * len(trainexamples)))
+        splits = ["train"] * trainlen + ["valid"] * validlen
+        random.seed(1223)
+        random.shuffle(splits)
+        assert(len(splits) == len(trainexamples))
+        splits = splits + ["test"] * len(testexamples)
 
         self.query_encoder = SentenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
 
@@ -214,14 +341,21 @@ class OvernightDataset(object):
         self.build_data(questions, queries, splits)
 
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
+        maxlen_in, maxlen_out = 0, 0
         for inp, out, split in zip(inputs, outputs, splits):
             state = BasicDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
+            maxlen_in, maxlen_out = max(maxlen_in, len(state.inp_tokens[0])), max(maxlen_out, len(state.gold_tokens[0]))
             if split not in self.data:
                 self.data[split] = []
             self.data[split].append(state)
+        self.maxlen_input, self.maxlen_output = maxlen_in, maxlen_out
 
     def get_split(self, split:str):
-        return DatasetSplitProxy(self.data[split])
+        splits = split.split("+")
+        data = []
+        for split in splits:
+            data += self.data[split]
+        return DatasetSplitProxy(data)
 
     @staticmethod
     def collate_fn(data:Iterable):
@@ -248,33 +382,9 @@ class OvernightDataset(object):
                 ret[split] = self.dataloader(batsize=batsize, split=split)
             return ret
         else:
-            assert(split in self.data.keys())
-            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split=="train",
+            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split in ("train", "train+valid"),
              collate_fn=OvernightDataset.collate_fn)
             return dl
-
-
-def try_dataset():
-    tt = q.ticktock("dataset")
-    tt.tick("building dataset")
-    ds = OvernightDataset(sentence_encoder=SentenceEncoder(tokenizer=lambda x: x.split()))
-    train_dl = ds.dataloader("train", batsize=19)
-    test_dl = ds.dataloader("test", batsize=20)
-    examples = set()
-    examples_list = []
-    duplicates = []
-    for b in train_dl:
-        print(len(b))
-        for i in range(len(b)):
-            example = b.inp_strings[i] + " --> " + b.gold_strings[i]
-            if example in examples:
-                duplicates.append(example)
-            examples.add(example)
-            examples_list.append(example)
-            # print(example)
-        pass
-    print(f"duplicates within train: {len(duplicates)} from {len(examples_list)} total")
-    tt.tock("dataset built")
 
 
 class DatasetSplitProxy(object):
@@ -287,6 +397,41 @@ class DatasetSplitProxy(object):
 
     def __len__(self):
         return len(self.data)
+
+
+def try_dataset():
+    tt = q.ticktock("dataset")
+    tt.tick("building dataset")
+    ds = OvernightDataset(sentence_encoder=SentenceEncoder(tokenizer=lambda x: x.split()))
+    train_dl = ds.dataloader("train+valid", batsize=20)
+    test_dl = ds.dataloader("test", batsize=20)
+    examples = set()
+    examples_list = []
+    duplicates = []
+    testexamples = set()
+    testexamples_list = []
+    testduplicates = []
+    for b in train_dl:
+        for i in range(len(b)):
+            example = b.inp_strings[i] + " --> " + b.gold_strings[i]
+            if example in examples:
+                duplicates.append(example)
+            examples.add(example)
+            examples_list.append(example)
+            # print(example)
+    for b in test_dl:
+        for i in range(len(b)):
+            example = b.inp_strings[i] + " --> " + b.gold_strings[i]
+            if example in examples:
+                testduplicates.append(example)
+            testexamples.add(example)
+            testexamples_list.append(example)
+
+    print(f"duplicates within train: {len(duplicates)} from {len(examples_list)} total")
+    print(f"duplicates from test to train: {len(testduplicates)} from {len(testexamples_list)} total:")
+    for x in testduplicates:
+        print(x)
+    tt.tock("dataset built")
 
 
 class BasicGenModel(TransitionModel):
@@ -479,6 +624,7 @@ def run(lr=0.001,
         minfreq=2,
         gradnorm=3.,
         cosine_restarts=1.,
+        domain="restaurants",
         ):
     # DONE: Porter stemmer
     # DONE: linear attention
@@ -489,10 +635,9 @@ def run(lr=0.001,
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
-    stemmer = PorterStemmer()
-    tokenizer = lambda x: [stemmer.stem(xe) for xe in x.split()]
-    ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
-
+    tokenizer = lambda x: x.split()
+    ds = OvernightDataset(domain=domain, sentence_encoder=SentenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
+    print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     train_dl = ds.dataloader("train", batsize=batsize)
     test_dl = ds.dataloader("test", batsize=batsize)
     tt.tock("data loaded")
@@ -564,9 +709,14 @@ def run(lr=0.001,
     tt.tock("done training")
 
 
+def preprocess_glove(p, outp):
+    from qelos.word import VectorLoader
+    VectorLoader.transform_to_format(p, outp)
+
 
 if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
-    try_dataset()
+    # try_dataset()
+    preprocess_glove("../../data/glove/glove.42B.300d.txt", "../../data/glove/glove300uncased")
     # q.argprun(run)

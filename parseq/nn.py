@@ -1,7 +1,10 @@
+import ujson
+import os
 import re
 from typing import Set
 
 import torch
+import numpy as np
 
 from parseq.states import State
 from parseq.vocab import Vocab
@@ -27,6 +30,25 @@ class TokenEmb(torch.nn.Module):
             x = self.id_mapper[x]
         ret = self.emb(x)
         return ret
+
+
+def load_pretrained(emb, D, p="../data/glove/glove300uncased"):
+    W = np.load(p + ".npy")
+    with open(p + ".words") as f:
+        words = ujson.load(f)
+        preD = dict(zip(words, range(len(words))))
+    # map D's indexes onto preD's indexes
+    select = np.zeros(emb.num_embeddings, dtype="int64") - 1
+    for k, v in D.items():
+        if k in preD:
+            select[v] = preD[k]
+    selectmask = select != -1
+    select = select * selectmask.astype("int64")
+    subW = W[select, :]
+    subW = torch.tensor(subW).to(emb.weight.device)
+    selectmask = torch.tensor(selectmask).to(emb.weight.device).to(torch.float)
+    emb.weight.data = emb.weight.data * (1-selectmask[:, None]) + subW * selectmask[:, None]        # masked set or something else?
+    print("done")
 
 
 class BasicGenOutput(torch.nn.Module):

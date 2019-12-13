@@ -193,6 +193,22 @@ def pas_to_tree(x):
     return node
 
 
+def tree_to_lisp(x:Tree):
+    if len(x) > 0:
+        children = [tree_to_lisp(xe) for xe in x]
+        return f"({x.label()} {' '.join(children)})"
+    else:
+        return x.label()
+
+
+def tree_to_prolog(x:Tree):
+    if len(x) > 0:
+        children = [tree_to_prolog(tc) for tc in x]
+        return f"{x.label()} ( {', '.join(children)} )"
+    else:
+        return x.label()
+
+
 def tree_size(x:Tree):
     ret = sum([tree_size(xe) for xe in x])
     ret += 1

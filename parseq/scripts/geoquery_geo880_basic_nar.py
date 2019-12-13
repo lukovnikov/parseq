@@ -82,7 +82,7 @@ def try_basic_query_tokenizer():
 
 class GeoQueryDataset(object):
     def __init__(self,
-                 p="../../data/geoquery/",
+                 p="../../datasets/geoquery/",
                  sentence_encoder:SentenceEncoder=None,
                  min_freq:int=2, **kw):
         super(GeoQueryDataset, self).__init__(**kw)

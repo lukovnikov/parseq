@@ -81,7 +81,7 @@ def try_basic_query_tokenizer():
 
 class GeoQueryDatasetFunQL(object):
     def __init__(self,
-                 p="../../data/geoquery/",
+                 p="../../datasets/geoquery/",
                  sentence_encoder:SentenceEncoder=None,
                  min_freq:int=2, **kw):
         super(GeoQueryDatasetFunQL, self).__init__(**kw)
@@ -158,7 +158,7 @@ class GeoQueryDatasetFunQL(object):
 
 class GeoQueryDatasetSub(GeoQueryDatasetFunQL):
     def __init__(self,
-                 p="../../data/geo880dong/",
+                 p="../../datasets/geo880dong/",
                  sentence_encoder:SentenceEncoder=None,
                  min_freq:int=2, **kw):
         super(GeoQueryDatasetSub, self).__init__(p, sentence_encoder, min_freq, **kw)
