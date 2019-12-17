@@ -19,13 +19,13 @@ from torch.utils.data import DataLoader
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, merge_dicts
-from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
+from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy
 from parseq.grammar import prolog_to_pas
 from parseq.nn import TokenEmb, BasicGenOutput
 from parseq.states import DecodableState, BasicDecoderState, State
 from parseq.tm import TransformerConfig, Transformer
 from parseq.transitions import TransitionModel, LSTMCellTransition
-from parseq.vocab import SentenceEncoder, Vocab
+from parseq.vocab import SequenceEncoder, Vocab
 
 
 def stem_id_words(pas, idparents, stem=False, strtok=None):
@@ -83,7 +83,7 @@ def try_basic_query_tokenizer():
 class GeoQueryDataset(object):
     def __init__(self,
                  p="../../datasets/geoquery/",
-                 sentence_encoder:SentenceEncoder=None,
+                 sentence_encoder:SequenceEncoder=None,
                  min_freq:int=2, **kw):
         super(GeoQueryDataset, self).__init__(**kw)
         self.data = {}
@@ -100,7 +100,7 @@ class GeoQueryDataset(object):
         if any([split == None for split in splits]):
             print(f"{len([split for split in splits if split == None])} examples not assigned to any split")
 
-        self.query_encoder = SentenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
+        self.query_encoder = SequenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
 
         # build vocabularies
         for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
@@ -155,7 +155,7 @@ class GeoQueryDataset(object):
 def try_dataset():
     tt = q.ticktock("dataset")
     tt.tick("building dataset")
-    ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=lambda x: x.split()))
+    ds = GeoQueryDataset(sentence_encoder=SequenceEncoder(tokenizer=lambda x: x.split()))
     train_dl = ds.dataloader("train", batsize=19)
     test_dl = ds.dataloader("test", batsize=20)
     examples = set()
@@ -215,8 +215,8 @@ class NARTMModel(TransitionModel):
 
 
 def create_model(hdim=128, dropout=0., numlayers:int=1, numheads:int=4,
-                 sentence_encoder:SentenceEncoder=None,
-                 query_encoder:SentenceEncoder=None,
+                 sentence_encoder:SequenceEncoder=None,
+                 query_encoder:SequenceEncoder=None,
                  feedatt=False, maxtime=100):
     inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids()+maxtime, hdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
@@ -334,7 +334,7 @@ def run(lr=0.001,
     tt.tick("loading data")
     stemmer = PorterStemmer()
     tokenizer = lambda x: [stemmer.stem(xe) for xe in x.split()]
-    ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
+    ds = GeoQueryDataset(sentence_encoder=SequenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
 
     train_dl = ds.dataloader("train", batsize=batsize)
     test_dl = ds.dataloader("test", batsize=batsize)
@@ -350,8 +350,8 @@ def run(lr=0.001,
     model = create_model(hdim=encdim, dropout=dropout, numlayers=numlayers, numheads=numheads,
                          sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder)
 
-    model._metrics = [StateCELoss(ignore_index=0, mode="logprobs"),
-                      StateSeqAccuracies()]
+    model._metrics = [CELoss(ignore_index=0, mode="logprobs"),
+                      SeqAccuracies()]
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc")
     vlosses = make_loss_array("loss", "seq_acc")

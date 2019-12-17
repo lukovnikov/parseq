@@ -10,9 +10,9 @@ import qelos as q
 from nltk import PorterStemmer
 
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamDecoder, BeamTransition
-from parseq.eval import StateCELoss, StateSeqAccuracies, BeamSeqAccuracies, make_loss_array
+from parseq.eval import CELoss, SeqAccuracies, BeamSeqAccuracies, make_loss_array
 from parseq.scripts.geoquery_geo880_basic import GeoQueryDatasetSub as GeoQueryDataset, do_rare_stats, create_model
-from parseq.vocab import SentenceEncoder
+from parseq.vocab import SequenceEncoder
 
 
 def run(lr=0.01,
@@ -41,7 +41,7 @@ def run(lr=0.01,
     # stemmer = PorterStemmer()
     # tokenizer = lambda x: [stemmer.stem(xe) for xe in x.split()]
     tokenizer = lambda x: x.split()
-    ds = GeoQueryDataset(sentence_encoder=SentenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
+    ds = GeoQueryDataset(sentence_encoder=SequenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
     dls = ds.dataloader(batsize=batsize)
     train_dl = ds.dataloader("train", batsize=batsize)
     test_dl = ds.dataloader("test", batsize=batsize)
@@ -58,8 +58,8 @@ def run(lr=0.01,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True, nocopy=nocopy)
 
     tfdecoder = SeqDecoder(TFTransition(model),
-                           [StateCELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
-                            StateSeqAccuracies()])
+                           [CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
+                            SeqAccuracies()])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=60,
                               eval_beam=[BeamSeqAccuracies()])

@@ -4,18 +4,18 @@ import torch
 import qelos as q
 import numpy as np
 
-from parseq.eval import StateLoss, StateMetric
-from parseq.states import DecodableState, TrainableDecodableState, ListState, State, BasicDecoderState
+from parseq.eval import Loss, Metric
+from parseq.states import DecodableState, TrainableDecodableState, ListState, State, BasicDecoderState, BeamState
 from parseq.transitions import TransitionModel
 
 
 class SeqDecoder(torch.nn.Module):
-    def __init__(self, model:TransitionModel, eval:List[Union[StateMetric, StateLoss]]=tuple(), **kw):
+    def __init__(self, model:TransitionModel, eval:List[Union[Metric, Loss]]=tuple(), **kw):
         super(SeqDecoder, self).__init__(**kw)
         self.model = model
         self._metrics = eval
 
-    def forward(self, x:DecodableState) -> Tuple[Dict, State]:
+    def forward(self, x:TrainableDecodableState) -> Tuple[Dict, State]:
         # sb = sb.make_copy()
         x.start_decoding()
 
@@ -34,7 +34,9 @@ class SeqDecoder(torch.nn.Module):
         outprobs = torch.stack(outprobs, 1)
         predactions = torch.stack(predactions, 1)
 
-        metrics = [metric(outprobs, predactions, x) for metric in self._metrics]
+        golds = x.get_gold()
+
+        metrics = [metric(outprobs, predactions, golds, x) for metric in self._metrics]
         metrics = merge_dicts(*metrics)
         return metrics, x
 
@@ -90,13 +92,13 @@ class FreerunningTransition(SeqDecoderTransition):
 
 
 class BeamDecoder(SeqDecoder):
-    def __init__(self, model:TransitionModel, eval:List[Union[StateMetric, StateLoss]]=tuple(), eval_beam:List[Union[StateMetric, StateLoss]]=None,
+    def __init__(self, model:TransitionModel, eval:List[Union[Metric, Loss]]=tuple(), eval_beam:List[Union[Metric, Loss]]=None,
                  beamsize=1, maxtime=100, copy_deep=False, **kw):
         model = BeamTransition(model, beamsize=beamsize, maxtime=maxtime, copy_deep=copy_deep)
         super(BeamDecoder, self).__init__(model, eval, **kw)
         self._beam_metrics = eval_beam
 
-    def forward(self, x:DecodableState) -> Dict:
+    def forward(self, x:TrainableDecodableState) -> Dict:
         # sb = sb.make_copy()
         x.start_decoding()
 
@@ -108,47 +110,19 @@ class BeamDecoder(SeqDecoder):
             outprobs, predactions, x, all_terminated = self.model(x, timestep=i)
             i += 1
 
-        beam_metrics = [metric(outprobs, predactions, x) for metric in self._beam_metrics]
+        assert(isinstance(x, BeamState))
+        golds = x.bstates.get(0).get_gold()
+
+        beam_metrics = [metric(outprobs, predactions, golds, x) for metric in self._beam_metrics]
         beam_metrics = merge_dicts(*beam_metrics)
         # get top of the beam and run eval on top of the beam
         top_outprobs, top_predactions, top_x = outprobs[:, 0], predactions[:, 0], x.bstates.get(0)
-        metrics = [metric(top_outprobs, top_predactions, top_x) for metric in self._metrics]
+        metrics = [metric(top_outprobs, top_predactions, golds, top_x) for metric in self._metrics]
         metrics = merge_dicts(beam_metrics, *metrics)
         return metrics, x
 
 
-class BeamState(DecodableState):
-    def __init__(self, states:List[DecodableState], scores:torch.Tensor=None,
-                 actionprobs:List[torch.Tensor]=None, predactions:torch.Tensor=None):
-        bstates = ListState(*states)
-        batsize, beamsize = len(bstates), len(states)
-        bscores = torch.zeros(batsize, beamsize) if scores is None else scores
-        kw = {"bstates": bstates, "bscores": bscores}
-        if actionprobs is not None:
-            actionprobs = ListState(*actionprobs)
-            kw["actionprobs"] = actionprobs
-        kw["predactions"] = predactions
-        super(BeamState, self).__init__(**kw)
-
-    def start_decoding(self):
-        raise Exception("states must have already been started decoding.")
-
-    def is_terminated(self)-> List[List[bool]]:
-        """
-        Returns a list (over beam elements) of lists (over batch size) of booleans whether each elem in this state is terminated.
-        """
-        return [x.is_terminated() for x in self.bstates._list]
-
-    def all_terminated(self):
-        return all([all(ist) for ist in self.is_terminated()])
-
-    def step(self, action:Union[torch.Tensor, List[Union[str, torch.Tensor]]]=None):
-        raise Exception("this should not be used")
-
-
 class BeamTransition(SeqDecoderTransition):
-    # TODO: problem: beam search is continuing from terminated states
-    # ==> TODO: don't expand terminated states (??? what about preference for shorter sequences under beam search?)
     """
     Transition for beam search.
     """

@@ -84,6 +84,79 @@ def lisp_to_pas(x:str, self:LispToPas=None):
             return ret
 
 
+class LispToTree(object):
+    def __init__(self, x:str=None):
+        super(LispToTree, self).__init__()
+        self.stack = [[]]
+        self.curstring = None
+        self.stringmode = None
+        self.prevescape = 0
+
+        if x is not None:
+            self.feed(x)
+
+    def feed(self, x:str):
+        xsplits = re.split("([\(\)\s'\"])", x)
+        queue = list(xsplits)
+        while len(queue) > 0:
+            next_token = queue.pop(0)
+            if self.curstring is not None:
+                if next_token == "\\":
+                    self.prevescape = 2
+                elif next_token == "":
+                    continue
+                self.curstring += next_token
+                if self.curstring[-1] == self.stringmode and self.prevescape == 0:  # closing string
+                    self.stack[-1].append(self.curstring)
+                    self.curstring = None
+                    self.stringmode = None
+                self.prevescape = max(self.prevescape - 1, 0)
+            else:
+                next_token = next_token.strip()
+                self.prevescape = False
+                if next_token == "(":
+                    # add one level on stack
+                    self.stack.append([])
+                elif next_token == ")":
+                    # close last level on stack, merge into subtree
+                    siblings = self.stack.pop(-1)
+                    assert(len(siblings[0]) == 0)
+                    siblings[0].extend(siblings[1:])
+                    self.stack[-1].append(siblings[0])
+                elif next_token == "" or next_token == " ":
+                    pass  # do nothing
+                elif next_token == "'":
+                    self.curstring = next_token
+                    self.stringmode = "'"
+                elif next_token == '"':
+                    self.curstring = next_token
+                    self.stringmode = '"'
+                else:
+                    self.stack[-1].append(Tree(next_token, []))
+        if len(self.stack) != 1 or len(self.stack[-1]) != 1:
+            return None
+        else:
+            return self.stack[-1][-1]
+
+
+def lisp_to_tree(x:str, self:LispToTree=None):
+    """
+    :param x: lisp-style string
+    strings must be surrounded by single quotes (') and may not contain anything but single quotes
+    :return:
+    """
+    if isinstance(self, LispToTree):
+        ret = self.feed(x)
+        return ret, self
+    else:
+        _self = LispToTree(x) if not isinstance(self, LispToTree) else self
+        ret = _self.feed("")
+        if ret is None or self == "empty":
+            return ret, self
+        else:
+            return ret
+
+
 def prolog_to_pas(x:str):
     """
     :param x:   query in functional format "wife(president(US))"
@@ -221,6 +294,7 @@ class ActionTree(ParentedTree):
     def __init__(self, node, children=None):
         super(ActionTree, self).__init__(node, children=children)
         self._action = None
+        self._align = None
 
     def action(self):
         return self._action
@@ -294,12 +368,6 @@ class ActionTree(ParentedTree):
         else:
             return all([selfchild.eq(otherchild) for selfchild, otherchild in zip(self, other)])
 
-
-class AlignedActionTree(ActionTree):
-    def __init__(self, node, children=None):
-        super(AlignedActionTree, self).__init__(node, children=children)
-        self._align = None
-
     @classmethod
     def convert(cls, tree):
         """
@@ -318,6 +386,51 @@ class AlignedActionTree(ActionTree):
             return ret
         else:
             return tree
+
+
+def are_equal_trees(self, other, orderless={"and", "or"}, use_terminator=False):
+    if self is None or other is None:
+        return False
+    assert(isinstance(other, Tree) and isinstance(self, Tree))
+    if self._label != other._label:
+        return False
+    if self._label in orderless or orderless == "__ALL__":
+        # check if every child is in other and other contains no more
+        if len(self) != len(other):
+            return False
+        selfchildren = [selfchild for selfchild in self]
+        otherchildren = [otherchild for otherchild in other]
+        if use_terminator:
+            if not are_equal_trees(selfchildren[-1], otherchildren[-1], orderless=orderless, use_terminator=use_terminator):
+                return False    # terminator must be same and in the end
+            else:
+                selfchildren = selfchildren[:-1]
+                otherchildren = otherchildren[:-1]
+        i = 0
+        while i < len(selfchildren):
+            selfchild = selfchildren[i]
+            j = 0
+            unbroken = True
+            while j < len(otherchildren):
+                otherchild = otherchildren[j]
+                if are_equal_trees(selfchild, otherchild, orderless=orderless, use_terminator=use_terminator):
+                    selfchildren.pop(i)
+                    otherchildren.pop(j)
+                    i -= 1
+                    j -= 1
+                    unbroken = False
+                    break
+                j += 1
+            if unbroken:
+                return False
+            i += 1
+        if len(selfchildren) == 0 and len(otherchildren) == 0:
+            return True
+        else:
+            return False
+    else:
+        return all([are_equal_trees(selfchild, otherchild, orderless=orderless, use_terminator=use_terminator)
+                    for selfchild, otherchild in zip(self, other)])
 
 
 def action_seq_from_tree():

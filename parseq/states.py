@@ -9,8 +9,8 @@ import qelos as q
 import torch
 from nltk import Tree
 
-from parseq.grammar import ActionTree, AlignedActionTree
-from parseq.vocab import SentenceEncoder, FuncQueryEncoder
+from parseq.grammar import ActionTree
+from parseq.vocab import SequenceEncoder, FuncQueryEncoder
 
 
 class State(object):
@@ -338,6 +338,35 @@ def batchstack(x:List[torch.Tensor]):
     return ret
 
 
+class BeamState(DecodableState):
+    def __init__(self, states:List[DecodableState], scores:torch.Tensor=None,
+                 actionprobs:List[torch.Tensor]=None, predactions:torch.Tensor=None):
+        bstates = ListState(*states)
+        batsize, beamsize = len(bstates), len(states)
+        bscores = torch.zeros(batsize, beamsize) if scores is None else scores
+        kw = {"bstates": bstates, "bscores": bscores}
+        if actionprobs is not None:
+            actionprobs = ListState(*actionprobs)
+            kw["actionprobs"] = actionprobs
+        kw["predactions"] = predactions
+        super(BeamState, self).__init__(**kw)
+
+    def start_decoding(self):
+        raise Exception("states must have already been started decoding.")
+
+    def is_terminated(self)-> List[List[bool]]:
+        """
+        Returns a list (over beam elements) of lists (over batch size) of booleans whether each elem in this state is terminated.
+        """
+        return [x.is_terminated() for x in self.bstates._list]
+
+    def all_terminated(self):
+        return all([all(ist) for ist in self.is_terminated()])
+
+    def step(self, action:Union[torch.Tensor, List[Union[str, torch.Tensor]]]=None):
+        raise Exception("this should not be used")
+
+
 class BasicDecoderState(TrainableDecodableState):
     """
     Basic state object for seq2seq
@@ -346,8 +375,8 @@ class BasicDecoderState(TrainableDecodableState):
     def __init__(self,
                  inp_strings:List[str]=None,
                  gold_strings:List[str]=None,
-                 sentence_encoder:SentenceEncoder=None,
-                 query_encoder:SentenceEncoder=None,
+                 sentence_encoder:SequenceEncoder=None,
+                 query_encoder:SequenceEncoder=None,
                  **kw):
         if inp_strings is None:
             super(BasicDecoderState, self).__init__(**kw)
@@ -410,6 +439,138 @@ class BasicDecoderState(TrainableDecodableState):
     def __setitem__(self, key, value:'BasicDecoderState'):
         assert(value.sentence_encoder == self.sentence_encoder and value.query_encoder == self.query_encoder)
         ret = super(BasicDecoderState, self).__setitem__(key, value)
+        return ret
+
+    # DecodableState API implementation
+    def is_terminated(self):
+        return self._is_terminated
+
+    def start_decoding(self):
+        # initialize prev_action
+        qe = self.query_encoder
+        self.set(prev_actions=torch.tensor([qe.vocab[qe.vocab.starttoken] for _ in self.inp_strings],
+                                                   device=self.inp_tensor.device, dtype=torch.long))
+
+    def step(self, tokens:Union[torch.Tensor, np.ndarray, List[Union[str, np.ndarray, torch.Tensor]]]):
+        qe = self.query_encoder
+        assert(len(tokens) == len(self))
+        tokens_np = np.zeros((len(tokens),), dtype="int64")
+
+        if isinstance(tokens, list):
+            types = [type(token) for token in tokens]
+            if all([tokentype == torch.Tensor for tokentype in types]):
+                tokens = torch.stack(tokens, 0)
+            if all([tokentype == np.ndarray for tokentype in types]):
+                tokens = np.stack(tokens, 0)
+        if isinstance(tokens, list):
+            for i, token in enumerate(tokens):
+                if isinstance(token, str):
+                    tokens_np[i] = qe.vocab[token]
+                elif isinstance(token, np.ndarray):
+                    assert(token.shape == (1,))
+                    tokens_np[i] = token[0]
+                elif isinstance(token, torch.Tensor):
+                    assert(token.size() in [(1,), tuple()])
+                    tokens_np[i] = token.detach().cpu().item()
+        elif isinstance(tokens, torch.Tensor):
+            tokens_np = tokens.detach().cpu().numpy()
+        tokens_np = tokens_np * (~self._is_terminated).astype("int64")
+        tokens_pt = torch.tensor(tokens_np).to(self.inp_tensor.device)
+        # tokens_str = np.vectorize(lambda x: qe.vocab(x))(tokens_np)
+
+        mask = torch.tensor(self._is_terminated).to(self.prev_actions.device)
+        self.prev_actions = self.prev_actions * (mask).long() + tokens_pt * (~mask).long()
+        self._timesteps[~self._is_terminated] = self._timesteps[~self._is_terminated] + 1
+
+        # for i, token in enumerate(tokens_str):
+        #     if not self.is_terminated()[i]:
+        #         self.followed_actions_str[i] = self.followed_actions_str[i] + [token]
+
+        self.followed_actions = torch.cat([self.followed_actions, tokens_pt[:, None]], 1)
+
+        # self._is_terminated |= tokens_str == self.endtoken
+        self._is_terminated = self._is_terminated | (tokens_np == self.query_encoder.vocab[self.endtoken])
+
+    def get_gold(self, i:int=None):
+        if i is None:
+            return self.gold_tensor
+        else:
+            return self.gold_tensor[:, i]
+
+
+class TreeDecoderState(TrainableDecodableState):
+    endtoken = "@END@"
+    def __init__(self,
+                 inp_strings:List[str]=None,
+                 gold_trees:List[ActionTree]=None,
+                 sentence_encoder:SequenceEncoder=None,
+                 query_encoder:SequenceEncoder=None,
+                 **kw):
+        if inp_strings is None:
+            super(TreeDecoderState, self).__init__(**kw)
+        else:
+            kw = kw.copy()
+            xg = np.array(range(len(gold_trees)), dtype="object")
+            for i in range(len(gold_trees)):
+                xg[i] = gold_trees[i]
+            kw.update({"inp_strings": np.asarray(inp_strings),
+                       "gold_trees": xg})
+            super(TreeDecoderState, self).__init__(**kw)
+
+            self.sentence_encoder = sentence_encoder
+            self.query_encoder = query_encoder
+
+            # self.set(followed_actions_str = np.asarray([None for _ in self.inp_strings]))
+            # for i in range(len(self.followed_actions_str)):
+            #     self.followed_actions_str[i] = []
+            self.set(followed_actions = torch.zeros(len(inp_strings), 0, dtype=torch.long))
+            self.set(_is_terminated = np.asarray([False for _ in self.inp_strings]))
+            self.set(_timesteps = np.asarray([0 for _ in self.inp_strings]))
+
+            if sentence_encoder is not None:
+                x = [sentence_encoder.convert(x, return_what="tensor,tokens") for x in self.inp_strings]
+                x = list(zip(*x))
+                inp_tokens = np.asarray([None for _ in range(len(x[1]))], dtype=np.object)
+                for i, inp_tokens_e in enumerate(x[1]):
+                    inp_tokens[i] = tuple(inp_tokens_e)
+                x = {"inp_tensor": batchstack(x[0]),
+                     "inp_tokens": inp_tokens}
+                self.set(**x)
+            if self.gold_trees is not None:
+                if query_encoder is not None:
+                    x = [query_encoder.convert(x, return_what="tensor,tokens") for x in self.gold_trees]
+                    x = list(zip(*x))
+                    gold_tokens = np.asarray([None for _ in range(len(x[1]))])
+                    for i, gold_tokens_e in enumerate(x[1]):
+                        gold_tokens[i] = tuple(gold_tokens_e)
+                    x = {"gold_tensor": batchstack(x[0]),
+                         "gold_tokens": gold_tokens}
+                    self.set(**x)
+
+    # State API override implementation
+    def make_copy(self, ret=None, detach=None, deep=True):
+        ret = super(TreeDecoderState, self).make_copy(ret=ret, detach=detach, deep=deep)
+        ret.sentence_encoder = self.sentence_encoder
+        ret.query_encoder = self.query_encoder
+        return ret
+
+    @classmethod
+    def merge(cls, states:List['TreeDecoderState'], ret=None):
+        assert(all([state.sentence_encoder == states[0].sentence_encoder and state.query_encoder == states[0].query_encoder for state in states]))
+        ret = super(TreeDecoderState, cls).merge(states, ret=ret)
+        ret.sentence_encoder = states[0].sentence_encoder
+        ret.query_encoder = states[0].query_encoder
+        return ret
+
+    def __getitem__(self, item):
+        ret = super(TreeDecoderState, self).__getitem__(item)
+        ret.sentence_encoder = self.sentence_encoder
+        ret.query_encoder = self.query_encoder
+        return ret
+
+    def __setitem__(self, key, value:'TreeDecoderState'):
+        assert(value.sentence_encoder == self.sentence_encoder and value.query_encoder == self.query_encoder)
+        ret = super(TreeDecoderState, self).__setitem__(key, value)
         return ret
 
     # DecodableState API implementation

@@ -11,12 +11,17 @@ from parseq.vocab import Vocab
 
 
 class TokenEmb(torch.nn.Module):
-    def __init__(self, emb:torch.nn.Embedding, rare_token_ids:Set[int]=None, rare_id:int=None, **kw):
+    def __init__(self, emb:torch.nn.Embedding, adapt_dims=None, rare_token_ids:Set[int]=None, rare_id:int=None, **kw):
         super(TokenEmb, self).__init__(**kw)
         self.emb = emb
         self.rare_token_ids = rare_token_ids
         self.rare_id = rare_id
         self._do_rare()
+
+        self.adapter = None
+        if adapt_dims is not None and adapt_dims[0] != adapt_dims[1]:
+            self.adapter = torch.nn.Linear(*adapt_dims)
+
 
     def _do_rare(self, rare_token_ids:Set[int]=None, rare_id:int=None):
         self.rare_token_ids = self.rare_token_ids if rare_token_ids is None else rare_token_ids
@@ -34,6 +39,8 @@ class TokenEmb(torch.nn.Module):
         if self.id_mapper is not None:
             x = self.id_mapper[x]
         ret = self.emb(x)
+        if self.adapter is not None:
+            ret = self.adapter(ret)
         return ret
 
 

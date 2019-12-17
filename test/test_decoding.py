@@ -5,16 +5,16 @@ import torch
 import numpy as np
 
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamTransition, BeamState, BeamDecoder
-from parseq.eval import StateCELoss, StateSeqAccuracies, BeamSeqAccuracies
+from parseq.eval import CELoss, SeqAccuracies, BeamSeqAccuracies
 from parseq.states import BasicDecoderState, ListState, State
 from parseq.transitions import TransitionModel
-from parseq.vocab import SentenceEncoder
+from parseq.vocab import SequenceEncoder
 
 
 class TestSeqDecoder(TestCase):
     def test_tf_decoder(self):
         texts = ["i went to chocolate @END@", "awesome is @END@", "the meaning of life @END@"]
-        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        se = SequenceEncoder(tokenizer=lambda x: x.split())
         for t in texts:
             se.inc_build_vocab(t)
         se.finalize_vocab()
@@ -40,7 +40,7 @@ class TestSeqDecoder(TestCase):
 
     def test_free_decoder(self):
         texts = ["i went to chocolate a b c d e f g h i j k l m n o p q r @END@", "awesome is @END@", "the meaning of life @END@"]
-        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        se = SequenceEncoder(tokenizer=lambda x: x.split())
         for t in texts:
             se.inc_build_vocab(t)
         se.finalize_vocab()
@@ -66,7 +66,7 @@ class TestSeqDecoder(TestCase):
 
     def test_tf_decoder_with_losses(self):
         texts = ["i went to chocolate @END@", "awesome is @END@", "the meaning of life @END@"]
-        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        se = SequenceEncoder(tokenizer=lambda x: x.split())
         for t in texts:
             se.inc_build_vocab(t)
         se.finalize_vocab()
@@ -78,8 +78,8 @@ class TestSeqDecoder(TestCase):
                 outprobs = torch.nn.functional.log_softmax(outprobs, -1)
                 return outprobs, x
 
-        celoss = StateCELoss(ignore_index=0)
-        accs = StateSeqAccuracies()
+        celoss = CELoss(ignore_index=0)
+        accs = SeqAccuracies()
 
         dec = SeqDecoder(TFTransition(Model()), eval=[celoss, accs])
 
@@ -101,7 +101,7 @@ class TestSeqDecoder(TestCase):
 
     def test_tf_decoder_with_losses_with_gold(self):
         texts = ["i went to chocolate @END@", "awesome is @END@", "the meaning of life @END@"]
-        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        se = SequenceEncoder(tokenizer=lambda x: x.split())
         for t in texts:
             se.inc_build_vocab(t)
         se.finalize_vocab()
@@ -114,8 +114,8 @@ class TestSeqDecoder(TestCase):
                 outprobs.scatter_(1, golds, 1)
                 return outprobs, x
 
-        celoss = StateCELoss(ignore_index=0)
-        accs = StateSeqAccuracies()
+        celoss = CELoss(ignore_index=0)
+        accs = SeqAccuracies()
 
         dec = SeqDecoder(TFTransition(Model()), eval=[celoss, accs])
 
@@ -174,8 +174,8 @@ class TestBeamTransition(TestCase):
 
     def test_beam_transition(self):
         texts = ["i went to chocolate @END@", "awesome is @END@", "the meaning of life @END@"]
-        from parseq.vocab import SentenceEncoder
-        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        from parseq.vocab import SequenceEncoder
+        se = SequenceEncoder(tokenizer=lambda x: x.split())
         for t in texts:
             se.inc_build_vocab(t)
         se.finalize_vocab()
@@ -229,8 +229,8 @@ class TestBeamTransition(TestCase):
     def test_beam_search_vs_greedy(self):
         with torch.no_grad():
             texts = ["a b"] * 10
-            from parseq.vocab import SentenceEncoder
-            se = SentenceEncoder(tokenizer=lambda x: x.split())
+            from parseq.vocab import SequenceEncoder
+            se = SequenceEncoder(tokenizer=lambda x: x.split())
             for t in texts:
                 se.inc_build_vocab(t)
             se.finalize_vocab()
@@ -281,8 +281,8 @@ class TestBeamTransition(TestCase):
     def test_beam_search_stored_probs(self):
         with torch.no_grad():
             texts = ["a b"] * 2
-            from parseq.vocab import SentenceEncoder
-            se = SentenceEncoder(tokenizer=lambda x: x.split())
+            from parseq.vocab import SequenceEncoder
+            se = SequenceEncoder(tokenizer=lambda x: x.split())
             for t in texts:
                 se.inc_build_vocab(t)
             se.finalize_vocab()
@@ -347,8 +347,8 @@ class TestBeamTransition(TestCase):
 
     def test_beam_search(self):
         texts = ["i went to chocolate @END@", "awesome is @END@", "the meaning of life @END@"]
-        from parseq.vocab import SentenceEncoder
-        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        from parseq.vocab import SequenceEncoder
+        se = SequenceEncoder(tokenizer=lambda x: x.split())
         for t in texts:
             se.inc_build_vocab(t)
         se.finalize_vocab()
@@ -365,7 +365,7 @@ class TestBeamTransition(TestCase):
 
         beamsize = 50
         maxtime = 10
-        bs = BeamDecoder(model, eval=[StateCELoss(ignore_index=0), StateSeqAccuracies()], eval_beam=[BeamSeqAccuracies()],
+        bs = BeamDecoder(model, eval=[CELoss(ignore_index=0), SeqAccuracies()], eval_beam=[BeamSeqAccuracies()],
                          beamsize=beamsize, maxtime=maxtime)
 
         y = bs(x)

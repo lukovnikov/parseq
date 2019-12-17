@@ -21,14 +21,14 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
-from parseq.eval import StateCELoss, StateSeqAccuracies, make_loss_array, StateDerivedAccuracy
+from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamDecoder
+from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
-    tree_to_lisp
+    tree_to_lisp, lisp_to_tree
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings
-from parseq.states import DecodableState, BasicDecoderState, State
+from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState
 from parseq.transitions import TransitionModel, LSTMCellTransition
-from parseq.vocab import SentenceEncoder, Vocab
+from parseq.vocab import SequenceEncoder, Vocab
 
 
 def stem_id_words(pas, idparents, stem=False, strtok=None):
@@ -53,6 +53,27 @@ def stem_id_words(pas, idparents, stem=False, strtok=None):
         return [(pas[0], children)]
 
 
+def stem_id_words_tree(tree:Tree, idparents, stem=False, strtok=None):
+    if stem is True:
+        assert(len(tree) == 0)  # should be leaf
+    if len(tree) == 0:
+        if stem is True:
+            if re.match(r"'([^']+)'", tree.label()):
+                pas = re.match(r"'([^']+)'", tree.label()).group(1)
+                pas = strtok(pas)
+                return [Tree("str", pas)]
+            else:
+                return [tree]
+        else:
+            return [tree]
+    else:
+        tostem = tree.label() in idparents
+        children = [stem_id_words_tree(k, idparents, stem=tostem, strtok=strtok)
+                    for k in tree]
+        children = [a for b in children for a in b]
+        return [Tree(tree.label(), children)]
+
+
 def pas2toks(pas):
     if not isinstance(pas, tuple):
         return [pas]
@@ -67,6 +88,18 @@ def pas2toks(pas):
         ret.append(")")
         return ret
 
+def tree2toks(tree:Tree):
+    if len(tree) == 0:
+        return [tree.label()]
+    else:
+        children = [tree2toks(x) for x in tree]
+        ret = [tree.label()] if tree.label() != "@NAMELESS@" else []
+        ret.insert(0, "(")
+        for child in children:
+            ret += child
+        ret.append(")")
+        return ret
+
 
 def basic_query_tokenizer(x:str, strtok=None):
     pas = lisp_to_pas(x)
@@ -76,6 +109,14 @@ def basic_query_tokenizer(x:str, strtok=None):
     pas = stem_id_words(pas, idpreds, strtok=strtok)[0]
     ret = pas2toks(pas)
     return ret
+
+
+def tree_query_tokenizer(x:Tree, strtok=None):
+    idpreds = set()
+    _x = stem_id_words_tree(x, idpreds, strtok=strtok)[0]
+    ret = tree2toks(_x)
+    return ret
+
 
 def try_basic_query_tokenizer():
     stemmer = PorterStemmer()
@@ -89,7 +130,7 @@ class OvernightDataset(object):
                  p="../../datasets/overnightData/",
                  pcache="../../datasets/overnightCache/",
                  domain:str="restaurants",
-                 sentence_encoder:SentenceEncoder=None,
+                 sentence_encoder:SequenceEncoder=None,
                  usecache=True,
                  min_freq:int=2, **kw):
         super(OvernightDataset, self).__init__(**kw)
@@ -293,7 +334,7 @@ class OvernightDataset(object):
                 ujson.dump(testexamples, f, indent=4, sort_keys=True)
         print("saved in cache")
 
-    def _initialize(self, p, domain, sentence_encoder:SentenceEncoder, min_freq:int):
+    def _initialize(self, p, domain, sentence_encoder:SequenceEncoder, min_freq:int):
         self.data = {}
         self.sentence_encoder = sentence_encoder
 
@@ -318,7 +359,6 @@ class OvernightDataset(object):
                 self._cache(trainexamples, testexamples)
 
         questions, queries = tuple(zip(*(trainexamples + testexamples)))
-        queries = [tree_to_lisp(x) for x in queries]
         trainlen = int(round(0.8 * len(trainexamples)))
         validlen = int(round(0.2 * len(trainexamples)))
         splits = ["train"] * trainlen + ["valid"] * validlen
@@ -327,7 +367,7 @@ class OvernightDataset(object):
         assert(len(splits) == len(trainexamples))
         splits = splits + ["test"] * len(testexamples)
 
-        self.query_encoder = SentenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
+        self.query_encoder = SequenceEncoder(tokenizer=partial(tree_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
 
         # build vocabularies
         for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
@@ -343,7 +383,7 @@ class OvernightDataset(object):
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
         maxlen_in, maxlen_out = 0, 0
         for inp, out, split in zip(inputs, outputs, splits):
-            state = BasicDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
+            state = TreeDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
             maxlen_in, maxlen_out = max(maxlen_in, len(state.inp_tokens[0])), max(maxlen_out, len(state.gold_tokens[0]))
             if split not in self.data:
                 self.data[split] = []
@@ -402,7 +442,7 @@ class DatasetSplitProxy(object):
 def try_dataset():
     tt = q.ticktock("dataset")
     tt.tick("building dataset")
-    ds = OvernightDataset(sentence_encoder=SentenceEncoder(tokenizer=lambda x: x.split()))
+    ds = OvernightDataset(sentence_encoder=SequenceEncoder(tokenizer=lambda x: x.split()))
     train_dl = ds.dataloader("train+valid", batsize=20)
     test_dl = ds.dataloader("test", batsize=20)
     examples = set()
@@ -495,15 +535,14 @@ class BasicGenModel(TransitionModel):
 
 
 def create_model(embdim=300, hdim=100, dropout=0., numlayers:int=1,
-                 sentence_encoder:SentenceEncoder=None,
-                 query_encoder:SentenceEncoder=None,
+                 sentence_encoder:SequenceEncoder=None,
+                 query_encoder:SequenceEncoder=None,
                  feedatt=False, nocopy=False):
-    inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
-    inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+    inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), 300, padding_idx=0)
+    inpemb = TokenEmb(inpemb, adapt_dims=(300, embdim), rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
     _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D, p="../../data/glove/glove300uncased")     # load glove embeddings where possible into the inner embedding class
     inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
     # TODO: use fasttext
-    # TODO: disable training of glove embeddings
     encoder_dim = hdim
     encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2]*numlayers), bidir=True, dropout_in=dropout)
     # encoder = PytorchSeq2SeqWrapper(
@@ -602,18 +641,12 @@ def tensor2tree(x, D:Vocab=None):
             parentheses_balance += 1
         i -= 1
 
-    # introduce comma's
-    i = 1
-    while i < len(x):
-        if x[i-1][-1] == "(":
-            pass
-        elif x[i] == ")":
-            pass
-        else:
-            x.insert(i, ",")
-            i += 1
-        i += 1
-    return " ".join(x)
+    # convert to nltk.Tree
+    try:
+        tree, parsestate = lisp_to_tree(" ".join(x), "empty")
+    except Exception as e:
+        tree = None
+    return tree
 
 
 
@@ -623,6 +656,7 @@ def run(lr=0.001,
         embdim=300,
         encdim=200,
         numlayers=1,
+        beamsize=5,
         dropout=.2,
         wreg=1e-10,
         cuda=False,
@@ -642,7 +676,7 @@ def run(lr=0.001,
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
     tokenizer = lambda x: x.split()
-    ds = OvernightDataset(domain=domain, sentence_encoder=SentenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
+    ds = OvernightDataset(domain=domain, sentence_encoder=SequenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     train_dl = ds.dataloader("train", batsize=batsize)
     test_dl = ds.dataloader("test", batsize=batsize)
@@ -662,12 +696,13 @@ def run(lr=0.001,
     do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
 
     tfdecoder = SeqDecoder(TFTransition(model),
-                           [StateCELoss(ignore_index=0, mode="logprobs"),
-                            StateSeqAccuracies()])
+                           [CELoss(ignore_index=0, mode="logprobs"),
+                            SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                          orderless={"op:and", "SW:concat"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(FreerunningTransition(model, maxtime=100),
-                             [StateCELoss(ignore_index=0, mode="logprobs"),
-                              StateSeqAccuracies()])
+    freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
+                              eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                 orderless={"op:and", "SW:concat"})])
 
     # # test
     # tt.tick("doing one epoch")
@@ -685,11 +720,15 @@ def run(lr=0.001,
 
     # print(dict(tfdecoder.named_parameters()).keys())
 
-    losses = make_loss_array("loss", "elem_acc", "seq_acc")
-    vlosses = make_loss_array("loss", "seq_acc")
+    losses = make_loss_array("loss", "seq_acc", "tree_acc")
+    vlosses = make_loss_array("tree_acc", "tree_acc_at3", "tree_acc_at_last")
+
+    trainable_params = tfdecoder.named_parameters()
+    exclude_params = {"model.model.inp_emb.emb.weight"}   # don't train input embeddings if doing glove
+    trainable_params = [v for k, v in trainable_params if k not in exclude_params]
 
     # 4. define optim
-    optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
+    optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
     # optim = torch.optim.SGD(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
 
     # lr schedule

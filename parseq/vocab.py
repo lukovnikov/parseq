@@ -153,10 +153,10 @@ class VocabBuilder(ABC):
         raise NotImplemented()
 
     
-class SentenceEncoder(VocabBuilder):
+class SequenceEncoder(VocabBuilder):
     endtoken = "@END@"
     def __init__(self, tokenizer:Callable[[str], List[str]], vocab:Vocab=None, add_end_token=False, **kw):
-        super(SentenceEncoder, self).__init__(**kw)
+        super(SequenceEncoder, self).__init__(**kw)
         self.tokenizer = tokenizer
         self.vocab = vocab if vocab is not None else Vocab()
         self.vocab_final = False
@@ -192,7 +192,7 @@ class SentenceEncoder(VocabBuilder):
     
 class FuncQueryEncoder(VocabBuilder):
     def __init__(self, grammar:FuncGrammar=None, vocab_tokens:Vocab=None, vocab_actions:Vocab=None,
-                 sentence_encoder:SentenceEncoder=None, format:str="prolog", **kw):
+                 sentence_encoder:SequenceEncoder=None, format:str= "prolog", **kw):
         super(FuncQueryEncoder, self).__init__(**kw)
         self.vocab_final = False
         self.vocab_tokens = vocab_tokens if vocab_tokens is not None else Vocab()

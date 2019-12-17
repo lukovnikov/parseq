@@ -5,8 +5,10 @@ import nltk
 import qelos as q
 
 import torch
+import numpy as np
 
-from parseq.states import State, DecodableState, TrainableDecodableState
+from parseq.grammar import are_equal_trees
+from parseq.states import State, DecodableState, TrainableDecodableState, BeamState
 
 
 class SelectedLoss(q.SelectedLinearLoss):
@@ -32,32 +34,32 @@ def make_loss_array(*lossnames):
     return ret
 
 
-class StateMetric(ABC):
+class Metric(ABC):
     @abstractmethod
-    def forward(self, probs, predactions, x:State) -> Dict:
+    def forward(self, probs, predactions, gold, x:State=None) -> Dict:
         pass
 
-    def __call__(self, probs, predactions, x:State) -> Dict:
-        return self.forward(probs, predactions, x)
+    def __call__(self, probs, predactions, gold, x:State=None) -> Dict:
+        return self.forward(probs, predactions, gold, x)
 
 
-class StateLoss(torch.nn.Module, ABC):
+class Loss(torch.nn.Module, ABC):
     @abstractmethod
-    def forward(self, probs, predactions, x:State)->Dict:
+    def forward(self, probs, predactions, gold, x:State=None)->Dict:
         pass
 
 
-class StateCELoss(StateLoss):
-    def __init__(self, weight=None, reduction="mean", ignore_index=-100, mode="logits", smoothing:float=0., **kw):
-        super(StateCELoss, self).__init__(**kw)
+class CELoss(Loss):
+    def __init__(self, weight=None, reduction="mean", ignore_index=0, mode="logits", smoothing:float=0., **kw):
+        super(CELoss, self).__init__(**kw)
         self.ce = q.CELoss(weight=weight, reduction=reduction, ignore_index=ignore_index, mode=mode)
         if smoothing != 0.:
             assert(smoothing < 1. and smoothing > 0.)
             assert(mode in ["logits", "logprobs"])
             self.ce = q.SmoothedCELoss(reduction=reduction, ignore_index=ignore_index, smoothing=smoothing, mode=mode, weight=weight)
 
-    def forward(self, probs, predactions, x:TrainableDecodableState):   # must be BasicStates
-        golds = x.get_gold()
+    def forward(self, probs, predactions, golds, x:State=None):   # must be BasicStates
+        # golds = x.get_gold()
         if probs.size(1) < golds.size(1):
             extension = torch.ones(probs.size(0), golds.size(1) - probs.size(1), probs.size(2), dtype=probs.dtype, device=probs.device)
             extension /= extension.size(2)  # makes uniform dist
@@ -70,9 +72,9 @@ class StateCELoss(StateLoss):
         return {"loss": loss}
 
 
-class StateSeqAccuracies(StateMetric):
-    def forward(self, probs, predactions, x:TrainableDecodableState):   # must be BasicStates
-        golds = x.get_gold()
+class SeqAccuracies(Metric):
+    def forward(self, probs, predactions, golds, x:State=None):   # must be BasicStates
+        # golds = x.get_gold()
         mask = golds != 0
         if predactions.size(1) < golds.size(1):
             extension = torch.zeros(predactions.size(0), golds.size(1) - predactions.size(1), dtype=predactions.dtype, device=predactions.device)
@@ -87,14 +89,14 @@ class StateSeqAccuracies(StateMetric):
         return ret
 
 
-class StateDerivedAccuracy(StateMetric):
+class DerivedAccuracy(Metric):
     def __init__(self, name:str="derived_acc", tensor2tree:Callable[[torch.Tensor], nltk.Tree]=None, **kw):
-        super(StateDerivedAccuracy, self).__init__(**kw)
+        super(DerivedAccuracy, self).__init__(**kw)
         self.name = name
         self.tensor2tree = tensor2tree
 
-    def forward(self, probs, predactions, x:TrainableDecodableState):
-        golds = x.get_gold()
+    def forward(self, probs, predactions, golds, x:State=None):
+        # golds = x.get_gold()
         gold_trees = [self.tensor2tree(gold) for gold in golds]
         pred_trees = [self.tensor2tree(predactionse) for predactionse in predactions]
         ret = [float(gold_tree == pred_tree) for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
@@ -102,11 +104,51 @@ class StateDerivedAccuracy(StateMetric):
         return ret
 
 
-class BeamSeqAccuracies(StateMetric):
-    def forward(self, probs, predactions, x):
-        golds = x.bstates.get(0).get_gold()
-        for i in range(len(x.bstates._list)):
-            assert(torch.allclose(x.bstates.get(i).get_gold(), golds))
+class TreeAccuracy(Metric):
+    def __init__(self, name:str="tree_acc", tensor2tree:Callable[[torch.Tensor], nltk.Tree]=None, orderless=set(), **kw):
+        super(TreeAccuracy, self).__init__(**kw)
+        self.name = name
+        self.tensor2tree = tensor2tree
+        self.orderless = orderless
+
+    def forward(self, probs, predactions, golds, x:State=None):
+        def compare(_gold_trees, _predactions):
+            pred_trees = [self.tensor2tree(predactionse) for predactionse in _predactions]
+            ret = [float(are_equal_trees(gold_tree, pred_tree, orderless=self.orderless))
+                   for gold_tree, pred_tree in zip(_gold_trees, pred_trees)]
+            return ret
+        if predactions.dim() == 3:      # beam states
+            # assert(isinstance(x, BeamState))
+            # golds = x.bstates.get(0).get_gold()
+            gold_trees = [self.tensor2tree(gold) for gold in golds]
+            rets = []
+            for i in range(predactions.size(1)):
+                ret_i = compare(gold_trees, predactions[:, i])
+                rets.append(ret_i)
+            rets = np.asarray(rets).T
+            acc_cum = np.cumsum(rets, 1)
+            acc_cum = np.clip(acc_cum, 0, 1)
+            r = {}
+            batsize = acc_cum.shape[0]
+            r[self.name] = sum(acc_cum[:, 0]) / batsize
+            for j in range(acc_cum.shape[1]):
+                r[f"{self.name}_at{j+1}"] = sum(acc_cum[:, j]) / batsize
+            r[f"{self.name}_at_last"] = sum(acc_cum[:, -1]) / batsize
+            return r
+        else:
+            assert(predactions.dim() == 2)
+            # golds = x.get_gold()
+            gold_trees = [self.tensor2tree(gold) for gold in golds]
+            ret = compare(gold_trees, predactions)
+            ret = {self.name: sum(ret) / len(ret)}
+            return ret
+
+
+class BeamSeqAccuracies(Metric):
+    def forward(self, probs, predactions, golds, x:State=None):
+        # golds = x.bstates.get(0).get_gold()
+        # for i in range(len(x.bstates._list)):
+        #     assert(torch.allclose(x.bstates.get(i).get_gold(), golds))
         mask = golds != 0
 
         if predactions.size(2) < golds.size(1):

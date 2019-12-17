@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from parseq.states import State, BasicDecoderState
-from parseq.vocab import SentenceEncoder
+from parseq.vocab import SequenceEncoder
 
 
 class Test_State(TestCase):
@@ -134,7 +134,7 @@ class Test_State(TestCase):
 
 class TestBasicDecoderState(TestCase):
     def test_create(self):
-        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        se = SequenceEncoder(tokenizer=lambda x: x.split())
         texts = ["i went to chocolate", "awesome is @PAD@ @PAD@", "the meaning of life"]
         for t in texts:
             se.inc_build_vocab(t)
@@ -150,7 +150,7 @@ class TestBasicDecoderState(TestCase):
 
     def test_decoder_API(self):
         texts = ["i went to chocolate", "awesome is", "the meaning of life"]
-        se = SentenceEncoder(tokenizer=lambda x: x.split())
+        se = SequenceEncoder(tokenizer=lambda x: x.split())
         for t in texts:
             se.inc_build_vocab(t)
         se.finalize_vocab()
