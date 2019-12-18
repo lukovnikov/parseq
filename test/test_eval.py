@@ -69,6 +69,7 @@ class TestTreeAccuracy(TestCase):
 
     def test_beam(self):
         x = ["( and ( got the walk ) ( got the talk ) ( and ( got thatstyle ) ( got thatsmile ) ) )",
+             "( and ( got the walk ) ( got talk the ) ( and ( got thatstyle ) ( got thatsmile ) ) )",
              "( and ( got the walk ) ( got the walk ) ( and ( got thatstyle ) ( got thatsmile ) ) )",
              "( and ( got the talk ) ( got the walk ) ( and ( got thatsmile ) ( got thatstyle ) ) )",
              "( too_bad ( she ( has ( a penis ) ) ) )"]
@@ -85,12 +86,13 @@ class TestTreeAccuracy(TestCase):
         x = torch.tensor(x)
         print(x)
 
-        a = acc(None, x[torch.tensor([1, 3, 2, 0])][None, :, :], x[0:1])
+        a = acc(None, x[torch.tensor([1, 4, 2, 3, 0])][None, :, :], x[0:1])
         print(a)
         self.assertTrue(a["tree_acc"] == 0)
         self.assertTrue(a["tree_acc_at1"] == 0)
         self.assertTrue(a["tree_acc_at2"] == 0)
-        self.assertTrue(a["tree_acc_at3"] == 1)
+        self.assertTrue(a["tree_acc_at3"] == 0)
         self.assertTrue(a["tree_acc_at4"] == 1)
+        self.assertTrue(a["tree_acc_at5"] == 1)
         self.assertTrue(a["tree_acc_at_last"] == 1)
 

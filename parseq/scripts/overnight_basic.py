@@ -617,6 +617,7 @@ def tensor2tree(x, D:Vocab=None):
     x = list(x.detach().cpu().numpy())
     x = [D(xe) for xe in x]
     x = [xe for xe in x if xe != D.padtoken]
+
     # find first @END@ and cut off
     parentheses_balance = 0
     for i in range(len(x)):
@@ -653,7 +654,7 @@ def tensor2tree(x, D:Vocab=None):
 def run(lr=0.001,
         batsize=20,
         epochs=100,
-        embdim=300,
+        embdim=301,
         encdim=200,
         numlayers=1,
         beamsize=5,
@@ -666,11 +667,6 @@ def run(lr=0.001,
         cosine_restarts=1.,
         domain="restaurants",
         ):
-    # DONE: Porter stemmer
-    # DONE: linear attention
-    # DONE: grad norm
-    # DONE: beam search
-    # DONE: lr scheduler
     print(locals())
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
@@ -679,6 +675,8 @@ def run(lr=0.001,
     ds = OvernightDataset(domain=domain, sentence_encoder=SequenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     train_dl = ds.dataloader("train", batsize=batsize)
+    fulltrain_dl = ds.dataloader("train+valid", batsize=batsize)
+    valid_dl = ds.dataloader("valid", batsize=batsize)
     test_dl = ds.dataloader("test", batsize=batsize)
     tt.tock("data loaded")
 
@@ -741,15 +739,15 @@ def run(lr=0.001,
     else:
         reduce_lr = []
 
-    # 6. define training function (using partial)
+    # 6. define training function
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=train_dl, optim=optim, losses=losses,
+    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=fulltrain_dl, optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
     validepoch = partial(q.test_epoch, model=freedecoder, dataloader=test_dl, losses=vlosses, device=device)
-    # validepoch = partial(q.test_epoch, model=tfdecoder, dataloader=test_dl, losses=vlosses, device=device)
+    # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=valid_dl, losses=vlosses, device=device)
 
     # 7. run training
     tt.tick("training")
