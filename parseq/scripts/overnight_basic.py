@@ -26,7 +26,7 @@ from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy,
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings
-from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState
+from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
 from parseq.transitions import TransitionModel, LSTMCellTransition
 from parseq.vocab import SequenceEncoder, Vocab
 
@@ -475,16 +475,49 @@ def try_dataset():
 
 
 class BasicGenModel(TransitionModel):
-    def __init__(self, inp_emb, inp_enc, out_emb, out_rnn:LSTMCellTransition,
-                 out_lin, att, enc_to_dec=None, feedatt=False, nocopy=False, **kw):
+    def __init__(self, embdim, hdim, numlayers:int=1, dropout=0.,
+                 sentence_encoder:SequenceEncoder=None,
+                 query_encoder:SequenceEncoder=None,
+                 feedatt=False, store_attn=True, **kw):
         super(BasicGenModel, self).__init__(**kw)
-        self.inp_emb, self.inp_enc = inp_emb, inp_enc
-        self.out_emb, self.out_rnn, self.out_lin = out_emb, out_rnn, out_lin
-        self.enc_to_dec = enc_to_dec
-        self.att = att
-        # self.ce = q.CELoss(reduction="none", ignore_index=0, mode="probs")
+
+        inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), 300, padding_idx=0)
+        inpemb = TokenEmb(inpemb, adapt_dims=(300, embdim), rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+        _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
+                                                         p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
+        inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
+        self.inp_emb = inpemb
+
+        encoder_dim = hdim
+        encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2] * numlayers), bidir=True, dropout_in=dropout)
+        self.inp_enc = encoder
+
+        decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        decoder_emb = TokenEmb(decoder_emb, rare_token_ids=query_encoder.vocab.rare_ids, rare_id=1)
+        self.out_emb = decoder_emb
+
+        dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
+        decoder_rnn = [torch.nn.LSTMCell(dec_rnn_in_dim, hdim)]
+        for i in range(numlayers - 1):
+            decoder_rnn.append(torch.nn.LSTMCell(hdim, hdim))
+        decoder_rnn = LSTMCellTransition(*decoder_rnn, dropout=dropout)
+        self.out_rnn = decoder_rnn
+
+        decoder_out = PtrGenOutput2(hdim + encoder_dim, out_vocab=query_encoder.vocab)
+        decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
+        self.out_lin = decoder_out
+
+        self.att = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
+
+        self.enc_to_dec = torch.nn.Sequential(
+            torch.nn.Linear(encoder_dim, hdim),
+            torch.nn.Tanh()
+        )
+
         self.feedatt = feedatt
-        self.nocopy = nocopy
+        self.nocopy = True
+
+        self.store_attn = store_attn
 
     def forward(self, x:State):
         if not "mstate" in x:
@@ -531,44 +564,13 @@ class BasicGenModel(TransitionModel):
             outs = self.out_lin(enc, x.inp_tensor, scores)
         outs = (outs,) if not q.issequence(outs) else outs
         # _, preds = outs.max(-1)
+
+        if self.store_attn:
+            if "stored_attentions" not in x:
+                x.stored_attentions = torch.zeros(alphas.size(0), 0, alphas.size(1), device=alphas.device)
+            x.stored_attentions = torch.cat([x.stored_attentions, alphas.detach()[:, None, :]], 1)
+
         return outs[0], x
-
-
-def create_model(embdim=300, hdim=100, dropout=0., numlayers:int=1,
-                 sentence_encoder:SequenceEncoder=None,
-                 query_encoder:SequenceEncoder=None,
-                 feedatt=False, nocopy=False):
-    inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), 300, padding_idx=0)
-    inpemb = TokenEmb(inpemb, adapt_dims=(300, embdim), rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
-    _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D, p="../../data/glove/glove300uncased")     # load glove embeddings where possible into the inner embedding class
-    inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
-    # TODO: use fasttext
-    encoder_dim = hdim
-    encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2]*numlayers), bidir=True, dropout_in=dropout)
-    # encoder = PytorchSeq2SeqWrapper(
-    #     torch.nn.LSTM(embdim, hdim, num_layers=numlayers, bidirectional=True, batch_first=True,
-    #                   dropout=dropout))
-    decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
-    decoder_emb = TokenEmb(decoder_emb, rare_token_ids=query_encoder.vocab.rare_ids, rare_id=1)
-    dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
-    decoder_rnn = [torch.nn.LSTMCell(dec_rnn_in_dim, hdim)]
-    for i in range(numlayers - 1):
-        decoder_rnn.append(torch.nn.LSTMCell(hdim, hdim))
-    decoder_rnn = LSTMCellTransition(*decoder_rnn, dropout=dropout)
-    # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
-    decoder_out = PtrGenOutput2(hdim + encoder_dim, out_vocab=query_encoder.vocab)
-    decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
-    attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
-    enctodec = torch.nn.Sequential(
-        torch.nn.Linear(encoder_dim, hdim),
-        torch.nn.Tanh()
-    )
-    model = BasicGenModel(inpemb, encoder,
-                          decoder_emb, decoder_rnn, decoder_out,
-                          attention,
-                          enc_to_dec=enctodec,
-                          feedatt=feedatt, nocopy=nocopy)
-    return model
 
 
 def do_rare_stats(ds, sentence_rare_tokens=None, query_rare_tokens=None):
@@ -650,10 +652,9 @@ def tensor2tree(x, D:Vocab=None):
     return tree
 
 
-
 def run(lr=0.001,
         batsize=20,
-        epochs=100,
+        epochs=2,
         embdim=301,
         encdim=200,
         numlayers=1,
@@ -667,6 +668,7 @@ def run(lr=0.001,
         cosine_restarts=1.,
         domain="restaurants",
         ):
+    localargs = locals().copy()
     print(locals())
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
@@ -681,13 +683,12 @@ def run(lr=0.001,
     tt.tock("data loaded")
 
     do_rare_stats(ds)
-
     # batch = next(iter(train_dl))
     # print(batch)
     # print("input graph")
     # print(batch.batched_states)
 
-    model = create_model(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
+    model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
 
     sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
@@ -742,17 +743,35 @@ def run(lr=0.001,
     # 6. define training function
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=fulltrain_dl, optim=optim, losses=losses,
+    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=train_dl, optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
-    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=test_dl, losses=vlosses, device=device)
+    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=valid_dl, losses=vlosses, device=device)
     # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=valid_dl, losses=vlosses, device=device)
 
     # 7. run training
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
     tt.tock("done training")
+
+    # testing
+    tt.tick("testing")
+    testresults = q.test_epoch(model=freedecoder, dataloader=test_dl, losses=vlosses, device=device)
+    print(testresults)
+    tt.tock("tested")
+
+    # save model?
+    p = q.save_run(freedecoder, localargs, filepath=__file__)
+    _freedecoder, _localargs = q.load_run(p)
+
+    # testing
+    tt.tick("testing reloaded")
+    _testresults = q.test_epoch(model=_freedecoder, dataloader=test_dl, losses=vlosses, device=device)
+    print(_testresults)
+    assert(testresults == _testresults)
+    tt.tock("tested")
+
 
 
 if __name__ == '__main__':
