@@ -1,4 +1,5 @@
 import re
+from abc import ABC, abstractmethod
 from typing import List
 
 from nltk import Tree, ParentedTree
@@ -13,16 +14,30 @@ def pas_to_str(x):
         return x
 
 
-class LispToPas(object):
+class TreeStrParser(ABC):
     def __init__(self, x:str=None):
-        super(LispToPas, self).__init__()
+        super(TreeStrParser, self).__init__()
         self.stack = [[]]
         self.curstring = None
         self.stringmode = None
         self.prevescape = 0
+        self.next_is_sibling = False
+        self.nameless_func = "@NAMELESS@"
 
         if x is not None:
             self.feed(x)
+
+    @abstractmethod
+    def add_level(self):
+        pass
+
+    @abstractmethod
+    def close_level(self):
+        pass
+
+    @abstractmethod
+    def add_sibling(self, next_token):
+        pass
 
     def feed(self, x:str):
         xsplits = re.split("([\(\)\s'\"])", x)
@@ -41,15 +56,15 @@ class LispToPas(object):
                     self.stringmode = None
                 self.prevescape = max(self.prevescape - 1, 0)
             else:
+                self.next_is_sibling = False
                 next_token = next_token.strip()
                 self.prevescape = False
                 if next_token == "(":
                     # add one level on stack
-                    self.stack.append([])
+                    self.add_level()
                 elif next_token == ")":
                     # close last level on stack, merge into subtree
-                    siblings = self.stack.pop(-1)
-                    self.stack[-1].append((siblings[0], siblings[1:]))
+                    self.close_level()
                 elif next_token == "" or next_token == " ":
                     pass  # do nothing
                 elif next_token == "'":
@@ -58,148 +73,105 @@ class LispToPas(object):
                 elif next_token == '"':
                     self.curstring = next_token
                     self.stringmode = '"'
+                elif next_token == ",":
+                    self.next_is_sibling = True
                 else:
-                    self.stack[-1].append(next_token)
+                    self.add_sibling(next_token)
         if len(self.stack) != 1 or len(self.stack[-1]) != 1:
             return None
         else:
             return self.stack[-1][-1]
 
 
-def lisp_to_pas(x:str, self:LispToPas=None):
+class PrologToPas(TreeStrParser):
+
+    def add_level(self):
+        if self.next_is_sibling:
+            self.stack[-1].append(self.nameless_func)
+        self.stack.append([])
+
+    def close_level(self):
+        siblings = self.stack.pop(-1)
+        # self.stack[-1].append((siblings[0], siblings[1:]))
+        self.stack[-1][-1] = (self.stack[-1][-1], siblings)
+
+    def add_sibling(self, next_token):
+        self.stack[-1].append(next_token)
+
+
+class PrologToTree(TreeStrParser):
+    def add_level(self):
+        self.stack.append([])
+
+    def close_level(self):
+        siblings = self.stack.pop(-1)
+        self.stack[-1].extend(siblings)
+
+    def add_sibling(self, next_token):
+        self.stack[-1].append(Tree(next_token, []))
+
+
+class LispToPas(TreeStrParser):
+    def add_level(self):
+        self.stack.append([])
+
+    def close_level(self):
+        siblings = self.stack.pop(-1)
+        self.stack[-1].append((siblings[0], siblings[1:]))
+
+    def add_sibling(self, next_token):
+        self.stack[-1].append(next_token)
+
+
+class LispToTree(TreeStrParser):
+    def add_level(self):
+        self.stack.append([])
+
+    def close_level(self):
+        siblings = self.stack.pop(-1)
+        assert (len(siblings[0]) == 0)
+        siblings[0].extend(siblings[1:])
+        self.stack[-1].append(siblings[0])
+
+    def add_sibling(self, next_token):
+        self.stack[-1].append(Tree(next_token, []))
+
+
+def _inc_convert_treestr(x, cls, self=-1):
     """
     :param x: lisp-style string
     strings must be surrounded by single quotes (') and may not contain anything but single quotes
     :return:
     """
-    if self is not None:
+    if isinstance(self, cls):
         ret = self.feed(x)
         return ret, self
     else:
-        self = LispToPas(x) if self is None else self
-        ret = self.feed("")
-        if ret is None:
-            return None, self
-        else:
-            return ret
-
-
-class LispToTree(object):
-    def __init__(self, x:str=None):
-        super(LispToTree, self).__init__()
-        self.stack = [[]]
-        self.curstring = None
-        self.stringmode = None
-        self.prevescape = 0
-
-        if x is not None:
-            self.feed(x)
-
-    def feed(self, x:str):
-        xsplits = re.split("([\(\)\s'\"])", x)
-        queue = list(xsplits)
-        while len(queue) > 0:
-            next_token = queue.pop(0)
-            if self.curstring is not None:
-                if next_token == "\\":
-                    self.prevescape = 2
-                elif next_token == "":
-                    continue
-                self.curstring += next_token
-                if self.curstring[-1] == self.stringmode and self.prevescape == 0:  # closing string
-                    self.stack[-1].append(self.curstring)
-                    self.curstring = None
-                    self.stringmode = None
-                self.prevescape = max(self.prevescape - 1, 0)
-            else:
-                next_token = next_token.strip()
-                self.prevescape = False
-                if next_token == "(":
-                    # add one level on stack
-                    self.stack.append([])
-                elif next_token == ")":
-                    # close last level on stack, merge into subtree
-                    siblings = self.stack.pop(-1)
-                    assert(len(siblings[0]) == 0)
-                    siblings[0].extend(siblings[1:])
-                    self.stack[-1].append(siblings[0])
-                elif next_token == "" or next_token == " ":
-                    pass  # do nothing
-                elif next_token == "'":
-                    self.curstring = next_token
-                    self.stringmode = "'"
-                elif next_token == '"':
-                    self.curstring = next_token
-                    self.stringmode = '"'
-                else:
-                    self.stack[-1].append(Tree(next_token, []))
-        if len(self.stack) != 1 or len(self.stack[-1]) != 1:
-            return None
-        else:
-            return self.stack[-1][-1]
-
-
-def lisp_to_tree(x:str, self:LispToTree=None):
-    """
-    :param x: lisp-style string
-    strings must be surrounded by single quotes (') and may not contain anything but single quotes
-    :return:
-    """
-    if isinstance(self, LispToTree):
-        ret = self.feed(x)
-        return ret, self
-    else:
-        _self = LispToTree(x) if not isinstance(self, LispToTree) else self
+        _self = cls(x) if not isinstance(self, cls) else self
         ret = _self.feed("")
-        if ret is None or self == "empty":
-            return ret, self
+        if ret is None:
+            return None, _self
         else:
-            return ret
-
-
-def prolog_to_pas(x:str):
-    """
-    :param x:   query in functional format "wife(president(US))"
-    strings in query must be surrounded by single quotes (') and may NOT contain single quotes
-    :return:
-    """
-    nameless_func = "@NAMELESS@"
-    tokens = re.split("([\(\),'])", x)
-
-    stack = [[]]
-    curstring = None
-    next_is_sibling = False
-    for _token in tokens:
-        if curstring is not None:
-            curstring += _token
-            if curstring[-1] == "'":   # closing string
-                stack[-1].append(curstring)
-                curstring = None
-        else:
-            token = _token.strip()
-            if token == "(":  # open new frame on stack
-                if next_is_sibling:
-                    stack[-1].append(nameless_func)
-                stack.append([])
-                next_is_sibling = False
-            elif token == ")":  # close last frame on stack
-                popped = stack.pop(-1)
-                stack[-1][-1] = (stack[-1][-1], popped)
-                next_is_sibling = False
-            elif token == ",":  # add sibling
-                next_is_sibling = True
-            elif token == "" or token == " ":
-                pass
-            elif token == "'":
-                curstring = token
-                next_is_sibling = False
+            if self is None:
+                return ret, _self
             else:
-                stack[-1].append(token)
-                next_is_sibling = False
+                return ret
 
-    assert (len(stack) == 1)  # if everything parsed correctly, only one tree left on stack
-    assert (len(stack[-1]) == 1)
-    return stack[-1][-1]
+
+def lisp_to_pas(x:str, self:LispToPas=-1):
+    return _inc_convert_treestr(x, LispToPas, self=self)
+
+
+def prolog_to_pas(x:str, self:PrologToPas=-1):
+    return _inc_convert_treestr(x, PrologToPas, self=self)
+
+
+def lisp_to_tree(x:str, self:LispToTree=-1):
+    return _inc_convert_treestr(x, LispToTree, self=self)
+
+
+def prolog_to_tree(x: str, self:PrologToTree = -1):
+    return _inc_convert_treestr(x, PrologToTree, self=self)
 
 
 def pas_to_lisp(x):

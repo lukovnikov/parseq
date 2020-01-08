@@ -128,20 +128,16 @@ def try_basic_query_tokenizer():
     # print(y)
 
 
-class OvernightDataset(object):
+class LCQuaDnoENTDataset(object):
     def __init__(self,
-                 p="../../datasets/overnightData/",
-                 pcache="../../datasets/overnightCache/",
-                 domain:str="restaurants",
+                 p="../../datasets/lcquad/",
                  sentence_encoder:SequenceEncoder=None,
-                 usecache=True,
-                 min_freq:int=2, **kw):
-        super(OvernightDataset, self).__init__(**kw)
+                 min_freq:int=2,
+                 splits=None, **kw):
+        super(LCQuaDnoENTDataset, self).__init__(**kw)
         self._simplify_filters = True        # if True, filter expressions are converted to orderless and-expressions
-        self._pcache = pcache if usecache else None
-        self._domain = domain
-        self._usecache = usecache
-        self._initialize(p, domain, sentence_encoder, min_freq)
+        self._initialize(p, sentence_encoder, min_freq)
+        self.splits_proportions = splits
 
     def lines_to_examples(self, lines:List[str]):
         maxsize_before = 0
@@ -150,225 +146,64 @@ class OvernightDataset(object):
         avgsize_after = []
         afterstring = set()
 
-        def simplify_tree(t:Tree):
-            if t.label() == "call":
-                assert(len(t[0]) == 0)
-                # if not t[0].label().startswith("SW."):
-                #     print(t)
-                # assert(t[0].label().startswith("SW."))
-                t.set_label(t[0].label())
-                del t[0]
-            elif t.label() == "string":
-                afterstring.update(set([tc.label() for tc in t]))
-                assert(len(t) == 1)
-                assert(len(t[0]) == 0)
-                t.set_label(f"arg:{t[0].label()}")
-                del t[0]
-            if t.label().startswith("edu.stanford.nlp.sempre.overnight.SimpleWorld."):
-                t.set_label("SW:" + t.label()[len("edu.stanford.nlp.sempre.overnight.SimpleWorld."):])
-            if t.label() == "SW:getProperty":
-                assert(len(t) == 2)
-                ret = simplify_tree(t[1])
-                ret.append(simplify_tree(t[0]))
-                return ret
-            elif t.label() == "SW:singleton":
-                assert(len(t) == 1)
-                assert(len(t[0]) == 0)
-                return t[0]
-            elif t.label() == "SW:ensureNumericProperty":
-                assert(len(t) == 1)
-                return simplify_tree(t[0])
-            elif t.label() == "SW:ensureNumericEntity":
-                assert(len(t) == 1)
-                return simplify_tree(t[0])
-            elif t.label() == "SW:aggregate":
-                assert(len(t) == 2)
-                ret = simplify_tree(t[0])
-                assert(ret.label() in ["arg:avg", "arg:sum"])
-                assert(len(ret) == 0)
-                ret.set_label(f"agg:{ret.label()}")
-                ret.append(simplify_tree(t[1]))
-                return ret
-            else:
-                t[:] = [simplify_tree(tc) for tc in t]
-                return t
-
-        def simplify_further(t):
-            """ simplifies filters and count expressions """
-            # replace filters with ands
-            if t.label() == "SW:filter" and self._simplify_filters is True:
-                if len(t) not in (2, 4):
-                    raise Exception(f"filter expression should have 2 or 4 children, got {len(children)}")
-                children = [simplify_further(tc) for tc in t]
-                startset = children[0]
-                if len(children) == 2:
-                    condition = Tree("cond:has", [children[1]])
-                elif len(children) == 4:
-                    condition = Tree(f"cond:{children[2].label()}", [children[1], children[3]])
-                conditions = [condition]
-                if startset.label() == "op:and":
-                    conditions = startset[:] + conditions
-                else:
-                    conditions = [startset] + conditions
-                # check for same conditions:
-                i = 0
-                while i < len(conditions) - 1:
-                    j = i + 1
-                    while j < len(conditions):
-                        if conditions[i] == conditions[j]:
-                            print(f"SAME!: {conditions[i]}, {conditions[j]}")
-                            del conditions[j]
-                            j -= 1
-                        j += 1
-                    i += 1
-
-                ret = Tree(f"op:and", conditions)
-                return ret
-            # replace countSuperlatives with specific ones
-            elif t.label() == "SW:countSuperlative":
-                assert(t[1].label() in ["arg:max", "arg:min"])
-                t.set_label(f"SW:CNT-{t[1].label()}")
-                del t[1]
-                t[:] = [simplify_further(tc) for tc in t]
-            elif t.label() == "SW:countComparative":
-                assert(t[2].label() in ["arg:<", "arg:<=", "arg:>", "arg:>=", "arg:=", "arg:!="])
-                t.set_label(f"SW:CNT-{t[2].label()}")
-                del t[2]
-                t[:] = [simplify_further(tc) for tc in t]
-            else:
-                t[:] = [simplify_further(tc) for tc in t]
-            return t
-
-        def simplify_furthermore(t):
-            """ replace reverse rels"""
-            if t.label() == "arg:!type":
-                t.set_label("arg:~type")
-                return t
-            elif t.label() == "SW:reverse":
-                assert(len(t) == 1)
-                assert(t[0].label().startswith("arg:"))
-                assert(len(t[0]) == 0)
-                t.set_label(f"arg:~{t[0].label()[4:]}")
-                del t[0]
-                return t
-            elif t.label().startswith("cond:arg:"):
-                assert(len(t) == 2)
-                head = t[0]
-                head = simplify_furthermore(head)
-                assert(head.label().startswith("arg:"))
-                assert(len(head) == 0)
-                headlabel = f"arg:~{head.label()[4:]}"
-                headlabel = headlabel.replace("~~", "")
-                head.set_label(headlabel)
-                body = simplify_furthermore(t[1])
-                if t.label()[len("cond:arg:"):] != "=":
-                    body = Tree(t.label()[5:], [body])
-                head.append(body)
-                return head
-            else:
-                t[:] = [simplify_furthermore(tc) for tc in t]
-                return t
-
-        def simplify_final(t):
-            assert(t.label() == "SW:listValue")
-            assert(len(t) == 1)
-            return t[0]
+        def convert_to_lispstr(_x):
+            splits = _x.split()
+            assert(sum([1 if xe == "~" else 0 for xe in splits]) == 1)
+            assert(splits[1] == "~")
+            splits = ["," if xe == "&" else xe for xe in splits]
+            pstr = f"{splits[0]} ({' '.join(splits[2:])})"
+            return pstr
 
         ret = []
         ltp = None
         j = 0
         for i, line in enumerate(lines):
-            z, ltp = lisp_to_pas(line, ltp)
+            question = line["question"]
+            query = line["logical_form"]
+            query = convert_to_lispstr(query)
+            z, ltp = prolog_to_pas(query, ltp)
             if z is not None:
-                print(f"Example {j}:")
-                ztree = pas_to_tree(z[1][2][1][0])
+                ztree = pas_to_tree(z)
                 maxsize_before = max(maxsize_before, tree_size(ztree))
                 avgsize_before.append(tree_size(ztree))
-                lf = simplify_tree(ztree)
-                lf = simplify_further(lf)
-                lf = simplify_furthermore(lf)
-                lf = simplify_final(lf)
-                question = z[1][0][1][0]
-                assert(question[0] == '"' and question[-1] == '"')
-                ret.append((question[1:-1], lf))
-                print(ret[-1][0])
-                print(ret[-1][1])
+                lf = ztree
+                ret.append((question, lf))
+                # print(f"Example {j}:")
+                # print(ret[-1][0])
+                # print(ret[-1][1])
+                # print()
                 ltp = None
                 maxsize_after = max(maxsize_after, tree_size(lf))
                 avgsize_after.append(tree_size(lf))
-
-                print(pas_to_tree(z[1][2][1][0]))
-                print()
                 j += 1
 
         avgsize_before = sum(avgsize_before) / len(avgsize_before)
         avgsize_after = sum(avgsize_after) / len(avgsize_after)
 
-        print("Simplification results ({j} examples):")
-        print(f"\t Max, Avg size before: {maxsize_before}, {avgsize_before}")
-        print(f"\t Max, Avg size after: {maxsize_after}, {avgsize_after}")
+        print("Sizes ({j} examples):")
+        # print(f"\t Max, Avg size before: {maxsize_before}, {avgsize_before}")
+        print(f"\t Max, Avg size: {maxsize_after}, {avgsize_after}")
 
         return ret
 
-    def _load_cached(self):
-        train_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.train.json"), "r"))
-        trainexamples = [(x, Tree.fromstring(y)) for x, y in train_cached]
-        test_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.test.json"), "r"))
-        testexamples = [(x, Tree.fromstring(y)) for x, y in test_cached]
-        print("loaded from cache")
-        return trainexamples, testexamples
-
-    def _cache(self, trainexamples:List[Tuple[str, Tree]], testexamples:List[Tuple[str, Tree]]):
-        train_cached, test_cached = None, None
-        if os.path.exists(os.path.join(self._pcache, f"{self._domain}.train.json")):
-            try:
-                train_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.train.json"), "r"))
-                test_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.test.json"), "r"))
-            except (IOError, ValueError) as e:
-                pass
-        trainexamples = [(x, str(y)) for x, y in trainexamples]
-        testexamples = [(x, str(y)) for x, y in testexamples]
-
-        if train_cached != trainexamples:
-            with open(os.path.join(self._pcache, f"{self._domain}.train.json"), "w") as f:
-                ujson.dump(trainexamples, f, indent=4, sort_keys=True)
-        if test_cached != testexamples:
-            with open(os.path.join(self._pcache, f"{self._domain}.test.json"), "w") as f:
-                ujson.dump(testexamples, f, indent=4, sort_keys=True)
-        print("saved in cache")
-
-    def _initialize(self, p, domain, sentence_encoder:SequenceEncoder, min_freq:int):
+    def _initialize(self, p, sentence_encoder:SequenceEncoder, min_freq:int):
         self.data = {}
         self.sentence_encoder = sentence_encoder
 
-        trainexamples, testexamples = None, None
-        if self._usecache:
-            try:
-                trainexamples, testexamples = self._load_cached()
-            except (IOError, ValueError) as e:
-                pass
+        jp = os.path.join(p, "lcquad_dataset.json")
+        with open(jp, "r") as f:
+            examples = ujson.load(f)
 
-        if trainexamples is None:
+        examples = self.lines_to_examples(examples)
 
-            trainlines = [x.strip() for x in
-                         open(os.path.join(p, f"{domain}.paraphrases.train.examples"), "r").readlines()]
-            testlines = [x.strip() for x in
-                        open(os.path.join(p, f"{domain}.paraphrases.test.examples"), "r").readlines()]
-
-            trainexamples = self.lines_to_examples(trainlines)
-            testexamples = self.lines_to_examples(testlines)
-
-            if self._usecache:
-                self._cache(trainexamples, testexamples)
-
-        questions, queries = tuple(zip(*(trainexamples + testexamples)))
-        trainlen = int(round(0.8 * len(trainexamples)))
-        validlen = int(round(0.2 * len(trainexamples)))
-        splits = ["train"] * trainlen + ["valid"] * validlen
-        # random.seed(1223)
+        questions, queries = tuple(zip(*examples))
+        trainlen = int(round(0.8 * len(examples)))
+        validlen = int(round(0.1 * len(examples)))
+        testlen = int(round(0.1 * len(examples)))
+        splits = ["train"] * trainlen + ["valid"] * validlen + ["test"] * testlen
+        random.seed(42)
         random.shuffle(splits)
-        assert(len(splits) == len(trainexamples))
-        splits = splits + ["test"] * len(testexamples)
+        assert(len(splits) == len(examples))
 
         self.query_encoder = SequenceEncoder(tokenizer=partial(tree_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
 
@@ -429,7 +264,7 @@ class OvernightDataset(object):
             return ret
         else:
             dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split in ("train", "train+valid"),
-             collate_fn=OvernightDataset.collate_fn)
+             collate_fn=type(self).collate_fn)
             return dl
 
 
@@ -448,7 +283,7 @@ class DatasetSplitProxy(object):
 def try_dataset():
     tt = q.ticktock("dataset")
     tt.tick("building dataset")
-    ds = OvernightDataset(sentence_encoder=SequenceEncoder(tokenizer=lambda x: x.split()))
+    ds = LCQuaDnoENTDataset(sentence_encoder=SequenceEncoder(tokenizer=lambda x: x.split()), splits=(80, 10, 10))
     train_dl = ds.dataloader("train+valid", batsize=20)
     test_dl = ds.dataloader("test", batsize=20)
     examples = set()
@@ -459,7 +294,7 @@ def try_dataset():
     testduplicates = []
     for b in train_dl:
         for i in range(len(b)):
-            example = b.inp_strings[i] + " --> " + b.gold_strings[i]
+            example = b.inp_strings[i] + " --> " + str(b.gold_trees[i])
             if example in examples:
                 duplicates.append(example)
             examples.add(example)
@@ -467,7 +302,7 @@ def try_dataset():
             # print(example)
     for b in test_dl:
         for i in range(len(b)):
-            example = b.inp_strings[i] + " --> " + b.gold_strings[i]
+            example = b.inp_strings[i] + " --> " + str(b.gold_trees[i])
             if example in examples:
                 testduplicates.append(example)
             testexamples.add(example)
@@ -489,9 +324,9 @@ class BasicGenModel(TransitionModel):
 
         inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), 300, padding_idx=0)
         inpemb = TokenEmb(inpemb, adapt_dims=(300, embdim), rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
-        _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
-                                                         p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
-        inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
+        # _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
+        #                                                  p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
+        # inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
         self.inp_emb = inpemb
 
         encoder_dim = hdim
@@ -659,16 +494,16 @@ def tensor2tree(x, D:Vocab=None):
 
 
 def split_tokenizer(x):
-    return x.split()
+    return x.lower().split()
 
 
 def run(lr=0.001,
-        batsize=20,
+        batsize=50,
         epochs=1,
-        embdim=301,
-        encdim=200,
+        embdim=101,
+        encdim=100,
         numlayers=1,
-        beamsize=5,
+        beamsize=1,
         dropout=.2,
         wreg=1e-10,
         cuda=False,
@@ -683,7 +518,7 @@ def run(lr=0.001,
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
-    ds = OvernightDataset(domain=domain, sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq)
+    ds = LCQuaDnoENTDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
@@ -696,17 +531,17 @@ def run(lr=0.001,
     model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
 
-    sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
-    do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
+    # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
+    # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
 
     tfdecoder = SeqDecoder(TFTransition(model),
                            [CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"op:and", "SW:concat"})])
+                                                          orderless={"select", "count", "ask"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
                               eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                 orderless={"op:and", "SW:concat"})])
+                                                 orderless={"select", "count", "ask"})])
 
     # # test
     # tt.tick("doing one epoch")
