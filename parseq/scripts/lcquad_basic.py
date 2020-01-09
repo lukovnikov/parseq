@@ -322,8 +322,9 @@ class BasicGenModel(TransitionModel):
                  feedatt=False, store_attn=True, **kw):
         super(BasicGenModel, self).__init__(**kw)
 
-        inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), 300, padding_idx=0)
-        inpemb = TokenEmb(inpemb, adapt_dims=(300, embdim), rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+        inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+        inpemb._do_rare(inpemb.rare_token_ids)
         # _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
         #                                                  p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
         # inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
