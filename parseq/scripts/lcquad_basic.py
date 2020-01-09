@@ -349,7 +349,7 @@ class BasicGenModel(TransitionModel):
         # decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
         self.out_lin = decoder_out
 
-        self.att = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
+        self.att = q.Attention(q.DotAttComp(hdim, encoder_dim))
 
         self.enc_to_dec = torch.nn.Sequential(
             torch.nn.Linear(encoder_dim, hdim),
