@@ -517,7 +517,6 @@ def run(lr=0.001,
         minfreq=2,
         gradnorm=3.,
         cosine_restarts=1.,
-        domain="restaurants",
         ):
     localargs = locals().copy()
     print(locals())
@@ -584,7 +583,7 @@ def run(lr=0.001,
 
     # 4. define optim
     # optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
-    optim = torch.optim.SGD(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
+    optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
 
     # lr schedule
     if cosine_restarts >= 0:
