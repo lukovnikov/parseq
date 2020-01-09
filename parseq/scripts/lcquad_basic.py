@@ -573,7 +573,7 @@ def run(lr=0.001,
 
     trainable_params = tfdecoder.named_parameters()
     exclude_params = set()
-    exclude_params.add("model.model.inp_emb.emb.weight")   # don't train input embeddings if doing glove
+    # exclude_params.add("model.model.inp_emb.emb.weight")   # don't train input embeddings if doing glove
     trainable_params = [v for k, v in trainable_params if k not in exclude_params]
 
     # 4. define optim
