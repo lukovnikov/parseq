@@ -593,7 +593,7 @@ def run(lr=0.001,
     # 6. define training function
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader("test", batsize), optim=optim, losses=losses,
+    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader("train", batsize), optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
