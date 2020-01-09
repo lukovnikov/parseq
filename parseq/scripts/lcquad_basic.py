@@ -545,7 +545,7 @@ def run(lr=0.001,
                                                           orderless={"select", "count", "ask"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
-                              eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                              eval_beam=[SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                  orderless={"select", "count", "ask"})])
 
     # # test
@@ -565,7 +565,10 @@ def run(lr=0.001,
     # print(dict(tfdecoder.named_parameters()).keys())
 
     losses = make_loss_array("loss", "seq_acc", "tree_acc")
-    vlosses = make_loss_array("tree_acc", "tree_acc_at3", "tree_acc_at_last")
+    if beamsize >= 3:
+        vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at3", "tree_acc_at_last")
+    else:
+        vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     trainable_params = tfdecoder.named_parameters()
     exclude_params = set()
