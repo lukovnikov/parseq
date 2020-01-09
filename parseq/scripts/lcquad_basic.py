@@ -565,7 +565,7 @@ def run(lr=0.001,
 
     # print(dict(tfdecoder.named_parameters()).keys())
 
-    losses = make_loss_array("loss", "seq_acc", "tree_acc")
+    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
     if beamsize >= 3:
         vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at3", "tree_acc_at_last")
     else:
