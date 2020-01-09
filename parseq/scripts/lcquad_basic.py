@@ -506,7 +506,7 @@ def split_tokenizer(x):
 def run(lr=0.001,
         batsize=50,
         epochs=50,
-        embdim=101,
+        embdim=100,
         encdim=100,
         numlayers=1,
         beamsize=1,
@@ -545,10 +545,14 @@ def run(lr=0.001,
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"select", "count", "ask"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
-                              eval=[SeqAccuracies()],
-                              eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                 orderless={"select", "count", "ask"})])
+    freedecoder = SeqDecoder(FreerunningTransition(model, maxtime=40),
+                             eval=[SeqAccuracies(),
+                                   TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                orderless={"select", "count", "ask"})])
+    # freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
+    #                           eval=[SeqAccuracies()],
+    #                           eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+    #                                              orderless={"select", "count", "ask"})])
 
     # # test
     # tt.tick("doing one epoch")
@@ -567,19 +571,20 @@ def run(lr=0.001,
     # print(dict(tfdecoder.named_parameters()).keys())
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
-    if beamsize >= 3:
-        vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at3", "tree_acc_at_last")
-    else:
-        vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
+    vlosses = make_loss_array("seq_acc", "tree_acc")
+    # if beamsize >= 3:
+    #     vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at3", "tree_acc_at_last")
+    # else:
+    #     vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
-    trainable_params = tfdecoder.named_parameters()
-    exclude_params = set()
+    # trainable_params = tfdecoder.named_parameters()
+    # exclude_params = set()
     # exclude_params.add("model.model.inp_emb.emb.weight")   # don't train input embeddings if doing glove
-    trainable_params = [v for k, v in trainable_params if k not in exclude_params]
+    # trainable_params = [v for k, v in trainable_params if k not in exclude_params]
 
     # 4. define optim
-    optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
-    # optim = torch.optim.SGD(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
+    # optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
+    optim = torch.optim.SGD(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
 
     # lr schedule
     if cosine_restarts >= 0:
