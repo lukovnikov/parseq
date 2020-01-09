@@ -487,7 +487,7 @@ def tensor2tree(x, D:Vocab=None):
 
     # convert to nltk.Tree
     try:
-        tree, parsestate = lisp_to_tree(" ".join(x), "empty")
+        tree, parsestate = lisp_to_tree(" ".join(x), None)
     except Exception as e:
         tree = None
     return tree
