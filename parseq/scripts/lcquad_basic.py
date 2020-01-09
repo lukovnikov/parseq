@@ -494,12 +494,17 @@ def tensor2tree(x, D:Vocab=None):
 
 
 def split_tokenizer(x):
+    x = x.replace("?", " ?"). \
+        replace(".", " ."). \
+        replace(",", " ,"). \
+        replace("'", " '")
+    x = re.sub("\s+", " ", x)
     return x.lower().split()
 
 
 def run(lr=0.001,
         batsize=50,
-        epochs=1,
+        epochs=50,
         embdim=101,
         encdim=100,
         numlayers=1,
