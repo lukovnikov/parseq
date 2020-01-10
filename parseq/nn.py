@@ -8,6 +8,7 @@ import numpy as np
 
 from parseq.states import State
 from parseq.vocab import Vocab
+import qelos as q
 
 
 class TokenEmb(torch.nn.Module):
@@ -71,6 +72,70 @@ def load_pretrained_embeddings(emb, D, p="../data/glove/glove300uncased"):
     emb.weight.data = emb.weight.data * (1-selectmask[:, None]) + subW * selectmask[:, None]        # masked set or something else?
     print("done")
     return covered_words, covered_word_ids
+
+
+class _Encoder(torch.nn.Module):
+    def __init__(self, embdim, hdim, num_layers=1, dropout=0., bidirectional=True, **kw):
+        super(_Encoder, self).__init__(**kw)
+        self.embdim, self.hdim, self.numlayers, self.bidir, self.dropoutp = embdim, hdim, num_layers, bidirectional, dropout
+        self.dropout = torch.nn.Dropout(dropout)
+        self.create_rnn()
+
+    def forward(self, x, mask=None):
+        x = self.dropout(x)
+
+        if mask is not None:
+            _x = torch.nn.utils.rnn.pack_padded_sequence(x, mask.sum(-1), batch_first=True, enforce_sorted=False)
+        else:
+            _x = x
+
+        _outputs, hidden = self.rnn(_x)
+
+        if mask is not None:
+            y, _ = torch.nn.utils.rnn.pad_packed_sequence(_outputs, batch_first=True)
+        else:
+            y = _outputs
+
+        hidden = (hidden,) if not q.issequence(hidden) else hidden
+        hiddens = []
+        for _hidden in hidden:
+            i = 0
+            _hiddens = tuple()
+            while i < _hidden.size(0):
+                if self.bidir is True:
+                    _h = torch.cat([_hidden[i], _hidden[i+1]], -1)
+                    i += 2
+                else:
+                    _h = _hidden[i]
+                    i += 1
+                _hiddens = _hiddens + (_h,)
+            hiddens.append(_hiddens)
+        hiddens = tuple(zip(*hiddens))
+        return y, hiddens
+
+
+class GRUEncoder(_Encoder):
+    def create_rnn(self):
+        self.rnn = torch.nn.GRU(self.embdim, self.hdim, self.numlayers,
+                                bias=True, batch_first=True, dropout=self.dropoutp, bidirectional=self.bidir)
+        self.init_params()
+
+    def init_params(self):
+        for name, param in self.rnn.named_parameters():
+            if 'weight' in name or 'bias' in name:
+                param.data.uniform_(-0.1, 0.1)
+
+
+class LSTMEncoder(_Encoder):
+    def create_rnn(self):
+        self.rnn = torch.nn.LSTM(self.embdim, self.hdim, self.numlayers,
+                                bias=True, batch_first=True, dropout=self.dropoutp, bidirectional=self.bidir)
+        self.init_params()
+
+    def init_params(self):
+        for name, param in self.rnn.named_parameters():
+            if 'weight' in name or 'bias' in name:
+                param.data.uniform_(-0.1, 0.1)
 
 
 class BasicGenOutput(torch.nn.Module):

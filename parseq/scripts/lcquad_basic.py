@@ -28,7 +28,7 @@ from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, Bea
 from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree
-from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings
+from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder
 from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
 from parseq.transitions import TransitionModel, LSTMCellTransition
 from parseq.vocab import SequenceEncoder, Vocab
@@ -331,7 +331,8 @@ class BasicGenModel(TransitionModel):
         self.inp_emb = inpemb
 
         encoder_dim = hdim
-        encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2] * numlayers), bidir=True, dropout_in=dropout)
+        encoder = GRUEncoder(embdim, encoder_dim//2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        # encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2] * numlayers), bidir=True, dropout_in=dropout)
         self.inp_enc = encoder
 
         decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
@@ -371,8 +372,8 @@ class BasicGenModel(TransitionModel):
             mask = inptensor != 0
             inpembs = self.inp_emb(inptensor)
             # inpembs = self.dropout(inpembs)
-            inpenc, final_enc = self.inp_enc(inpembs, mask)
-            final_enc = final_enc.view(final_enc.size(0), -1).contiguous()
+            inpenc, final_encs = self.inp_enc(inpembs, mask)
+            final_enc = final_encs[-1][0].view(final_encs[-1][0].size(0), -1).contiguous()
             final_enc = self.enc_to_dec(final_enc)
             mstate.ctx = inpenc
             mstate.ctx_mask = mask
