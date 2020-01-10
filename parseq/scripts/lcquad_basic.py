@@ -513,8 +513,7 @@ def create_basic_model(inpvocab, outvocab, embdim, hdim, num_layers, dropout, ma
     inpemb = TokenEmb(inpemb, rare_token_ids=inpvocab.rare_ids, rare_id=1)
     encoder = GRUEncoder(embdim, hdim, num_layers=num_layers, dropout=dropout)
     enc = parseq.rnn1.Encoder(inpemb, encoder, hdim*2, hdim, dropout=dropout)
-    decoder_out = BasicGenOutput(hdim + hdim*2, vocab=outvocab)
-    dec = parseq.rnn1.Decoder(decoder_out, outvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout, max_positions=maxtime)
+    dec = parseq.rnn1.Decoder(outvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout, max_positions=maxtime)
     encdec = parseq.rnn1.Seq2Seq(enc, dec, "wtf")
     return encdec
 
@@ -551,10 +550,10 @@ def run(lr=0.001,
 
     model = create_basic_model(ds.sentence_encoder.vocab, ds.query_encoder.vocab, embdim, encdim, num_layers=numlayers, dropout=dropout, maxtime=50)
     inpvocab, outvocab = ds.sentence_encoder.vocab, ds.query_encoder.vocab
-    tfdecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logprobs"),
+    tfdecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
                                                     SeqAccuracies()],
                                        mode="tf", out_vocab=outvocab)
-    freedecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logprobs"),
+    freedecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
                                                     SeqAccuracies()],
                                        mode="tf", out_vocab=outvocab)
     tfdecoder = tfdecoder.to(device)
