@@ -31,7 +31,7 @@ from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tre
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
     LSTMEncoder
 from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
-from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition
+from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition, GRUTransition
 from parseq.vocab import SequenceEncoder, Vocab
 
 
@@ -331,7 +331,7 @@ class BasicGenModel(TransitionModel):
         self.inp_emb = inpemb
 
         encoder_dim = hdim * 2
-        encoder = LSTMEncoder(embdim, hdim, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        encoder = GRUEncoder(embdim, hdim, num_layers=numlayers, dropout=dropout, bidirectional=True)
         # encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2] * numlayers), bidir=True, dropout_in=dropout)
         self.inp_enc = encoder
 
@@ -339,7 +339,7 @@ class BasicGenModel(TransitionModel):
         self.out_emb = decoder_emb
 
         dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
-        decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
+        decoder_rnn = GRUTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
         self.out_rnn = decoder_rnn
 
         decoder_out = BasicGenOutput(hdim + encoder_dim, vocab=query_encoder.vocab)
@@ -402,7 +402,7 @@ class BasicGenModel(TransitionModel):
             init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
             # uncomment next line to initialize decoder state with last state of encoder
             # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
-            if len(init_states) == init_rnn_state.c.size(1):
+            if len(init_states) == init_rnn_state.h.size(1):
                 init_rnn_state.h = torch.stack(init_states, 1).contiguous()
             mstate.rnnstate = init_rnn_state
 
