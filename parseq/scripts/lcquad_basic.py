@@ -358,6 +358,23 @@ class BasicGenModel(TransitionModel):
 
         self.store_attn = store_attn
 
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        def _param_reset(m):
+            if type(m) == torch.nn.Linear:
+                torch.nn.init.uniform_(m.weight, -0.1, 0.1)
+                if m.bias is not None:
+                    torch.nn.init.uniform_(m.bias, -0.1, 0.1)
+            elif type(m) in (torch.nn.LSTM, torch.nn.GRU):
+                for name, param in m.named_parameters():
+                    if "weight" in name or "bias" in name:
+                        torch.nn.init.uniform_(param, -0.1, 0.1)
+            elif type(m) == torch.nn.Embedding:
+                torch.nn.init.uniform_(m.weight, -0.1, 0.1)
+                torch.nn.init.constant_(m.weight[0], 0)
+        self.apply(_param_reset)
+
     def forward(self, x:State):
         if not "mstate" in x:
             x.mstate = State()
@@ -386,7 +403,7 @@ class BasicGenModel(TransitionModel):
             # uncomment next line to initialize decoder state with last state of encoder
             # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
             if len(init_states) == init_rnn_state.c.size(1):
-                init_rnn_state.c = torch.stack(init_states, 1).contiguous()
+                init_rnn_state.h = torch.stack(init_states, 1).contiguous()
             mstate.rnnstate = init_rnn_state
 
         if "prev_summ" not in mstate:
