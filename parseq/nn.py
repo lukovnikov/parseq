@@ -22,6 +22,9 @@ class TokenEmb(torch.nn.Module):
         if adapt_dims is not None and adapt_dims[0] != adapt_dims[1]:
             self.adapter = torch.nn.Linear(*adapt_dims)
 
+    def init_params(self):
+        torch.nn.init.uniform_(self.emb.weight, -0.1, 0.1)
+        torch.nn.init.constant_(self.emb.weight[self.rare_id], 0)
 
     def _do_rare(self, rare_token_ids:Set[int]=None, rare_id:int=None):
         self.rare_token_ids = self.rare_token_ids if rare_token_ids is None else rare_token_ids
