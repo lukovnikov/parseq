@@ -10,19 +10,16 @@ import torch.nn.functional as F
 
 class Encoder(nn.Module):
     """Encoder"""
-    def __init__(self, vocabulary, device, embed_dim=256, hidden_size=512,
+    def __init__(self, vocsize, embed_dim=256, hidden_size=512,
                  num_layers=2, dropout=0.5, bidirectional=True):
         super().__init__()
-        self.vocabulary = vocabulary
         self.num_layers = num_layers
         self.bidirectional = bidirectional
         self.hidden_size = hidden_size
-        self.pad_id = vocabulary.stoi[PAD_TOKEN]
-        input_dim = len(vocabulary)
+        self.pad_id = 0
         self.dropout = dropout
-        self.device = device
 
-        self.embed_tokens = Embedding(input_dim, embed_dim, self.pad_id)
+        self.embed_tokens = Embedding(vocsize, embed_dim, self.pad_id)
         self.gru = GRU(
             input_size=embed_dim,
             hidden_size=hidden_size,
@@ -259,3 +256,8 @@ def GRU(input_size, hidden_size, **kwargs):
         if 'weight' in name or 'bias' in name:
             param.data.uniform_(-0.1, 0.1)
     return m
+
+
+if __name__ == '__main__':
+    enc = Encoder(100)
+    print(enc)

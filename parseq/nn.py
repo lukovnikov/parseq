@@ -22,6 +22,8 @@ class TokenEmb(torch.nn.Module):
         if adapt_dims is not None and adapt_dims[0] != adapt_dims[1]:
             self.adapter = torch.nn.Linear(*adapt_dims)
 
+        self.init_params()
+
     def init_params(self):
         torch.nn.init.uniform_(self.emb.weight, -0.1, 0.1)
         torch.nn.init.constant_(self.emb.weight[self.rare_id], 0)
