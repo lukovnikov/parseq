@@ -124,7 +124,7 @@ class Encoder(nn.Module):
 
         hidden = torch.tanh(self.linear_out(hidden[-1][0]))  # (batch, enc_hid_dim)
 
-        return y.t(), hidden        # (seqlen, batsize, encdim), (batsize, compressed_encdim)
+        return y.transpose(0, 1), hidden        # (seqlen, batsize, encdim), (batsize, compressed_encdim)
 
 
 class Attention(nn.Module):
