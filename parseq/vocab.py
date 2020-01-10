@@ -26,6 +26,14 @@ class Vocab(_Vocab):
         self.RD = {v: k for k, v in self.D.items()}
         self.growing = True
 
+    @property
+    def stoi(self):
+        return self.D
+
+    @property
+    def itos(self):
+        return self.RD
+
     def nextid(self):
         return max(self.D.values()) + 1
 

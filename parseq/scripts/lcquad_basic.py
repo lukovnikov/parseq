@@ -24,12 +24,14 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
+import parseq
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamDecoder, BeamTransition
 from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
     LSTMEncoder
+from parseq.rnn1 import Encoder, Seq2Seq
 from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
 from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition
 from parseq.vocab import SequenceEncoder, Vocab
@@ -506,20 +508,27 @@ def split_tokenizer(x):
     return x.lower().split()
 
 
+def create_basic_model(inpvocab, outvocab, embdim, hdim, num_layers, dropout, maxtime=50):
+    enc = parseq.rnn1.Encoder(inpvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout)
+    dec = parseq.rnn1.Decoder(outvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout, max_positions=maxtime)
+    encdec = parseq.rnn1.Seq2Seq(enc, dec, "wtf")
+    return encdec
+
+
 def run(lr=0.001,
-        batsize=50,
+        batsize=100,
         epochs=50,
-        embdim=100,
-        encdim=100,
-        numlayers=1,
+        embdim=256,
+        encdim=512,
+        numlayers=2,
         beamsize=1,
-        dropout=.2,
-        wreg=1e-10,
+        dropout=.5,
+        wreg=0.,
         cuda=False,
         gpu=0,
         minfreq=3,
         gradnorm=3.,
-        cosine_restarts=1.,
+        cosine_restarts=0.,
         ):
     localargs = locals().copy()
     print(locals())
@@ -536,25 +545,34 @@ def run(lr=0.001,
     # print("input graph")
     # print(batch.batched_states)
 
-    model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+    model = create_basic_model(ds.sentence_encoder.vocab, ds.query_encoder.vocab, embdim, encdim, num_layers=numlayers, dropout=dropout, maxtime=50)
+    inpvocab, outvocab = ds.sentence_encoder.vocab, ds.query_encoder.vocab
+    tfdecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
+                                                    SeqAccuracies()],
+                                       mode="tf", inp_vocab=inpvocab, out_vocab=outvocab)
+    freedecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
+                                                    SeqAccuracies()],
+                                       mode="tf", inp_vocab=inpvocab, out_vocab=outvocab)
 
-    # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
-    # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
-
-    tfdecoder = SeqDecoder(TFTransition(model),
-                           [CELoss(ignore_index=0, mode="logprobs"),
-                            SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"select", "count", "ask"})])
-    # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(FreerunningTransition(model, maxtime=40),
-                             eval=[SeqAccuracies(),
-                                   TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"select", "count", "ask"})])
-    # freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
-    #                           eval=[SeqAccuracies()],
-    #                           eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-    #                                              orderless={"select", "count", "ask"})])
+    # model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
+    #                          sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+    #
+    # # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
+    # # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
+    #
+    # tfdecoder = SeqDecoder(TFTransition(model),
+    #                        [CELoss(ignore_index=0, mode="logprobs"),
+    #                         SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+    #                                                       orderless={"select", "count", "ask"})])
+    # # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
+    # freedecoder = SeqDecoder(FreerunningTransition(model, maxtime=40),
+    #                          eval=[SeqAccuracies(),
+    #                                TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+    #                                             orderless={"select", "count", "ask"})])
+    # # freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
+    # #                           eval=[SeqAccuracies()],
+    # #                           eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+    # #                                              orderless={"select", "count", "ask"})])
 
     # # test
     # tt.tick("doing one epoch")
@@ -572,8 +590,13 @@ def run(lr=0.001,
 
     # print(dict(tfdecoder.named_parameters()).keys())
 
-    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
-    vlosses = make_loss_array("seq_acc", "tree_acc")
+    # losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
+    # vlosses = make_loss_array("seq_acc", "tree_acc")
+
+
+    losses = make_loss_array("loss", "elem_acc", "seq_acc")
+    vlosses = make_loss_array("loss", "elem_acc", "seq_acc")
+
     # if beamsize >= 3:
     #     vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at3", "tree_acc_at_last")
     # else:

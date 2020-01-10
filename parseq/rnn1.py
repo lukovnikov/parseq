@@ -3,23 +3,120 @@ Seq2seq based: Neural Machine Translation by Jointly Learning to Align and Trans
 https://arxiv.org/abs/1409.0473
 """
 import random
+from typing import List, Union, Dict, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from parseq.decoding import merge_dicts
+from parseq.eval import Metric, Loss
+from parseq.states import TrainableDecodableState, State
+
+
+class SeqDecoder(torch.nn.Module):
+    def __init__(self, model, eval:List[Union[Metric, Loss]]=tuple(), mode="tf", inp_vocab=None, out_vocab=None, **kw):
+        super(SeqDecoder, self).__init__(**kw)
+        self.model = model
+        self._metrics = eval
+        self.mode = mode
+        self.inp_vocab, self.out_vocab = inp_vocab, out_vocab
+        self.register_buffer("inp_mapper", None)
+        self.register_buffer("out_mapper", None)
+        self.register_buffer("out_mask", None)
+
+        id_mapper = torch.arange(inp_vocab.number_of_ids())
+        for id in inp_vocab.rare_ids:
+            id_mapper[id] = inp_vocab[inp_vocab.unktoken]
+        self.register_buffer("inp_mapper", id_mapper)
+
+        id_mapper = torch.arange(out_vocab.number_of_ids())
+        for id in out_vocab.rare_ids:
+            id_mapper[id] = out_vocab[out_vocab.unktoken]
+        self.register_buffer("out_mapper", id_mapper)
+
+        out_mask = torch.ones(out_vocab.number_of_ids())
+        for id in out_vocab.rare_ids:
+            out_mask[id] = 0
+        self.register_buffer("out_mask", out_mask)
+
+
+    def forward(self, x:TrainableDecodableState) -> Tuple[Dict, State]:
+        mask = x.inp_tensor != 0
+        src_lengths = mask.sum(-1)
+        inptensor = x.inp_tensor
+        inptensor = self.inp_mapper[inptensor]
+        goldtensor = x.gold_tensor
+        goldtensor = self.out_mapper[goldtensor]
+        y = self.model(inptensor, src_lengths, goldtensor, teacher_forcing_ratio=1. if self.mode == "tf" else 0.)
+        y = y.transpose(0, 1)
+        y = y + torch.log(self.out_mask[None, None, :])
+        y = y[:, 1:]
+
+        outprobs = y
+        _, predactions = outprobs.max(-1)
+
+        golds = x.get_gold()
+        golds = golds[:, 1:]
+
+        if self.mode == "tf":
+            traingold = self.out_mapper[golds]
+            loss = self._metrics[0](outprobs, predactions, traingold, x)
+            metrics = [metric(outprobs, predactions, golds, x) for metric in self._metrics[1:]]
+            metrics += [loss]
+        metrics = merge_dicts(*metrics)
+        return metrics, x
+
+
+class Seq2Seq(nn.Module):
+    """
+    Seq2seq class
+    """
+    def __init__(self, encoder, decoder, name):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.name = name
+
+    def forward(self, src_tokens, src_lengths, trg_tokens, teacher_forcing_ratio=0.5):
+        """
+        Run the forward pass for an encoder-decoder model.
+
+        Args:
+            src_tokens (LongTensor): tokens in the source language of shape
+                `(src_len, batch)`
+            src_lengths (LongTensor): source sentence lengths of shape `(batch)`
+            trg_tokens (LongTensor): tokens in the target language of shape
+                `(tgt_len, batch)`, for teacher forcing
+            teacher_forcing_ratio (float): teacher forcing probability
+
+        Returns:
+            tuple:
+                - the decoder's output of shape `(batch, tgt_len, vocab)`
+                - attention scores of shape `(batch, trg_len, src_len)`
+        """
+        encoder_out = self.encoder(src_tokens, src_lengths=src_lengths)
+        decoder_out = self.decoder(trg_tokens, encoder_out,
+                                   src_tokens=src_tokens,
+                                   teacher_forcing_ratio=teacher_forcing_ratio)
+        return decoder_out
+
 
 class Encoder(nn.Module):
     """Encoder"""
-    def __init__(self, vocsize, embed_dim=256, hidden_size=512,
+    def __init__(self, vocabulary, device, embed_dim=256, hidden_size=512,
                  num_layers=2, dropout=0.5, bidirectional=True):
         super().__init__()
+        self.vocabulary = vocabulary
         self.num_layers = num_layers
         self.bidirectional = bidirectional
         self.hidden_size = hidden_size
-        self.pad_id = 0
+        self.pad_id = vocabulary.stoi[vocabulary.padtoken]
+        input_dim = max(vocabulary.stoi.values()) + 1
         self.dropout = dropout
+        self.device = device
 
-        self.embed_tokens = Embedding(vocsize, embed_dim, self.pad_id)
+        self.embed_tokens = Embedding(input_dim, embed_dim, self.pad_id)
         self.gru = GRU(
             input_size=embed_dim,
             hidden_size=hidden_size,
@@ -45,11 +142,11 @@ class Encoder(nn.Module):
         src_tokens = src_tokens.t()
 
         x = self.embed_tokens(src_tokens)
-        x = F.dropout(x, p=self.dropout, training=self.training) # (src_len, batch, embed_dim)
+        x = F.dropout(x, p=self.dropout, training=self.training)  # (src_len, batch, embed_dim)
 
-        packed_x = nn.utils.rnn.pack_padded_sequence(x, src_lengths)
+        packed_x = nn.utils.rnn.pack_padded_sequence(x, src_lengths, enforce_sorted=False)
 
-        packed_outputs, hidden = self.gru(packed_x) # hidden: (n_layers * num_directions, batch, hidden_size)
+        packed_outputs, hidden = self.gru(packed_x)  # hidden: (n_layers * num_directions, batch, hidden_size)
 
         x, _ = nn.utils.rnn.pad_packed_sequence(packed_outputs)
         x = F.dropout(x, p=self.dropout, training=self.training)
@@ -60,7 +157,7 @@ class Encoder(nn.Module):
         last_backward = hidden[-1, :, :]
         hidden = torch.cat((last_forward, last_backward), dim=1)
 
-        hidden = torch.tanh(self.linear_out(hidden)) # (batch, enc_hid_dim)
+        hidden = torch.tanh(self.linear_out(hidden))  # (batch, enc_hid_dim)
 
         return x, hidden
 
@@ -113,10 +210,10 @@ class Decoder(nn.Module):
         self.vocabulary = vocabulary
         self.hidden_size = hidden_size
         self.need_attn = True
-        self.output_dim = len(vocabulary)
-        self.pad_id = vocabulary.stoi[PAD_TOKEN]
-        self.sos_idx = vocabulary.stoi[SOS_TOKEN]
-        self.eos_idx = vocabulary.stoi[EOS_TOKEN]
+        self.output_dim = max(vocabulary.stoi.values()) + 1
+        self.pad_id = vocabulary.stoi[vocabulary.padtoken]
+        self.sos_idx = vocabulary.stoi[vocabulary.starttoken]
+        self.eos_idx = vocabulary.stoi[vocabulary.endtoken]
         self.dropout = dropout
         self.max_positions = max_positions
         self.device = device
@@ -128,6 +225,7 @@ class Decoder(nn.Module):
         self.rnn = GRU(
             input_size=(hidden_size * 2) + embed_dim,
             hidden_size=hidden_size,
+            num_layers=num_layers,
         )
 
         self.linear_out = Linear(
@@ -256,8 +354,3 @@ def GRU(input_size, hidden_size, **kwargs):
         if 'weight' in name or 'bias' in name:
             param.data.uniform_(-0.1, 0.1)
     return m
-
-
-if __name__ == '__main__':
-    enc = Encoder(100)
-    print(enc)
