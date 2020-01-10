@@ -40,7 +40,6 @@ class SeqDecoder(torch.nn.Module):
             out_mask[id] = 0
         self.register_buffer("out_mask", out_mask)
 
-
     def forward(self, x:TrainableDecodableState) -> Tuple[Dict, State]:
         mask = x.inp_tensor != 0
         src_lengths = mask.sum(-1)
@@ -292,7 +291,7 @@ class Decoder(nn.Module):
             inference = True
             trg_tokens = torch.zeros((self.max_positions, batch)).long().\
                                                                   fill_(self.sos_idx).\
-                                                                  to(self.device)
+                                                                  to(encoder_out.device)
         else:
             trg_tokens = trg_tokens.t()
             inference = False
@@ -300,8 +299,8 @@ class Decoder(nn.Module):
         max_len = trg_tokens.shape[0]
 
         # initialize tensors to store the outputs and attentions
-        outputs = torch.zeros(max_len, batch, self.output_dim).to(self.device)
-        attentions = torch.zeros(max_len, batch, src_tokens.shape[0]).to(self.device)
+        outputs = torch.zeros(max_len, batch, self.output_dim).to(encoder_out.device)
+        attentions = torch.zeros(max_len, batch, src_tokens.shape[0]).to(encoder_out.device)
 
         # prepare decoder input(<sos> token)
         input = trg_tokens[0, :]
