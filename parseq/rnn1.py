@@ -55,6 +55,7 @@ class SeqDecoder(torch.nn.Module):
 
         if self.mode == "tf":
             traingold = self.out_mapper[golds]
+            traingold = golds
             loss = self._metrics[0](outprobs, predactions, traingold, x)
             metrics = [metric(outprobs, predactions, golds, x) for metric in self._metrics[1:]]
             metrics += [loss]
@@ -142,7 +143,7 @@ class Attention(nn.Module):
 
 class Decoder(nn.Module):
     """Decoder"""
-    def __init__(self, vocabulary, device, embed_dim=256, hidden_size=512,
+    def __init__(self, outlin, vocabulary, device, embed_dim=256, hidden_size=512,
                  num_layers=2, dropout=0.5, max_positions=50):
         super().__init__()
         num_layers = 1      # TODO
@@ -167,12 +168,7 @@ class Decoder(nn.Module):
             num_layers=num_layers,
         )
 
-        # self.linear_out = outlin
-
-        self.linear_out = Linear(
-            in_features=(hidden_size * 2) + hidden_size,
-            out_features=self.output_dim
-        )
+        self.linear_out = outlin
 
     def _decoder_step(self, input, hidden, encoder_outputs, mask):
         input = input.unsqueeze(0) # (1, batch)
@@ -189,7 +185,6 @@ class Decoder(nn.Module):
         # output: (1, batch, dec_hid_dim)
         # hidden: (1, batch, dec_hid_dim)
 
-        x = x.squeeze(0)
         output = output.squeeze(0)
         weighted = summ.squeeze(0)
 

@@ -513,7 +513,8 @@ def create_basic_model(inpvocab, outvocab, embdim, hdim, num_layers, dropout, ma
     inpemb = TokenEmb(inpemb, rare_token_ids=inpvocab.rare_ids, rare_id=1)
     encoder = GRUEncoder(embdim, hdim, num_layers=num_layers, dropout=dropout)
     enc = parseq.rnn1.Encoder(inpemb, encoder, hdim*2, hdim, dropout=dropout)
-    dec = parseq.rnn1.Decoder(outvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout, max_positions=maxtime)
+    decoder_out = BasicGenOutput(hdim + hdim*2, vocab=outvocab)
+    dec = parseq.rnn1.Decoder(decoder_out, outvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout, max_positions=maxtime)
     encdec = parseq.rnn1.Seq2Seq(enc, dec, "wtf")
     return encdec
 
