@@ -142,7 +142,7 @@ class Attention(nn.Module):
 
 class Decoder(nn.Module):
     """Decoder"""
-    def __init__(self, vocabulary, device, embed_dim=256, hidden_size=512,
+    def __init__(self, outlin, vocabulary, device, embed_dim=256, hidden_size=512,
                  num_layers=2, dropout=0.5, max_positions=50):
         super().__init__()
         num_layers = 1      # TODO
@@ -167,8 +167,10 @@ class Decoder(nn.Module):
             num_layers=num_layers,
         )
 
+        # self.linear_out = outlin
+
         self.linear_out = Linear(
-            in_features=(hidden_size * 2) + hidden_size + embed_dim,
+            in_features=(hidden_size * 2) + hidden_size,
             out_features=self.output_dim
         )
 
@@ -191,7 +193,7 @@ class Decoder(nn.Module):
         output = output.squeeze(0)
         weighted = summ.squeeze(0)
 
-        x = torch.cat((output, weighted, x), dim=1)
+        x = torch.cat((output, weighted), dim=1)
         output = self.linear_out(x) # (batch, output_dim)
 
         return output, hidden.squeeze(0), attn.squeeze(1)
