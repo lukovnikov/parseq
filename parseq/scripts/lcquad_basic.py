@@ -330,8 +330,8 @@ class BasicGenModel(TransitionModel):
         # inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
         self.inp_emb = inpemb
 
-        encoder_dim = hdim
-        encoder = LSTMEncoder(embdim, encoder_dim//2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        encoder_dim = hdim * 2
+        encoder = LSTMEncoder(embdim, hdim, num_layers=numlayers, dropout=dropout, bidirectional=True)
         # encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2] * numlayers), bidir=True, dropout_in=dropout)
         self.inp_enc = encoder
 
@@ -346,7 +346,7 @@ class BasicGenModel(TransitionModel):
         # decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
         self.out_lin = decoder_out
 
-        self.att = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim))
+        self.att = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim), dropout=min(0.1, dropout))
 
         self.enc_to_dec = torch.nn.ModuleList([torch.nn.Sequential(
             torch.nn.Linear(encoder_dim, hdim),
