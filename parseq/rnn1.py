@@ -179,12 +179,12 @@ class Decoder(nn.Module):
         x = self.embed_tokens(input) # (1, batch, emb_dim)
         x = F.dropout(x, p=self.dropout, training=self.training)
 
-        attn, summ = self.attention(hidden, encoder_outputs, mask) # (batch, src_len)
+        attn, summ = self.attention(hidden[-1], encoder_outputs, mask) # (batch, src_len)
         summ = summ[None, :, :]
 
         rnn_input = torch.cat((x, summ), dim=2) # (1, batch, 2 * enc_hid_dim + embed_dim)
 
-        output, hidden = self.rnn(rnn_input, hidden.unsqueeze(0))
+        output, hidden = self.rnn(rnn_input, hidden)
         # output: (1, batch, dec_hid_dim)
         # hidden: (1, batch, dec_hid_dim)
 
@@ -239,7 +239,7 @@ class Decoder(nn.Module):
 
         mask = (src_tokens != self.pad_id).permute(1, 0) # (batch, src_len)
 
-        hidden = torch.cat([torch.zeros_like(hidden), hidden], 0)
+        hidden = torch.stack([torch.zeros_like(hidden), hidden], 0)
 
         for i in range(1, max_len):
 
