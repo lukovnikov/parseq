@@ -87,7 +87,7 @@ class Seq2Seq(nn.Module):
                 - the decoder's output of shape `(batch, tgt_len, vocab)`
                 - attention scores of shape `(batch, trg_len, src_len)`
         """
-        encoder_out = self.encoder(src_tokens, src_lengths=src_lengths)
+        encoder_out = self.encoder(src_tokens, mask=src_tokens!=0)
         decoder_out = self.decoder(trg_tokens, encoder_out,
                                    src_tokens=src_tokens,
                                    teacher_forcing_ratio=teacher_forcing_ratio)
@@ -96,26 +96,14 @@ class Seq2Seq(nn.Module):
 
 class Encoder(nn.Module):
     """Encoder"""
-    def __init__(self, emb, device, embed_dim=256, hidden_size=512,
-                 num_layers=2, dropout=0.5, bidirectional=True):
+    def __init__(self, emb, enc, hdim, outdim, dropout=0):
         super().__init__()
         self.emb = emb
-        self.num_layers = num_layers
-        self.bidirectional = bidirectional
-        self.hidden_size = hidden_size
+        self.enc = enc
+        self.linear_out = nn.Linear(hdim, outdim)
         self.dropout = dropout
-        self.device = device
 
-        self.gru = GRU(
-            input_size=embed_dim,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            dropout=dropout if num_layers > 1 else 0.,
-            bidirectional=bidirectional
-        )
-        self.linear_out = nn.Linear(hidden_size * 2, hidden_size)
-
-    def forward(self, src_tokens, **kwargs):
+    def forward(self, src_tokens, mask, **kwargs):
         """
         Forward Encoder
 
@@ -127,28 +115,16 @@ class Encoder(nn.Module):
             x (LongTensor): (src_len, batch, hidden_size * num_directions)
             hidden (LongTensor): (batch, enc_hid_dim)
         """
-        src_lengths = kwargs.get('src_lengths', '')
-        src_tokens = src_tokens.t()
-
         x = self.emb(src_tokens)
         x = F.dropout(x, p=self.dropout, training=self.training)  # (src_len, batch, embed_dim)
 
-        packed_x = nn.utils.rnn.pack_padded_sequence(x, src_lengths, enforce_sorted=False)
+        y, hidden = self.enc(x, mask)
 
-        packed_outputs, hidden = self.gru(packed_x)  # hidden: (n_layers * num_directions, batch, hidden_size)
+        y = F.dropout(y, p=self.dropout, training=self.training)
 
-        x, _ = nn.utils.rnn.pad_packed_sequence(packed_outputs)
-        x = F.dropout(x, p=self.dropout, training=self.training)
+        hidden = torch.tanh(self.linear_out(hidden[-1][0]))  # (batch, enc_hid_dim)
 
-        # input hidden for decoder is the final encoder hidden state
-        # since rnn is bidirectional get last forward and backward hidden state
-        last_forward = hidden[-2, :, :]
-        last_backward = hidden[-1, :, :]
-        hidden = torch.cat((last_forward, last_backward), dim=1)
-
-        hidden = torch.tanh(self.linear_out(hidden))  # (batch, enc_hid_dim)
-
-        return x, hidden
+        return y.t(), hidden        # (seqlen, batsize, encdim), (batsize, compressed_encdim)
 
 
 class Attention(nn.Module):

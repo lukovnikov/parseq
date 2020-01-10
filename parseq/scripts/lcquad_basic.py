@@ -511,7 +511,8 @@ def split_tokenizer(x):
 def create_basic_model(inpvocab, outvocab, embdim, hdim, num_layers, dropout, maxtime=50):
     inpemb = torch.nn.Embedding(inpvocab.number_of_ids(), embdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=inpvocab.rare_ids, rare_id=1)
-    enc = parseq.rnn1.Encoder(inpemb, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout)
+    encoder = GRUEncoder(embdim, hdim, num_layers=num_layers, dropout=dropout)
+    enc = parseq.rnn1.Encoder(inpemb, encoder, hdim*2, hdim, dropout=dropout)
     dec = parseq.rnn1.Decoder(outvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout, max_positions=maxtime)
     encdec = parseq.rnn1.Seq2Seq(enc, dec, "wtf")
     return encdec
