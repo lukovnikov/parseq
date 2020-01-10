@@ -21,7 +21,7 @@ class LSTMTransition(TransitionModel):
         self.cell = torch.nn.LSTM(indim, hdim, num_layers, bias=True,
                                   batch_first=True, dropout=dropout, bidirectional=False)
         self.dropout = torch.nn.Dropout(dropout)
-        self.dropout_rec = torch.nn.Dropout(0.)
+        self.dropout_rec = torch.nn.Dropout(dropout)
 
     def get_init_state(self, batsize, device=torch.device("cpu")):
         state = State()
