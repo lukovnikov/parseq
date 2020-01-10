@@ -28,8 +28,8 @@ class LSTMTransition(TransitionModel):
         x = torch.ones(batsize, self.numlayers, self.hdim, device=device)
         state.h = torch.zeros_like(x)
         state.c = torch.zeros_like(x)
-        state.h_dropout = self.dropout_rec(torch.ones_like(x))
-        state.c_dropout = self.dropout_rec(torch.ones_like(x))
+        state.h_dropout = self.dropout_rec(torch.ones_like(x)).clamp(0, 1)
+        state.c_dropout = self.dropout_rec(torch.ones_like(x)).clamp(0, 1)
         return state
 
     def forward(self, inp:torch.Tensor, state:State):

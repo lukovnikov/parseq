@@ -517,7 +517,7 @@ def run(lr=0.001,
         wreg=1e-10,
         cuda=False,
         gpu=0,
-        minfreq=2,
+        minfreq=3,
         gradnorm=3.,
         cosine_restarts=1.,
         ):
