@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import qelos as q
+
 from parseq.decoding import merge_dicts
 from parseq.eval import Metric, Loss
 from parseq.states import TrainableDecodableState, State
@@ -129,42 +131,13 @@ class Encoder(nn.Module):
 
 class Attention(nn.Module):
     """Attention"""
-    def __init__(self, enc_hid_dim, dec_hid_dim):
+    def __init__(self, enc_hid_dim, dec_hid_dim, dropout):
         super().__init__()
-
-        self.linear = nn.Linear((enc_hid_dim * 2) + dec_hid_dim, dec_hid_dim)
-        self.v = nn.Parameter(torch.rand(dec_hid_dim))
+        self.att = q.Attention(q.SimpleFwdAttComp(dec_hid_dim, enc_hid_dim*1, dec_hid_dim), dropout=dropout)
 
     def forward(self, hidden, encoder_outputs, mask):
-        """
-        Forward Attention Layer
-
-        Args:
-            hidden (LongTensor): (batch, dec_hid_dim)
-            encoder_outputs (LongTensor): (src_len, batch, enc_hid_dim * 2)
-            mask (LongTensor): (batch, src_len)
-
-        Returns:
-            attention (LongTensor): (batch, src_len)
-        """
-
-        batch = encoder_outputs.shape[1]
-        src_len = encoder_outputs.shape[0]
-
-        hidden = hidden.unsqueeze(1).repeat(1, src_len, 1) # (batch, src_len, dec_hid_dim)
-
-        encoder_outputs = encoder_outputs.permute(1, 0, 2) # (batch, src_len, enc_hid_dim * 2)
-
-        energy = torch.tanh(self.linear(torch.cat((hidden, encoder_outputs), dim=2))) # (batch, src_len, dec_hid_dim)
-        energy = energy.permute(0, 2, 1) # (batch, dec_hid_dim, src_len)
-
-        v = self.v.repeat(batch, 1).unsqueeze(1) # (batch, 1, dec_hid_dim)
-
-        attention = torch.bmm(v, energy).squeeze(1)
-
-        attention = attention.masked_fill(mask == 0, float('-inf'))
-
-        return F.softmax(attention, dim=1)
+        alphas, summary, scores = self.att(hidden, encoder_outputs.transpose(0, 1), mask)
+        return alphas
 
 
 class Decoder(nn.Module):
@@ -185,7 +158,7 @@ class Decoder(nn.Module):
         self.device = device
 
         # suppose encoder and decoder have same hidden size
-        self.attention = Attention(hidden_size, hidden_size)
+        self.attention = Attention(hidden_size, hidden_size, dropout=dropout)
         self.embed_tokens = Embedding(self.output_dim, embed_dim, self.pad_id)
 
         self.rnn = GRU(
@@ -206,7 +179,6 @@ class Decoder(nn.Module):
         x = F.dropout(x, p=self.dropout, training=self.training)
 
         attn = self.attention(hidden, encoder_outputs, mask) # (batch, src_len)
-        attn = F.dropout(attn, p=self.dropout, training=self.training)
 
         attn = attn.unsqueeze(1) # (batch, 1, src_len)
 
