@@ -388,7 +388,7 @@ class BasicGenModel(TransitionModel):
             # uncomment next line to initialize decoder state with last state of encoder
             # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
             if len(init_states) == init_rnn_state.c.size(1):
-                init_rnn_state.c = torch.stack(init_states, 1)
+                init_rnn_state.c = torch.stack(init_states, 1).contiguous()
             mstate.rnnstate = init_rnn_state
 
         if "prev_summ" not in mstate:
