@@ -15,14 +15,20 @@ from parseq.states import TrainableDecodableState, State
 
 
 class SeqDecoder(torch.nn.Module):
-    def __init__(self, model, eval:List[Union[Metric, Loss]]=tuple(), mode="tf", out_vocab=None, **kw):
+    def __init__(self, model, eval:List[Union[Metric, Loss]]=tuple(), mode="tf", inp_vocab=None, out_vocab=None, **kw):
         super(SeqDecoder, self).__init__(**kw)
         self.model = model
         self._metrics = eval
         self.mode = mode
-        self.out_vocab = out_vocab
+        self.inp_vocab, self.out_vocab = inp_vocab, out_vocab
+        self.register_buffer("inp_mapper", None)
         self.register_buffer("out_mapper", None)
         self.register_buffer("out_mask", None)
+
+        id_mapper = torch.arange(inp_vocab.number_of_ids())
+        for id in inp_vocab.rare_ids:
+            id_mapper[id] = inp_vocab[inp_vocab.unktoken]
+        self.register_buffer("inp_mapper", id_mapper)
 
         id_mapper = torch.arange(out_vocab.number_of_ids())
         for id in out_vocab.rare_ids:
@@ -38,6 +44,7 @@ class SeqDecoder(torch.nn.Module):
         mask = x.inp_tensor != 0
         src_lengths = mask.sum(-1)
         inptensor = x.inp_tensor
+        inptensor = self.inp_mapper[inptensor]
         goldtensor = x.gold_tensor
         goldtensor = self.out_mapper[goldtensor]
         y = self.model(inptensor, src_lengths, goldtensor, teacher_forcing_ratio=1. if self.mode == "tf" else 0.)
@@ -96,16 +103,19 @@ class Seq2Seq(nn.Module):
 
 class Encoder(nn.Module):
     """Encoder"""
-    def __init__(self, emb, device, embed_dim=256, hidden_size=512,
+    def __init__(self, vocabulary, device, embed_dim=256, hidden_size=512,
                  num_layers=2, dropout=0.5, bidirectional=True):
         super().__init__()
-        self.emb = emb
+        self.vocabulary = vocabulary
         self.num_layers = num_layers
         self.bidirectional = bidirectional
         self.hidden_size = hidden_size
+        self.pad_id = vocabulary.stoi[vocabulary.padtoken]
+        input_dim = max(vocabulary.stoi.values()) + 1
         self.dropout = dropout
         self.device = device
 
+        self.embed_tokens = Embedding(input_dim, embed_dim, self.pad_id)
         self.gru = GRU(
             input_size=embed_dim,
             hidden_size=hidden_size,
@@ -130,7 +140,7 @@ class Encoder(nn.Module):
         src_lengths = kwargs.get('src_lengths', '')
         src_tokens = src_tokens.t()
 
-        x = self.emb(src_tokens)
+        x = self.embed_tokens(src_tokens)
         x = F.dropout(x, p=self.dropout, training=self.training)  # (src_len, batch, embed_dim)
 
         packed_x = nn.utils.rnn.pack_padded_sequence(x, src_lengths, enforce_sorted=False)

@@ -509,7 +509,9 @@ def split_tokenizer(x):
 
 
 def create_basic_model(inpvocab, outvocab, embdim, hdim, num_layers, dropout, maxtime=50):
-    enc = parseq.rnn1.Encoder(inpvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout)
+    inpemb = torch.nn.Embedding(inpvocab.number_of_ids(), embdim, padding_idx=0)
+    inpemb = TokenEmb(inpemb, rare_token_ids=inpvocab.rare_ids, rare_id=1)
+    enc = parseq.rnn1.Encoder(inpemb, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout)
     dec = parseq.rnn1.Decoder(outvocab, torch.device("cpu"), embdim, hdim, num_layers=num_layers, dropout=dropout, max_positions=maxtime)
     encdec = parseq.rnn1.Seq2Seq(enc, dec, "wtf")
     return encdec
@@ -549,10 +551,10 @@ def run(lr=0.001,
     inpvocab, outvocab = ds.sentence_encoder.vocab, ds.query_encoder.vocab
     tfdecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
                                                     SeqAccuracies()],
-                                       mode="tf", inp_vocab=inpvocab, out_vocab=outvocab)
+                                       mode="tf", out_vocab=outvocab)
     freedecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
                                                     SeqAccuracies()],
-                                       mode="tf", inp_vocab=inpvocab, out_vocab=outvocab)
+                                       mode="tf", out_vocab=outvocab)
     tfdecoder = tfdecoder.to(device)
     freedecoder = freedecoder.to(device)
 
