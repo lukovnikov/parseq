@@ -551,10 +551,10 @@ def run(lr=0.001,
 
     model = create_basic_model(ds.sentence_encoder.vocab, ds.query_encoder.vocab, embdim, encdim, num_layers=numlayers, dropout=dropout, maxtime=50)
     inpvocab, outvocab = ds.sentence_encoder.vocab, ds.query_encoder.vocab
-    tfdecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
+    tfdecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logprobs"),
                                                     SeqAccuracies()],
                                        mode="tf", out_vocab=outvocab)
-    freedecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
+    freedecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logprobs"),
                                                     SeqAccuracies()],
                                        mode="tf", out_vocab=outvocab)
     tfdecoder = tfdecoder.to(device)
