@@ -622,8 +622,12 @@ def run(lr=0.001,
 
     # testing
     tt.tick("testing")
+    testresults = q.test_epoch(model=freedecoder, dataloader=ds.dataloader("valid", batsize), losses=vlosses, device=device)
+    print("validation test results: ", testresults)
+    tt.tock("tested")
+    tt.tick("testing")
     testresults = q.test_epoch(model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
-    print(testresults)
+    print("test results: ", testresults)
     tt.tock("tested")
 
     # save model?
