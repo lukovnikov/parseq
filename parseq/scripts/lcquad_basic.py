@@ -348,7 +348,7 @@ class BasicGenModel(TransitionModel):
         # decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
         self.out_lin = decoder_out
 
-        self.att = q.Attention(q.DotAttComp())
+        self.att = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim))
 
         self.enc_to_dec = torch.nn.ModuleList([torch.nn.Sequential(
             torch.nn.Linear(encoder_dim, hdim),
@@ -468,7 +468,7 @@ def tensor2tree(x, D:Vocab=None):
     # find first @END@ and cut off
     parentheses_balance = 0
     for i in range(len(x)):
-        if x[i] ==D.endtoken:
+        if x[i] == D.endtoken:
             x = x[:i]
             break
         elif x[i] == "(" or x[i][-1] == "(":
@@ -600,6 +600,7 @@ def run(lr=0.001,
 
     # 6. define training function
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
+    # clipgradnorm = lambda: None
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader("train", batsize), optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
