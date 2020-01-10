@@ -15,13 +15,13 @@ class MultiLSTMState(ListState): pass
 
 
 class LSTMTransition(TransitionModel):
-    def __init__(self, indim, hdim, num_layers=1, dropout:float=0., **kw):
+    def __init__(self, indim, hdim, num_layers=1, dropout:float=0., dropout_rec:float=0., **kw):
         super(LSTMTransition, self).__init__(**kw)
         self.indim, self.hdim, self.numlayers, self.dropoutp = indim, hdim, num_layers, dropout
         self.cell = torch.nn.LSTM(indim, hdim, num_layers, bias=True,
                                   batch_first=True, dropout=dropout, bidirectional=False)
         self.dropout = torch.nn.Dropout(dropout)
-        self.dropout_rec = torch.nn.Dropout(dropout)
+        self.dropout_rec = torch.nn.Dropout(dropout_rec)
 
     def get_init_state(self, batsize, device=torch.device("cpu")):
         state = State()
