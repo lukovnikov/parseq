@@ -158,7 +158,7 @@ class Decoder(nn.Module):
         self.device = device
 
         # suppose encoder and decoder have same hidden size
-        self.attention = Attention(hidden_size, hidden_size, dropout=dropout)
+        self.attention = Attention(hidden_size, hidden_size, dropout=min(dropout, 0.1))
         self.embed_tokens = Embedding(self.output_dim, embed_dim, self.pad_id)
 
         self.rnn = GRU(
@@ -178,17 +178,10 @@ class Decoder(nn.Module):
         x = self.embed_tokens(input) # (1, batch, emb_dim)
         x = F.dropout(x, p=self.dropout, training=self.training)
 
-        attn = self.attention(hidden, encoder_outputs, mask) # (batch, src_len)
+        attn, summ = self.attention(hidden, encoder_outputs, mask) # (batch, src_len)
+        summ = summ[None, :, :]
 
-        attn = attn.unsqueeze(1) # (batch, 1, src_len)
-
-        encoder_outputs = encoder_outputs.permute(1, 0, 2) # (batch, src_len, 2 * enc_hid_dim)
-
-        weighted = torch.bmm(attn, encoder_outputs) # (batch, 1, 2 * enc_hid_dim)
-
-        weighted = weighted.permute(1, 0, 2) # (1, batch, 2 * enc_hid_dim)
-
-        rnn_input = torch.cat((x, weighted), dim=2) # (1, batch, 2 * enc_hid_dim + embed_dim)
+        rnn_input = torch.cat((x, summ), dim=2) # (1, batch, 2 * enc_hid_dim + embed_dim)
 
         output, hidden = self.rnn(rnn_input, hidden.unsqueeze(0))
         # output: (1, batch, dec_hid_dim)
@@ -196,7 +189,7 @@ class Decoder(nn.Module):
 
         x = x.squeeze(0)
         output = output.squeeze(0)
-        weighted = weighted.squeeze(0)
+        weighted = summ.squeeze(0)
 
         x = torch.cat((output, weighted, x), dim=1)
         output = self.linear_out(x) # (batch, output_dim)
