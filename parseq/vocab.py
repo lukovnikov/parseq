@@ -29,48 +29,51 @@ class Vocab(_Vocab):
     def nextid(self):
         return max(self.D.values()) + 1
 
-    def stopgrowth(self):
+    def finalize(self, min_freq:int=0, top_k:int=np.infty, keep_rare=False):
         self.growing = False
+        sorted_counts = sorted(self.counts.items(), key=lambda x: x[1], reverse=True)
 
-    def do_rare(self, min_freq:int=0, top_k:int=np.infty):
-        tokens_with_counts = self.counts.items()
-        if min_freq == 0 and top_k > len(tokens_with_counts):
+        if min_freq == 0 and top_k > len(sorted_counts):
             self.rare_tokens = set()
-            self.rare_ids = set()
-            return
-
-        tokens_with_counts = sorted(tokens_with_counts, key=lambda x: x[1], reverse=True)
-        if top_k < len(tokens_with_counts) and tokens_with_counts[top_k][1] > min_freq:
-            i = top_k
         else:
-            if top_k < len(tokens_with_counts):
-                tokens_with_counts = tokens_with_counts[:top_k]
-            # binary search for min_freq position
-            i = 0
-            divider = 2
-            where = +1
-            while True:
-                i += where * len(tokens_with_counts)//divider
-                if (i == len(tokens_with_counts)) or (tokens_with_counts[i][1] <= min_freq - 1 and tokens_with_counts[i - 1][1] >= min_freq):
-                    break   # found
-                elif tokens_with_counts[i][1] < min_freq:   # go up
-                    where = -1
-                elif tokens_with_counts[i][1] >= min_freq:   # go down
-                    where = +1
-                divider *= 2
-                divider = min(divider, len(tokens_with_counts))
-        nonrare = set([t[0] for t in tokens_with_counts[:i]])
-        self.rare_tokens = set(self.D.keys()) - nonrare
-        self.rare_ids = set([self[rare_token] for rare_token in self.rare_tokens])
+            if top_k < len(sorted_counts) and sorted_counts[top_k][1] > min_freq:
+                i = top_k
+            else:
+                if top_k < len(sorted_counts):
+                    sorted_counts = sorted_counts[:top_k]
+                # binary search for min_freq position
+                i = 0
+                divider = 2
+                where = +1
+                while True:
+                    i += where * len(sorted_counts) // divider
+                    if (i == len(sorted_counts)) or (
+                            sorted_counts[i][1] <= min_freq - 1 and sorted_counts[i - 1][1] >= min_freq):
+                        break  # found
+                    elif sorted_counts[i][1] < min_freq:  # go up
+                        where = -1
+                    elif sorted_counts[i][1] >= min_freq:  # go down
+                        where = +1
+                    divider *= 2
+                    divider = min(divider, len(sorted_counts))
+            self.rare_tokens = set([t[0] for t in sorted_counts[i:]])
+            if not keep_rare:
+                sorted_counts = sorted_counts[:i]
+
+        nextid = max(self.D.values()) + 1
+        for token, cnt in sorted_counts:
+            if token not in self.D:
+                self.D[token] = nextid
+                nextid += 1
+
+        self.RD = {v: k for k, v in self.D.items()}
+        if keep_rare:
+            self.rare_ids = set([self[rare_token] for rare_token in self.rare_tokens])
 
     def add_token(self, token, seen:Union[int,bool]=True):
-        if token not in self.D:
-            assert(self.growing)
-            if self.growing:
-                id = self.nextid()
-                self.D[token] = id
-                self.RD[id] = token
-                self.counts[token] = 0
+        assert(self.growing)
+        if token not in self.counts:
+            self.counts[token] = 0
         if seen > 0:
             self.counts[token] += float(seen)
 
@@ -172,8 +175,7 @@ class SequenceEncoder(VocabBuilder):
     
     def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty):
         self.vocab_final = True
-        self.vocab.stopgrowth()
-        self.vocab.do_rare(min_freq=min_freq, top_k=top_k)
+        self.vocab.finalize(min_freq=min_freq, top_k=top_k)
         
     def vocabs_finalized(self):
         return self.vocab_final

@@ -73,6 +73,8 @@ class CELoss(Loss):
 
 
 class SeqAccuracies(Metric):
+    padid = 0
+    unkid = 1
     def forward(self, probs, predactions, golds, x:State=None):   # must be BasicStates
         # golds = x.get_gold()
         mask = golds != 0
@@ -82,6 +84,7 @@ class SeqAccuracies(Metric):
         else:
             predactions = predactions[:, :golds.size(1)]
         same = golds == predactions
+        same = same & (predactions != self.unkid)
         seq_accs = (same | ~mask).all(1).float()
         elem_accs = (same & mask).sum(1).float() / mask.sum(1).float()
         ret = {"seq_acc": seq_accs.sum().detach().cpu().item() / seq_accs.size(0),
@@ -120,7 +123,7 @@ class TreeAccuracy(Metric):
         if predactions.dim() == 3:      # beam states
             # assert(isinstance(x, BeamState))
             # golds = x.bstates.get(0).get_gold()
-            gold_trees = [self.tensor2tree(gold) for gold in golds]
+            gold_trees = x.gold_trees
             rets = []
             for i in range(predactions.size(1)):
                 ret_i = compare(gold_trees, predactions[:, i])
@@ -138,7 +141,7 @@ class TreeAccuracy(Metric):
         else:
             assert(predactions.dim() == 2)
             # golds = x.get_gold()
-            gold_trees = [self.tensor2tree(gold) for gold in golds]
+            gold_trees = x.gold_trees
             ret = compare(gold_trees, predactions)
             ret = {self.name: sum(ret) / len(ret)}
             return ret

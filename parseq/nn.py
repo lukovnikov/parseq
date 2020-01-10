@@ -150,21 +150,20 @@ class BasicGenOutput(torch.nn.Module):
 
         # rare output tokens
         self.rare_token_ids = vocab.rare_ids
-        rare_id = 1
         if len(self.rare_token_ids) > 0:
-            out_map = torch.arange(self.vocab.number_of_ids())
+            out_mask = torch.ones(self.vocab.number_of_ids())
             for rare_token_id in self.rare_token_ids:
-                out_map[rare_token_id] = rare_id
-            self.register_buffer("out_map", out_map)
+                out_mask[rare_token_id] = 0
+            self.register_buffer("out_mask", out_mask)
         else:
-            self.register_buffer("out_map", None)
+            self.register_buffer("out_mask", None)
 
     def forward(self, x:torch.Tensor, **kw):
         x = self.dropout(x)
         # - generation probs
         gen_probs = self.gen_lin(x)
-        if self.out_map is not None:
-            gen_probs = gen_probs.index_select(-1, self.out_map)
+        if self.out_mask is not None:
+            gen_probs = gen_probs + torch.log(self.out_mask)[None, :]
         gen_probs = self.logsm(gen_probs)
         return gen_probs
 
