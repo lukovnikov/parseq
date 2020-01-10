@@ -137,7 +137,7 @@ class Attention(nn.Module):
 
     def forward(self, hidden, encoder_outputs, mask):
         alphas, summary, scores = self.att(hidden, encoder_outputs.transpose(0, 1), mask)
-        return alphas
+        return alphas, summary
 
 
 class Decoder(nn.Module):
