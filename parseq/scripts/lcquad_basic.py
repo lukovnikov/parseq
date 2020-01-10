@@ -553,6 +553,8 @@ def run(lr=0.001,
     freedecoder = parseq.rnn1.SeqDecoder(model, eval=[CELoss(ignore_index=0, mode="logits"),
                                                     SeqAccuracies()],
                                        mode="tf", inp_vocab=inpvocab, out_vocab=outvocab)
+    tfdecoder = tfdecoder.to(device)
+    freedecoder = freedecoder.to(device)
 
     # model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
     #                          sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
