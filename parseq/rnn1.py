@@ -133,7 +133,7 @@ class Attention(nn.Module):
     """Attention"""
     def __init__(self, enc_hid_dim, dec_hid_dim, dropout):
         super().__init__()
-        self.att = q.Attention(q.SimpleFwdAttComp(dec_hid_dim, enc_hid_dim*1, dec_hid_dim), dropout=dropout)
+        self.att = q.Attention(q.SimpleFwdAttComp(dec_hid_dim, enc_hid_dim*2, dec_hid_dim), dropout=dropout)
 
     def forward(self, hidden, encoder_outputs, mask):
         alphas, summary, scores = self.att(hidden, encoder_outputs.transpose(0, 1), mask)
