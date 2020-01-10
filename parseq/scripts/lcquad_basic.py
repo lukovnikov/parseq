@@ -28,9 +28,10 @@ from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, Bea
 from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree
-from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder
+from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
+    LSTMEncoder
 from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
-from parseq.transitions import TransitionModel, LSTMCellTransition
+from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition
 from parseq.vocab import SequenceEncoder, Vocab
 
 
@@ -324,14 +325,14 @@ class BasicGenModel(TransitionModel):
 
         inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
         inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
-        inpemb._do_rare(inpemb.rare_token_ids)
+
         # _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
         #                                                  p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
         # inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
         self.inp_emb = inpemb
 
         encoder_dim = hdim
-        encoder = GRUEncoder(embdim, encoder_dim//2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        encoder = LSTMEncoder(embdim, encoder_dim//2, num_layers=numlayers, dropout=dropout, bidirectional=True)
         # encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2] * numlayers), bidir=True, dropout_in=dropout)
         self.inp_enc = encoder
 
@@ -340,10 +341,7 @@ class BasicGenModel(TransitionModel):
         self.out_emb = decoder_emb
 
         dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
-        decoder_rnn = [torch.nn.LSTMCell(dec_rnn_in_dim, hdim)]
-        for i in range(numlayers - 1):
-            decoder_rnn.append(torch.nn.LSTMCell(hdim, hdim))
-        decoder_rnn = LSTMCellTransition(*decoder_rnn, dropout=dropout)
+        decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
         self.out_rnn = decoder_rnn
 
         decoder_out = BasicGenOutput(hdim + encoder_dim, vocab=query_encoder.vocab)
@@ -352,10 +350,10 @@ class BasicGenModel(TransitionModel):
 
         self.att = q.Attention(q.DotAttComp())
 
-        self.enc_to_dec = torch.nn.Sequential(
+        self.enc_to_dec = torch.nn.ModuleList([torch.nn.Sequential(
             torch.nn.Linear(encoder_dim, hdim),
             torch.nn.Tanh()
-        )
+        ) for _ in range(numlayers)])
 
         self.feedatt = feedatt
         self.nocopy = True
@@ -366,6 +364,7 @@ class BasicGenModel(TransitionModel):
         if not "mstate" in x:
             x.mstate = State()
         mstate = x.mstate
+        init_states = []
         if not "ctx" in mstate:
             # encode input
             inptensor = x.inp_tensor
@@ -373,8 +372,9 @@ class BasicGenModel(TransitionModel):
             inpembs = self.inp_emb(inptensor)
             # inpembs = self.dropout(inpembs)
             inpenc, final_encs = self.inp_enc(inpembs, mask)
-            final_enc = final_encs[-1][0].view(final_encs[-1][0].size(0), -1).contiguous()
-            final_enc = self.enc_to_dec(final_enc)
+            for i, final_enc in enumerate(final_encs):    # iter over layers
+                _fenc = self.enc_to_dec[i](final_enc[0])
+                init_states.append(_fenc)
             mstate.ctx = inpenc
             mstate.ctx_mask = mask
 
@@ -387,6 +387,8 @@ class BasicGenModel(TransitionModel):
             init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
             # uncomment next line to initialize decoder state with last state of encoder
             # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
+            if len(init_states) == init_rnn_state.c.size(1):
+                init_rnn_state.c = torch.stack(init_states, 1)
             mstate.rnnstate = init_rnn_state
 
         if "prev_summ" not in mstate:

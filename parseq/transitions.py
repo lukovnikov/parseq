@@ -14,6 +14,41 @@ class LSTMState(State): pass
 class MultiLSTMState(ListState): pass
 
 
+class LSTMTransition(TransitionModel):
+    def __init__(self, indim, hdim, num_layers=1, dropout:float=0., **kw):
+        super(LSTMTransition, self).__init__(**kw)
+        self.indim, self.hdim, self.numlayers, self.dropoutp = indim, hdim, num_layers, dropout
+        self.cell = torch.nn.LSTM(indim, hdim, num_layers, bias=True,
+                                  batch_first=True, dropout=dropout, bidirectional=False)
+        self.dropout = torch.nn.Dropout(dropout)
+        self.dropout_rec = torch.nn.Dropout(dropout)
+
+    def get_init_state(self, batsize, device=torch.device("cpu")):
+        state = State()
+        x = torch.ones(batsize, self.numlayers, self.hdim, device=device)
+        state.h = torch.zeros_like(x)
+        state.c = torch.zeros_like(x)
+        state.h_dropout = self.dropout_rec(torch.ones_like(x))
+        state.c_dropout = self.dropout_rec(torch.ones_like(x))
+        return state
+
+    def forward(self, inp:torch.Tensor, state:State):
+        """
+        :param inp:     (batsize, indim)
+        :param state:   State with .h, .c of shape (numlayers, batsize, hdim)
+        :return:
+        """
+        x = inp
+        _x = self.dropout(x)
+        h_nm1 = (state.h * state.h_dropout).transpose(0, 1)
+        c_nm1 = (state.c * state.c_dropout).transpose(0, 1)
+        out, (h_n, c_n) = self.cell(_x[:, None, :], (h_nm1, c_nm1))
+        out = out[:, 0, :]
+        state.h = h_n.transpose(0, 1)
+        state.c = c_n.transpose(0, 1)
+        return out, state
+
+
 class LSTMCellTransition(TransitionModel):
     def __init__(self, *cells:torch.nn.LSTMCell, dropout:float=0., **kw):
         super(LSTMCellTransition, self).__init__(**kw)
