@@ -44,7 +44,6 @@ class SeqDecoder(torch.nn.Module):
         goldtensor = self.out_mapper[goldtensor]
         y = self.model(inptensor, src_lengths, goldtensor, teacher_forcing_ratio=1. if self.mode == "tf" else 0.)
         y = y.transpose(0, 1)
-        y = y + torch.log(self.out_mask[None, None, :])
         y = y[:, 1:]
 
         outprobs = y
