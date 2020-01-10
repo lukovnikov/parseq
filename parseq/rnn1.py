@@ -142,7 +142,7 @@ class Attention(nn.Module):
 
 class Decoder(nn.Module):
     """Decoder"""
-    def __init__(self, outlin, vocabulary, device, embed_dim=256, hidden_size=512,
+    def __init__(self, vocabulary, device, embed_dim=256, hidden_size=512,
                  num_layers=2, dropout=0.5, max_positions=50):
         super().__init__()
         num_layers = 1      # TODO
