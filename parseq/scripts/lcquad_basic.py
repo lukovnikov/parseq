@@ -369,11 +369,11 @@ class BasicGenModel(TransitionModel):
             elif type(m) in (torch.nn.LSTM, torch.nn.GRU):
                 for name, param in m.named_parameters():
                     if "weight" in name or "bias" in name:
-                        torch.nn.init.uniform_(param, -0.1, 0.1)
+                        torch.nn.init.uniform(param, -0.1, 0.1)
             elif type(m) == torch.nn.Embedding:
                 torch.nn.init.uniform_(m.weight, -0.1, 0.1)
                 torch.nn.init.constant_(m.weight[0], 0)
-        self.apply(_param_reset)
+        # self.apply(_param_reset)
 
     def forward(self, x:State):
         if not "mstate" in x:
