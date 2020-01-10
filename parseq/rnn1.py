@@ -207,6 +207,7 @@ class Decoder(nn.Module):
     def __init__(self, vocabulary, device, embed_dim=256, hidden_size=512,
                  num_layers=2, dropout=0.5, max_positions=50):
         super().__init__()
+        num_layers = 1      # TODO
         self.vocabulary = vocabulary
         self.hidden_size = hidden_size
         self.need_attn = True
