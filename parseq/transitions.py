@@ -42,7 +42,7 @@ class LSTMTransition(TransitionModel):
         _x = self.dropout(x)
         h_nm1 = (state.h * state.h_dropout).transpose(0, 1)
         c_nm1 = (state.c * state.c_dropout).transpose(0, 1)
-        out, (h_n, c_n) = self.cell(_x[:, None, :], (h_nm1, c_nm1))
+        out, (h_n, c_n) = self.cell(_x[:, None, :], (h_nm1.contiguous(), c_nm1.contiguous()))
         out = out[:, 0, :]
         state.h = h_n.transpose(0, 1)
         state.c = c_n.transpose(0, 1)
