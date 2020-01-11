@@ -141,7 +141,8 @@ class TreeAccuracy(Metric):
         else:
             assert(predactions.dim() == 2)
             # golds = x.get_gold()
-            gold_trees = x.gold_trees
+            # _gold_trees = x.gold_trees
+            gold_trees = [self.tensor2tree(goldse) for goldse in golds]
             ret = compare(gold_trees, predactions)
             ret = {self.name: sum(ret) / len(ret)}
             return ret

@@ -23,27 +23,34 @@ class TokenEmb(torch.nn.Module):
         if adapt_dims is not None and adapt_dims[0] != adapt_dims[1]:
             self.adapter = torch.nn.Linear(*adapt_dims)
 
-        self.init_params()
+        # self.init_params()
 
     def init_params(self):
         torch.nn.init.uniform_(self.emb.weight, -0.1, 0.1)
         torch.nn.init.constant_(self.emb.weight[0], 0)
 
     def _do_rare(self, rare_token_ids:Set[int]=None, rare_id:int=None):
+        self.register_buffer("unkmask", None)
         self.rare_token_ids = self.rare_token_ids if rare_token_ids is None else rare_token_ids
         self.rare_id = self.rare_id if rare_id is None else rare_id
         if self.rare_id is not None and self.rare_token_ids is not None:
             # build id mapper
-            id_mapper = torch.arange(self.emb.num_embeddings)
+            unkmask = torch.ones(self.emb.num_embeddings)
+            save = False
             for id in self.rare_token_ids:
-                id_mapper[id] = self.rare_id
-            self.register_buffer("id_mapper", id_mapper)
-        else:
-            self.register_buffer("id_mapper", None)
+                if id < unkmask.size(0):
+                    unkmask[id] = 1
+                    save = True
+            if save:
+                self.register_buffer("unkmask", unkmask)
 
     def forward(self, x:torch.Tensor):
-        if self.id_mapper is not None:
-            x = self.id_mapper[x]
+        numembs = self.emb.num_embeddings
+        unkmask = x >= numembs
+        if torch.any(unkmask):
+            x = x.masked_fill(unkmask, self.rare_id)
+        if self.unkmask is not None:
+            x = x.masked_fill(self.unkmask[None, :], self.rare_id)
         ret = self.emb(x)
         if self.adapter is not None:
             ret = self.adapter(ret)
@@ -269,9 +276,9 @@ class SumPtrGenOutputOLD(torch.nn.Module):
         return out_probs, None, gen_scores, attn_scores
 
 
-class PtrGenOutput(torch.nn.Module):
+class _PtrGenOutput(torch.nn.Module):
     def __init__(self, h_dim: int, out_vocab:Vocab=None, **kw):
-        super(PtrGenOutput, self).__init__(**kw)
+        super(_PtrGenOutput, self).__init__(**kw)
         # initialize modules
         self.gen_lin = torch.nn.Linear(h_dim, out_vocab.number_of_ids(), bias=True)
         self.copy_or_gen = torch.nn.Linear(h_dim, 2, bias=True)
@@ -286,27 +293,28 @@ class PtrGenOutput(torch.nn.Module):
     # str_action_re=re.compile(r"^<W>\s->\s'(.+)'$")        # <-- for grammar actions
     def build_copy_maps(self, inp_vocab:Vocab, str_action_re=re.compile(r"^([^_].*)$")):
         self.inp_vocab = inp_vocab
-        self.register_buffer("_inp_to_act", torch.zeros(inp_vocab.number_of_ids(), dtype=torch.long))
-        self.register_buffer("_act_from_inp", torch.zeros(self.out_vocab.number_of_ids(), dtype=torch.long))
+        self.register_buffer("_inp_to_act",
+             torch.zeros(inp_vocab.number_of_ids(last_nonrare=False), dtype=torch.long))
+        self.register_buffer("_act_to_inp",
+             torch.zeros(self.out_vocab.number_of_ids(last_nonrare=False), dtype=torch.long))
 
         # for COPY, initialize mapping from input node vocab (sgb.vocab) to output action vocab (qgb.vocab_actions)
         self._build_copy_maps(str_action_re=str_action_re)
 
         # compute action mask from input: actions that are doable using input copy actions are 1, others are 0
-        actmask = torch.zeros(self.out_vocab.number_of_ids(), dtype=torch.uint8)
+        actmask = torch.zeros(self.out_vocab.number_of_ids(last_nonrare=False), dtype=torch.uint8)
         actmask.index_fill_(0, self._inp_to_act, 1)
+        actmask[0] = 0
         self.register_buffer("_inp_actmask", actmask)
 
         # rare actions
         self.rare_token_ids = self.out_vocab.rare_ids
-        rare_id = 1
+        self.register_buffer("out_mask", None)
         if len(self.rare_token_ids) > 0:
-            out_map = torch.arange(self.out_vocab.number_of_ids())
+            out_mask = torch.ones(self.out_vocab.number_of_ids(last_nonrare=False))
             for rare_token_id in self.rare_token_ids:
-                out_map[rare_token_id] = rare_id
-            self.register_buffer("out_map", out_map)
-        else:
-            self.register_buffer("out_map", None)
+                out_mask[rare_token_id] = 0
+            self.register_buffer("out_mask", out_mask)
 
     def _build_copy_maps(self, str_action_re):      # TODO test
         string_action_vocab = {}
@@ -325,8 +333,10 @@ class PtrGenOutput(torch.nn.Module):
                 assert (k in string_action_vocab)
                 out_v = string_action_vocab[k]
                 self._inp_to_act[inp_v] = out_v
-                self._act_from_inp[out_v] = inp_v
+                self._act_to_inp[out_v] = inp_v
 
+
+class PtrGenOutput2(_PtrGenOutput):
     def forward(self, x:torch.Tensor, inptensor:torch.Tensor=None, attn_scores:torch.Tensor=None, out_mask:torch.Tensor=None):  # (batsize, hdim), (batsize, numactions)
         """
         :param x:               (batsize, hdim)
@@ -392,7 +402,7 @@ class PtrGenOutput(torch.nn.Module):
             return out_probs, ptr_or_gen_probs, gen_probs, attn_probs
 
 
-class PtrGenOutput2(PtrGenOutput):
+class PtrGenOutput(_PtrGenOutput):
     def forward(self, x:torch.Tensor, inptensor:torch.Tensor=None, attn_scores:torch.Tensor=None, out_mask:torch.Tensor=None):  # (batsize, hdim), (batsize, numactions)
         """
         :param x:               (batsize, hdim)
@@ -406,8 +416,14 @@ class PtrGenOutput2(PtrGenOutput):
 
         # - generation probs
         gen_probs = self.gen_lin(x)
-        if self.out_map is not None:
-            gen_probs = gen_probs.index_select(1, self.out_map)
+        fullvocsize = self.out_vocab.number_of_ids(last_nonrare=False)
+        if gen_probs.size(1) < fullvocsize:
+            gen_probs = torch.cat([gen_probs,
+                                   torch.log(torch.zeros_like(gen_probs[:, :1]))
+                                        .repeat(1, fullvocsize - gen_probs.size(1))],
+                                  1)
+        if self.out_mask is not None:
+            gen_probs = gen_probs + torch.log(self.out_mask.float()[None, :])
         if out_mask is not None:
             gen_probs = gen_probs + torch.log(out_mask.float())
 
@@ -434,12 +450,12 @@ class PtrGenOutput2(PtrGenOutput):
             attn_probs = self.sm(attn_scores)
             # get distributions over input vocabulary
             ctx_ids = inptensor
-            inpdist = torch.zeros(gen_probs.size(0), self.inp_vocab.number_of_ids(), dtype=torch.float,
+            inpdist = torch.zeros(gen_probs.size(0), self.inp_vocab.number_of_ids(last_nonrare=False), dtype=torch.float,
                                   device=gen_probs.device)
             inpdist.scatter_add_(1, ctx_ids, attn_probs)
 
             # map to distribution over output actions
-            ptr_scores = torch.zeros(gen_probs.size(0), self.out_vocab.number_of_ids(),
+            ptr_scores = torch.zeros(gen_probs.size(0), self.out_vocab.number_of_ids(last_nonrare=False),
                                      dtype=torch.float, device=gen_probs.device)  # - np.infty
             ptr_scores.scatter_(1, self._inp_to_act.unsqueeze(0).repeat(gen_probs.size(0), 1),
                                 inpdist)

@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamDecoder, BeamTransition
+from parseq.decoding import SeqDecoder, BeamDecoder, BeamTransition
 from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree
@@ -222,8 +222,22 @@ class LCQuaDnoENTDataset(object):
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
         maxlen_in, maxlen_out = 0, 0
         eid = 0
+
+        gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
+        rare_tokens = self.query_encoder.vocab.rare_tokens - set(self.sentence_encoder.vocab.D.keys())
+        for rare_token in rare_tokens:
+            gold_map[self.query_encoder.vocab[rare_token]] = \
+                self.query_encoder.vocab[self.query_encoder.vocab.unktoken]
+
         for inp, out, split in zip(inputs, outputs, splits):
-            state = TreeDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
+            inp_tensor, inp_tokens = self.sentence_encoder.convert(inp, return_what="tensor,tokens")
+            out_tensor, out_tokens = self.query_encoder.convert(out, return_what="tensor,tokens")
+            out_tensor = gold_map[out_tensor]
+
+            state = TreeDecoderState([inp], [out],
+                                     inp_tensor[None, :], out_tensor[None, :],
+                                     [inp_tokens], [out_tokens],
+                         self.sentence_encoder.vocab, self.query_encoder.vocab)
             state.eids = np.asarray([eid], dtype="int64")
             maxlen_in, maxlen_out = max(maxlen_in, len(state.inp_tokens[0])), max(maxlen_out, len(state.gold_tokens[0]))
             if split not in self.data:
@@ -402,8 +416,8 @@ class BasicGenModel(TransitionModel):
             init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
             # uncomment next line to initialize decoder state with last state of encoder
             # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
-            # if len(init_states) == init_rnn_state.h.size(1):
-            #     init_rnn_state.h = torch.stack(init_states, 1).contiguous()
+            if len(init_states) == init_rnn_state.h.size(1):
+                init_rnn_state.h = torch.stack(init_states, 1).contiguous()
             mstate.rnnstate = init_rnn_state
 
         if "prev_summ" not in mstate:
@@ -448,13 +462,13 @@ def do_rare_stats(ds, sentence_rare_tokens=None, query_rare_tokens=None):
             query_tokens = example.gold_tokens[0]
             both = True
             either = False
-            _sentence_rare_tokens = example.sentence_encoder.vocab.rare_tokens if sentence_rare_tokens is None else sentence_rare_tokens
+            _sentence_rare_tokens = example.sentence_vocab.rare_tokens if sentence_rare_tokens is None else sentence_rare_tokens
             if len(set(question_tokens) & _sentence_rare_tokens) > 0:
                 rare_in_question += 1
                 either = True
             else:
                 both = False
-            _query_rare_tokens = example.query_encoder.vocab.rare_tokens if query_rare_tokens is None else query_rare_tokens
+            _query_rare_tokens = example.query_vocab.rare_tokens if query_rare_tokens is None else query_rare_tokens
             if len(set(query_tokens) & _query_rare_tokens) > 0:
                 either = True
                 rare_in_query += 1
@@ -558,12 +572,12 @@ def run(lr=0.001,
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
 
-    tfdecoder = SeqDecoder(TFTransition(model),
-                           [CELoss(ignore_index=0, mode="logprobs"),
+    tfdecoder = SeqDecoder(model, tf_ratio=1.,
+                           eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"select", "count", "ask"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(FreerunningTransition(model, maxtime=40),
+    freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
                              eval=[SeqAccuracies(),
                                    TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                 orderless={"select", "count", "ask"})])

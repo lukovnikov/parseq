@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from parseq.grammar import lisp_to_pas, pas_to_tree, LispToPas
+from parseq.grammar import lisp_to_pas, pas_to_tree, LispToPas, lisp_to_tree, are_equal_trees
 
 
 class Test_lisp_to_pas(TestCase):
@@ -93,3 +93,23 @@ class Test_lisp_to_pas(TestCase):
         self.assertEqual(z, ("spouse", [("wife", [("director", ["'federal \"bureau\" of (investigations of )'"])])]))
 
 
+class TestEqualTrees(TestCase):
+    def test_it(self):
+        a = lisp_to_tree("(and (wife BO) (spouse BO))")
+        b = lisp_to_tree("(and (spouse BO) (wife BO))")
+        c = lisp_to_tree("(and (wife BO) (wife BO))")
+
+        print(are_equal_trees(a, a))        # should be True
+        print(are_equal_trees(a, b))        # should be True
+        print(are_equal_trees(a, c))        # should be False
+        self.assertTrue(are_equal_trees(a, a))
+        self.assertTrue(are_equal_trees(a, b))
+        self.assertFalse(are_equal_trees(a, c))
+
+    def test_it_unk(self):
+        a = lisp_to_tree("(and (wife BO) (spouse BO))")
+        b = lisp_to_tree("(and (wife BO) (spouse @UNK@))")
+        print(are_equal_trees(a, b))
+        print(are_equal_trees(b, b))
+        self.assertFalse(are_equal_trees(b, b))
+        self.assertFalse(are_equal_trees(a, b))

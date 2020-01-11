@@ -105,7 +105,7 @@ class PrologToTree(TreeStrParser):
 
     def close_level(self):
         siblings = self.stack.pop(-1)
-        self.stack[-1].extend(siblings)
+        self.stack[-1][-1].extend(siblings)
 
     def add_sibling(self, next_token):
         self.stack[-1].append(Tree(next_token, []))
@@ -360,11 +360,11 @@ class ActionTree(ParentedTree):
             return tree
 
 
-def are_equal_trees(self, other, orderless={"and", "or"}, use_terminator=False):
+def are_equal_trees(self, other, orderless={"and", "or"}, unktoken="@UNK@", use_terminator=False):
     if self is None or other is None:
         return False
     assert(isinstance(other, Tree) and isinstance(self, Tree))
-    if self._label != other._label:
+    if self._label != other._label or self._label == unktoken or other._label == unktoken:
         return False
     if self._label in orderless or orderless == "__ALL__":
         # check if every child is in other and other contains no more

@@ -4,6 +4,7 @@ import sys
 from functools import partial
 from typing import *
 
+import numpy as np
 import torch
 
 import qelos as q
@@ -18,12 +19,12 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy
-from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog
-from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2
-from parseq.states import DecodableState, BasicDecoderState, State
-from parseq.transitions import TransitionModel, LSTMCellTransition
+from parseq.decoding import SeqDecoder
+from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
+from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, prolog_to_tree
+from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, GRUEncoder
+from parseq.states import DecodableState, BasicDecoderState, State, batchstack, TreeDecoderState
+from parseq.transitions import TransitionModel, LSTMCellTransition, GRUTransition
 from parseq.vocab import SequenceEncoder, Vocab
 
 
@@ -108,16 +109,31 @@ class GeoQueryDatasetFunQL(object):
         for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
             self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
             self.query_encoder.inc_build_vocab(query, seen=split=="train")
-        for word, wordid in self.sentence_encoder.vocab.D.items():
+        for word, _ in self.sentence_encoder.vocab.counts.items():
             self.query_encoder.vocab.add_token(word, seen=False)
-        self.sentence_encoder.finalize_vocab(min_freq=min_freq)
-        self.query_encoder.finalize_vocab(min_freq=min_freq)
+        self.sentence_encoder.finalize_vocab(min_freq=min_freq, keep_rare=True)
+        self.query_encoder.finalize_vocab(min_freq=min_freq, keep_rare=True)
 
         self.build_data(questions, queries, splits)
 
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
+        gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
+        rare_tokens = self.query_encoder.vocab.rare_tokens - set(self.sentence_encoder.vocab.D.keys())
+        for rare_token in rare_tokens:
+            gold_map[self.query_encoder.vocab[rare_token]] = \
+                self.query_encoder.vocab[self.query_encoder.vocab.unktoken]
         for inp, out, split in zip(inputs, outputs, splits):
-            state = BasicDecoderState([inp], [out], self.sentence_encoder, self.query_encoder)
+
+            inp_tensor, inp_tokens = self.sentence_encoder.convert(inp, return_what="tensor,tokens")
+            gold_tree = prolog_to_tree(out)
+            assert(gold_tree is not None)
+            out_tensor, out_tokens = self.query_encoder.convert(out, return_what="tensor,tokens")
+            out_tensor = gold_map[out_tensor]
+
+            state = TreeDecoderState([inp], [gold_tree],
+                                      inp_tensor[None, :], out_tensor[None, :],
+                                      [inp_tokens], [out_tokens],
+                                      self.sentence_encoder.vocab, self.query_encoder.vocab)
             if split not in self.data:
                 self.data[split] = []
             self.data[split].append(state)
@@ -201,7 +217,7 @@ class GeoQueryDatasetSub(GeoQueryDatasetFunQL):
 def try_dataset():
     tt = q.ticktock("dataset")
     tt.tick("building dataset")
-    ds = GeoQueryDataset(sentence_encoder=SequenceEncoder(tokenizer=lambda x: x.split()))
+    ds = GeoQueryDatasetFunQL(sentence_encoder=SequenceEncoder(tokenizer=lambda x: x.split()))
     train_dl = ds.dataloader("train", batsize=19)
     test_dl = ds.dataloader("test", batsize=20)
     examples = set()
@@ -255,9 +271,8 @@ class BasicGenModel(TransitionModel):
             mask = inptensor != 0
             inpembs = self.inp_emb(inptensor)
             # inpembs = self.dropout(inpembs)
-            inpenc, final_enc = self.inp_enc(inpembs, mask)
-            final_enc = final_enc.view(final_enc.size(0), -1).contiguous()
-            final_enc = self.enc_to_dec(final_enc)
+            inpenc, final_encs = self.inp_enc(inpembs, mask)
+            # TODO
             mstate.ctx = inpenc
             mstate.ctx_mask = mask
 
@@ -300,19 +315,16 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
     encoder_dim = hdim
-    encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2]*numlayers), bidir=True, dropout_in=dropout)
+    encoder = GRUEncoder(embdim, encoder_dim // 2, numlayers, bidirectional=True, dropout=dropout)
     # encoder = PytorchSeq2SeqWrapper(
     #     torch.nn.LSTM(embdim, hdim, num_layers=numlayers, bidirectional=True, batch_first=True,
     #                   dropout=dropout))
     decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
     decoder_emb = TokenEmb(decoder_emb, rare_token_ids=query_encoder.vocab.rare_ids, rare_id=1)
     dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
-    decoder_rnn = [torch.nn.LSTMCell(dec_rnn_in_dim, hdim)]
-    for i in range(numlayers - 1):
-        decoder_rnn.append(torch.nn.LSTMCell(hdim, hdim))
-    decoder_rnn = LSTMCellTransition(*decoder_rnn, dropout=dropout)
+    decoder_rnn = GRUTransition(dec_rnn_in_dim, hdim, dropout=dropout)
     # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
-    decoder_out = PtrGenOutput2(hdim + encoder_dim, out_vocab=query_encoder.vocab)
+    decoder_out = PtrGenOutput(hdim + encoder_dim, out_vocab=query_encoder.vocab)
     decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
     attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
     enctodec = torch.nn.Sequential(
@@ -341,12 +353,12 @@ def do_rare_stats(ds:GeoQueryDatasetSub):
             query_tokens = example.gold_tokens[0]
             both = True
             either = False
-            if len(set(question_tokens) & example.sentence_encoder.vocab.rare_tokens) > 0:
+            if len(set(question_tokens) & example.sentence_vocab.rare_tokens) > 0:
                 rare_in_question += 1
                 either = True
             else:
                 both = False
-            if len(set(query_tokens) & example.query_encoder.vocab.rare_tokens) > 0:
+            if len(set(query_tokens) & example.query_vocab.rare_tokens) > 0:
                 either = True
                 rare_in_query += 1
             else:
@@ -379,18 +391,18 @@ def tensor2tree(x, D:Vocab=None):
             break
         elif x[i] == "(" or x[i][-1] == "(":
             parentheses_balance += 1
-        elif x[i] == ")":
+        elif x[i] == ")" or x[i][-1] == ")":
             parentheses_balance -= 1
         else:
             pass
 
     # balance parentheses
     while parentheses_balance > 0:
-        x.append(")")
+        x.append("_)")
         parentheses_balance -= 1
     i = len(x) - 1
     while parentheses_balance < 0 and i > 0:
-        if x[i] == ")":
+        if x[i] == ")" or x[i][-1] == ")":
             x.pop(i)
             parentheses_balance += 1
         i -= 1
@@ -400,13 +412,21 @@ def tensor2tree(x, D:Vocab=None):
     while i < len(x):
         if x[i-1][-1] == "(":
             pass
-        elif x[i] == ")":
+        elif x[i][-1] == ")":
             pass
         else:
             x.insert(i, ",")
             i += 1
         i += 1
-    return " ".join(x)
+
+    # convert to nltk.Tree
+    try:
+        prolog = " ".join(x)
+        prolog = prolog.replace("_)", ")")
+        tree, parsestate = prolog_to_tree(prolog, None)
+    except Exception as e:
+        tree = None
+    return tree
 
 
 
@@ -435,7 +455,7 @@ def run(lr=0.001,
     tt.tick("loading data")
     stemmer = PorterStemmer()
     tokenizer = lambda x: [stemmer.stem(xe) for xe in x.split()]
-    ds = GeoQueryDataset(sentence_encoder=SequenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
+    ds = GeoQueryDatasetFunQL(sentence_encoder=SequenceEncoder(tokenizer=tokenizer), min_freq=minfreq)
 
     train_dl = ds.dataloader("train", batsize=batsize)
     test_dl = ds.dataloader("test", batsize=batsize)
@@ -451,13 +471,13 @@ def run(lr=0.001,
     model = create_model(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
 
-    tfdecoder = SeqDecoder(TFTransition(model),
-                           [CELoss(ignore_index=0, mode="logprobs"),
-                            SeqAccuracies()])
+    tfdecoder = SeqDecoder(model, tf_ratio=1.,
+                           eval=[CELoss(ignore_index=0, mode="logprobs"),
+                            SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(FreerunningTransition(model, maxtime=100),
-                             [CELoss(ignore_index=0, mode="logprobs"),
-                              SeqAccuracies()])
+    freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
+                             eval=[CELoss(ignore_index=0, mode="logprobs"),
+                            SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
 
     # # test
     # tt.tick("doing one epoch")
@@ -510,7 +530,7 @@ def run(lr=0.001,
 
 
 if __name__ == '__main__':
-    try_basic_query_tokenizer()
+    # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
     q.argprun(run)

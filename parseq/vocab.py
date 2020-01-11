@@ -87,8 +87,11 @@ class Vocab(_Vocab):
     def __call__(self, item:int) -> str:
         return self.RD[item]
 
-    def number_of_ids(self):
-        return max(self.D.values()) + 1
+    def number_of_ids(self, last_nonrare=True):
+        if not last_nonrare:
+            return max(self.D.values()) + 1
+        else:
+            return max(set(self.D.values()) - self.rare_ids) + 1
 
     def reverse(self):
         return {v: k for k, v in self.D.items()}
@@ -173,9 +176,9 @@ class SequenceEncoder(VocabBuilder):
             for token in tokens:
                 self.vocab.add_token(token, seen=seen)
     
-    def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty):
+    def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty, keep_rare=False):
         self.vocab_final = True
-        self.vocab.finalize(min_freq=min_freq, top_k=top_k)
+        self.vocab.finalize(min_freq=min_freq, top_k=top_k, keep_rare=keep_rare)
         
     def vocabs_finalized(self):
         return self.vocab_final

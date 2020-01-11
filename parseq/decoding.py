@@ -10,10 +10,14 @@ from parseq.transitions import TransitionModel
 
 
 class SeqDecoder(torch.nn.Module):
-    def __init__(self, model:TransitionModel, eval:List[Union[Metric, Loss]]=tuple(), **kw):
+    def __init__(self, model:TransitionModel, eval:List[Union[Metric, Loss]]=tuple(),
+                 maxtime=100, tf_ratio=1.0, **kw):
         super(SeqDecoder, self).__init__(**kw)
         self.model = model
         self._metrics = eval
+        self.maxtime = maxtime
+        self.tf_ratio = tf_ratio
+        assert(self.tf_ratio == 1. or self.tf_ratio == 0)
 
     def forward(self, x:TrainableDecodableState) -> Tuple[Dict, State]:
         # sb = sb.make_copy()
@@ -26,9 +30,17 @@ class SeqDecoder(torch.nn.Module):
 
         all_terminated = x.all_terminated()
         while not all_terminated:
-            probs, preds, x, all_terminated = self.model(x, timestep=i)
-            outprobs.append(probs)
-            predactions.append(preds)
+            actionprobs, x = self.model(x)
+            _, _predactions = actionprobs.max(-1)
+            # feed next
+            if self.tf_ratio == 1.:
+                goldactions = x.get_gold(i)
+                x.step(goldactions)
+            elif self.tf_ratio == 0.:
+                x.step(_predactions)
+            all_terminated = x.all_terminated() or i >= self.maxtime - 1
+            outprobs.append(actionprobs)
+            predactions.append(_predactions)
             i += 1
 
         outprobs = torch.stack(outprobs, 1)
@@ -60,35 +72,6 @@ class SeqDecoderTransition(TransitionModel):
     def __init__(self, model:TransitionModel, **kw):
         super(SeqDecoderTransition, self).__init__(**kw)
         self.model = model
-
-
-class TFTransition(SeqDecoderTransition):
-    """
-    Teacher forcing transition.
-    """
-    def forward(self, x:TrainableDecodableState, timestep:int):
-        actionprobs, x = self.model(x)
-        _, predactions = actionprobs.max(-1)
-        # feed next
-        goldactions = x.get_gold(timestep)
-        x.step(goldactions)
-        return actionprobs, predactions, x, x.all_terminated()
-
-
-class FreerunningTransition(SeqDecoderTransition):
-    """
-    Freerunning transition.
-    """
-    def __init__(self, model:TransitionModel, maxtime=100, **kw):
-        super(FreerunningTransition, self).__init__(model, **kw)
-        self.maxtime = maxtime
-
-    def forward(self, x:DecodableState, timestep:int):
-        actionprobs, x = self.model(x)
-        # feed next
-        _, predactions = actionprobs.max(-1)
-        x.step(predactions)
-        return actionprobs, predactions, x, x.all_terminated() or timestep >= self.maxtime - 1
 
 
 class BeamDecoder(SeqDecoder):
