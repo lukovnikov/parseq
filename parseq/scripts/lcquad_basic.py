@@ -407,7 +407,8 @@ class BasicGenModel(TransitionModel):
             mstate.rnnstate = init_rnn_state
 
         if "prev_summ" not in mstate:
-            mstate.prev_summ = torch.zeros_like(ctx[:, 0])
+            # mstate.prev_summ = torch.zeros_like(ctx[:, 0])
+            mstate.prev_summ = init_states[-1]
         _emb = emb
         if self.feedatt == True:
             _emb = torch.cat([_emb, mstate.prev_summ], 1)
