@@ -22,9 +22,9 @@ from torch.utils.data import DataLoader
 from parseq.decoding import SeqDecoder
 from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, prolog_to_tree
-from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, GRUEncoder
+from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, GRUEncoder, LSTMEncoder
 from parseq.states import DecodableState, BasicDecoderState, State, batchstack, TreeDecoderState
-from parseq.transitions import TransitionModel, LSTMCellTransition, GRUTransition
+from parseq.transitions import TransitionModel, LSTMCellTransition, GRUTransition, LSTMTransition
 from parseq.vocab import SequenceEncoder, Vocab
 
 
@@ -323,18 +323,18 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
     encoder_dim = hdim * 2
-    encoder = GRUEncoder(embdim, hdim, numlayers, bidirectional=True, dropout=dropout)
+    encoder = LSTMEncoder(embdim, hdim, numlayers, bidirectional=True, dropout=dropout)
     # encoder = PytorchSeq2SeqWrapper(
     #     torch.nn.LSTM(embdim, hdim, num_layers=numlayers, bidirectional=True, batch_first=True,
     #                   dropout=dropout))
     decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
     decoder_emb = TokenEmb(decoder_emb, rare_token_ids=query_encoder.vocab.rare_ids, rare_id=1)
     dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
-    decoder_rnn = GRUTransition(dec_rnn_in_dim, hdim, dropout=dropout)
+    decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, dropout=dropout)
     # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
     decoder_out = PtrGenOutput(hdim + encoder_dim, out_vocab=query_encoder.vocab)
     decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
-    attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim), dropout=min(0.1, dropout))
+    attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim), dropout=min(0.0, dropout))
     enctodec = torch.nn.ModuleList([torch.nn.Sequential(
         torch.nn.Linear(encoder_dim, hdim),
         torch.nn.Tanh()
@@ -441,10 +441,10 @@ def tensor2tree(x, D:Vocab=None):
 def run(lr=0.001,
         batsize=20,
         epochs=100,
-        embdim=100,
-        encdim=200,
+        embdim=64,
+        encdim=128,
         numlayers=1,
-        dropout=.5,
+        dropout=.25,
         wreg=1e-10,
         cuda=False,
         gpu=0,
