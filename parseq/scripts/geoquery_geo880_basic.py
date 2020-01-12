@@ -275,7 +275,6 @@ class BasicGenModel(TransitionModel):
             inptensor = x.inp_tensor
             mask = inptensor != 0
             inpembs = self.inp_emb(inptensor)
-            inpembs = self.dropout(inpembs)
             inpenc, final_encs = self.inp_enc(inpembs, mask)
             init_states = []
             for i in range(len(final_encs)):
