@@ -276,7 +276,6 @@ class BasicGenModel(TransitionModel):
             mask = inptensor != 0
             inpembs = self.inp_emb(inptensor)
             inpembs = self.dropout(inpembs)
-            # inpembs = self.dropout(inpembs)
             inpenc, final_encs = self.inp_enc(inpembs, mask)
             init_states = []
             for i in range(len(final_encs)):
@@ -288,7 +287,6 @@ class BasicGenModel(TransitionModel):
         ctx_mask = mstate.ctx_mask
 
         emb = self.out_emb(x.prev_actions)
-        emb = self.dropout(emb)
 
         if not "rnnstate" in mstate:
             init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
@@ -334,7 +332,7 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
     decoder_out = PtrGenOutput(hdim + encoder_dim, out_vocab=query_encoder.vocab)
     decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
-    attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim), dropout=min(0.0, dropout))
+    attention = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim), dropout=min(0.0, dropout))
     enctodec = torch.nn.ModuleList([torch.nn.Sequential(
         torch.nn.Linear(encoder_dim, hdim),
         torch.nn.Tanh()
