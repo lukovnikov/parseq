@@ -68,6 +68,11 @@ class CELoss(Loss):
             probs = probs[:, :golds.size(1)]
         if probs.size(1) != golds.size(1):
             print(probs, golds)
+
+        selected = probs.gather(2, golds[:, :, None])
+        if torch.any(selected == -np.infty):
+            print("gold id could not be generated")
+
         loss = self.ce(probs, golds)
         return {"loss": loss}
 

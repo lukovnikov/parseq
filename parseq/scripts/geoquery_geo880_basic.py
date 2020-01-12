@@ -106,29 +106,33 @@ class GeoQueryDatasetFunQL(object):
         self.query_encoder = SequenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
 
         # build vocabularies
+        unktokens = set()
         for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
-            self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
-            self.query_encoder.inc_build_vocab(query, seen=split=="train")
-        for word, _ in self.sentence_encoder.vocab.counts.items():
+            question_tokens = self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
+            query_tokens = self.query_encoder.inc_build_vocab(query, seen=split=="train")
+            unktokens |= set(query_tokens) - set(question_tokens)
+        for word in self.sentence_encoder.vocab.counts.keys():
             self.query_encoder.vocab.add_token(word, seen=False)
         self.sentence_encoder.finalize_vocab(min_freq=min_freq, keep_rare=True)
         self.query_encoder.finalize_vocab(min_freq=min_freq, keep_rare=True)
+        unktokens = unktokens & self.query_encoder.vocab.rare_tokens
 
-        self.build_data(questions, queries, splits)
+        self.build_data(questions, queries, splits, unktokens=unktokens)
 
-    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
-        gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
-        rare_tokens = self.query_encoder.vocab.rare_tokens - set(self.sentence_encoder.vocab.D.keys())
-        for rare_token in rare_tokens:
-            gold_map[self.query_encoder.vocab[rare_token]] = \
-                self.query_encoder.vocab[self.query_encoder.vocab.unktoken]
+    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str], unktokens:Set[str]=None):
+        if unktokens is not None:
+            gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
+            for rare_token in unktokens:
+                gold_map[self.query_encoder.vocab[rare_token]] = \
+                    self.query_encoder.vocab[self.query_encoder.vocab.unktoken]
         for inp, out, split in zip(inputs, outputs, splits):
 
             inp_tensor, inp_tokens = self.sentence_encoder.convert(inp, return_what="tensor,tokens")
             gold_tree = prolog_to_tree(out)
             assert(gold_tree is not None)
             out_tensor, out_tokens = self.query_encoder.convert(out, return_what="tensor,tokens")
-            out_tensor = gold_map[out_tensor]
+            if gold_map is not None:
+                out_tensor = gold_map[out_tensor]
 
             state = TreeDecoderState([inp], [gold_tree],
                                       inp_tensor[None, :], out_tensor[None, :],
@@ -251,8 +255,9 @@ class DatasetSplitProxy(object):
 
 class BasicGenModel(TransitionModel):
     def __init__(self, inp_emb, inp_enc, out_emb, out_rnn:LSTMCellTransition,
-                 out_lin, att, enc_to_dec=None, feedatt=False, nocopy=False, **kw):
+                 out_lin, att, enc_to_dec=None, feedatt=False, nocopy=False, dropout=0., **kw):
         super(BasicGenModel, self).__init__(**kw)
+        self.dropout = torch.nn.Dropout(dropout)
         self.inp_emb, self.inp_enc = inp_emb, inp_enc
         self.out_emb, self.out_rnn, self.out_lin = out_emb, out_rnn, out_lin
         self.enc_to_dec = enc_to_dec
@@ -270,9 +275,12 @@ class BasicGenModel(TransitionModel):
             inptensor = x.inp_tensor
             mask = inptensor != 0
             inpembs = self.inp_emb(inptensor)
+            inpembs = self.dropout(inpembs)
             # inpembs = self.dropout(inpembs)
             inpenc, final_encs = self.inp_enc(inpembs, mask)
-            # TODO
+            init_states = []
+            for i in range(len(final_encs)):
+                init_states.append(self.enc_to_dec[i](final_encs[i][0]))
             mstate.ctx = inpenc
             mstate.ctx_mask = mask
 
@@ -280,15 +288,15 @@ class BasicGenModel(TransitionModel):
         ctx_mask = mstate.ctx_mask
 
         emb = self.out_emb(x.prev_actions)
+        emb = self.dropout(emb)
 
         if not "rnnstate" in mstate:
             init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
-            # uncomment next line to initialize decoder state with last state of encoder
-            # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
+            init_rnn_state.h = torch.stack(init_states, 1).contiguous()
             mstate.rnnstate = init_rnn_state
-
         if "prev_summ" not in mstate:
-            mstate.prev_summ = torch.zeros_like(ctx[:, 0])
+            # mstate.prev_summ = torch.zeros_like(ctx[:, 0])
+            mstate.prev_summ = final_encs[-1][0]
         _emb = emb
         if self.feedatt == True:
             _emb = torch.cat([_emb, mstate.prev_summ], 1)
@@ -314,8 +322,8 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
                  feedatt=False, nocopy=False):
     inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
-    encoder_dim = hdim
-    encoder = GRUEncoder(embdim, encoder_dim // 2, numlayers, bidirectional=True, dropout=dropout)
+    encoder_dim = hdim * 2
+    encoder = GRUEncoder(embdim, hdim, numlayers, bidirectional=True, dropout=dropout)
     # encoder = PytorchSeq2SeqWrapper(
     #     torch.nn.LSTM(embdim, hdim, num_layers=numlayers, bidirectional=True, batch_first=True,
     #                   dropout=dropout))
@@ -326,11 +334,11 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
     decoder_out = PtrGenOutput(hdim + encoder_dim, out_vocab=query_encoder.vocab)
     decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
-    attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim))
-    enctodec = torch.nn.Sequential(
+    attention = q.Attention(q.MatMulDotAttComp(hdim, encoder_dim), dropout=min(0.1, dropout))
+    enctodec = torch.nn.ModuleList([torch.nn.Sequential(
         torch.nn.Linear(encoder_dim, hdim),
         torch.nn.Tanh()
-    )
+    ) for _ in range(numlayers)])
     model = BasicGenModel(inpemb, encoder,
                           decoder_emb, decoder_rnn, decoder_out,
                           attention,
@@ -436,7 +444,7 @@ def run(lr=0.001,
         embdim=100,
         encdim=200,
         numlayers=1,
-        dropout=.2,
+        dropout=.5,
         wreg=1e-10,
         cuda=False,
         gpu=0,
@@ -495,8 +503,8 @@ def run(lr=0.001,
 
     # print(dict(tfdecoder.named_parameters()).keys())
 
-    losses = make_loss_array("loss", "elem_acc", "seq_acc")
-    vlosses = make_loss_array("loss", "seq_acc")
+    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
+    vlosses = make_loss_array("loss", "seq_acc", "tree_acc")
 
     # 4. define optim
     optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)

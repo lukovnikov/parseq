@@ -401,6 +401,8 @@ def are_equal_trees(self, other, orderless={"and", "or"}, unktoken="@UNK@", use_
         else:
             return False
     else:
+        if len(self) != len(other):
+            return False
         return all([are_equal_trees(selfchild, otherchild, orderless=orderless, use_terminator=use_terminator)
                     for selfchild, otherchild in zip(self, other)])
 

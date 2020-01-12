@@ -287,8 +287,8 @@ class _PtrGenOutput(torch.nn.Module):
 
         self.inp_vocab, self.out_vocab = None, out_vocab
 
-        # self.naningrad = torch.nn.Parameter(torch.zeros(200, 200))
-        # self.naningrad2 = torch.nn.Parameter(torch.zeros(1, out_vocab.number_of_ids()))
+        self.naningrad = torch.nn.Parameter(torch.zeros(1))
+        self.naningrad2 = torch.nn.Parameter(torch.zeros(1))
 
     # str_action_re=re.compile(r"^<W>\s->\s'(.+)'$")        # <-- for grammar actions
     def build_copy_maps(self, inp_vocab:Vocab, str_action_re=re.compile(r"^([^_].*)$")):
@@ -465,6 +465,7 @@ class PtrGenOutput(_PtrGenOutput):
 
             # - mix
             out_probs = ptr_or_gen_probs[:, 0:1] * self.sm(gen_probs) + ptr_or_gen_probs[:, 1:2] * ptr_scores
+            out_probs = torch.masked_fill(out_probs, out_probs == 0, 0)
             out_probs = torch.log(out_probs)
 
             # out_probs = out_probs.masked_fill(out_probs == 0, 0)

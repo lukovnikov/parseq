@@ -175,6 +175,9 @@ class SequenceEncoder(VocabBuilder):
                 tokens.append(self.endtoken)
             for token in tokens:
                 self.vocab.add_token(token, seen=seen)
+            return tokens
+        else:
+            return []
     
     def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty, keep_rare=False):
         self.vocab_final = True
