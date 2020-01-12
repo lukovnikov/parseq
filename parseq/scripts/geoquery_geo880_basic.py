@@ -19,8 +19,8 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
+from parseq.decoding import SeqDecoder, BeamDecoder
+from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy, BeamSeqAccuracies
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, prolog_to_tree
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, GRUEncoder, LSTMEncoder
 from parseq.states import DecodableState, BasicDecoderState, State, batchstack, TreeDecoderState
@@ -447,6 +447,7 @@ def run(lr=0.001,
         gpu=0,
         minfreq=2,
         gradnorm=3.,
+        beamsize=2,
         cosine_restarts=1.,
         ):
     # DONE: Porter stemmer
@@ -479,11 +480,21 @@ def run(lr=0.001,
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
-    # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
-                             eval=[CELoss(ignore_index=0, mode="logprobs"),
-                            SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
 
+    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
+    # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
+    if beamsize == 1:
+        freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
+                                 eval=[CELoss(ignore_index=0, mode="logprobs"),
+                                SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
+
+        vlosses = make_loss_array("seq_acc", "tree_acc")
+    else:
+        print("Doing beam search!")
+        freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=60,
+                                  eval=[SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
+
+        vlosses = make_loss_array("seq_acc", "tree_acc")
     # # test
     # tt.tick("doing one epoch")
     # for batch in iter(train_dl):
@@ -499,9 +510,6 @@ def run(lr=0.001,
     # beamdecoder(next(iter(train_dl)))
 
     # print(dict(tfdecoder.named_parameters()).keys())
-
-    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
-    vlosses = make_loss_array("loss", "seq_acc", "tree_acc")
 
     # 4. define optim
     optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)

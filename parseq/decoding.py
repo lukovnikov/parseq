@@ -75,7 +75,9 @@ class SeqDecoderTransition(TransitionModel):
 
 
 class BeamDecoder(SeqDecoder):
-    def __init__(self, model:TransitionModel, eval:List[Union[Metric, Loss]]=tuple(), eval_beam:List[Union[Metric, Loss]]=None,
+    def __init__(self, model:TransitionModel,
+                 eval:List[Union[Metric, Loss]]=tuple(),
+                 eval_beam:List[Union[Metric, Loss]]=tuple(),
                  beamsize=1, maxtime=100, copy_deep=False, **kw):
         model = BeamTransition(model, beamsize=beamsize, maxtime=maxtime, copy_deep=copy_deep)
         super(BeamDecoder, self).__init__(model, eval, **kw)
