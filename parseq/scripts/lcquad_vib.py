@@ -376,7 +376,7 @@ class BasicGenModel_VIB(TransitionModel):
         self.store_attn = store_attn
 
         # VIBs
-        self.vib_init = [VIB(encoder_dim) for _ in range(numlayers)] if vib_init else None
+        self.vib_init = torch.nn.ModuleList([VIB(encoder_dim) for _ in range(numlayers)]) if vib_init else None
         self.vib_enc = VIB_seq(encoder_dim) if vib_enc else None
 
         self.reset_parameters()
