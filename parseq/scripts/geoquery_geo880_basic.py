@@ -332,8 +332,8 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
     decoder_out = PtrGenOutput(hdim + encoder_dim, out_vocab=query_encoder.vocab)
     decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
-    # attention = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim), dropout=min(0.0, dropout))
-    attention = q.Attention(q.DotAttComp(), dropout=min(0.0, dropout))
+    attention = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim), dropout=min(0.0, dropout))
+    # attention = q.Attention(q.DotAttComp(), dropout=min(0.0, dropout))
     enctodec = torch.nn.ModuleList([torch.nn.Sequential(
         torch.nn.Linear(encoder_dim, hdim),
         torch.nn.Tanh()
