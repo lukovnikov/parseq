@@ -639,7 +639,7 @@ def run(lr=0.001,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
-    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader("valid", batsize), losses=vlosses, device=device)
+    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
     # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=valid_dl, losses=vlosses, device=device)
 
     # p = q.save_run(freedecoder, localargs, filepath=__file__)

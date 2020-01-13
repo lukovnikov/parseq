@@ -202,7 +202,7 @@ class LCQuaDnoENTDataset(object):
         validlen = int(round(0.1 * len(examples)))
         testlen = int(round(0.1 * len(examples)))
         splits = ["train"] * trainlen + ["valid"] * validlen + ["test"] * testlen
-        random.seed(42)
+        random.seed(1337)
         random.shuffle(splits)
         assert(len(splits) == len(examples))
 
@@ -577,14 +577,17 @@ def run(lr=0.001,
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"select", "count", "ask"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
-                             eval=[SeqAccuracies(),
-                                   TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"select", "count", "ask"})])
-    # freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
-    #                           eval=[SeqAccuracies()],
-    #                           eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-    #                                              orderless={"select", "count", "ask"})])
+    if beamsize == 1:
+        freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
+                                 eval=[SeqAccuracies(),
+                                       TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                    orderless={"select", "count", "ask"})])
+    else:
+
+        freedecoder = BeamDecoder(model, maxtime=30, beamsize=beamsize,
+                                  eval=[SeqAccuracies(),
+                                       TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                    orderless={"select", "count", "ask"})])
 
     # # test
     # tt.tick("doing one epoch")
@@ -636,7 +639,7 @@ def run(lr=0.001,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
-    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader("valid", batsize), losses=vlosses, device=device)
+    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
     # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=valid_dl, losses=vlosses, device=device)
 
     # p = q.save_run(freedecoder, localargs, filepath=__file__)
