@@ -202,7 +202,7 @@ class LCQuaDnoENTDataset(object):
         validlen = int(round(0.1 * len(examples)))
         testlen = int(round(0.1 * len(examples)))
         splits = ["train"] * trainlen + ["valid"] * validlen + ["test"] * testlen
-        random.seed(1337)
+        random.seed(42)
         random.shuffle(splits)
         assert(len(splits) == len(examples))
 
