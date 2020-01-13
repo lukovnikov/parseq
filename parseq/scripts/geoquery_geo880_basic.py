@@ -320,8 +320,8 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
                  feedatt=False, nocopy=False):
     inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
     inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
-    encoder_dim = hdim * 2
-    encoder = LSTMEncoder(embdim, hdim, numlayers, bidirectional=True, dropout=dropout)
+    encoder_dim = hdim
+    encoder = LSTMEncoder(embdim, hdim//2, numlayers, bidirectional=True, dropout=dropout)
     # encoder = PytorchSeq2SeqWrapper(
     #     torch.nn.LSTM(embdim, hdim, num_layers=numlayers, bidirectional=True, batch_first=True,
     #                   dropout=dropout))
@@ -332,7 +332,8 @@ def create_model(embdim=100, hdim=100, dropout=0., numlayers:int=1,
     # decoder_out = BasicGenOutput(hdim + encoder_dim, query_encoder.vocab)
     decoder_out = PtrGenOutput(hdim + encoder_dim, out_vocab=query_encoder.vocab)
     decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
-    attention = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim), dropout=min(0.0, dropout))
+    # attention = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim), dropout=min(0.0, dropout))
+    attention = q.Attention(q.DotAttComp(), dropout=min(0.0, dropout))
     enctodec = torch.nn.ModuleList([torch.nn.Sequential(
         torch.nn.Linear(encoder_dim, hdim),
         torch.nn.Tanh()
