@@ -10,7 +10,8 @@ from parseq.transitions import TransitionModel
 
 
 class SeqDecoder(torch.nn.Module):
-    def __init__(self, model:TransitionModel, eval:List[Union[Metric, Loss]]=tuple(),
+    def __init__(self, model:TransitionModel,
+                 eval:List[Union[Metric, Loss]]=tuple(),
                  maxtime=100, tf_ratio=1.0, **kw):
         super(SeqDecoder, self).__init__(**kw)
         self.model = model
@@ -49,17 +50,23 @@ class SeqDecoder(torch.nn.Module):
         golds = x.get_gold()
 
         metrics = [metric(outprobs, predactions, golds, x) for metric in self._metrics]
-        metrics = merge_dicts(*metrics)
+        metrics = merge_metric_dicts(*metrics)
         return metrics, x
 
 
-def merge_dicts(*dicts):
+def merge_metric_dicts(*dicts, sum_loss=True, sum_penalties=True):
     ret = {}
     for d in dicts:
         for k, v in d.items():
             if k in ret:
-                raise Exception(f"Key '{k}' already in return dict.")
-            ret[k] = v
+                if k == "loss" and sum_loss is True:
+                    ret[k] = ret[k] + v
+                elif k == "penalty" and sum_penalties is True:
+                    ret[k] = ret[k] + v
+                else:
+                    raise Exception(f"Key '{k}' already in return dict.")
+            else:
+                ret[k] = v
     return ret
 
 
@@ -99,11 +106,11 @@ class BeamDecoder(SeqDecoder):
         golds = x.bstates.get(0).get_gold()
 
         beam_metrics = [metric(outprobs, predactions, golds, x) for metric in self._beam_metrics]
-        beam_metrics = merge_dicts(*beam_metrics)
+        beam_metrics = merge_metric_dicts(*beam_metrics)
         # get top of the beam and run eval on top of the beam
         top_outprobs, top_predactions, top_x = outprobs[:, 0], predactions[:, 0], x.bstates.get(0)
         metrics = [metric(top_outprobs, top_predactions, golds, top_x) for metric in self._metrics]
-        metrics = merge_dicts(beam_metrics, *metrics)
+        metrics = merge_metric_dicts(beam_metrics, *metrics)
         return metrics, x
 
 

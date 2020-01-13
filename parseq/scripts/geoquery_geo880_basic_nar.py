@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, merge_dicts
+from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, merge_metric_dicts
 from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy
 from parseq.grammar import prolog_to_pas
 from parseq.nn import TokenEmb, BasicGenOutput
@@ -210,7 +210,7 @@ class NARTMModel(TransitionModel):
         _, predactions = outprobs.max(-1)
 
         metrics = [metric(outprobs, predactions, x) for metric in self._metrics]
-        metrics = merge_dicts(*metrics)
+        metrics = merge_metric_dicts(*metrics)
         return metrics, x
 
 

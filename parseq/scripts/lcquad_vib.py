@@ -25,13 +25,14 @@ from torch.utils.data import DataLoader
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, BeamDecoder, BeamTransition
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
+from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy, StatePenalty
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
     LSTMEncoder
 from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
 from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition, GRUTransition
+from parseq.vib import VIB, VIB_seq
 from parseq.vocab import SequenceEncoder, Vocab
 
 
@@ -330,12 +331,14 @@ def try_dataset():
     tt.tock("dataset built")
 
 
-class BasicGenModel(TransitionModel):
+class BasicGenModel_VIB(TransitionModel):
     def __init__(self, embdim, hdim, numlayers:int=1, dropout=0.,
                  sentence_encoder:SequenceEncoder=None,
                  query_encoder:SequenceEncoder=None,
-                 feedatt=False, store_attn=True, **kw):
-        super(BasicGenModel, self).__init__(**kw)
+                 feedatt=False, store_attn=True,
+                 vib_init=False, vib_enc=False,
+                 **kw):
+        super(BasicGenModel_VIB, self).__init__(**kw)
 
         inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
 
@@ -372,6 +375,10 @@ class BasicGenModel(TransitionModel):
 
         self.store_attn = store_attn
 
+        # VIBs
+        self.vib_init = [VIB(encoder_dim) for _ in range(numlayers)] if vib_init else None
+        self.vib_enc = VIB_seq(encoder_dim) if vib_enc else None
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -392,8 +399,10 @@ class BasicGenModel(TransitionModel):
     def forward(self, x:State):
         if not "mstate" in x:
             x.mstate = State()
+            x.mstate.vib = State()
         mstate = x.mstate
         init_states = []
+        final_encs_kls = torch.tensor([0])
         if not "ctx" in mstate:
             # encode input
             inptensor = x.inp_tensor
@@ -401,9 +410,15 @@ class BasicGenModel(TransitionModel):
             inpembs = self.inp_emb(inptensor)
             # inpembs = self.dropout(inpembs)
             inpenc, final_encs = self.inp_enc(inpembs, mask)
-            for i, final_enc in enumerate(final_encs):    # iter over layers
-                _fenc = self.enc_to_dec[i](final_enc[0])
-                init_states.append(_fenc)
+            final_encs = [final_enc[0] for final_enc in final_encs]
+
+            if self.vib_init is not None:
+                final_encs, final_enc_kls = zip(*[vib(final_enc) for vib, final_enc in zip(self.vib_init, final_encs)])
+                mstate.vib.init = final_enc_kls
+            if self.vib_enc is not None:
+                inpenc, inpenc_kl = self.vib_enc(inpenc, mask)
+                mstate.vib.enc = inpenc_kl
+            init_states = [enctodec(final_enc) for enctodec, final_enc in zip(self.enc_to_dec, final_encs)]
             mstate.ctx = inpenc
             mstate.ctx_mask = mask
 
@@ -422,7 +437,7 @@ class BasicGenModel(TransitionModel):
 
         if "prev_summ" not in mstate:
             # mstate.prev_summ = torch.zeros_like(ctx[:, 0])
-            mstate.prev_summ = final_encs[-1][0]
+            mstate.prev_summ = final_encs[-1]
         _emb = emb
         if self.feedatt == True:
             _emb = torch.cat([_emb, mstate.prev_summ], 1)
@@ -550,6 +565,9 @@ def run(lr=0.001,
         minfreq=3,
         gradnorm=3.,
         cosine_restarts=1.,
+        beta=0.001,
+        vib_init=True,
+        vib_enc=True,
         ):
     localargs = locals().copy()
     print(locals())
@@ -566,15 +584,20 @@ def run(lr=0.001,
     # print("input graph")
     # print(batch.batched_states)
 
-    model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+    model = BasicGenModel_VIB(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
+                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True,
+                              vib_init=vib_init, vib_enc=vib_enc)
 
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
+    losses = [CELoss(ignore_index=0, mode="logprobs")]
+    if vib_init:
+        losses.append(StatePenalty(lambda state: sum(state.mstate.vib.init), weight=beta))
+    if vib_enc:
+        losses.append(StatePenalty("mstate.vib.enc", weight=beta))
 
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
-                           eval=[CELoss(ignore_index=0, mode="logprobs"),
-                            SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                           eval=losses + [SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"select", "count", "ask"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
@@ -683,276 +706,6 @@ def run(lr=0.001,
         print(_testresults)
         assert(testresults == _testresults)
         tt.tock("tested")
-
-
-class ScoreModel(ABC, torch.nn.Module):
-    def forward(self, inp_tensor:torch.Tensor, cand_tensors:torch.Tensor, attn_tensors:torch.Tensor=None):
-        """
-        :param inp_tensor:      (batsize, inpseqlen) tensor of int ids
-        :param cand_tensors:    (batsize, beamsize, outseqlen) tensor of int ids
-        :param attn_tensors:    (batsize, beamsize, outseqlen, inpseqlen) tensor of attention probs
-        :return:                (batsize, beamsize) scores or probabilities
-        """
-        pass
-
-
-class SimpleScoreModel(ScoreModel):
-    """ Simple scoring model that uses two encoders and produces .dot-based scores. """
-    def __init__(self, inpemb, inpenc, outemb, outenc, comp, **kw):
-        super(SimpleScoreModel, self).__init__(**kw)
-        self.inpemb, self.outemb = inpemb, outemb
-        self.inpenc, self.outenc = inpenc, outenc
-
-        self.comp = comp
-
-    def forward(self, inp_tensor:torch.Tensor, cand_tensors:torch.Tensor, attn_tensors:torch.Tensor=None):
-        mask = inp_tensor != 0
-        inp_embedded = self.inpemb(inp_tensor)
-        inp_encoding = self.inpenc(inp_embedded, mask=mask)
-
-        out_encs = []
-        for i in range(cand_tensors.size(1)):
-            mask = cand_tensors[:, i] != 0
-            out_embedded = self.outemb(cand_tensors[:, i])
-            out_encoding = self.outenc(out_embedded, mask=mask)
-            out_encs.append(out_encoding)
-        out_encs = torch.stack(out_encs, 1)     # (batsize, beamsize, encdim)
-
-        scores = self.comp(inp_encoding, out_encs)
-        return scores
-
-
-class BeamReranker(TransitionModel):
-    def __init__(self, genmodel, scoremodel, beamsize=5, maxtime=100,
-                 copy_deep=False, endid=3, use_beamcache=True, **kw):
-        super(BeamReranker, self).__init__(**kw)
-        self.genmodel = genmodel
-        self.beammodel = BeamTransition(self.genmodel, beamsize=beamsize, maxtime=maxtime, copy_deep=copy_deep)
-        self.scoremodel = scoremodel
-        self.endid = endid
-        self._beamcache_actions = {}
-        self._beamcache_attentions = {}         # TODO: cache attentions too
-        self._beamcache_complete = False
-        self._use_beamcache = use_beamcache
-
-    def finalize_beamcache(self):
-        numex = max(self._beamcache_actions.keys()) + 1
-        ex = self._beamcache_actions[0]
-        beamsize, seqlen = ex.size(1), ex.size(2)
-        beamcache = torch.zeros(numex, beamsize, seqlen, dtype=torch.long, device=ex.device)
-        for k in self._beamcache_actions:
-            beamcache[k] = self._beamcache_actions[k]
-        self._beamcache_actions = beamcache
-        self._beamcache_complete = True
-
-    def forward(self, x:State):
-        _x = x
-        # run genmodel in beam decoder in non-training mode
-        if self._beamcache_complete and "eids" in x and self._use_beamcache:
-            eids = torch.tensor(x.eids, device=self._beamcache_actions.device)
-            predactions = self._beamcache_actions[eids]
-        else:
-            with torch.no_grad():
-                self.beammodel.eval()
-                x.start_decoding()
-                i = 0
-                all_terminated = x.all_terminated()
-                while not all_terminated:
-                    outprobs, predactions, x, all_terminated = self.beammodel(x, timestep=i)
-                    i += 1
-                if not self._beamcache_complete  and "eids" in _x and self._use_beamcache:
-                    for j, eid in enumerate(list(_x.eids)):
-                        self._beamcache_actions[eid] = predactions[j:j+1]
-
-        # if training, add gold to beam
-        if self.training:
-            golds = _x.get_gold()
-            # align gold dims
-            pass    # TODO
-
-        # replace everything after end id with padding (0)
-        # TODO
-
-        # run scoring model
-        # TODO
-
-        # re-arrange the beam
-        # TODO
-
-        # run eval
-
-
-class LSTMEncoderWrapper(torch.nn.Module):
-    def __init__(self, lstmencoder, **kw):
-        super(LSTMEncoderWrapper, self).__init__(**kw)
-        self.core = lstmencoder
-
-    def forward(self, x, mask=None):
-        enc, finalenc = self.core(x, mask)
-        return finalenc
-
-
-class DotSimilarity(torch.nn.Module):
-    def forward(self, x, y):
-        """
-        :param x:   (batsize, encdim)
-        :param y:   (batsize, beamsize, encdim)
-        :return:    (batsize, beamsize)
-        """
-        scores = torch.einsum("xd,xbd->xb", x, y)
-        return scores
-
-
-def run_rerank(lr=0.001,
-        batsize=20,
-        epochs=1,
-        embdim=301,     # not used
-        encdim=200,
-        numlayers=1,
-        beamsize=5,
-        dropout=.2,
-        wreg=1e-10,
-        cuda=False,
-        gpu=0,
-        minfreq=2,
-        gradnorm=3.,
-        cosine_restarts=1.,
-        domain="restaurants",
-        gensavedp="overnight_basic/run{}",
-        genrunid=1,
-        ):
-    localargs = locals().copy()
-    print(locals())
-    gensavedrunp = gensavedp.format(genrunid)
-    tt = q.ticktock("script")
-    device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
-    tt.tick("loading data")
-    ds = q.load_dataset(gensavedrunp)
-    # ds = OvernightDataset(domain=domain, sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq)
-    print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
-    tt.tock("data loaded")
-
-    do_rare_stats(ds)
-    # batch = next(iter(train_dl))
-    # print(batch)
-    # print("input graph")
-    # print(batch.batched_states)
-
-    genmodel, genargs = q.load_run(gensavedrunp)
-    # BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-    #                          sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
-
-    # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
-    # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
-
-    inpenc = q.LSTMEncoder(embdim, *([encdim // 2] * numlayers), bidir=True, dropout_in=dropout)
-    outenc = q.LSTMEncoder(embdim, *([encdim // 2] * numlayers), bidir=True, dropout_in=dropout)
-    scoremodel = SimpleScoreModel(genmodel.inp_emb, genmodel.out_emb,
-                                  LSTMEncoderWrapper(inpenc), LSTMEncoderWrapper(outenc),
-                                  DotSimilarity())
-
-    model = BeamReranker(genmodel, scoremodel, beamsize=beamsize, maxtime=50)
-
-    # todo: run over whole dataset to populate beam cache
-    testbatch = next(iter(ds.dataloader("train", batsize=2)))
-    model(testbatch)
-
-    sys.exit()
-
-    tfdecoder = SeqDecoder(TFTransition(model),
-                           [CELoss(ignore_index=0, mode="logprobs"),
-                            SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"op:and", "SW:concat"})])
-    # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
-                              eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                 orderless={"op:and", "SW:concat"})])
-
-    # # test
-    # tt.tick("doing one epoch")
-    # for batch in iter(train_dl):
-    #     batch = batch.to(device)
-    #     ttt.tick("start batch")
-    #     # with torch.no_grad():
-    #     out = tfdecoder(batch)
-    #     ttt.tock("end batch")
-    # tt.tock("done one epoch")
-    # print(out)
-    # sys.exit()
-
-    # beamdecoder(next(iter(train_dl)))
-
-    # print(dict(tfdecoder.named_parameters()).keys())
-
-    losses = make_loss_array("loss", "seq_acc", "tree_acc")
-    vlosses = make_loss_array("tree_acc", "tree_acc_at3", "tree_acc_at_last")
-
-    trainable_params = tfdecoder.named_parameters()
-    exclude_params = {"model.model.inp_emb.emb.weight"}   # don't train input embeddings if doing glove
-    trainable_params = [v for k, v in trainable_params if k not in exclude_params]
-
-    # 4. define optim
-    optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
-    # optim = torch.optim.SGD(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
-
-    # lr schedule
-    if cosine_restarts >= 0:
-        # t_max = epochs * len(train_dl)
-        t_max = epochs
-        print(f"Total number of updates: {t_max}")
-        lr_schedule = q.WarmupCosineWithHardRestartsSchedule(optim, 0, t_max, cycles=cosine_restarts)
-        reduce_lr = [lambda: lr_schedule.step()]
-    else:
-        reduce_lr = []
-
-    # 6. define training function
-    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
-    trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader("train", batsize), optim=optim, losses=losses,
-                         _train_batch=trainbatch, device=device, on_end=reduce_lr)
-
-    # 7. define validation function (using partial)
-    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader("valid", batsize), losses=vlosses, device=device)
-    # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=valid_dl, losses=vlosses, device=device)
-
-    # p = q.save_run(freedecoder, localargs, filepath=__file__)
-    # q.save_dataset(ds, p)
-    # _freedecoder, _localargs = q.load_run(p)
-    # _ds = q.load_dataset(p)
-    # sys.exit()
-
-    # 7. run training
-    tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
-    tt.tock("done training")
-
-    # testing
-    tt.tick("testing")
-    testresults = q.test_epoch(model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
-    print(testresults)
-    tt.tock("tested")
-
-    # save model?
-    tosave = input("Save this model? 'y(es)'=Yes, <int>=overwrite previous, otherwise=No) \n>")
-    if tosave.lower() == "y" or tosave.lower() == "yes" or re.match("\d+", tosave.lower()):
-        overwrite = int(tosave) if re.match("\d+", tosave) else None
-        p = q.save_run(model, localargs, filepath=__file__, overwrite=overwrite)
-        q.save_dataset(ds, p)
-        _model, _localargs = q.load_run(p)
-        _ds = q.load_dataset(p)
-
-        _freedecoder = BeamDecoder(_model, maxtime=50, beamsize=beamsize,
-                                  eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"op:and", "SW:concat"})])
-
-        # testing
-        tt.tick("testing reloaded")
-        _testresults = q.test_epoch(model=_freedecoder, dataloader=_ds.dataloader("test", batsize),
-                                    losses=vlosses, device=device)
-        print(_testresults)
-        assert(testresults == _testresults)
-        tt.tock("tested")
-
 
 
 if __name__ == '__main__':

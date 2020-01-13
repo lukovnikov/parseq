@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from functools import partial
 from typing import Union, Dict, Callable
 
 import nltk
@@ -74,7 +75,41 @@ class CELoss(Loss):
             print("gold id could not be generated")
 
         loss = self.ce(probs, golds)
-        return {"loss": loss}
+        return {"loss": loss, "ce": loss}
+
+
+def state_path_penalty_getter(x, spec=None):
+    path = spec.split(".")
+    o = x
+    for path_e in path:
+        o = getattr(o, path_e)
+    return o
+
+
+class StatePenalty(Loss):
+    def __init__(self, getter, weight=1., reduction="mean", name="penalty", **kw):
+        super(StatePenalty, self).__init__(**kw)
+        if isinstance(getter, str):
+            getter = partial(state_path_penalty_getter, spec=getter)
+        self.getter = getter
+        self.reduction = reduction
+        self.weight = weight
+        self._name = name
+
+    def forward(self, probs, predactions, gold, x:State=None) ->Dict:
+        # get tensor from state
+        penalty_vec = self.getter(x)
+        assert(penalty_vec.dim() == 1 and penalty_vec.size(0) == probs.size(0))
+        if self.reduction in ("mean", "default"):
+            penalty = penalty_vec.mean()
+        elif self.reduction == "sum":
+            penalty = penalty_vec.sum()
+        elif self.reduction in ("none", None):
+            penalty = penalty_vec
+        else:
+            raise Exception(f"unknown reduction mode: {self.reduction}")
+        ret = penalty * self.weight
+        return {"loss": ret, self._name: ret}
 
 
 class SeqAccuracies(Metric):
