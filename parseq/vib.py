@@ -10,11 +10,12 @@ class VIB(torch.nn.Module):
         self.fc_mu = torch.nn.Linear(self.indim, self.outdim)
         self.fc_logvar = torch.nn.Linear(self.indim, self.outdim)
 
-        self.r_mu = torch.zeros(1, self.outdim)
-        self.r_logvar = torch.zeros(1, self.outdim)
         if train_r:
-            self.r_mu = torch.nn.Parameter(self.r_mu)
-            self.r_logvar = torch.nn.Parameter(self.r_logvar)
+            self.r_mu = torch.nn.Parameter(torch.zeros(1, self.outdim))
+            self.r_logvar = torch.nn.Parameter(torch.zeros(1, self.outdim))
+        else:
+            self.register_buffer("r_mu", torch.zeros(1, self.outdim))
+            self.register_buffer("r_logvar", torch.zeros(1, self.outdim))
 
     def kl(self, mu, logvar):       # KL[N(mu, logvar) || N(self.r_mu, self.r_logvar)]
         mu_diff = self.r_mu - mu
