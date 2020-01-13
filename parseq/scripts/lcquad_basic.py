@@ -577,14 +577,17 @@ def run(lr=0.001,
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"select", "count", "ask"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
-                             eval=[SeqAccuracies(),
-                                   TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"select", "count", "ask"})])
-    # freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
-    #                           eval=[SeqAccuracies()],
-    #                           eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-    #                                              orderless={"select", "count", "ask"})])
+    if beamsize == 1:
+        freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
+                                 eval=[SeqAccuracies(),
+                                       TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                    orderless={"select", "count", "ask"})])
+    else:
+
+        freedecoder = BeamDecoder(model, maxtime=30, beamsize=beamsize,
+                                  eval=[SeqAccuracies(),
+                                       TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                    orderless={"select", "count", "ask"})])
 
     # # test
     # tt.tick("doing one epoch")
