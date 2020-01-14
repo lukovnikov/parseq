@@ -499,7 +499,7 @@ def run(lr=0.001,
     model = create_model(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
 
-    model.apply(initializer)
+    # model.apply(initializer)
 
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs"),
