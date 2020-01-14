@@ -440,6 +440,19 @@ def tensor2tree(x, D:Vocab=None):
     return tree
 
 
+def initializer(m):
+    if type(m) == torch.nn.Linear:
+        torch.nn.init.uniform_(m.weight, -0.1, 0.1)
+        if m.bias is not None:
+            torch.nn.init.uniform_(m.bias, -0.1, 0.1)
+    elif type(m) in (torch.nn.LSTM, torch.nn.GRU):
+        for name, param in m.named_parameters():
+            if "weight" in name or "bias" in name:
+                torch.nn.init.uniform(param, -0.1, 0.1)
+    elif type(m) == torch.nn.Embedding:
+        torch.nn.init.uniform_(m.weight, -0.1, 0.1)
+        torch.nn.init.constant_(m.weight[0], 0)
+
 
 def run(lr=0.001,
         batsize=20,
@@ -455,7 +468,7 @@ def run(lr=0.001,
         gradnorm=3.,
         beamsize=1,
         cosine_restarts=1.,
-        seed=123456,
+        seed=456789,
         ):
     # DONE: Porter stemmer
     # DONE: linear attention
@@ -486,6 +499,8 @@ def run(lr=0.001,
     model = create_model(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
 
+    model.apply(initializer)
+
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
@@ -494,8 +509,7 @@ def run(lr=0.001,
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
         freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
-                                 eval=[CELoss(ignore_index=0, mode="logprobs"),
-                                SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
+                                 eval=[SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
 
         vlosses = make_loss_array("seq_acc", "tree_acc")
     else:
