@@ -29,8 +29,8 @@ from parseq.transitions import TransitionModel, LSTMCellTransition, GRUTransitio
 from parseq.vocab import SequenceEncoder, Vocab
 
 
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+# torch.backends.cudnn.deterministic = True
+# torch.backends.cudnn.benchmark = False
 
 
 def stem_id_words(pas, idparents, stem=False, strtok=None):
@@ -455,6 +455,7 @@ def run(lr=0.001,
         gradnorm=3.,
         beamsize=1,
         cosine_restarts=1.,
+        seed=123456,
         ):
     # DONE: Porter stemmer
     # DONE: linear attention
@@ -462,8 +463,8 @@ def run(lr=0.001,
     # DONE: beam search
     # DONE: lr scheduler
     print(locals())
-    print(f"PyTorch seed: {torch.seed()}")
-    print(f"Numpy seed: {np.random.get_state()[1][0]}")
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
