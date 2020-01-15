@@ -480,6 +480,8 @@ def run(lr=0.001,
         ):
     localargs = locals().copy()
     print(locals())
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
