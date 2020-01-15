@@ -163,7 +163,7 @@ class TreeAccuracy(Metric):
         if predactions.dim() == 3:      # beam states
             # assert(isinstance(x, BeamState))
             # golds = x.bstates.get(0).get_gold()
-            gold_trees = x.gold_trees
+            gold_trees = [self.tensor2tree(goldse) for goldse in golds]
             rets = []
             for i in range(predactions.size(1)):
                 ret_i = compare(gold_trees, predactions[:, i])
