@@ -523,8 +523,8 @@ def run(lr=0.001,
     else:
 
         freedecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize,
-                                  eval=[SeqAccuracies(),
-                                       TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                  eval=[SeqAccuracies()],
+                                  eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                     orderless={"and", "or"})])
         vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
