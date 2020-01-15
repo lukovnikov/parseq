@@ -20,7 +20,8 @@ class SeqDecoder(torch.nn.Module):
         self.tf_ratio = tf_ratio
         assert(self.tf_ratio == 1. or self.tf_ratio == 0)
 
-    def forward(self, x:TrainableDecodableState) -> Tuple[Dict, State]:
+    def forward(self, x:TrainableDecodableState, tf_ratio:float=None) -> Tuple[Dict, State]:
+        tf_ratio = self.tf_ratio if tf_ratio is None else tf_ratio
         # sb = sb.make_copy()
         x.start_decoding()
 
@@ -34,10 +35,10 @@ class SeqDecoder(torch.nn.Module):
             actionprobs, x = self.model(x)
             _, _predactions = actionprobs.max(-1)
             # feed next
-            if self.tf_ratio == 1.:
+            if tf_ratio == 1.:
                 goldactions = x.get_gold(i)
                 x.step(goldactions)
-            elif self.tf_ratio == 0.:
+            elif tf_ratio == 0.:
                 x.step(_predactions)
             all_terminated = x.all_terminated() or i >= self.maxtime - 1
             outprobs.append(actionprobs)

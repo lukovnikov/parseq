@@ -17,7 +17,7 @@ class SelectedLoss(q.SelectedLinearLoss):
         To be used to output multiple losses from the model/ select one model output as training loss
     """
     def forward(self, model_outs, gold, **kw):
-        metrics, state = model_outs
+        metrics = model_outs[0]
         x = metrics[self.which]
         if self.reduction in ["elementwise_mean", "mean"]:
             ret = x.mean()

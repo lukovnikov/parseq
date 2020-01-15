@@ -202,7 +202,7 @@ class LCQuaDnoENTDataset(object):
         validlen = int(round(0.1 * len(examples)))
         testlen = int(round(0.1 * len(examples)))
         splits = ["train"] * trainlen + ["valid"] * validlen + ["test"] * testlen
-        random.seed(1337)
+        random.seed(123456)
         random.shuffle(splits)
         assert(len(splits) == len(examples))
 
@@ -271,15 +271,15 @@ class LCQuaDnoENTDataset(object):
         ret = data[0].merge(data)
         return ret
 
-    def dataloader(self, split:str=None, batsize:int=5):
+    def dataloader(self, split:str=None, batsize:int=5, shuffle=None):
         if split is None:   # return all splits
             ret = {}
             for split in self.data.keys():
                 ret[split] = self.dataloader(batsize=batsize, split=split)
             return ret
         else:
-            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split in ("train", "train+valid"),
-             collate_fn=type(self).collate_fn)
+            shuffle = shuffle if shuffle is not None else split in ("train", "train+valid")
+            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=shuffle, collate_fn=type(self).collate_fn)
             return dl
 
 
@@ -538,7 +538,7 @@ def split_tokenizer(x):
 
 def run(lr=0.001,
         batsize=50,
-        epochs=50,
+        epochs=0,
         embdim=100,
         encdim=100,
         numlayers=1,
@@ -550,9 +550,12 @@ def run(lr=0.001,
         minfreq=3,
         gradnorm=3.,
         cosine_restarts=1.,
+        seed=123456,
         ):
     localargs = locals().copy()
     print(locals())
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
@@ -576,18 +579,21 @@ def run(lr=0.001,
                            eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"select", "count", "ask"})])
+    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
         freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
                                  eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                     orderless={"select", "count", "ask"})])
+        vlosses = make_loss_array("seq_acc", "tree_acc")
     else:
 
         freedecoder = BeamDecoder(model, maxtime=30, beamsize=beamsize,
-                                  eval=[SeqAccuracies(),
-                                       TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                  eval=[SeqAccuracies()],
+                                  eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                     orderless={"select", "count", "ask"})])
+        vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # # test
     # tt.tick("doing one epoch")
@@ -669,20 +675,79 @@ def run(lr=0.001,
         overwrite = int(tosave) if re.match("\d+", tosave) else None
         p = q.save_run(model, localargs, filepath=__file__, overwrite=overwrite)
         q.save_dataset(ds, p)
+
+        # region reload
         _model, _localargs = q.load_run(p)
         _ds = q.load_dataset(p)
 
-        _freedecoder = BeamDecoder(_model, maxtime=50, beamsize=beamsize,
-                                  eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"op:and", "SW:concat"})])
+        freedecoder.model = _model
 
         # testing
         tt.tick("testing reloaded")
-        _testresults = q.test_epoch(model=_freedecoder, dataloader=_ds.dataloader("test", batsize),
+        _testresults = q.test_epoch(model=freedecoder, dataloader=_ds.dataloader("test", batsize),
                                     losses=vlosses, device=device)
         print(_testresults)
         assert(testresults == _testresults)
         tt.tock("tested")
+        # endregion
+
+        # save predictions
+        trainpreds = q.eval_loop(freedecoder, ds.dataloader("train", batsize=batsize, shuffle=False), device=device)
+        validpreds = q.eval_loop(freedecoder, ds.dataloader("valid", batsize=batsize, shuffle=False), device=device)
+        testpreds = q.eval_loop(freedecoder, ds.dataloader("test", batsize=batsize, shuffle=False), device=device)
+        trainpreds = get_arrays_to_save(trainpreds[1])
+        validpreds = get_arrays_to_save(validpreds[1])
+        testpreds = get_arrays_to_save(testpreds[1])
+        for fname, content in [("trainpreds.npz", trainpreds), ("validpreds.npz", validpreds), ("testpreds.npz", testpreds)]:
+            np.savez(os.path.join(p, fname), **content)
+
+    return testresults
+
+
+def print_run(p):
+    import tabulate
+    dataset = q.load_dataset(p, "dataset")
+    # load predictions
+    trainpreds = np.load(os.path.join(p, "trainpreds.npz"))
+    validpreds = np.load(os.path.join(p, "validpreds.npz"))
+    testpreds = np.load(os.path.join(p, "testpreds.npz"))
+    print(list(trainpreds.keys()))
+
+    for preds, split in ((trainpreds, "train"), (validpreds, "valid"), (testpreds, "test")):
+        inp_tensor = preds["inp_tensor"]
+        gold_tensor = preds["gold_tensor"]
+        pred_tensor = preds["followed_actions"]
+        attentions = preds["attentions"]
+        for i in range(len(inp_tensor)):
+            print(i)
+            inptensorstring = dataset.sentence_encoder.vocab.tostr(inp_tensor[i])
+            print(inptensorstring)
+            print(dataset.data[split][i].inp_strings[0])
+            goldtensorstring = dataset.query_encoder.vocab.tostr(gold_tensor[i])
+            print(goldtensorstring)
+            predtensorstring = dataset.query_encoder.vocab.tostr(pred_tensor[i])
+            print(predtensorstring)
+            print("seq same: ", dataset.query_encoder.vocab.tostr(gold_tensor[i]) == dataset.query_encoder.vocab.tostr(pred_tensor[i]))
+            print("attentions:")
+            att = np.argmax(attentions[i], -1)
+            att_entropies = np.sum(- attentions[i] * np.clip(np.log(attentions[i]), -9999999, 0), -1)
+            print(att)
+            print(att_entropies)
+
+
+def get_arrays_to_save(x:List[State]):
+    inp_tensors = torch.cat(q.pad_tensors([xe.inp_tensor for xe in x], 1), 0)
+    followed_actions = torch.cat(q.pad_tensors([xe.followed_actions for xe in x], 1), 0)
+    gold_tensors = torch.cat(q.pad_tensors([xe.gold_tensor for xe in x], 1), 0)
+    attentions = torch.cat(q.pad_tensors([xe.stored_attentions for xe in x], (1, 2)), 0)
+    return {
+        "inp_tensor": inp_tensors,
+        "gold_tensor": gold_tensors,
+        "followed_actions": followed_actions,
+        "attentions": attentions
+    }
+
+
 
 
 class ScoreModel(ABC, torch.nn.Module):
@@ -959,5 +1024,6 @@ if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
-    q.argprun(run)
+    # q.argprun(run)
+    print_run("lcquad_basic/run7/")
     # q.argprun(run_rerank)

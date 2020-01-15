@@ -93,6 +93,7 @@ def pas2toks(pas):
         ret.append(")")
         return ret
 
+
 def tree2toks(tree:Tree):
     if len(tree) == 0:
         return [tree.label()]
@@ -599,6 +600,6 @@ def run(lr=0.001,
 if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
-    # try_dataset()
-    q.argprun(run)
+    try_dataset()
+    # q.argprun(run)
     # q.argprun(run_rerank)
