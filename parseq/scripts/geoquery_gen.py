@@ -437,12 +437,12 @@ def tensor2tree(x, D:Vocab=None):
 
     # balance parentheses
     while parentheses_balance > 0:
-        # x.append(")")
+        x.append(")")
         parentheses_balance -= 1
     i = len(x) - 1
     while parentheses_balance < 0 and i > 0:
         if x[i] == ")":
-            # x.pop(i)
+            x.pop(i)
             parentheses_balance += 1
         i -= 1
 
