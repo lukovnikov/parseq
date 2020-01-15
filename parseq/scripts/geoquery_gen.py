@@ -437,12 +437,12 @@ def tensor2tree(x, D:Vocab=None):
 
     # balance parentheses
     while parentheses_balance > 0:
-        x.append(")")
+        # x.append(")")
         parentheses_balance -= 1
     i = len(x) - 1
     while parentheses_balance < 0 and i > 0:
         if x[i] == ")":
-            x.pop(i)
+            # x.pop(i)
             parentheses_balance += 1
         i -= 1
 
@@ -505,19 +505,19 @@ def run(lr=0.001,
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"or"})])
+                                                          orderless={"and", "or"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
         freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
                                  eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                    orderless={"or"})])
+                                                    orderless={"and", "or"})])
     else:
 
         freedecoder = BeamDecoder(model, maxtime=30, beamsize=beamsize,
                                   eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                    orderless={"or"})])
+                                                    orderless={"and", "or"})])
 
     # # test
     # tt.tick("doing one epoch")
