@@ -477,6 +477,7 @@ def run(lr=0.001,
         minfreq=2,
         gradnorm=3.,
         cosine_restarts=1.,
+        seed=456789,
         ):
     localargs = locals().copy()
     print(locals())
