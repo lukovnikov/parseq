@@ -166,6 +166,7 @@ class GeoDataset(object):
 
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str], unktokens:Set[str]=None):
         gold_map = None
+        maxlen_in, maxlen_out = 0, 0
         if unktokens is not None:
             gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
             for rare_token in unktokens:
@@ -187,6 +188,10 @@ class GeoDataset(object):
             if split not in self.data:
                 self.data[split] = []
             self.data[split].append(state)
+            maxlen_in = max(maxlen_in, len(inp_tokens))
+            maxlen_out = max(maxlen_out, len(out_tensor))
+        self.maxlen_input = maxlen_in
+        self.maxlen_output = maxlen_out
 
     def get_split(self, split:str):
         return DatasetSplitProxy(self.data[split])
@@ -487,7 +492,7 @@ def run(lr=0.001,
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
     ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq)
-    # print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
+    print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
     do_rare_stats(ds)
@@ -510,14 +515,14 @@ def run(lr=0.001,
 
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
-        freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
+        freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
                                  eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                     orderless={"and", "or"})])
         vlosses = make_loss_array("seq_acc", "tree_acc")
     else:
 
-        freedecoder = BeamDecoder(model, maxtime=30, beamsize=beamsize,
+        freedecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize,
                                   eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                     orderless={"and", "or"})])
