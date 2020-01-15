@@ -506,46 +506,22 @@ def run(lr=0.001,
                            eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"and", "or"})])
+    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
+
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
         freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
                                  eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                     orderless={"and", "or"})])
+        vlosses = make_loss_array("seq_acc", "tree_acc")
     else:
 
         freedecoder = BeamDecoder(model, maxtime=30, beamsize=beamsize,
                                   eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                     orderless={"and", "or"})])
-
-    # # test
-    # tt.tick("doing one epoch")
-    # for batch in iter(train_dl):
-    #     batch = batch.to(device)
-    #     ttt.tick("start batch")
-    #     # with torch.no_grad():
-    #     out = tfdecoder(batch)
-    #     ttt.tock("end batch")
-    # tt.tock("done one epoch")
-    # print(out)
-    # sys.exit()
-
-    # beamdecoder(next(iter(train_dl)))
-
-    # print(dict(tfdecoder.named_parameters()).keys())
-
-    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
-    vlosses = make_loss_array("seq_acc", "tree_acc")
-    # if beamsize >= 3:
-    #     vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at3", "tree_acc_at_last")
-    # else:
-    #     vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
-
-    # trainable_params = tfdecoder.named_parameters()
-    # exclude_params = set()
-    # exclude_params.add("model.model.inp_emb.emb.weight")   # don't train input embeddings if doing glove
-    # trainable_params = [v for k, v in trainable_params if k not in exclude_params]
+        vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # 4. define optim
     # optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
