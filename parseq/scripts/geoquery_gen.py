@@ -505,19 +505,19 @@ def run(lr=0.001,
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and", "or"})])
+                                                          orderless={"or"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
         freedecoder = SeqDecoder(model, maxtime=40, tf_ratio=0.,
                                  eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                    orderless={"and", "or"})])
+                                                    orderless={"or"})])
     else:
 
         freedecoder = BeamDecoder(model, maxtime=30, beamsize=beamsize,
                                   eval=[SeqAccuracies(),
                                        TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                    orderless={"and", "or"})])
+                                                    orderless={"or"})])
 
     # # test
     # tt.tick("doing one epoch")
@@ -585,7 +585,7 @@ def run(lr=0.001,
 
     # testing
     tt.tick("testing")
-    testresults = q.test_epoch(model=freedecoder, dataloader=ds.dataloader("valid", batsize), losses=vlosses, device=device)
+    testresults = q.test_epoch(model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
     print("validation test results: ", testresults)
     tt.tock("tested")
     tt.tick("testing")
