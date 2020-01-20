@@ -286,7 +286,7 @@ class ONRLSTMTransition(TransitionModel):
         y = x
         hs = q.unstack(state.h, 1)
         cs = q.unstack(state.c, 1)
-        levels = state.levels
+        levels = (state.levels - 1).clamp_min(0)
         perc = (levels.float() * self.p_step).clamp(0., 1-self.p_min)
 
         for l in range(len(self.cells)):
