@@ -538,7 +538,7 @@ def run(lr=0.001,
         seed=456789,
         p_step=.2,
         p_min=.3,
-        beta=.1,
+        beta=.01,
         ):
     localargs = locals().copy()
     print(locals())
@@ -568,7 +568,7 @@ def run(lr=0.001,
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=losses + [SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"and", "or"})])
-    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
+    losses = make_loss_array("loss", "penalty", "elem_acc", "seq_acc", "tree_acc")
 
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
