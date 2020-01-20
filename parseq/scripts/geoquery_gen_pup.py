@@ -31,7 +31,7 @@ from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tre
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
     LSTMEncoder
 from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
-from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition, GRUTransition
+from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition, GRUTransition, LSTMState
 from parseq.util import DatasetSplitProxy
 from parseq.vocab import SequenceEncoder, Vocab
 
@@ -286,6 +286,64 @@ class LSTMPUPLoss(torch.nn.Module):
         return ret
 
 
+class RRLSTMTransition(TransitionModel):
+    def __init__(self, indim, hdim, num_layers=1, dropout:float=0., **kw):
+        super(RRLSTMTransition, self).__init__(**kw)
+        self.indim, self.hdim, self.numlayers, self.dropoutp = indim, hdim, num_layers, dropout
+        dims = [indim] + [hdim]*num_layers
+        self.cells = torch.nn.ModuleList([
+            torch.nn.LSTMCell(dims[i-1], dims[i]) for i in range(1, len(dims))
+        ])
+        self.rr_gates = torch.nn.ModuleList([
+            torch.nn.Linear(dims[i-1] + hdim, dims[i])
+            for i in range(1, len(dims))
+        ])
+        self.dropout = torch.nn.Dropout(dropout)
+
+    def get_init_state(self, batsize, device=torch.device("cpu")):
+        state = State()
+        x = torch.ones(batsize, self.numlayers, self.hdim, device=device)
+        state.h = torch.zeros_like(x)
+        state.c = torch.zeros_like(x)
+        state.rr = torch.zeros_like(x)
+        return state
+
+    def forward(self, x, state):
+        y = x
+        rrs = q.unstack(state.rr, 1)
+        hs = q.unstack(state.h, 1)
+        cs = q.unstack(state.c, 1)
+
+        for l in range(len(self.cells)):
+            y = self.dropout(y)
+            # rr = rrs[l] + 2*torch.tanh(self.rr_gates[l](torch.cat([y, hs[l]], -1)))
+            rr = rrs[l] + 2 * torch.tanh(self.rr_gates[l](torch.cat([y, hs[l]], -1)))
+            rr_toobig = (rr.abs() > 1).float()
+            rr = rr / ((1-rr_toobig) + rr_toobig * rr.abs()).detach()
+            # rr is between -1 and 1
+            rrs[l] = rr
+            y, _c = self.cells[l](y, (hs[l], cs[l]))
+            rr = rr * 0.5 + 0.5     # rr between 0 and 1
+            cs[l] = rr * cs[l] + (1 - rr) * _c
+            hs[l] = y
+
+        state.h = torch.stack(hs, 1)
+        state.c = torch.stack(cs, 1)
+        state.rr = torch.stack(rrs, 1)
+
+        return y, state
+
+
+def try_rr_lstm():
+    t = RRLSTMTransition(5, 4, 2, dropout=0.1)
+    x = torch.rand(3, 5)
+    s_0 = t.get_init_state(3)
+    s_0.rr += -1
+    y, s_1 = t(x, s_0)
+    print(y)
+
+
+
 class BasicGenModel(TransitionModel):
     open_token = '('
     close_token = ')'
@@ -316,7 +374,7 @@ class BasicGenModel(TransitionModel):
         self.out_emb = decoder_emb
 
         dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
-        decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
+        decoder_rnn = RRLSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
         self.out_rnn = decoder_rnn
 
         decoder_out = BasicGenOutput(hdim + encoder_dim, vocab=query_encoder.vocab)
@@ -658,5 +716,5 @@ if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
+    # try_rr_lstm()
     q.argprun(run)
-    # q.argprun(run_rerank)
