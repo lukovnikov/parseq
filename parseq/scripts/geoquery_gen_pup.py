@@ -387,21 +387,22 @@ class BasicGenModel(TransitionModel):
                 init_rnn_state.h = torch.stack(init_states, 1).contiguous()
             mstate.rnnstate = init_rnn_state
 
-        # PUP stuff: !!! assumes LISP style queries with parentheses as separate tokens and only parentheses opening and closing clauses
-        refstates = []
-        levels = []
-        for i in range(len(x)):
-            refstate_i = mstate.rnnstate[i].make_copy(detach=True)
-            levels.append(0)
-            if (x.prev_actions[i] == self.open_id).item() is True:       # opening token "("
-                mstate.state_stack[i].append(mstate.rnnstate[i].make_copy(detach=True))
-            elif (x.prev_actions[i] == self.close_id).item() is True and len(mstate.state_stack[i]) > 0:    # closing token ")"
-                refstate_i = mstate.state_stack[i].pop(-1)
-                levels[i] = len(mstate.state_stack[i])
-            refstates.append(refstate_i)
+        if self.training:
+            # PUP stuff: !!! assumes LISP style queries with parentheses as separate tokens and only parentheses opening and closing clauses
+            refstates = []
+            levels = []
+            for i in range(len(x)):
+                refstate_i = mstate.rnnstate[i].make_copy(detach=True)
+                levels.append(0)
+                if (x.prev_actions[i] == self.open_id).item() is True:       # opening token "("
+                    mstate.state_stack[i].append(mstate.rnnstate[i].make_copy(detach=True))
+                elif (x.prev_actions[i] == self.close_id).item() is True and len(mstate.state_stack[i]) > 0:    # closing token ")"
+                    refstate_i = mstate.state_stack[i].pop(-1)
+                    levels[i] = len(mstate.state_stack[i])
+                refstates.append(refstate_i)
 
-        ploss = self.pup_loss(mstate.rnnstate, refstates[0].merge(refstates), torch.tensor(levels).to(emb.device))
-        mstate.plosses = mstate.plosses + ploss
+            ploss = self.pup_loss(mstate.rnnstate, refstates[0].merge(refstates), torch.tensor(levels).to(emb.device))
+            mstate.plosses = mstate.plosses + ploss
 
         if "prev_summ" not in mstate:
             # mstate.prev_summ = torch.zeros_like(ctx[:, 0])
