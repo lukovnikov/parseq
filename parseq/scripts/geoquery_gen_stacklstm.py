@@ -331,7 +331,7 @@ class StackLSTMTransition(TransitionModel):
             state.c = state.c * (1 - mask) + main_states.c * mask
 
         # stack management
-        for i, action in enumerate(list(stack_actions.numpy())):
+        for i, action in enumerate(list(stack_actions.cpu().numpy())):
             if action == 1: # push current main state onto stack, with zero state for reducer
                 main_state = self.main_lstm.get_init_state(1, device=state.h.device)
                 main_state.h = state.h[i:i+1]
