@@ -215,16 +215,16 @@ class GeoDataset(object):
         ret = data[0].merge(data)
         return ret
 
-    def dataloader(self, split:str=None, batsize:int=5):
+    def dataloader(self, split:str=None, batsize:int=5, shuffle=None):
         if split is None:   # return all splits
             ret = {}
             for split in self.data.keys():
-                ret[split] = self.dataloader(batsize=batsize, split=split)
+                ret[split] = self.dataloader(batsize=batsize, split=split, shuffle=shuffle)
             return ret
         else:
             assert(split in self.data.keys())
-            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=split=="train",
-             collate_fn=type(self).collate_fn)
+            shuffle = shuffle if shuffle is not None else split in ("train", "train+valid")
+            dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=shuffle, collate_fn=type(self).collate_fn)
             return dl
 
 
@@ -471,20 +471,20 @@ def split_tokenizer(x):
 
 def run(lr=0.001,
         batsize=20,
-        epochs=100,
+        epochs=70,
         embdim=128,
         encdim=400,
         numlayers=1,
-        beamsize=1,
+        beamsize=5,
         dropout=.5,
         wreg=1e-10,
         cuda=False,
         gpu=0,
         minfreq=2,
         gradnorm=3.,
-        smoothing=0.,
+        smoothing=0.2,
         cosine_restarts=1.,
-        seed=456789,
+        seed=123456,
         ):
     localargs = locals().copy()
     print(locals())
@@ -515,20 +515,17 @@ def run(lr=0.001,
                                                           orderless={"and", "or"})])
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
 
-    # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    if beamsize == 1:
-        freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
-                                 eval=[SeqAccuracies(),
-                                       TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                    orderless={"and", "or"})])
-        vlosses = make_loss_array("seq_acc", "tree_acc")
-    else:
+    freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
+                             eval=[SeqAccuracies(),
+                                   TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                orderless={"and", "or"})])
+    vlosses = make_loss_array("seq_acc", "tree_acc")
 
-        freedecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize,
-                                  eval=[SeqAccuracies()],
-                                  eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                    orderless={"and", "or"})])
-        vlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
+    beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize,
+                              eval=[SeqAccuracies()],
+                              eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
+                                                orderless={"and", "or"})])
+    beamlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # 4. define optim
     # optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
@@ -568,16 +565,18 @@ def run(lr=0.001,
 
     # testing
     tt.tick("testing")
-    testresults = q.test_epoch(model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
+    testresults = q.test_epoch(model=beamdecoder, dataloader=ds.dataloader("test", batsize), losses=beamlosses, device=device)
     print("validation test results: ", testresults)
     tt.tock("tested")
     tt.tick("testing")
-    testresults = q.test_epoch(model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
+    testresults = q.test_epoch(model=beamdecoder, dataloader=ds.dataloader("test", batsize), losses=beamlosses, device=device)
     print("test results: ", testresults)
     tt.tock("tested")
 
     # save model?
     tosave = input("Save this model? 'y(es)'=Yes, <int>=overwrite previous, otherwise=No) \n>")
+    # if True:
+    #     overwrite = None
     if tosave.lower() == "y" or tosave.lower() == "yes" or re.match("\d+", tosave.lower()):
         overwrite = int(tosave) if re.match("\d+", tosave) else None
         p = q.save_run(model, localargs, filepath=__file__, overwrite=overwrite)
@@ -585,17 +584,74 @@ def run(lr=0.001,
         _model, _localargs = q.load_run(p)
         _ds = q.load_dataset(p)
 
-        _freedecoder = BeamDecoder(_model, maxtime=50, beamsize=beamsize,
+        _freedecoder = BeamDecoder(_model, maxtime=100, beamsize=beamsize, copy_deep=True,
+                                  eval=[SeqAccuracies()],
                                   eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"op:and", "SW:concat"})])
 
         # testing
         tt.tick("testing reloaded")
-        _testresults = q.test_epoch(model=_freedecoder, dataloader=_ds.dataloader("test", batsize),
-                                    losses=vlosses, device=device)
-        print(_testresults)
-        assert(testresults == _testresults)
+        # _testresults = q.test_epoch(model=_freedecoder, dataloader=_ds.dataloader("test", batsize),
+        #                             losses=beamlosses, device=device)
+        # print(_testresults)
         tt.tock("tested")
+
+        # save predictions
+        _, testpreds = q.eval_loop(_freedecoder, ds.dataloader("test", batsize=batsize, shuffle=False), device=device)
+        testout = get_outputs_for_save(testpreds)
+        _, trainpreds = q.eval_loop(_freedecoder, ds.dataloader("train", batsize=batsize, shuffle=False), device=device)
+        trainout = get_outputs_for_save(trainpreds)
+
+        with open(os.path.join(p, "trainpreds.json"), "w") as f:
+            ujson.dump(trainout, f)
+
+        with open(os.path.join(p, "testpreds.json"), "w") as f:
+            ujson.dump(testout, f)
+
+
+def get_outputs_for_save(states):   # list of beam states
+    ret = []
+    for beamstate in states:
+        for i in range(len(beamstate)):
+            example = get_output_for_example(beamstate[i])
+            ret.append(example)
+    return ret
+
+
+def get_output_for_example(x):
+    sentence_vocab = x.bstates.get(0).sentence_vocab
+    query_vocab = x.bstates.get(0).query_vocab
+
+    sentence = sentence_vocab.tostr(x.bstates.get(0).inp_tensor[0], return_tokens=True)
+    gold = query_vocab.tostr(x.bstates.get(0).gold_tensor[0], return_tokens=True)
+
+    cands = []
+
+    for bstate in x.bstates._list:
+        cand = query_vocab.tostr(bstate.followed_actions[0], return_tokens=True)
+        alignments = []
+        align_entropies = []
+
+        for i in range(len(cand)):
+            att = bstate.stored_attentions[0, i]
+            entropy = - (att.clamp_min(1e-6).log() * att).sum()
+            _, amax = att.max(-1)
+            alignments.append(amax.cpu().item())
+            align_entropies.append(entropy.cpu().item())
+
+
+        cands.append({
+            "tokens": cand,
+            "alignments": alignments,
+            "align_entropies": align_entropies
+        })
+
+    ret = {
+        "sentence": sentence,
+        "gold": gold,
+        "candidates": cands
+    }
+    return ret
 
 
 if __name__ == '__main__':

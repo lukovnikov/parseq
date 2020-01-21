@@ -339,17 +339,20 @@ def batchstack(x:List[torch.Tensor]):
 
 
 class BeamState(DecodableState):
-    def __init__(self, states:List[DecodableState], scores:torch.Tensor=None,
+    def __init__(self, states:List[DecodableState]=None, scores:torch.Tensor=None,
                  actionprobs:List[torch.Tensor]=None, predactions:torch.Tensor=None):
-        bstates = ListState(*states)
-        batsize, beamsize = len(bstates), len(states)
-        bscores = torch.zeros(batsize, beamsize) if scores is None else scores
-        kw = {"bstates": bstates, "bscores": bscores}
-        if actionprobs is not None:
-            actionprobs = ListState(*actionprobs)
-            kw["actionprobs"] = actionprobs
-        kw["predactions"] = predactions
-        super(BeamState, self).__init__(**kw)
+        if states is not None:
+            bstates = ListState(*states)
+            batsize, beamsize = len(bstates), len(states)
+            bscores = torch.zeros(batsize, beamsize) if scores is None else scores
+            kw = {"bstates": bstates, "bscores": bscores}
+            if actionprobs is not None:
+                actionprobs = ListState(*actionprobs)
+                kw["actionprobs"] = actionprobs
+            kw["predactions"] = predactions
+            super(BeamState, self).__init__(**kw)
+        else:
+            super(BeamState, self).__init__()
 
     def start_decoding(self):
         raise Exception("states must have already been started decoding.")
