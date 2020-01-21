@@ -482,6 +482,7 @@ def run(lr=0.001,
         gpu=0,
         minfreq=2,
         gradnorm=3.,
+        smoothing=0.,
         cosine_restarts=1.,
         seed=456789,
         ):
@@ -509,7 +510,7 @@ def run(lr=0.001,
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
 
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
-                           eval=[CELoss(ignore_index=0, mode="logprobs"),
+                           eval=[CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"and", "or"})])
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")

@@ -602,6 +602,7 @@ def run(lr=0.001,
         gpu=0,
         minfreq=2,
         gradnorm=3.,
+        smoothing=0.,
         cosine_restarts=1.,
         seed=456789,
         p_step=.2,
@@ -629,7 +630,7 @@ def run(lr=0.001,
 
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
-    losses = [CELoss(ignore_index=0, mode="logprobs")]
+    losses = [CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing)]
 
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=losses + [SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
