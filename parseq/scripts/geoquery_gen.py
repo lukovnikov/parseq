@@ -394,7 +394,10 @@ class BasicGenModel(TransitionModel):
         mstate.prev_summ = summ
         enc = torch.cat([enc, summ], -1)
 
-        out_mask = x.get_out_mask(device=enc.device)
+        if self.training:
+            out_mask = None
+        else:
+            out_mask = x.get_out_mask(device=enc.device)
 
         if self.nocopy is True:
             outs = self.out_lin(enc, out_mask)
