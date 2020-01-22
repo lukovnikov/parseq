@@ -624,9 +624,9 @@ def run(lr=0.001,
 
         # testing
         tt.tick("testing reloaded")
-        # _testresults = q.test_epoch(model=_freedecoder, dataloader=_ds.dataloader("test", batsize),
-        #                             losses=beamlosses, device=device)
-        # print(_testresults)
+        _testresults = q.test_epoch(model=_freedecoder, dataloader=_ds.dataloader("test", batsize),
+                                    losses=beamlosses, device=device)
+        print(_testresults)
         tt.tock("tested")
 
         # save predictions
