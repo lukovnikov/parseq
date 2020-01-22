@@ -116,6 +116,7 @@ class SeqAccuracies(Metric):
     padid = 0
     unkid = 1
     def forward(self, probs, predactions, golds, x:State=None):   # must be BasicStates
+        # TODO: GOLD MUST CONTAIN END TOKEN !!!!!
         # golds = x.get_gold()
         mask = golds != 0
         if predactions.size(1) < golds.size(1):

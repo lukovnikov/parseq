@@ -163,7 +163,34 @@ class GeoDataset(object):
         self.sentence_encoder.finalize_vocab(min_freq=min_freq, keep_rare=True)
         self.query_encoder.finalize_vocab(min_freq=min_freq)
 
+        token_specs = self.build_token_specs(queries)
+        self.token_specs = token_specs
+
         self.build_data(questions, queries, splits)
+
+    def build_token_specs(self, outputs:Iterable[str]):
+        token_specs = dict()
+
+        def walk_the_tree(t, _ts):
+            l = t.label()
+            if l not in _ts:
+                _ts[l] = [np.infty, -np.infty]
+            minc, maxc = _ts[l]
+            _ts[l] = [min(minc, len(t)), max(maxc, len(t))]
+            for c in t:
+                walk_the_tree(c, _ts)
+
+        for out in outputs:
+            out_tokens = self.query_encoder.convert(out, return_what="tokens")[0]
+            assert(out_tokens[-1] == "@END@")
+            out_tokens = out_tokens[:-1]
+            out_str = " ".join(out_tokens)
+            tree = lisp_to_tree(out_str)
+            walk_the_tree(tree, token_specs)
+
+        token_specs["and"][1] = np.infty
+
+        return token_specs
 
     def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str], unktokens:Set[str]=None):
         gold_map = None
@@ -185,7 +212,8 @@ class GeoDataset(object):
             state = TreeDecoderState([inp], [gold_tree],
                                       inp_tensor[None, :], out_tensor[None, :],
                                       [inp_tokens], [out_tokens],
-                                      self.sentence_encoder.vocab, self.query_encoder.vocab)
+                                      self.sentence_encoder.vocab, self.query_encoder.vocab,
+                                     token_specs=self.token_specs)
             if split not in self.data:
                 self.data[split] = []
             self.data[split].append(state)
@@ -366,7 +394,7 @@ class BasicGenModel(TransitionModel):
         mstate.prev_summ = summ
         enc = torch.cat([enc, summ], -1)
 
-        out_mask = x.get_out_mask()
+        out_mask = x.get_out_mask(device=enc.device)
 
         if self.nocopy is True:
             outs = self.out_lin(enc, out_mask)

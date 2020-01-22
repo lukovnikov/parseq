@@ -507,7 +507,7 @@ class BasicDecoderState(TrainableDecodableState):
 
 class TreeDecoderState(TrainableDecodableState):
     endtoken = "@END@"
-    poptoken = ")"
+    reducetoken = ")"
     pushtoken = "("
     def __init__(self,
                  inp_strings:List[str]=None,
@@ -529,11 +529,13 @@ class TreeDecoderState(TrainableDecodableState):
             inp_tokens_ = np.array(range(len(inp_tokens)), dtype="object")
             gold_tokens_ = np.array(range(len(gold_tokens)), dtype="object")
             child_counts_ = np.array(range(len(gold_tokens)), dtype="object")   # stack of child counts
+            followed_tokens_ = np.array(range(len(gold_tokens)), dtype="object")
             for i in range(len(gold_trees)):
                 gold_trees_[i] = gold_trees[i]
                 inp_tokens_[i] = inp_tokens[i]
                 gold_tokens_[i] = gold_tokens[i]
                 child_counts_[i] = []
+                followed_tokens_[i] = []
 
             kw.update({"inp_strings": np.asarray(inp_strings),
                        "gold_trees": gold_trees_,
@@ -541,12 +543,24 @@ class TreeDecoderState(TrainableDecodableState):
                        "gold_tokens": gold_tokens_,
                        "inp_tensor": inp_tensor,
                        "gold_tensor": gold_tensor,
-                       "child_counts": child_counts_})
+                       "child_counts": child_counts_,
+                       "followed_tokens": followed_tokens_})
             super(TreeDecoderState, self).__init__(**kw)
 
             self.sentence_vocab = sentence_vocab
             self.query_vocab = query_vocab
             self.token_specs = token_specs
+            self.token_groups = None
+            if token_specs is not None:
+                self.token_groups = {
+                    "leaf": set(),
+                    "nonleaf": set(),
+                }
+                for t, (min_c, max_c) in self.token_specs.items():
+                    if min_c == 0 and max_c == 0:
+                        self.token_groups["leaf"].add(t)
+                    else:
+                        self.token_groups["nonleaf"].add(t)
 
             self.set(followed_actions = torch.zeros(len(inp_strings), 0, dtype=torch.long))
             self.set(_is_terminated = np.asarray([False for _ in self.inp_strings]))
@@ -559,6 +573,7 @@ class TreeDecoderState(TrainableDecodableState):
         ret.sentence_vocab = self.sentence_vocab
         ret.query_vocab = self.query_vocab
         ret.token_specs = self.token_specs
+        ret.token_groups = self.token_groups
         return ret
 
     @classmethod
@@ -568,6 +583,7 @@ class TreeDecoderState(TrainableDecodableState):
         ret.sentence_vocab = states[0].sentence_vocab
         ret.query_vocab = states[0].query_vocab
         ret.token_specs = states[0].token_specs
+        ret.token_groups = states[0].token_groups
         return ret
 
     def __getitem__(self, item):
@@ -575,6 +591,7 @@ class TreeDecoderState(TrainableDecodableState):
         ret.sentence_vocab = self.sentence_vocab
         ret.query_vocab = self.query_vocab
         ret.token_specs = self.token_specs
+        ret.token_groups = self.token_groups
         return ret
 
     def __setitem__(self, key, value:'TreeDecoderState'):
@@ -628,15 +645,69 @@ class TreeDecoderState(TrainableDecodableState):
         #         self.followed_actions_str[i] = self.followed_actions_str[i] + [token]
 
         self.followed_actions = torch.cat([self.followed_actions, tokens_pt[:, None]], 1)
+        token_strs = [self.query_vocab(tokenid) for tokenid in tokens_np]
+        for followed_tokens_i, token_str in zip(self.followed_tokens, token_strs):
+            followed_tokens_i.append(token_str)
 
         # self._is_terminated |= tokens_str == self.endtoken
         self._is_terminated = self._is_terminated | (tokens_np == self.query_vocab[self.endtoken])
+        #
+        # if self.token_specs is not None:
+        #     for token_str, child_count in zip(token_strs, self.child_counts):
+        #         token_spec = self.token_specs[token_str]
+        #         if token_spec == "PUSH":
+        #             cc = child_count[-1]
+        #             child_count[-1] = (cc[0] - 1, cc[1])
+        #             child_count.append(None)
+        #         elif token_spec == "RED":
+        #             assert(child_count[-1] in ((0, "="), (0, "+")))
+        #             child_count.pop(-1)
+        #         else:
+        #             if token_spec not in ((0, "="), (0, "+")):
+        #                 assert(child_count[-1] is None)   # must have been preceded by a PUSH
+        #                 child_count[-1] = token_spec
 
-        token_strs = []
-
-    def get_out_mask(self):
-        batsize = len(self)
-
+    def get_out_mask(self, device=torch.device("cpu")):
+        rets = []
+        for history in self.followed_tokens:
+            if len(history) == 0:
+                ret = {"("}
+            elif history[-1] in ("@END@", "@PAD@"):
+                ret = {"@PAD@"}
+            else:
+                child_counts = [0]
+                ancestors = []
+                for t in history:
+                    if t == self.pushtoken:
+                        child_counts.append(-1)
+                        ancestors.append(None)
+                    elif t == self.reducetoken:
+                        child_counts.pop(-1)
+                        ancestors.pop(-1)
+                        child_counts[-1] += 1
+                    else:
+                        child_counts[-1] += 1
+                        if ancestors[-1] is None:
+                            ancestors[-1] = t
+                ret = {self.reducetoken, self.pushtoken}
+                if len(ancestors) == 0:
+                    ret = {"@END@"}
+                elif child_counts[-1] == -1:
+                    ret |= self.token_groups["nonleaf"]
+                    ret -= {self.pushtoken}
+                else:
+                    ret |= self.token_groups["leaf"]
+                if len(ancestors) > 0 and ancestors[-1] in self.token_specs:
+                    parent_min_children, parent_max_children = self.token_specs[ancestors[-1]]
+                    if child_counts[-1] == parent_max_children:
+                        ret = {self.reducetoken}
+                    elif child_counts[-1] < parent_min_children:
+                        ret -= {self.reducetoken}
+            ret_ = torch.zeros(self.query_vocab.number_of_ids(), device=device)
+            for ret_i in ret:
+                ret_[self.query_vocab[ret_i]] = 1
+            rets.append(ret_)
+        return torch.stack(rets, 0)
 
     def get_gold(self, i:int=None):
         if i is None:
