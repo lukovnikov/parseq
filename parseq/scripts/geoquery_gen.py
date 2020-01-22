@@ -554,7 +554,7 @@ def run(lr=0.001,
                                                 orderless={"and", "or"})])
     vlosses = make_loss_array("seq_acc", "tree_acc")
 
-    beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize,
+    beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize, copy_deep=True,
                               eval=[SeqAccuracies()],
                               eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                 orderless={"and", "or"})])

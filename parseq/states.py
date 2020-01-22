@@ -687,7 +687,7 @@ class TreeDecoderState(TrainableDecodableState):
                         child_counts[-1] += 1
                     else:
                         child_counts[-1] += 1
-                        if ancestors[-1] is None:
+                        if len(ancestors) > 0 and ancestors[-1] is None:
                             ancestors[-1] = t
                 ret = {self.reducetoken, self.pushtoken}
                 if len(ancestors) == 0:
