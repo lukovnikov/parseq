@@ -131,22 +131,22 @@ def try_basic_query_tokenizer():
     # print(y)
 
 
-class GeoDataset(object):
+class GeoDatasetRank(object):
     def __init__(self,
-                 p="../../datasets/geo880dong/",
-                 sentence_encoder:SequenceEncoder=None,
+                 p="geoquery_gen/drogonrun3/",
                  min_freq:int=2,
                  splits=None, **kw):
-        super(GeoDataset, self).__init__(**kw)
-        self._initialize(p, sentence_encoder, min_freq)
+        super(GeoDatasetRank, self).__init__(**kw)
+        self._initialize(p)
         self.splits_proportions = splits
 
-    def _initialize(self, p, sentence_encoder:SequenceEncoder, min_freq:int):
+    def _initialize(self, p):
         self.data = {}
-        self.sentence_encoder = sentence_encoder
-        trainlines = [x.strip() for x in open(os.path.join(p, "train.txt"), "r").readlines()]
-        testlines = [x.strip() for x in open(os.path.join(p, "test.txt"), "r").readlines()]
-        splits = ["train"]*len(trainlines) + ["test"] * len(testlines)
+        with open(os.path.join(p, "trainpreds.json")) as f:
+            trainpreds = ujson.load(f)
+        with open(os.path.join(p, "testpreds.json")) as f:
+            testpreds = ujson.load(f)
+        splits = ["train"]*len(trainpreds) + ["test"] * len(testpreds)
         questions, queries = zip(*[x.split("\t") for x in trainlines])
         testqs, testxs = zip(*[x.split("\t") for x in testlines])
         questions += testqs
@@ -620,7 +620,7 @@ def run(lr=0.001,
         _freedecoder = BeamDecoder(_model, maxtime=100, beamsize=beamsize, copy_deep=True,
                                   eval=[SeqAccuracies()],
                                   eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and", "or"})])
+                                                          orderless={"op:and", "SW:concat"})])
 
         # testing
         tt.tick("testing reloaded")
