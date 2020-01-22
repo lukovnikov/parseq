@@ -165,12 +165,20 @@ class BasicGenOutput(torch.nn.Module):
         else:
             self.register_buffer("out_mask", None)
 
-    def forward(self, x:torch.Tensor, **kw):
+    def forward(self, x:torch.Tensor, out_mask=None, **kw):
+        """
+        :param x:           (batsize, hdim)
+        :param out_mask:    (batsize, vocsize)
+        :param kw:
+        :return:
+        """
         x = self.dropout(x)
         # - generation probs
         gen_probs = self.gen_lin(x)
         if self.out_mask is not None:
             gen_probs = gen_probs + torch.log(self.out_mask)[None, :]
+        if out_mask is not None:
+            gen_probs = gen_probs + torch.log(out_mask)
         gen_probs = self.logsm(gen_probs)
         return gen_probs
 

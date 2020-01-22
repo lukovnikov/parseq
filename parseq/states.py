@@ -507,6 +507,8 @@ class BasicDecoderState(TrainableDecodableState):
 
 class TreeDecoderState(TrainableDecodableState):
     endtoken = "@END@"
+    poptoken = ")"
+    pushtoken = "("
     def __init__(self,
                  inp_strings:List[str]=None,
                  gold_trees:List[ActionTree]=None,
@@ -516,6 +518,7 @@ class TreeDecoderState(TrainableDecodableState):
                  gold_tokens:List[List[str]]=None,
                  sentence_vocab:Vocab=None,
                  query_vocab:Vocab=None,
+                 token_specs=None,
                  **kw):
         if inp_strings is None:
             super(TreeDecoderState, self).__init__(**kw)
@@ -525,31 +528,37 @@ class TreeDecoderState(TrainableDecodableState):
             gold_trees_ = np.array(range(len(gold_trees)), dtype="object")
             inp_tokens_ = np.array(range(len(inp_tokens)), dtype="object")
             gold_tokens_ = np.array(range(len(gold_tokens)), dtype="object")
+            child_counts_ = np.array(range(len(gold_tokens)), dtype="object")   # stack of child counts
             for i in range(len(gold_trees)):
                 gold_trees_[i] = gold_trees[i]
                 inp_tokens_[i] = inp_tokens[i]
                 gold_tokens_[i] = gold_tokens[i]
+                child_counts_[i] = []
 
             kw.update({"inp_strings": np.asarray(inp_strings),
                        "gold_trees": gold_trees_,
                        "inp_tokens": inp_tokens_,
                        "gold_tokens": gold_tokens_,
                        "inp_tensor": inp_tensor,
-                       "gold_tensor": gold_tensor})
+                       "gold_tensor": gold_tensor,
+                       "child_counts": child_counts_})
             super(TreeDecoderState, self).__init__(**kw)
 
             self.sentence_vocab = sentence_vocab
             self.query_vocab = query_vocab
+            self.token_specs = token_specs
 
             self.set(followed_actions = torch.zeros(len(inp_strings), 0, dtype=torch.long))
             self.set(_is_terminated = np.asarray([False for _ in self.inp_strings]))
             self.set(_timesteps = np.asarray([0 for _ in self.inp_strings]))
+
 
     # State API override implementation
     def make_copy(self, ret=None, detach=None, deep=True):
         ret = super(TreeDecoderState, self).make_copy(ret=ret, detach=detach, deep=deep)
         ret.sentence_vocab = self.sentence_vocab
         ret.query_vocab = self.query_vocab
+        ret.token_specs = self.token_specs
         return ret
 
     @classmethod
@@ -558,12 +567,14 @@ class TreeDecoderState(TrainableDecodableState):
         ret = super(TreeDecoderState, cls).merge(states, ret=ret)
         ret.sentence_vocab = states[0].sentence_vocab
         ret.query_vocab = states[0].query_vocab
+        ret.token_specs = states[0].token_specs
         return ret
 
     def __getitem__(self, item):
         ret = super(TreeDecoderState, self).__getitem__(item)
         ret.sentence_vocab = self.sentence_vocab
         ret.query_vocab = self.query_vocab
+        ret.token_specs = self.token_specs
         return ret
 
     def __setitem__(self, key, value:'TreeDecoderState'):
@@ -620,6 +631,12 @@ class TreeDecoderState(TrainableDecodableState):
 
         # self._is_terminated |= tokens_str == self.endtoken
         self._is_terminated = self._is_terminated | (tokens_np == self.query_vocab[self.endtoken])
+
+        token_strs = []
+
+    def get_out_mask(self):
+        batsize = len(self)
+
 
     def get_gold(self, i:int=None):
         if i is None:

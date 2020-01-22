@@ -366,10 +366,12 @@ class BasicGenModel(TransitionModel):
         mstate.prev_summ = summ
         enc = torch.cat([enc, summ], -1)
 
+        out_mask = x.get_out_mask()
+
         if self.nocopy is True:
-            outs = self.out_lin(enc)
+            outs = self.out_lin(enc, out_mask)
         else:
-            outs = self.out_lin(enc, x.inp_tensor, scores)
+            outs = self.out_lin(enc, x.inp_tensor, scores, out_mask=out_mask)
         outs = (outs,) if not q.issequence(outs) else outs
         # _, preds = outs.max(-1)
 

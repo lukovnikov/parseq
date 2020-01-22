@@ -1024,6 +1024,6 @@ if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
-    # q.argprun(run)
-    print_run("lcquad_basic/run7/")
+    q.argprun(run)
+    # print_run("lcquad_basic/run7/")
     # q.argprun(run_rerank)
