@@ -598,7 +598,7 @@ def run(lr=0.001,
         smoothing=0.2,
         cosine_restarts=1.,
         seed=123456,
-        beta=-1,
+        beta=-1.,
         delay_til=-1,
         attack_til=-1,
         ):
