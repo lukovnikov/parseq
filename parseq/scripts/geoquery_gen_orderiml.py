@@ -598,6 +598,7 @@ def run(lr=0.001,
         smoothing=0.2,
         cosine_restarts=1.,
         seed=123456,
+        beta=-1,
         delay_til=-1,
         attack_til=-1,
         ):
@@ -612,7 +613,10 @@ def run(lr=0.001,
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
-    if attack_til <= 0:
+    if beta >= 0:
+        beta = q.hyperparam(beta)
+        beta_step = 0
+    elif attack_til <= 0:
         beta = q.hyperparam(1)  # beta means probability to sample original order
         beta_step = 0
     else:
