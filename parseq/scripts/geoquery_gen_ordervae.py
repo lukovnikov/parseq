@@ -167,7 +167,7 @@ def try_tree_permutations():
 
 
 class GeoDataset(object):
-    max_lins_allowed = 50
+    max_lins_allowed = 10
     def __init__(self,
                  p="../../datasets/geo880dong/",
                  sentence_encoder:SequenceEncoder=None,
