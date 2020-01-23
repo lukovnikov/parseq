@@ -5,6 +5,7 @@ import re
 import sys
 from abc import ABC
 from functools import partial
+from itertools import permutations, product
 from typing import *
 
 import dill as dill
@@ -25,7 +26,7 @@ from torch.utils.data import DataLoader
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, BeamDecoder, BeamTransition
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
+from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy, StatePenalty
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree, are_equal_trees
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
@@ -131,77 +132,153 @@ def try_basic_query_tokenizer():
     # print(y)
 
 
-class GeoDatasetRank(object):
+def get_tree_permutations(tree, orderless={"and", "or"}):
+    rets = []
+    if len(tree) == 0:
+        return [Tree(tree.label(), [])]
+    elif tree.label() in orderless:
+        for permutation in permutations(tree):
+            child_perms = [get_tree_permutations(child, orderless=orderless) for child in permutation]
+            for children in product(*child_perms):
+                ret = Tree(tree.label(), children)
+                rets.append(ret)
+        return rets
+    else:
+        child_perms = [get_tree_permutations(child, orderless=orderless) for child in tree]
+        for children in product(*child_perms):
+            ret = Tree(tree.label(), children)
+            rets.append(ret)
+        return rets
+
+
+def try_tree_permutations():
+    tree = Tree("x", [Tree("a", [Tree("1", []), Tree("2", []), Tree("3", [])]), Tree("b", [Tree("1", []), Tree("2", [])])])
+    print(tree)
+    print("")
+    perms = []
+    unique_perms = set()
+    for tree_perm in get_tree_permutations(tree, orderless={"a", "x"}):
+        print(tree_perm)
+        assert(are_equal_trees(tree, tree_perm, orderless={"a", "x"}))
+        unique_perms.add(str(tree_perm))
+        perms.append(str(tree_perm))
+
+    print(len(unique_perms), len(perms))
+
+
+class GeoDataset(object):
+    max_lins_allowed = 50
     def __init__(self,
-                 p="geoquery_gen/drogonrun3/",
+                 p="../../datasets/geo880dong/",
+                 sentence_encoder:SequenceEncoder=None,
                  min_freq:int=2,
                  splits=None, **kw):
-        super(GeoDatasetRank, self).__init__(**kw)
-        self._initialize(p)
+        super(GeoDataset, self).__init__(**kw)
+        self._initialize(p, sentence_encoder, min_freq)
         self.splits_proportions = splits
 
-    def _initialize(self, p):
+    def _initialize(self, p, sentence_encoder:SequenceEncoder, min_freq:int):
         self.data = {}
-        with open(os.path.join(p, "trainpreds.json")) as f:
-            trainpreds = ujson.load(f)
-        with open(os.path.join(p, "testpreds.json")) as f:
-            testpreds = ujson.load(f)
-        splits = ["train"]*len(trainpreds) + ["test"] * len(testpreds)
-        preds = trainpreds + testpreds
+        self.sentence_encoder = sentence_encoder
+        trainlines = [x.strip() for x in open(os.path.join(p, "train.txt"), "r").readlines()]
+        testlines = [x.strip() for x in open(os.path.join(p, "test.txt"), "r").readlines()]
+        splits = ["train"]*len(trainlines) + ["test"] * len(testlines)
+        questions, queries = zip(*[x.split("\t") for x in trainlines])
+        testqs, testxs = zip(*[x.split("\t") for x in testlines])
+        questions += testqs
+        queries += testxs
 
-        self.sentence_encoder = SequenceEncoder(tokenizer=lambda x: x.split())
-        self.query_encoder = SequenceEncoder(tokenizer=lambda x: x.split())
+        self.query_encoder = SequenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=sentence_encoder.tokenizer), add_end_token=True)
 
         # build vocabularies
-        for i, (example, split) in enumerate(zip(preds, splits)):
-            self.sentence_encoder.inc_build_vocab(" ".join(example["sentence"]), seen=split=="train")
-            self.query_encoder.inc_build_vocab(" ".join(example["gold"]), seen=split=="train")
-            for can in example["candidates"]:
-                self.query_encoder.inc_build_vocab(" ".join(can["tokens"]), seen=False)
+        for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
+            self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
+            self.query_encoder.inc_build_vocab(query, seen=split=="train")
         # for word, wordid in self.sentence_encoder.vocab.D.items():
         #     self.query_encoder.vocab.add_token(word, seen=False)
-        self.sentence_encoder.finalize_vocab()
-        self.query_encoder.finalize_vocab()
+        self.sentence_encoder.finalize_vocab(min_freq=min_freq, keep_rare=True)
+        self.query_encoder.finalize_vocab(min_freq=min_freq)
 
-        self.build_data(preds, splits)
+        token_specs = self.build_token_specs(queries)
+        self.token_specs = token_specs
 
-    def build_data(self, examples:Iterable[dict], splits:Iterable[str]):
+        self.build_data(questions, queries, splits)
+
+    def build_token_specs(self, outputs:Iterable[str]):
+        token_specs = dict()
+
+        def walk_the_tree(t, _ts):
+            l = t.label()
+            if l not in _ts:
+                _ts[l] = [np.infty, -np.infty]
+            minc, maxc = _ts[l]
+            _ts[l] = [min(minc, len(t)), max(maxc, len(t))]
+            for c in t:
+                walk_the_tree(c, _ts)
+
+        for out in outputs:
+            out_tokens = self.query_encoder.convert(out, return_what="tokens")[0]
+            assert(out_tokens[-1] == "@END@")
+            out_tokens = out_tokens[:-1]
+            out_str = " ".join(out_tokens)
+            tree = lisp_to_tree(out_str)
+            walk_the_tree(tree, token_specs)
+
+        token_specs["and"][1] = np.infty
+
+        return token_specs
+
+    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str], unktokens:Set[str]=None):
+        gold_map = None
         maxlen_in, maxlen_out = 0, 0
-        for example, split in zip(examples, splits):
-            inp, out = " ".join(example["sentence"]), " ".join(example["gold"])
+        maxlins = 0
+        numlins_counts = [0] * (self.max_lins_allowed + 1)
+        if unktokens is not None:
+            gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
+            for rare_token in unktokens:
+                gold_map[self.query_encoder.vocab[rare_token]] = \
+                    self.query_encoder.vocab[self.query_encoder.vocab.unktoken]
+        for inp, out, split in zip(inputs, outputs, splits):
+
             inp_tensor, inp_tokens = self.sentence_encoder.convert(inp, return_what="tensor,tokens")
-            gold_tree = lisp_to_tree(" ".join(example["gold"][:-1]))
+            gold_tree = lisp_to_tree(out)
             assert(gold_tree is not None)
-            gold_tensor, gold_tokens = self.query_encoder.convert(out, return_what="tensor,tokens")
+            out_tensor, out_tokens = self.query_encoder.convert(out, return_what="tensor,tokens")
 
-            candidate_tensors, candidate_tokens, candidate_align_tensors = [], [], []
-            candidate_align_entropies = []
-            candidate_trees = []
-            candidate_same = []
-            for cand in example["candidates"]:
-                cand_tree = lisp_to_tree(" ".join(cand["tokens"][:-1]))
-                assert(cand_tree is not None)
-                cand_tensor, cand_tokens = self.query_encoder.convert(" ".join(cand["tokens"]), return_what="tensor,tokens")
-                candidate_tensors.append(cand_tensor)
-                candidate_tokens.append(cand_tokens)
-                candidate_align_tensors.append(torch.tensor(cand["alignments"]))
-                candidate_align_entropies.append(torch.tensor(cand["align_entropies"]))
-                candidate_trees.append(cand_tree)
-                candidate_same.append(are_equal_trees(cand_tree, gold_tree, orderless={"and", "or"}, unktoken="@NOUNKTOKENHERE@"))
+            if split == "train":
+                gold_tree_ = tensor2tree(out_tensor, self.query_encoder.vocab)
+                numlins = 0
+                for gold_tree_reordered in get_tree_permutations(gold_tree_, orderless={"and", "or"}):
+                    if numlins >= self.max_lins_allowed:
+                        break
+                    out_ = tree_to_lisp(gold_tree_reordered)
+                    out_tensor_, out_tokens_ = self.query_encoder.convert(out_, return_what="tensor,tokens")
+                    if gold_map is not None:
+                        out_tensor = gold_map[out_tensor]
 
-            candidate_tensor = torch.stack(q.pad_tensors(candidate_tensors, 0), 0)
-            candidate_align_tensor = torch.stack(q.pad_tensors(candidate_align_tensors, 0), 0)
-            candidate_align_entropy = torch.stack(q.pad_tensors(candidate_align_entropies, 0), 0)
-            candidate_same = torch.tensor(candidate_same)
+                    state = TreeDecoderState([inp], [gold_tree_reordered],
+                                              inp_tensor[None, :], out_tensor_[None, :],
+                                              [inp_tokens], [out_tokens_],
+                                              self.sentence_encoder.vocab, self.query_encoder.vocab,
+                                             token_specs=self.token_specs)
+                    if split not in self.data:
+                        self.data[split] = []
+                    self.data[split].append(state)
+                    numlins += 1
+                numlins_counts[numlins] += 1
+                maxlins = max(maxlins, numlins)
+            else:
+                if gold_map is not None:
+                    out_tensor = gold_map[out_tensor]
 
-            state = RankState([inp], [gold_tree],
-                                      inp_tensor[None, :], out_tensor[None, :],
-                                      [inp_tokens], [out_tokens],
-                                      self.sentence_encoder.vocab, self.query_encoder.vocab,
-                                     token_specs=self.token_specs)
-            if split not in self.data:
-                self.data[split] = []
-            self.data[split].append(state)
+                state = TreeDecoderState([inp], [gold_tree],
+                                         inp_tensor[None, :], out_tensor[None, :],
+                                         [inp_tokens], [out_tokens],
+                                         self.sentence_encoder.vocab, self.query_encoder.vocab,
+                                         token_specs=self.token_specs)
+                if split not in self.data:
+                    self.data[split] = []
+                self.data[split].append(state)
             maxlen_in = max(maxlen_in, len(inp_tokens))
             maxlen_out = max(maxlen_out, len(out_tensor))
         self.maxlen_input = maxlen_in
@@ -244,7 +321,7 @@ class GeoDatasetRank(object):
 def try_dataset():
     tt = q.ticktock("dataset")
     tt.tick("building dataset")
-    ds = GeoDatasetRank()
+    ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=lambda x: x.split()))
     train_dl = ds.dataloader("train", batsize=20)
     test_dl = ds.dataloader("test", batsize=20)
     examples = set()
@@ -277,11 +354,14 @@ def try_dataset():
 
 
 class BasicGenModel(TransitionModel):
-    def __init__(self, embdim, hdim, numlayers:int=1, dropout=0.,
+    def __init__(self, embdim, hdim, numlayers:int=1, dropout=0., zdim=None,
                  sentence_encoder:SequenceEncoder=None,
                  query_encoder:SequenceEncoder=None,
                  feedatt=False, store_attn=True, **kw):
         super(BasicGenModel, self).__init__(**kw)
+
+        self.embdim, self.hdim, self.numlayers, self.dropout = embdim, hdim, numlayers, dropout
+        self.zdim = embdim if zdim is None else zdim
 
         inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
         inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
@@ -298,9 +378,12 @@ class BasicGenModel(TransitionModel):
         decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
         self.out_emb = decoder_emb
 
-        dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
+        dec_rnn_in_dim = embdim + self.zdim + (encoder_dim if feedatt else 0)
         decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
         self.out_rnn = decoder_rnn
+        self.out_enc = LSTMEncoder(embdim, hdim //2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        self.out_mu = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim))
+        self.out_logvar = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim))
 
         decoder_out = BasicGenOutput(hdim + encoder_dim, vocab=query_encoder.vocab)
         # decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
@@ -353,6 +436,24 @@ class BasicGenModel(TransitionModel):
             mstate.ctx = inpenc
             mstate.ctx_mask = mask
 
+        if not "outenc" in mstate:
+            if self.training:
+                outtensor = x.gold_tensor
+                mask = outtensor != 0
+                outembs = self.out_emb(outtensor)
+                _, final_outenc = self.out_enc(outembs, mask)
+                finalenc = final_outenc[-1][0]
+                # reparam
+                mu = self.out_mu(finalenc)
+                logvar = self.out_logvar(finalenc)
+                std = torch.exp(.5*logvar)
+                eps = torch.randn_like(std)
+                outenc = mu + eps * std
+                mstate.outenc = outenc
+                mstate.kld = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), -1)
+            else:
+                mstate.outenc = torch.randn(x.inp_tensor.size(0), self.zdim, device=x.inp_tensor.device)
+
         ctx = mstate.ctx
         ctx_mask = mstate.ctx_mask
 
@@ -369,7 +470,7 @@ class BasicGenModel(TransitionModel):
         if "prev_summ" not in mstate:
             # mstate.prev_summ = torch.zeros_like(ctx[:, 0])
             mstate.prev_summ = final_encs[-1][0]
-        _emb = emb
+        _emb = torch.cat([emb, mstate.outenc], 1)
         if self.feedatt == True:
             _emb = torch.cat([_emb, mstate.prev_summ], 1)
         enc, new_rnnstate = self.out_rnn(_emb, mstate.rnnstate)
@@ -503,6 +604,8 @@ def run(lr=0.001,
         smoothing=0.2,
         cosine_restarts=1.,
         seed=123456,
+        beta=1.,
+        beta_max_at=40,
         ):
     localargs = locals().copy()
     print(locals())
@@ -514,6 +617,8 @@ def run(lr=0.001,
     ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
+
+    beta_ = q.hyperparam(0)
 
     do_rare_stats(ds)
     # batch = next(iter(train_dl))
@@ -529,9 +634,10 @@ def run(lr=0.001,
 
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
+                                 StatePenalty(lambda x: x.mstate.kld, weight=beta_),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"and", "or"})])
-    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
+    losses = make_loss_array("loss", "penalty", "elem_acc", "seq_acc", "tree_acc")
 
     freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
                              eval=[SeqAccuracies(),
@@ -555,16 +661,22 @@ def run(lr=0.001,
         t_max = epochs
         print(f"Total number of updates: {t_max}")
         lr_schedule = q.WarmupCosineWithHardRestartsSchedule(optim, 0, t_max, cycles=cosine_restarts)
-        reduce_lr = [lambda: lr_schedule.step()]
+        on_epoch_end = [lambda: lr_schedule.step()]
     else:
-        reduce_lr = []
+        on_epoch_end = []
+
+    beta_step = beta * 1/beta_max_at
+    def update_beta():
+        beta_._v = min(beta, beta_._v + beta_step)
+        # print(f"beta set to {beta_.v}")
+    on_epoch_end.append(update_beta)
 
     # 6. define training function
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
     # clipgradnorm = lambda: None
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader("train", batsize), optim=optim, losses=losses,
-                         _train_batch=trainbatch, device=device, on_end=reduce_lr)
+                         _train_batch=trainbatch, device=device, on_end=on_epoch_end)
 
     # 7. define validation function (using partial)
     validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
@@ -605,7 +717,7 @@ def run(lr=0.001,
         _freedecoder = BeamDecoder(_model, maxtime=100, beamsize=beamsize, copy_deep=True,
                                   eval=[SeqAccuracies()],
                                   eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"op:and", "SW:concat"})])
+                                                          orderless={"and", "or"})])
 
         # testing
         tt.tick("testing reloaded")
@@ -675,6 +787,7 @@ def get_output_for_example(x):
 if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
-    try_dataset()
-    # q.argprun(run)
+    # try_dataset()
+    # try_tree_permutations()
+    q.argprun(run)
     # q.argprun(run_rerank)

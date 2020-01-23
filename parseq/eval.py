@@ -108,7 +108,7 @@ class StatePenalty(Loss):
             penalty = penalty_vec
         else:
             raise Exception(f"unknown reduction mode: {self.reduction}")
-        ret = penalty * self.weight
+        ret = penalty * q.v(self.weight)
         return {"loss": ret, self._name: ret}
 
 
