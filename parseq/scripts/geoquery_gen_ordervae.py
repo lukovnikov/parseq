@@ -375,12 +375,12 @@ class BasicGenModel(TransitionModel):
         # encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2] * numlayers), bidir=True, dropout_in=dropout)
         self.inp_enc = encoder
 
-        decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
-        self.out_emb = decoder_emb
+        self.out_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
 
         dec_rnn_in_dim = embdim + self.zdim + (encoder_dim if feedatt else 0)
         decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
         self.out_rnn = decoder_rnn
+        self.out_emb_vae = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
         # self.out_enc = LSTMEncoder(embdim, hdim //2, num_layers=numlayers, dropout=dropout, bidirectional=True)
         self.out_mu = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
         self.out_logvar = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
@@ -441,7 +441,7 @@ class BasicGenModel(TransitionModel):
             if self.training:
                 outtensor = x.gold_tensor
                 mask = outtensor != 0
-                outembs = self.out_emb(outtensor)
+                outembs = self.out_emb_vae(outtensor)
                 # finalenc, _ = self.out_enc(outembs, mask)
                 # reparam
                 mu = self.out_mu(outembs)
