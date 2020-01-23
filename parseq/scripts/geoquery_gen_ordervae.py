@@ -421,6 +421,7 @@ class BasicGenModel(TransitionModel):
     def forward(self, x:State):
         if not "mstate" in x:
             x.mstate = State()
+            x.mstate.decoding_step = torch.zeros(x.inp_tensor.size(0), dtype=torch.long, device=x.inp_tensor.device)
         mstate = x.mstate
         init_states = []
         if not "ctx" in mstate:
@@ -441,8 +442,7 @@ class BasicGenModel(TransitionModel):
                 outtensor = x.gold_tensor
                 mask = outtensor != 0
                 outembs = self.out_emb(outtensor)
-                _, final_outenc = self.out_enc(outembs, mask)
-                finalenc = final_outenc[-1][0]
+                finalenc, _ = self.out_enc(outembs, mask)
                 # reparam
                 mu = self.out_mu(finalenc)
                 logvar = self.out_logvar(finalenc)
@@ -450,9 +450,9 @@ class BasicGenModel(TransitionModel):
                 eps = torch.randn_like(std)
                 outenc = mu + eps * std
                 mstate.outenc = outenc
-                mstate.kld = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), -1)
-            else:
-                mstate.outenc = torch.randn(x.inp_tensor.size(0), self.zdim, device=x.inp_tensor.device)
+                kld = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), -1)
+                kld = (kld * mask.float()).sum(-1) / mask.float().sum(-1)
+                mstate.kld = kld
 
         ctx = mstate.ctx
         ctx_mask = mstate.ctx_mask
@@ -470,7 +470,11 @@ class BasicGenModel(TransitionModel):
         if "prev_summ" not in mstate:
             # mstate.prev_summ = torch.zeros_like(ctx[:, 0])
             mstate.prev_summ = final_encs[-1][0]
-        _emb = torch.cat([emb, mstate.outenc], 1)
+
+        outenc = mstate.outenc
+        outenc = outenc.gather(1, mstate.decoding_step[:, None, None].repeat(1, 1, outenc.size(2)))[:, 0]
+        _emb = torch.cat([emb, outenc], 1)
+
         if self.feedatt == True:
             _emb = torch.cat([_emb, mstate.prev_summ], 1)
         enc, new_rnnstate = self.out_rnn(_emb, mstate.rnnstate)
@@ -496,6 +500,8 @@ class BasicGenModel(TransitionModel):
             if "stored_attentions" not in x:
                 x.stored_attentions = torch.zeros(alphas.size(0), 0, alphas.size(1), device=alphas.device)
             x.stored_attentions = torch.cat([x.stored_attentions, alphas.detach()[:, None, :]], 1)
+
+        mstate.decoding_step = mstate.decoding_step + 1
 
         return outs[0], x
 
