@@ -381,9 +381,9 @@ class BasicGenModel(TransitionModel):
         dec_rnn_in_dim = embdim + self.zdim + (encoder_dim if feedatt else 0)
         decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
         self.out_rnn = decoder_rnn
-        self.out_enc = LSTMEncoder(embdim, hdim //2, num_layers=numlayers, dropout=dropout, bidirectional=True)
-        self.out_mu = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim))
-        self.out_logvar = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim))
+        # self.out_enc = LSTMEncoder(embdim, hdim //2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        self.out_mu = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
+        self.out_logvar = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
 
         decoder_out = BasicGenOutput(hdim + encoder_dim, vocab=query_encoder.vocab)
         # decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
@@ -442,10 +442,10 @@ class BasicGenModel(TransitionModel):
                 outtensor = x.gold_tensor
                 mask = outtensor != 0
                 outembs = self.out_emb(outtensor)
-                finalenc, _ = self.out_enc(outembs, mask)
+                # finalenc, _ = self.out_enc(outembs, mask)
                 # reparam
-                mu = self.out_mu(finalenc)
-                logvar = self.out_logvar(finalenc)
+                mu = self.out_mu(outembs)
+                logvar = self.out_logvar(outembs)
                 std = torch.exp(.5*logvar)
                 eps = torch.randn_like(std)
                 outenc = mu + eps * std
