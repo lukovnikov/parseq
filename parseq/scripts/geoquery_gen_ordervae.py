@@ -471,8 +471,11 @@ class BasicGenModel(TransitionModel):
             # mstate.prev_summ = torch.zeros_like(ctx[:, 0])
             mstate.prev_summ = final_encs[-1][0]
 
-        outenc = mstate.outenc
-        outenc = outenc.gather(1, mstate.decoding_step[:, None, None].repeat(1, 1, outenc.size(2)))[:, 0]
+        if self.training:
+            outenc = mstate.outenc
+            outenc = outenc.gather(1, mstate.decoding_step[:, None, None].repeat(1, 1, outenc.size(2)))[:, 0]
+        else:
+            outenc = torch.randn(emb.size(0), self.zdim, device=emb.device)
         _emb = torch.cat([emb, outenc], 1)
 
         if self.feedatt == True:
