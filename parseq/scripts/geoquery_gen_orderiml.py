@@ -584,7 +584,7 @@ def split_tokenizer(x):
 
 def run(lr=0.001,
         batsize=20,
-        epochs=70,
+        epochs=80,
         embdim=128,
         encdim=400,
         numlayers=1,
@@ -598,7 +598,8 @@ def run(lr=0.001,
         smoothing=0.2,
         cosine_restarts=1.,
         seed=123456,
-        true_at=-1,
+        delay_til=-1,
+        attack_til=-1,
         ):
     localargs = locals().copy()
     print(locals())
@@ -611,12 +612,12 @@ def run(lr=0.001,
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
-    if true_at <= 0:
+    if attack_til <= 0:
         beta = q.hyperparam(1)  # beta means probability to sample original order
         beta_step = 0
     else:
-        beta = q.hyperparam(0)
-        beta_step = 1/true_at
+        beta_step = 1/(attack_til - delay_til)
+        beta = q.hyperparam(-delay_til * beta_step)
 
     do_rare_stats(ds)
     # batch = next(iter(train_dl))
