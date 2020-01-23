@@ -245,40 +245,33 @@ class GeoDataset(object):
             assert(gold_tree is not None)
             out_tensor, out_tokens = self.query_encoder.convert(out, return_what="tensor,tokens")
 
-            if split == "train":
-                gold_tree_ = tensor2tree(out_tensor, self.query_encoder.vocab)
-                numlins = 0
-                for gold_tree_reordered in get_tree_permutations(gold_tree_, orderless={"and", "or"}):
-                    if numlins >= self.max_lins_allowed:
-                        break
-                    out_ = tree_to_lisp(gold_tree_reordered)
-                    out_tensor_, out_tokens_ = self.query_encoder.convert(out_, return_what="tensor,tokens")
-                    if gold_map is not None:
-                        out_tensor = gold_map[out_tensor]
+            if gold_map is not None:
+                out_tensor = gold_map[out_tensor]
 
-                    state = TreeDecoderState([inp], [gold_tree_reordered],
-                                              inp_tensor[None, :], out_tensor_[None, :],
-                                              [inp_tokens], [out_tokens_],
-                                              self.sentence_encoder.vocab, self.query_encoder.vocab,
-                                             token_specs=self.token_specs)
-                    if split not in self.data:
-                        self.data[split] = []
-                    self.data[split].append(state)
-                    numlins += 1
-                numlins_counts[numlins] += 1
-                maxlins = max(maxlins, numlins)
-            else:
+            state = TreeDecoderState([inp], [gold_tree],
+                                     inp_tensor[None, :], out_tensor[None, :],
+                                     [inp_tokens], [out_tokens],
+                                     self.sentence_encoder.vocab, self.query_encoder.vocab,
+                                     token_specs=self.token_specs)
+            if split not in self.data:
+                self.data[split] = []
+            self.data[split].append(state)
+
+            # if split == "train":
+            gold_tree_ = tensor2tree(out_tensor, self.query_encoder.vocab)
+            numlins = 0
+            out_tensor_all = torch.zeros_like(out_tensor)[None, :].repeat(self.max_lins_allowed, 1)
+            for gold_tree_reordered in get_tree_permutations(gold_tree_, orderless={"and", "or"}):
+                if numlins >= self.max_lins_allowed:
+                    break
+                out_ = tree_to_lisp(gold_tree_reordered)
+                out_tensor_, out_tokens_ = self.query_encoder.convert(out_, return_what="tensor,tokens")
                 if gold_map is not None:
                     out_tensor = gold_map[out_tensor]
+                out_tensor_all[numlins, :] = out_tensor_
+                numlins += 1
+            state._gold_tensors = out_tensor_all[None]
 
-                state = TreeDecoderState([inp], [gold_tree],
-                                         inp_tensor[None, :], out_tensor[None, :],
-                                         [inp_tokens], [out_tokens],
-                                         self.sentence_encoder.vocab, self.query_encoder.vocab,
-                                         token_specs=self.token_specs)
-                if split not in self.data:
-                    self.data[split] = []
-                self.data[split].append(state)
             maxlen_in = max(maxlen_in, len(inp_tokens))
             maxlen_out = max(maxlen_out, len(out_tensor))
         self.maxlen_input = maxlen_in
@@ -299,6 +292,9 @@ class GeoDataset(object):
             state.gold_tensor = torch.cat([
                 state.gold_tensor,
                 state.gold_tensor.new_zeros(1, goldmaxlen - state.gold_tensor.size(1))], 1)
+            state._gold_tensors = torch.cat([
+                state._gold_tensors,
+                state._gold_tensors.new_zeros(1, state._gold_tensors.size(1), goldmaxlen - state._gold_tensors.size(2))], 2)
             state.inp_tensor = torch.cat([
                 state.inp_tensor,
                 state.inp_tensor.new_zeros(1, inpmaxlen - state.inp_tensor.size(1))], 1)
@@ -357,8 +353,10 @@ class BasicGenModel(TransitionModel):
     def __init__(self, embdim, hdim, numlayers:int=1, dropout=0.,
                  sentence_encoder:SequenceEncoder=None,
                  query_encoder:SequenceEncoder=None,
-                 feedatt=False, store_attn=True, **kw):
+                 feedatt=False, store_attn=True, beta=1, **kw):
         super(BasicGenModel, self).__init__(**kw)
+
+        self.beta = beta
 
         self.embdim, self.hdim, self.numlayers, self.dropout = embdim, hdim, numlayers, dropout
 
@@ -431,6 +429,20 @@ class BasicGenModel(TransitionModel):
                 init_states.append(_fenc)
             mstate.ctx = inpenc
             mstate.ctx_mask = mask
+
+            if self.training and q.v(self.beta) < 1:    # sample one of the orders
+                golds = x._gold_tensors
+                goldsmask = (golds != 0).any(-1).float()
+                numgolds = goldsmask.sum(-1)
+                gold_select_prob = torch.ones_like(goldsmask) * goldsmask / numgolds[:, None]
+                selector = gold_select_prob.multinomial(1)[:, 0]
+                gold = golds.gather(1, selector[:, None, None].repeat(1, 1, golds.size(2)))[:, 0]
+                # interpolate with original gold
+                original_gold = x.gold_tensor
+                beta_selector = (torch.rand_like(numgolds) <= q.v(self.beta)).long()
+                gold_ = original_gold * beta_selector[:, None] + gold * (1 - beta_selector[:, None])
+                x.gold_tensor = gold_
+
 
         ctx = mstate.ctx
         ctx_mask = mstate.ctx_mask
@@ -586,6 +598,7 @@ def run(lr=0.001,
         smoothing=0.2,
         cosine_restarts=1.,
         seed=123456,
+        true_at=-1,
         ):
     localargs = locals().copy()
     print(locals())
@@ -598,7 +611,12 @@ def run(lr=0.001,
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
-    beta_ = q.hyperparam(0)
+    if true_at <= 0:
+        beta = q.hyperparam(1)  # beta means probability to sample original order
+        beta_step = 0
+    else:
+        beta = q.hyperparam(0)
+        beta_step = 1/true_at
 
     do_rare_stats(ds)
     # batch = next(iter(train_dl))
@@ -607,7 +625,8 @@ def run(lr=0.001,
     # print(batch.batched_states)
 
     model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder,
+                          feedatt=True, beta=beta)
 
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
@@ -643,6 +662,10 @@ def run(lr=0.001,
         on_epoch_end = [lambda: lr_schedule.step()]
     else:
         on_epoch_end = []
+
+    def do_beta_step():
+        beta._v = beta._v + beta_step
+    on_epoch_end.append(do_beta_step)
 
     # 6. define training function
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)

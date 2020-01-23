@@ -17,7 +17,7 @@ class SeqDecoder(torch.nn.Module):
         self.model = model
         self._metrics = eval
         self.maxtime = maxtime
-        self.tf_ratio = tf_ratio
+        self.tf_ratio = tf_ratio        # 1 is for full TF, 0 for freerunning
         assert(self.tf_ratio == 1. or self.tf_ratio == 0)
 
     def forward(self, x:TrainableDecodableState, tf_ratio:float=None) -> Tuple[Dict, State]:
