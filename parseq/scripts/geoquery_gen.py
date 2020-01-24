@@ -535,6 +535,7 @@ def run(lr=0.001,
         ):
     localargs = locals().copy()
     print(locals())
+    random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
     tt = q.ticktock("script")
