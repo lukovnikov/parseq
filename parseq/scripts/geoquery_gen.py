@@ -137,9 +137,9 @@ class GeoDataset(object):
                  p="../../datasets/geo880dong/",
                  sentence_encoder:SequenceEncoder=None,
                  min_freq:int=2,
-                 cvfolds=5, **kw):
+                 cvfolds=None, testfold=None, **kw):
         super(GeoDataset, self).__init__(**kw)
-        self.cvfolds = cvfolds
+        self.cvfolds, self.testfold = cvfolds, testfold
         self._initialize(p, sentence_encoder, min_freq)
 
     def _initialize(self, p, sentence_encoder:SequenceEncoder, min_freq:int):
@@ -147,14 +147,16 @@ class GeoDataset(object):
         self.sentence_encoder = sentence_encoder
         trainlines = [x.strip() for x in open(os.path.join(p, "train.txt"), "r").readlines()]
         testlines = [x.strip() for x in open(os.path.join(p, "test.txt"), "r").readlines()]
-        splits = ["train"]*len(trainlines) + ["test"] * len(testlines)
-        cvsplit_len = len(trainlines)/5
-        cvsplits = []
-        for i in range(self.cvfolds):
-            cvsplits += [f"cv{i}"] * round(cvsplit_len)
-        random.shuffle(cvsplits)
-        cvsplits = cvsplits + ["cvtest"] * len(testlines)
-        splits = list(zip(splits, cvsplits))
+        if self.cvfolds is None:
+            splits = ["train"]*len(trainlines) + ["test"] * len(testlines)
+        else:
+            cvsplit_len = len(trainlines)/self.cvfolds
+            splits = []
+            for i in range(0, self.cvfolds):
+                splits += [i] * round(cvsplit_len * (i+1) - len(splits))
+            random.shuffle(splits)
+            splits = ["valid" if x == self.testfold else "train" for x in splits]
+            splits = splits + ["test"] * len(testlines)
         questions, queries = zip(*[x.split("\t") for x in trainlines])
         testqs, testxs = zip(*[x.split("\t") for x in testlines])
         questions += testqs
@@ -200,7 +202,7 @@ class GeoDataset(object):
 
         return token_specs
 
-    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[Tuple], unktokens:Set[str]=None):
+    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str], unktokens:Set[str]=None):
         gold_map = None
         maxlen_in, maxlen_out = 0, 0
         if unktokens is not None:
@@ -222,10 +224,9 @@ class GeoDataset(object):
                                       [inp_tokens], [out_tokens],
                                       self.sentence_encoder.vocab, self.query_encoder.vocab,
                                      token_specs=self.token_specs)
-            for split_e in split:
-                if split_e not in self.data:
-                    self.data[split_e] = []
-                self.data[split_e].append(state)
+            if split not in self.data:
+                self.data[split] = []
+            self.data[split].append(state)
             maxlen_in = max(maxlen_in, len(inp_tokens))
             maxlen_out = max(maxlen_out, len(out_tensor))
         self.maxlen_input = maxlen_in
@@ -541,7 +542,10 @@ def run(lr=0.001,
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
-    ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq, cvfolds=numcvfolds)
+    cvfolds = None if testfold == -1 else numcvfolds
+    testfold = None if testfold == -1 else testfold
+    ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq,
+                    cvfolds=cvfolds, testfold=testfold)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
@@ -594,8 +598,8 @@ def run(lr=0.001,
     # clipgradnorm = lambda: None
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
 
-    train_on = "train" if testfold == -1 else "+".join([f"cv{i}" for i in range(numcvfolds) if i != testfold])
-    valid_on = "test" if testfold == -1 else f"cv{testfold}"
+    train_on = "train"
+    valid_on = "test" if testfold is None else "valid"
     trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader(train_on, batsize, shuffle=True), optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
@@ -614,7 +618,7 @@ def run(lr=0.001,
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
     tt.tock("done training")
 
-    if testfold != -1:
+    if testfold is not None:
         return vlosses[1].get_epoch_error()
 
     # testing
