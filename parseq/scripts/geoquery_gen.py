@@ -5,6 +5,7 @@ import re
 import sys
 from abc import ABC
 from functools import partial
+from itertools import product
 from typing import *
 
 import dill as dill
@@ -136,10 +137,10 @@ class GeoDataset(object):
                  p="../../datasets/geo880dong/",
                  sentence_encoder:SequenceEncoder=None,
                  min_freq:int=2,
-                 splits=None, **kw):
+                 cvfolds=5, **kw):
         super(GeoDataset, self).__init__(**kw)
+        self.cvfolds = cvfolds
         self._initialize(p, sentence_encoder, min_freq)
-        self.splits_proportions = splits
 
     def _initialize(self, p, sentence_encoder:SequenceEncoder, min_freq:int):
         self.data = {}
@@ -147,6 +148,13 @@ class GeoDataset(object):
         trainlines = [x.strip() for x in open(os.path.join(p, "train.txt"), "r").readlines()]
         testlines = [x.strip() for x in open(os.path.join(p, "test.txt"), "r").readlines()]
         splits = ["train"]*len(trainlines) + ["test"] * len(testlines)
+        cvsplit_len = len(trainlines)/5
+        cvsplits = []
+        for i in range(self.cvfolds):
+            cvsplits += [f"cv{i}"] * round(cvsplit_len)
+        random.shuffle(cvsplits)
+        cvsplits = cvsplits + ["cvtest"] * len(testlines)
+        splits = list(zip(splits, cvsplits))
         questions, queries = zip(*[x.split("\t") for x in trainlines])
         testqs, testxs = zip(*[x.split("\t") for x in testlines])
         questions += testqs
@@ -192,7 +200,7 @@ class GeoDataset(object):
 
         return token_specs
 
-    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str], unktokens:Set[str]=None):
+    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[Tuple], unktokens:Set[str]=None):
         gold_map = None
         maxlen_in, maxlen_out = 0, 0
         if unktokens is not None:
@@ -214,16 +222,20 @@ class GeoDataset(object):
                                       [inp_tokens], [out_tokens],
                                       self.sentence_encoder.vocab, self.query_encoder.vocab,
                                      token_specs=self.token_specs)
-            if split not in self.data:
-                self.data[split] = []
-            self.data[split].append(state)
+            for split_e in split:
+                if split_e not in self.data:
+                    self.data[split_e] = []
+                self.data[split_e].append(state)
             maxlen_in = max(maxlen_in, len(inp_tokens))
             maxlen_out = max(maxlen_out, len(out_tensor))
         self.maxlen_input = maxlen_in
         self.maxlen_output = maxlen_out
 
     def get_split(self, split:str):
-        return DatasetSplitProxy(self.data[split])
+        data = []
+        for split_e in split.split("+"):
+            data += self.data[split_e]
+        return DatasetSplitProxy(data)
 
     @staticmethod
     def collate_fn(data:Iterable):
@@ -250,7 +262,7 @@ class GeoDataset(object):
                 ret[split] = self.dataloader(batsize=batsize, split=split, shuffle=shuffle)
             return ret
         else:
-            assert(split in self.data.keys())
+            # assert(split in self.data.keys())
             shuffle = shuffle if shuffle is not None else split in ("train", "train+valid")
             dl = DataLoader(self.get_split(split), batch_size=batsize, shuffle=shuffle, collate_fn=type(self).collate_fn)
             return dl
@@ -518,6 +530,8 @@ def run(lr=0.001,
         smoothing=0.2,
         cosine_restarts=1.,
         seed=123456,
+        numcvfolds=6,
+        testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
         ):
     localargs = locals().copy()
     print(locals())
@@ -526,7 +540,7 @@ def run(lr=0.001,
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
-    ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq)
+    ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq, cvfolds=numcvfolds)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
@@ -578,11 +592,14 @@ def run(lr=0.001,
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
     # clipgradnorm = lambda: None
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader("train", batsize), optim=optim, losses=losses,
+
+    train_on = "train" if testfold == -1 else "+".join([f"cv{i}" for i in range(numcvfolds) if i != testfold])
+    valid_on = "test" if testfold == -1 else f"cv{testfold}"
+    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader(train_on, batsize, shuffle=True), optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
-    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
+    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader(valid_on, batsize, shuffle=False), losses=vlosses, device=device)
     # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=valid_dl, losses=vlosses, device=device)
 
     # p = q.save_run(freedecoder, localargs, filepath=__file__)
@@ -595,6 +612,9 @@ def run(lr=0.001,
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
     tt.tock("done training")
+
+    if testfold != -1:
+        return vlosses[1].get_epoch_error()
 
     # testing
     tt.tick("testing")
@@ -687,9 +707,20 @@ def get_output_for_example(x):
     return ret
 
 
+def run_hpo(numsplits=6, cuda=False, gpu=0):
+    ranges = {"encdim": [128, 256, 400],
+              "dropout": [.25, .5],
+              "smoothing": [0., .1, .2],
+              "epochs": [50, 60, 70]
+              }
+    results = q.run_hpo_cv(run, ranges, numcvfolds=numsplits, path=__file__+".hpo", cuda=cuda, gpu=gpu)
+    print(results["best"])
+
+
 if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
-    q.argprun(run)
+    # q.argprun(run)
+    q.argprun(run_hpo)
     # q.argprun(run_rerank)
