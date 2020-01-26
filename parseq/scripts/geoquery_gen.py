@@ -517,18 +517,18 @@ def split_tokenizer(x):
 
 def run(lr=0.001,
         batsize=20,
-        epochs=70,
+        epochs=60,
         embdim=128,
-        encdim=400,
+        encdim=256,
         numlayers=1,
         beamsize=5,
-        dropout=.5,
+        dropout=.25,
         wreg=1e-10,
         cuda=False,
         gpu=0,
         minfreq=2,
         gradnorm=3.,
-        smoothing=0.2,
+        smoothing=0.1,
         cosine_restarts=1.,
         seed=123456,
         numcvfolds=6,
@@ -726,6 +726,6 @@ if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
-    # q.argprun(run)
-    q.argprun(run_hpo)
+    q.argprun(run)
+    # q.argprun(run_hpo)
     # q.argprun(run_rerank)
