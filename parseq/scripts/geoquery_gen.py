@@ -233,7 +233,7 @@ class GeoDataset(object):
                 out_tensor_, out_tokens_ = self.query_encoder.convert(out_, return_what="tensor,tokens")
                 if gold_map is not None:
                     out_tensor_ = gold_map[out_tensor_]
-                state.gold_tensor = out_tensor_
+                state.gold_tensor = out_tensor_[None]
 
             if split not in self.data:
                 self.data[split] = []
@@ -544,6 +544,7 @@ def run(lr=0.001,
         seed=123456,
         numcvfolds=6,
         testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
+        reorder_random=True,
         ):
     localargs = locals().copy()
     print(locals())
@@ -556,7 +557,7 @@ def run(lr=0.001,
     cvfolds = None if testfold == -1 else numcvfolds
     testfold = None if testfold == -1 else testfold
     ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq,
-                    cvfolds=cvfolds, testfold=testfold)
+                    cvfolds=cvfolds, testfold=testfold, reorder_random=reorder_random)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
