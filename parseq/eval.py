@@ -50,6 +50,22 @@ class Loss(torch.nn.Module, ABC):
         pass
 
 
+class BCELoss(Loss):
+    def __init__(self, weight=None, reduction="mean", mode="logits", smoothing:float=0., **kw):
+        super(BCELoss, self).__init__(**kw)
+        if mode == "logits":
+            self.bce = torch.nn.BCEWithLogitsLoss(weight=weight, reduction=reduction)
+        elif mode == "logprobs":
+            self.bce = torch.nn.BCELoss(weight=weight, reduction=reduction)
+        self.smoothing = smoothing
+
+    def forward(self, probs, predactions, gold, x:State=None) ->Dict:
+        if self.smoothing > 0:
+            gold = gold.clamp(self.smoothing, 1-self.smoothing)
+        ret = self.bce(probs, gold)
+        return {"loss": ret, "ce": ret}
+
+
 class CELoss(Loss):
     def __init__(self, weight=None, reduction="mean", ignore_index=0, mode="logits", smoothing:float=0., **kw):
         super(CELoss, self).__init__(**kw)

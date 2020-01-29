@@ -31,6 +31,7 @@ from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tre
     tree_to_lisp, lisp_to_tree
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
     LSTMEncoder
+from parseq.scripts.geoquery_gen_orderiml import get_tree_permutations
 from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
 from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition, GRUTransition
 from parseq.util import DatasetSplitProxy
@@ -137,10 +138,11 @@ class GeoDataset(object):
                  p="../../datasets/geo880dong/",
                  sentence_encoder:SequenceEncoder=None,
                  min_freq:int=2,
-                 cvfolds=None, testfold=None, **kw):
+                 cvfolds=None, testfold=None, reorder_random=False, **kw):
         super(GeoDataset, self).__init__(**kw)
         self.cvfolds, self.testfold = cvfolds, testfold
         self._initialize(p, sentence_encoder, min_freq)
+        self.reorder_random = reorder_random
 
     def _initialize(self, p, sentence_encoder:SequenceEncoder, min_freq:int):
         self.data = {}
@@ -224,6 +226,15 @@ class GeoDataset(object):
                                       [inp_tokens], [out_tokens],
                                       self.sentence_encoder.vocab, self.query_encoder.vocab,
                                      token_specs=self.token_specs)
+            if split == "train" and self.reorder_random is True:
+                gold_tree_ = tensor2tree(out_tensor, self.query_encoder.vocab)
+                random_gold_tree = random.choice(get_tree_permutations(gold_tree_, orderless={"and"}))
+                out_ = tree_to_lisp(random_gold_tree)
+                out_tensor_, out_tokens_ = self.query_encoder.convert(out_, return_what="tensor,tokens")
+                if gold_map is not None:
+                    out_tensor_ = gold_map[out_tensor_]
+                state.gold_tensor = out_tensor_
+
             if split not in self.data:
                 self.data[split] = []
             self.data[split].append(state)
@@ -564,19 +575,19 @@ def run(lr=0.001,
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and", "or"})])
+                                                          orderless={"and"})])
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
 
     freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
                              eval=[SeqAccuracies(),
                                    TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and", "or"})])
+                                                orderless={"and"})])
     vlosses = make_loss_array("seq_acc", "tree_acc")
 
     beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize, copy_deep=True,
                               eval=[SeqAccuracies()],
                               eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and", "or"})])
+                                                orderless={"and"})])
     beamlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # 4. define optim
@@ -645,7 +656,7 @@ def run(lr=0.001,
         _freedecoder = BeamDecoder(_model, maxtime=100, beamsize=beamsize, copy_deep=True,
                                   eval=[SeqAccuracies()],
                                   eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and", "or"})])
+                                                          orderless={"and"})])
 
         # testing
         tt.tick("testing reloaded")

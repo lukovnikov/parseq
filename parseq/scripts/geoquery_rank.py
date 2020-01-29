@@ -24,13 +24,13 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder, BeamDecoder, BeamTransition
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
+from parseq.decoding import SeqDecoder, BeamDecoder, BeamTransition, merge_metric_dicts
+from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy, Metric, Loss, BCELoss
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree, are_equal_trees
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
     LSTMEncoder
-from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState
+from parseq.states import DecodableState, BasicDecoderState, State, TreeDecoderState, ListState, TrainableState
 from parseq.transitions import TransitionModel, LSTMCellTransition, LSTMTransition, GRUTransition
 from parseq.util import DatasetSplitProxy
 from parseq.vocab import SequenceEncoder, Vocab
@@ -131,9 +131,65 @@ def try_basic_query_tokenizer():
     # print(y)
 
 
+class RankState(TrainableState):
+    def __init__(self,
+                 inp_tensor:torch.Tensor=None,
+                 gold_tensor:torch.Tensor=None,
+                 candtensors:torch.Tensor=None,
+                 candgold:torch.Tensor=None,
+                 alignments:torch.Tensor=None,
+                 alignment_entropies:torch.Tensor=None,
+                 sentence_vocab:Vocab=None,
+                 query_vocab:Vocab=None,
+                 **kw):
+        if inp_tensor is None:
+            super(RankState, self).__init__(**kw)
+        else:
+            super(RankState, self).__init__(inp_tensor=inp_tensor,
+                                            gold_tensor=gold_tensor,
+                                            candtensors=candtensors,
+                                            candgold=candgold,
+                                            alignments=alignments,
+                                            alignment_entropies=alignment_entropies,
+                                            **kw)
+            self.sentence_vocab = sentence_vocab
+            self.query_vocab = query_vocab
+
+    def make_copy(self, ret=None, detach=None, deep=True):
+        ret = super(RankState, self).make_copy(ret=ret, detach=detach, deep=deep)
+        ret.sentence_vocab = self.sentence_vocab
+        ret.query_vocab = self.query_vocab
+        return ret
+
+    @classmethod
+    def merge(cls, states:List['RankState'], ret=None):
+        assert(all([state.sentence_vocab == states[0].sentence_vocab and state.query_vocab == states[0].query_vocab for state in states]))
+        ret = super(RankState, cls).merge(states, ret=ret)
+        ret.sentence_vocab = states[0].sentence_vocab
+        ret.query_vocab = states[0].query_vocab
+        return ret
+
+    def __getitem__(self, item):
+        ret = super(RankState, self).__getitem__(item)
+        ret.sentence_vocab = self.sentence_vocab
+        ret.query_vocab = self.query_vocab
+        return ret
+
+    def __setitem__(self, key, value:'RankState'):
+        assert(value.sentence_vocab == self.sentence_vocab and value.query_vocab == self.query_vocab)
+        ret = super(RankState, self).__setitem__(key, value)
+        return ret
+
+    def get_gold(self, i:int=None) -> torch.Tensor:
+        if i is None:
+            return self.candgold
+        else:
+            assert(False)   # can't have time slicing
+
+
 class GeoDatasetRank(object):
     def __init__(self,
-                 p="geoquery_gen/drogonrun3/",
+                 p="geoquery_gen/run4/",
                  min_freq:int=2,
                  splits=None, **kw):
         super(GeoDatasetRank, self).__init__(**kw)
@@ -171,7 +227,8 @@ class GeoDatasetRank(object):
             inp, out = " ".join(example["sentence"]), " ".join(example["gold"])
             inp_tensor, inp_tokens = self.sentence_encoder.convert(inp, return_what="tensor,tokens")
             gold_tree = lisp_to_tree(" ".join(example["gold"][:-1]))
-            assert(gold_tree is not None)
+            if not isinstance(gold_tree, Tree):
+                assert(gold_tree is not None)
             gold_tensor, gold_tokens = self.query_encoder.convert(out, return_what="tensor,tokens")
 
             candidate_tensors, candidate_tokens, candidate_align_tensors = [], [], []
@@ -179,7 +236,9 @@ class GeoDatasetRank(object):
             candidate_trees = []
             candidate_same = []
             for cand in example["candidates"]:
-                cand_tree = lisp_to_tree(" ".join(cand["tokens"][:-1]))
+                cand_tree, _ = lisp_to_tree(" ".join(cand["tokens"][:-1]), None)
+                if cand_tree is None:
+                    cand_tree = Tree("@UNK@", [])
                 assert(cand_tree is not None)
                 cand_tensor, cand_tokens = self.query_encoder.convert(" ".join(cand["tokens"]), return_what="tensor,tokens")
                 candidate_tensors.append(cand_tensor)
@@ -194,16 +253,20 @@ class GeoDatasetRank(object):
             candidate_align_entropy = torch.stack(q.pad_tensors(candidate_align_entropies, 0), 0)
             candidate_same = torch.tensor(candidate_same)
 
-            state = RankState([inp], [gold_tree],
-                                      inp_tensor[None, :], out_tensor[None, :],
-                                      [inp_tokens], [out_tokens],
-                                      self.sentence_encoder.vocab, self.query_encoder.vocab,
-                                     token_specs=self.token_specs)
+            state = RankState(inp_tensor[None, :],
+                              gold_tensor[None, :],
+                              candidate_tensor[None, :, :],
+                              candidate_same[None, :],
+                              candidate_align_tensor[None, :],
+                              candidate_align_entropy[None, :],
+                              self.sentence_encoder.vocab,
+                              self.query_encoder.vocab,
+                              )
             if split not in self.data:
                 self.data[split] = []
             self.data[split].append(state)
             maxlen_in = max(maxlen_in, len(inp_tokens))
-            maxlen_out = max(maxlen_out, len(out_tensor))
+            maxlen_out = max(maxlen_out, candidate_tensor.size(-1), gold_tensor.size(-1))
         self.maxlen_input = maxlen_in
         self.maxlen_output = maxlen_out
 
@@ -218,13 +281,19 @@ class GeoDatasetRank(object):
         for state in data:
             goldmaxlen = max(goldmaxlen, state.gold_tensor.size(1))
             inpmaxlen = max(inpmaxlen, state.inp_tensor.size(1))
-        for state in data:
-            state.gold_tensor = torch.cat([
-                state.gold_tensor,
-                state.gold_tensor.new_zeros(1, goldmaxlen - state.gold_tensor.size(1))], 1)
-            state.inp_tensor = torch.cat([
-                state.inp_tensor,
-                state.inp_tensor.new_zeros(1, inpmaxlen - state.inp_tensor.size(1))], 1)
+            goldmaxlen = max(goldmaxlen, state.candtensors.size(-1))
+        inp_tensors = q.pad_tensors([state.inp_tensor for state in data], 1, 0)
+        gold_tensors = q.pad_tensors([state.gold_tensor for state in data], 1, 0)
+        candtensors = q.pad_tensors([state.candtensors for state in data], 2, 0)
+        alignments = q.pad_tensors([state.alignments for state in data], 2, 0)
+        alignment_entropies = q.pad_tensors([state.alignment_entropies for state in data], 2, 0)
+
+        for i, state in enumerate(data):
+            state.inp_tensor = inp_tensors[i]
+            state.gold_tensor = gold_tensors[i]
+            state.candtensors = candtensors[i]
+            state.alignments = alignments[i]
+            state.alignment_entropies = alignment_entropies[i]
         ret = data[0].merge(data)
         return ret
 
@@ -274,6 +343,81 @@ def try_dataset():
     for x in testduplicates:
         print(x)
     tt.tock("dataset built")
+
+
+class Ranker(torch.nn.Module):
+    def __init__(self, model,
+                 eval:List[Union[Metric, Loss]]=tuple(),
+                 evalseq:List[Union[Metric, Loss]]=tuple(),
+                 **kw):
+        super(Ranker, self).__init__(**kw)
+        self.model = model
+        self._metrics = eval
+        self._seq_metrics = evalseq
+
+    def forward(self, x:RankState):
+        inp_tensors = x.inp_tensor
+        cand_tensors = x.candtensors
+        alignments = x.alignments
+        align_entropies = x.alignment_entropies
+
+        candscores = self.model(inp_tensors, cand_tensors, alignments, align_entropies)
+        _, candpred = candscores.max(-1)
+        # _, candpred = x.candgold.max(-1)
+        candgold = x.candgold.to(torch.float)
+
+        candtensors = x.candtensors
+        pred_tensor = candtensors.gather(1, candpred[:, None, None].repeat(1, 1, candtensors.size(2)))[:, 0]
+        gold_tensor = x.gold_tensor
+
+        rank_metrics = [metric(candscores, candpred, candgold, x) for metric in self._metrics]
+        seq_metrics = [metric(None, pred_tensor, gold_tensor, x) for metric in self._seq_metrics]
+        metrics = merge_metric_dicts(*(rank_metrics + seq_metrics))
+        return metrics, x
+
+
+class RankModel(torch.nn.Module):
+    def __init__(self, embdim, hdim, numlayers:int=1, dropout=0.,
+                 sentence_encoder:SequenceEncoder=None,
+                 query_encoder:SequenceEncoder=None,
+                 **kw):
+        super(RankModel, self).__init__(**kw)
+
+        inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+        # _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
+        #                                                  p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
+        # inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
+        self.inp_emb = inpemb
+
+        encoder = LSTMEncoder(embdim, hdim // 2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        self.inp_enc = encoder
+
+        decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        self.out_emb = decoder_emb
+
+        encoder = LSTMEncoder(embdim, hdim // 2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        self.out_enc = encoder
+
+        self.lin_map = torch.nn.Sequential(torch.nn.Linear(hdim, hdim), torch.nn.Tanh())
+
+    def forward(self, inptensor, candtensors, alignments, align_entropies):
+        inpemb = self.inp_emb(inptensor)
+        _, inpenc = self.inp_enc(inpemb, mask=inptensor!=0)
+        inpenc = inpenc[-1][0]  # top output state of bilstm
+        inpenc = self.lin_map(inpenc)
+
+        outtensor = candtensors.view(-1, candtensors.size(-1))
+        outemb = self.out_emb(outtensor)
+        _, outenc = self.out_enc(outemb, mask=outtensor!=0)
+        outenc = outenc[-1][0]
+        outenc = outenc.view(candtensors.size(0), candtensors.size(1), outenc.size(-1))
+
+        scores = inpenc[:, None, :] * outenc
+        scores = scores.sum(-1)
+        return scores
+
+        return torch.rand_like(candtensors[:, :, 0].to(torch.float))
 
 
 class BasicGenModel(TransitionModel):
@@ -500,7 +644,7 @@ def run(lr=0.001,
         gpu=0,
         minfreq=2,
         gradnorm=3.,
-        smoothing=0.2,
+        smoothing=0.1,
         cosine_restarts=1.,
         seed=123456,
         ):
@@ -511,43 +655,27 @@ def run(lr=0.001,
     tt = q.ticktock("script")
     device = torch.device("cpu") if not cuda else torch.device("cuda", gpu)
     tt.tick("loading data")
-    ds = GeoDataset(sentence_encoder=SequenceEncoder(tokenizer=split_tokenizer), min_freq=minfreq)
+    ds = GeoDatasetRank()
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 
-    do_rare_stats(ds)
-    # batch = next(iter(train_dl))
-    # print(batch)
-    # print("input graph")
-    # print(batch.batched_states)
+    # do_rare_stats(ds)
 
-    model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+    model = RankModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
+                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder)
 
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
+    ranker = Ranker(model, eval=[BCELoss(mode="logits", smoothing=smoothing)],
+                           evalseq=[SeqAccuracies(),
+                                    TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab), orderless={"and", "or"})])
 
-    tfdecoder = SeqDecoder(model, tf_ratio=1.,
-                           eval=[CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
-                            SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and", "or"})])
-    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
-
-    freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
-                             eval=[SeqAccuracies(),
-                                   TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and", "or"})])
+    losses = make_loss_array("loss", "seq_acc", "tree_acc")
     vlosses = make_loss_array("seq_acc", "tree_acc")
-
-    beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize, copy_deep=True,
-                              eval=[SeqAccuracies()],
-                              eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and", "or"})])
-    beamlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # 4. define optim
     # optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
-    optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
+    optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wreg)
 
     # lr schedule
     if cosine_restarts >= 0:
@@ -560,21 +688,14 @@ def run(lr=0.001,
         reduce_lr = []
 
     # 6. define training function
-    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
+    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(model.parameters(), gradnorm)
     # clipgradnorm = lambda: None
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=tfdecoder, dataloader=ds.dataloader("train", batsize), optim=optim, losses=losses,
+    trainepoch = partial(q.train_epoch, model=ranker, dataloader=ds.dataloader("train", batsize), optim=optim, losses=losses,
                          _train_batch=trainbatch, device=device, on_end=reduce_lr)
 
     # 7. define validation function (using partial)
-    validepoch = partial(q.test_epoch, model=freedecoder, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
-    # validepoch = partial(q.test_epoch, model=freedecoder, dataloader=valid_dl, losses=vlosses, device=device)
-
-    # p = q.save_run(freedecoder, localargs, filepath=__file__)
-    # q.save_dataset(ds, p)
-    # _freedecoder, _localargs = q.load_run(p)
-    # _ds = q.load_dataset(p)
-    # sys.exit()
+    validepoch = partial(q.test_epoch, model=ranker, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
 
     # 7. run training
     tt.tick("training")
@@ -583,11 +704,11 @@ def run(lr=0.001,
 
     # testing
     tt.tick("testing")
-    testresults = q.test_epoch(model=beamdecoder, dataloader=ds.dataloader("test", batsize), losses=beamlosses, device=device)
+    testresults = q.test_epoch(model=ranker, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
     print("validation test results: ", testresults)
     tt.tock("tested")
     tt.tick("testing")
-    testresults = q.test_epoch(model=beamdecoder, dataloader=ds.dataloader("test", batsize), losses=beamlosses, device=device)
+    testresults = q.test_epoch(model=ranker, dataloader=ds.dataloader("test", batsize), losses=vlosses, device=device)
     print("test results: ", testresults)
     tt.tock("tested")
 
@@ -675,6 +796,6 @@ def get_output_for_example(x):
 if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
-    try_dataset()
-    # q.argprun(run)
+    # try_dataset()
+    q.argprun(run)
     # q.argprun(run_rerank)

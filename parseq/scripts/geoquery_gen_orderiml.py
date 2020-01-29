@@ -132,7 +132,7 @@ def try_basic_query_tokenizer():
     # print(y)
 
 
-def get_tree_permutations(tree, orderless={"and", "or"}):
+def get_tree_permutations(tree, orderless={"and"}):
     rets = []
     if len(tree) == 0:
         return [Tree(tree.label(), [])]
@@ -261,13 +261,13 @@ class GeoDataset(object):
             gold_tree_ = tensor2tree(out_tensor, self.query_encoder.vocab)
             numlins = 0
             out_tensor_all = torch.zeros_like(out_tensor)[None, :].repeat(self.max_lins_allowed, 1)
-            for gold_tree_reordered in get_tree_permutations(gold_tree_, orderless={"and", "or"}):
+            for gold_tree_reordered in get_tree_permutations(gold_tree_, orderless={"and"}):
                 if numlins >= self.max_lins_allowed:
                     break
                 out_ = tree_to_lisp(gold_tree_reordered)
                 out_tensor_, out_tokens_ = self.query_encoder.convert(out_, return_what="tensor,tokens")
                 if gold_map is not None:
-                    out_tensor = gold_map[out_tensor]
+                    out_tensor_ = gold_map[out_tensor_]
                 out_tensor_all[numlins, :] = out_tensor_
                 numlins += 1
             state._gold_tensors = out_tensor_all[None]
@@ -639,19 +639,19 @@ def run(lr=0.001,
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and", "or"})])
+                                                          orderless={"and"})])
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
 
     freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
                              eval=[SeqAccuracies(),
                                    TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and", "or"})])
+                                                orderless={"and"})])
     vlosses = make_loss_array("seq_acc", "tree_acc")
 
     beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize, copy_deep=True,
                               eval=[SeqAccuracies()],
                               eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and", "or"})])
+                                                orderless={"and"})])
     beamlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # 4. define optim
@@ -718,7 +718,7 @@ def run(lr=0.001,
         _freedecoder = BeamDecoder(_model, maxtime=100, beamsize=beamsize, copy_deep=True,
                                   eval=[SeqAccuracies()],
                                   eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and", "or"})])
+                                                          orderless={"and"})])
 
         # testing
         tt.tick("testing reloaded")

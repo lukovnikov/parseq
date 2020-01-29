@@ -129,9 +129,10 @@ class LispToTree(TreeStrParser):
 
     def close_level(self):
         siblings = self.stack.pop(-1)
-        assert (len(siblings[0]) == 0)
-        siblings[0].extend(siblings[1:])
-        self.stack[-1].append(siblings[0])
+        if len(siblings) > 0:
+            assert (len(siblings[0]) == 0)
+            siblings[0].extend(siblings[1:])
+            self.stack[-1].append(siblings[0])
 
     def add_sibling(self, next_token):
         self.stack[-1].append(Tree(next_token, []))
