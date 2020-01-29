@@ -544,7 +544,7 @@ def run(lr=0.001,
         seed=123456,
         numcvfolds=6,
         testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
-        reorder_random=True,
+        reorder_random=False,
         ):
     localargs = locals().copy()
     print(locals())
