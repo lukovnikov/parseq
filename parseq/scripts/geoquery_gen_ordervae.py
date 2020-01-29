@@ -454,7 +454,7 @@ class BasicGenModel(TransitionModel):
                 outenc = mu + eps * std
                 mstate.outenc = outenc
                 kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
-                kld = torch.sum(kld.clamp_min(1e-2), -1)
+                kld = torch.sum(kld.clamp_min(1e-3), -1)
                 mstate.kld = kld
 
         ctx = mstate.ctx
