@@ -381,9 +381,11 @@ class BasicGenModel(TransitionModel):
         decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
         self.out_rnn = decoder_rnn
         self.out_emb_vae = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
-        # self.out_enc = LSTMEncoder(embdim, hdim //2, num_layers=numlayers, dropout=dropout, bidirectional=True)
-        self.out_mu = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
-        self.out_logvar = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
+        self.out_enc = LSTMEncoder(embdim, hdim //2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        # self.out_mu = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
+        # self.out_logvar = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
+        self.out_mu = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim))
+        self.out_logvar = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim))
 
         decoder_out = BasicGenOutput(hdim + encoder_dim, vocab=query_encoder.vocab)
         # decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
@@ -440,18 +442,19 @@ class BasicGenModel(TransitionModel):
         if not "outenc" in mstate:
             if self.training:
                 outtensor = x.gold_tensor
-                mask = outtensor != 0
+                omask = outtensor != 0
                 outembs = self.out_emb_vae(outtensor)
-                # finalenc, _ = self.out_enc(outembs, mask)
+                finalenc, _ = self.out_enc(outembs, omask)
+                finalenc, _ = (finalenc + torch.log(omask.float()[:, :, None])).max(1)        # max pool
                 # reparam
-                mu = self.out_mu(outembs)
-                logvar = self.out_logvar(outembs)
+                mu = self.out_mu(finalenc)
+                logvar = self.out_logvar(finalenc)
                 std = torch.exp(.5*logvar)
                 eps = torch.randn_like(std)
                 outenc = mu + eps * std
                 mstate.outenc = outenc
-                kld = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), -1)
-                kld = (kld * mask.float()).sum(-1) / mask.float().sum(-1)
+                kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+                kld = torch.sum(kld.clamp_min(1e-2), -1)
                 mstate.kld = kld
 
         ctx = mstate.ctx
@@ -473,7 +476,7 @@ class BasicGenModel(TransitionModel):
 
         if self.training:
             outenc = mstate.outenc
-            outenc = outenc.gather(1, mstate.decoding_step[:, None, None].repeat(1, 1, outenc.size(2)))[:, 0]
+            # outenc = outenc.gather(1, mstate.decoding_step[:, None, None].repeat(1, 1, outenc.size(2)))[:, 0]
         else:
             outenc = torch.randn(emb.size(0), self.zdim, device=emb.device)
         _emb = torch.cat([emb, outenc], 1)
@@ -601,20 +604,19 @@ def run(lr=0.001,
         batsize=20,
         epochs=70,
         embdim=128,
-        encdim=400,
+        encdim=256,
         numlayers=1,
         beamsize=5,
-        dropout=.5,
+        dropout=.25,
         wreg=1e-10,
         cuda=False,
         gpu=0,
         minfreq=2,
         gradnorm=3.,
-        smoothing=0.2,
+        smoothing=0.1,
         cosine_restarts=1.,
         seed=123456,
-        beta=1.,
-        beta_max_at=40,
+        beta_spec="none",
         ):
     localargs = locals().copy()
     print(locals())
@@ -628,6 +630,9 @@ def run(lr=0.001,
     tt.tock("data loaded")
 
     beta_ = q.hyperparam(0)
+    if beta_spec == "none":
+        beta_spec = "0:0"
+    beta_sched = q.EnvelopeSchedule(beta_, beta_spec, numsteps=epochs)
 
     do_rare_stats(ds)
     # batch = next(iter(train_dl))
@@ -674,11 +679,7 @@ def run(lr=0.001,
     else:
         on_epoch_end = []
 
-    beta_step = beta * 1/beta_max_at
-    def update_beta():
-        beta_._v = min(beta, beta_._v + beta_step)
-        # print(f"beta set to {beta_.v}")
-    on_epoch_end.append(update_beta)
+    on_epoch_end.append(lambda: beta_sched.step())
 
     # 6. define training function
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(tfdecoder.parameters(), gradnorm)
