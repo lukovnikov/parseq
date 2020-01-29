@@ -357,8 +357,11 @@ class BasicGenModel(TransitionModel):
     def __init__(self, embdim, hdim, numlayers:int=1, dropout=0., zdim=None,
                  sentence_encoder:SequenceEncoder=None,
                  query_encoder:SequenceEncoder=None,
-                 feedatt=False, store_attn=True, **kw):
+                 feedatt=False, store_attn=True,
+                 minkl=0.05, **kw):
         super(BasicGenModel, self).__init__(**kw)
+
+        self.minkl = minkl
 
         self.embdim, self.hdim, self.numlayers, self.dropout = embdim, hdim, numlayers, dropout
         self.zdim = embdim if zdim is None else zdim
@@ -454,7 +457,7 @@ class BasicGenModel(TransitionModel):
                 outenc = mu + eps * std
                 mstate.outenc = outenc
                 kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
-                kld = torch.sum(kld.clamp_min(0.05), -1)
+                kld = torch.sum(kld.clamp_min(self.minkl), -1)
                 mstate.kld = kld
 
         ctx = mstate.ctx
@@ -617,6 +620,7 @@ def run(lr=0.001,
         cosine_restarts=1.,
         seed=123456,
         beta_spec="none",
+        minkl=0.05,
         ):
     localargs = locals().copy()
     print(locals())
@@ -641,7 +645,8 @@ def run(lr=0.001,
     # print(batch.batched_states)
 
     model = BasicGenModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
+                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder,
+                          feedatt=True, minkl=minkl)
 
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
