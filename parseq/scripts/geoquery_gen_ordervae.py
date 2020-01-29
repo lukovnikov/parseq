@@ -384,8 +384,8 @@ class BasicGenModel(TransitionModel):
         self.out_enc = LSTMEncoder(embdim, hdim //2, num_layers=numlayers, dropout=dropout, bidirectional=True)
         # self.out_mu = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
         # self.out_logvar = torch.nn.Sequential(torch.nn.Linear(embdim, hdim), torch.nn.Tanh(), torch.nn.Linear(hdim, self.zdim))
-        self.out_mu = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim))
-        self.out_logvar = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim))
+        self.out_mu = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim, bias=False))
+        self.out_logvar = torch.nn.Sequential(torch.nn.Linear(hdim, self.zdim, bias=False))
 
         decoder_out = BasicGenOutput(hdim + encoder_dim, vocab=query_encoder.vocab)
         # decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab)
@@ -454,7 +454,7 @@ class BasicGenModel(TransitionModel):
                 outenc = mu + eps * std
                 mstate.outenc = outenc
                 kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
-                kld = torch.sum(kld.clamp_min(0.005), -1)
+                kld = torch.sum(kld.clamp_min(0.05), -1)
                 mstate.kld = kld
 
         ctx = mstate.ctx
