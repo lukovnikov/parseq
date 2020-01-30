@@ -81,6 +81,47 @@ def load_pretrained_embeddings(emb, D, p="../data/glove/glove300uncased"):
     return covered_words, covered_word_ids
 
 
+class DGRUCell(torch.nn.Module):
+    def __init__(self, dim, bias=True, **kw):
+        super(DGRUCell, self).__init__(**kw)
+        self.dim, self.bias = dim, bias
+        self.gateW = torch.nn.Linear(dim * 2, dim * 5, bias=bias)
+        self.gateU = torch.nn.Linear(dim * 2, dim, bias=bias)
+        self.sm = torch.nn.Softmax(-1)
+
+    def forward(self, x, h):
+        gates = self.gateW(torch.cat([x, h], 1))
+        gates = gates.chunk(5, 1)
+        rx = torch.sigmoid(gates[0])
+        rh = torch.sigmoid(gates[1])
+        z = torch.softmax(torch.stack(gates[2:5], 2), -1)
+        u = self.gateU(torch.cat([x * rx, h * rh], 1))
+        u = torch.tanh(u)
+        h_new = torch.stack([x, h, u], 2) * z
+        h_new = h_new.sum(-1)
+        return h_new
+
+
+def try_dgru_cell():
+    xs = torch.nn.Parameter(torch.rand(2, 10, 5))
+    _hs = torch.nn.Parameter(torch.rand(2, 10, 5))
+    hs = [h[:, 0, :] for h in _hs.split(1, 1)]
+
+    m = [DGRUCell(5) for _ in range(10)]
+    # m = [torch.nn.GRUCell(5, 5) for _ in range(10)]
+    for i in range(xs.size(1)):
+        x = xs[:, i]
+        for j in range(len(hs)):
+            h = hs[j]
+            y = m[j](x, h)
+            x = y
+            hs[j] = y
+    print(y)
+    y.sum().backward()
+    print(xs.grad[:, 0].norm())
+    print(_hs.grad[:, 0].norm())
+
+
 class _Encoder(torch.nn.Module):
     def __init__(self, embdim, hdim, num_layers=1, dropout=0., bidirectional=True, **kw):
         super(_Encoder, self).__init__(**kw)
@@ -533,3 +574,7 @@ class PtrGenOutput3(PtrGenOutput):
 
             # out_probs = out_probs.masked_fill(out_probs == 0, 0)
             return out_probs, ptr_or_gen_scores, gen_probs, self.sm(attn_scores)
+
+
+if __name__ == '__main__':
+    try_dgru_cell()

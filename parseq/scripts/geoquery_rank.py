@@ -7,6 +7,7 @@ from abc import ABC
 from functools import partial
 from typing import *
 
+import dgl
 import dill as dill
 import torch
 import numpy as np
@@ -417,7 +418,201 @@ class RankModel(torch.nn.Module):
         scores = scores.sum(-1)
         return scores
 
-        return torch.rand_like(candtensors[:, :, 0].to(torch.float))
+
+class TreeGRUCell(torch.nn.Module):
+    def __init__(self, nodedim, reldim, hdim, dropout=0., **kw):
+        super(TreeGRUCell, self).__init__(**kw)
+        self.node_gru = torch.nn.GRUCell(nodedim, hdim)
+        self.rel_map = torch.nn.GRUCell(reldim, hdim)
+        self.dropout = torch.nn.Dropout(dropout)
+
+    def message_func(self, edges):
+        msg = self.rel_map(edges.data["x"], edges.src["h"])
+        return {"msg": msg}
+
+    def reduce_func(self, nodes):
+        red = nodes.mailbox["msg"].sum(1)
+        return {"red": red}
+
+    def apply_node_func(self, nodes):
+        h = self.node_gru(nodes.data["x"], nodes.data["red"])
+        return {"h": h}
+
+
+class TreeGRUEncoder(torch.nn.Module):
+    def __init__(self, embdim, hdim, numrels, num_layers=1, dropout=0., bidirectional=False, **kw):
+        super(TreeGRUEncoder, self).__init__(**kw)
+        self.hdim = hdim
+        self.rel_emb = torch.nn.Embedding(numrels, embdim, padding_idx=0)
+        self.rev_rel_emb = torch.nn.Embedding(numrels, embdim, padding_idx=0)
+
+        dims = [embdim]
+        for _ in range(1, num_layers):
+            dims.append(hdim*2 if bidirectional else hdim)
+        # multi layer that works with bidir and without re-doing everything into a graph
+        self.bu_cells = torch.nn.ModuleList([TreeGRUCell(_embdim, embdim, hdim, dropout=dropout) for _embdim in dims])
+        self.td_cells = torch.nn.ModuleList([TreeGRUCell(_embdim, embdim, hdim, dropout=dropout) for _embdim in dims]) if bidirectional else None
+
+    def forward(self, embs, parents, rels, mask=None):
+        # build dgl graph
+
+        # add nodes
+        g = dgl.DGLGraph()
+        g.add_nodes(embs.size(0)*embs.size(1))
+
+        if self.td_cells is not None:
+            g2 = dgl.DGLGraph()
+            g2.add_nodes(embs.size(0)*embs.size(1))
+
+        # add edges
+        maxtime = embs.size(1)
+        for i in range(len(embs)):
+            for t in range(embs.size(1)):
+                if parents[i, t].item() != -1:
+                    g.add_edge(i * maxtime + t, i * maxtime + parents[i, t].item(),
+                               {"relid": rels[i, t][None],
+                                "x": self.rel_emb(rels[i, t])[None]})
+                    if self.td_cells is not None:
+                        g2.add_edge(i * maxtime + parents[i, t].item(), i * maxtime + t,
+                                    {"relid": rels[i, t][None],
+                                     "x": self.rev_rel_emb(rels[i, t])[None]})
+
+        states = embs
+
+        for i in range(len(self.bu_cells)):
+            bu_cell = self.bu_cells[i]
+            td_cell = self.td_cells[i] if self.td_cells is not None else None
+            g.ndata["x"] = states.view(-1, states.size(-1))
+            g.ndata["red"] = torch.zeros(g.ndata["x"].size(0), self.hdim, device=states.device)
+
+            if td_cell is not None:
+                g2.ndata["x"] = states.view(-1, states.size(-1))
+                g2.ndata["red"] = torch.zeros(g.ndata["x"].size(0), self.hdim, device=states.device)
+
+            g_traversal_order = dgl.topological_nodes_generator(g)
+            g.prop_nodes(g_traversal_order,
+                         message_func=bu_cell.message_func,
+                         reduce_func=bu_cell.reduce_func,
+                         apply_node_func=bu_cell.apply_node_func)
+
+            if td_cell is not None:
+                g2_traversal_order = dgl.topological_nodes_generator(g2)
+                g2.prop_nodes(g2_traversal_order,
+                             message_func=td_cell.message_func,
+                             reduce_func=td_cell.reduce_func,
+                             apply_node_func=td_cell.apply_node_func)
+
+            bu_states = g.ndata["h"].view(states.size(0), states.size(1), -1)
+            states = bu_states
+            if td_cell is not None:
+                td_states = g2.ndata["h"].view(states.size(0), states.size(1), -1)
+                states = torch.cat([bu_states, td_states], 2)
+        return states
+
+
+def try_tree_gru_encoder():
+    m = TreeGRUEncoder(10, 20, 10, 2, .1, True)
+    embs = torch.nn.Parameter(torch.randn(2, 5, 10))
+    parents = torch.tensor([
+        [-1, -1, 1, 2, -1],
+        [-1, -1, 1, 1, -1]
+    ])
+    rels = torch.ones_like(parents)
+    y = m(embs, parents, rels)
+    print(y.size())
+    y.sum().backward()
+    print(embs.grad.norm())
+
+
+
+class TreeRankModel(torch.nn.Module):
+    open_token = "("
+    close_token = ")"
+    end_token = "@END@"
+    def __init__(self, embdim, hdim, numlayers:int=1, dropout=0.,
+                 sentence_encoder:SequenceEncoder=None,
+                 query_encoder:SequenceEncoder=None,
+                 **kw):
+        super(TreeRankModel, self).__init__(**kw)
+
+        self.open_id = query_encoder.vocab[self.open_token]
+        self.close_id = query_encoder.vocab[self.close_token]
+        self.end_id = query_encoder.vocab[self.end_token]
+        self.query_vocab = query_encoder.vocab
+
+        inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+        # _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
+        #                                                  p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
+        # inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
+        self.inp_emb = inpemb
+        self.inp_enc = LSTMEncoder(embdim, hdim // 2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+
+        self.out_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        self.out_enc = TreeGRUEncoder(embdim, hdim, 10, num_layers=numlayers, dropout=dropout, bidirectional=False)
+
+        self.lin_map = torch.nn.Sequential(torch.nn.Linear(hdim, hdim), torch.nn.Tanh())
+
+    def get_parents_and_rels(self, x):     # x: tensor of ids of out vocabulary
+        rels = []
+        parents = []
+        roots = [0 for _ in range(len(x))]
+        for i in range(len(x)):
+            xe = list(x[i].detach().cpu().numpy())
+            relse = []
+            parentse = []
+            stacke = [0]
+            pstacke = [-1]
+            for j in range(len(xe)):
+                if xe[j] == 0 or xe[j] == self.end_id:
+                    relse.append(0)
+                    parentse.append(-1)
+                elif self.open_id == xe[j]:
+                    relse.append(0)
+                    stacke.append(0)
+                    parentse.append(-1)
+                    pstacke.append(None)
+                elif self.close_id == xe[j]:
+                    relse.append(stacke[-2])
+                    parentse.append(-1)
+                    stacke[-2] += 1
+                    stacke.pop(-1)
+                    pstacke.pop(-1)
+                else:
+                    relse.append(stacke[-1])
+                    if pstacke[-1] is None:
+                        pstacke[-1] = j
+                        parentse.append(pstacke[-2])
+                        if roots[i] == 0:
+                            roots[i] = j
+                    else:
+                        parentse.append(pstacke[-1])
+                    stacke[-1] += 1
+            rels.append(relse)
+            parents.append(parentse)
+        rels = torch.tensor(rels).to(x.device)
+        parents = torch.tensor(parents).to(x.device)
+        roots = torch.tensor(roots).to(x.device)
+        return parents, rels, roots
+
+    def forward(self, inptensor, candtensors, alignments, align_entropies):
+        inpemb = self.inp_emb(inptensor)
+        _, inpenc = self.inp_enc(inpemb, mask=inptensor!=0)
+        inpenc = inpenc[-1][0]  # top output state of bilstm
+        inpenc = self.lin_map(inpenc)
+
+        outtensor = candtensors.view(-1, candtensors.size(-1))
+        outemb = self.out_emb(outtensor)
+
+        parents, rels, roots = self.get_parents_and_rels(outtensor) # relation of this element wrt its parent
+
+        outenc = self.out_enc(outemb, parents, rels, mask=outtensor!=0)
+        finalenc = outenc.gather(1, roots[:, None, None].repeat(1, 1, outenc.size(-1)))[:, 0]
+        finalenc = finalenc.view(candtensors.size(0), candtensors.size(1), outenc.size(-1))
+
+        scores = inpenc[:, None, :] * finalenc
+        scores = scores.sum(-1)
+        return scores
 
 
 class BasicGenModel(TransitionModel):
@@ -661,7 +856,7 @@ def run(lr=0.001,
 
     # do_rare_stats(ds)
 
-    model = RankModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
+    model = TreeRankModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder)
 
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
@@ -797,5 +992,6 @@ if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
-    q.argprun(run)
+    # q.argprun(run)
     # q.argprun(run_rerank)
+    try_tree_gru_encoder()
