@@ -419,6 +419,58 @@ class RankModel(torch.nn.Module):
         return scores
 
 
+class ParikhRankModel(torch.nn.Module):
+    def __init__(self, embdim, encdim=None, fdim=None, gdim=None, dropout=0., sidessame=True,
+                 sentence_encoder=None, query_encoder=None, **kw):
+        super(ParikhRankModel, self).__init__(**kw)
+        self.encdim = encdim if encdim is not None else embdim
+        self.fdim = fdim if fdim is not None else embdim
+        self.gdim = gdim if gdim is not None else embdim
+        self.dropout = torch.nn.Dropout(dropout)
+
+        inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+        # _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
+        #                                                  p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
+        # inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
+        self.inp_emb = inpemb
+        self.out_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+
+        self.FlinA = torch.nn.Sequential(torch.nn.Linear(self.encdim, self.fdim), torch.nn.ReLU())
+        self.FlinB = self.FlinA if sidessame else torch.nn.Sequential(torch.nn.Linear(self.encdim, self.fdim), torch.nn.ReLU())
+        self.Glin1 = torch.nn.Sequential(torch.nn.Linear(self.encdim *2, self.gdim), torch.nn.ReLU())
+        self.Glin2 = self.Glin1 if sidessame else torch.nn.Sequential(torch.nn.Linear(self.encdim *2, self.gdim), torch.nn.ReLU())
+        self.Hlin = torch.nn.Sequential(torch.nn.Linear(self.gdim*2, 1))
+
+    def forward(self, inptensor, candtensors, alignments, align_entropies):
+        a = self.inp_emb(inptensor)
+        a_stripe = a
+        a_mapped = self.FlinA(self.dropout(a_stripe))
+
+        b = self.out_emb(candtensors)
+        b_stripe = b
+        b_mapped = self.FlinB(self.dropout(b_stripe))
+
+        e_ij = torch.einsum("bsd,bczd->bcsz", a_mapped, b_mapped)
+        _alpha_j = torch.softmax(e_ij, 2)   # bc(s!)z
+        _beta_i = torch.softmax(e_ij, 3)    # bcs(z!)
+        alpha_j = _alpha_j[:, :, :, :, None] * a_stripe[:, None, :, None, :]
+        beta_i = _beta_i[:, :, :, :, None] * b_stripe[:, :, None, :, :]
+        alpha_j = alpha_j.sum(2)    # bczd
+        beta_i = beta_i.sum(3)      # bcsd
+
+        v_1i = self.Glin1(self.dropout(torch.cat([a_stripe[:, None, :, :].repeat(1, beta_i.size(1), 1, 1), beta_i], -1)))
+        v_2j = self.Glin2(self.dropout(torch.cat([b_stripe, alpha_j], -1)))
+
+        v_1 = v_1i.sum(2)
+        v_2 = v_2j.sum(2)       # bcd
+
+        y = self.Hlin(torch.cat([v_1, v_2], 2))[:, :, 0]    # bc
+        return y
+
+
+
+
 class TreeGRUCell(torch.nn.Module):
     def __init__(self, nodedim, reldim, hdim, dropout=0., **kw):
         super(TreeGRUCell, self).__init__(**kw)
@@ -856,8 +908,11 @@ def run(lr=0.001,
 
     # do_rare_stats(ds)
 
-    model = TreeRankModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
-                             sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder)
+    # model = TreeRankModel(embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
+    #                          sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder)
+    #
+    model = ParikhRankModel(embdim=encdim, dropout=dropout,
+                            sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder)
 
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
@@ -992,6 +1047,6 @@ if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
-    # q.argprun(run)
+    q.argprun(run)
     # q.argprun(run_rerank)
-    try_tree_gru_encoder()
+    # try_tree_gru_encoder()
