@@ -174,8 +174,8 @@ class GeoDataset(object):
                  min_freq:int=2,
                  cvfolds=None, testfold=None, **kw):
         super(GeoDataset, self).__init__(**kw)
-        self._initialize(p, sentence_encoder, min_freq)
         self.cvfolds, self.testfold = cvfolds, testfold
+        self._initialize(p, sentence_encoder, min_freq)
 
     def _initialize(self, p, sentence_encoder:SequenceEncoder, min_freq:int):
         self.data = {}
