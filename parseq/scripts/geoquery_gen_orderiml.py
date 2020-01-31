@@ -711,6 +711,9 @@ def run(lr=0.001,
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
     tt.tock("done training")
 
+    if testfold is not None:
+        return vlosses[1].get_epoch_error()
+
     # testing
     tt.tick("testing")
     testresults = q.test_epoch(model=beamdecoder, dataloader=ds.dataloader("test", batsize), losses=beamlosses, device=device)
