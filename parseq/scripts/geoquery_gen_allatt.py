@@ -735,10 +735,10 @@ def get_output_for_example(x):
 
 
 def run_hpo(numsplits=6, cuda=False, gpu=0):
-    ranges = {"encdim": [128, 256, 400],
+    ranges = {"encdim": [256, 400],
               "dropout": [.25, .5],
-              "smoothing": [0., .1, .2],
-              "epochs": [50, 60, 70]
+              "smoothing": [.1],
+              "epochs": [60, 75]
               }
     results = q.run_hpo_cv(run, ranges, numcvfolds=numsplits, path=__file__+".hpo", cuda=cuda, gpu=gpu)
     print(results["best"])
@@ -748,6 +748,6 @@ if __name__ == '__main__':
     # try_basic_query_tokenizer()
     # try_build_grammar()
     # try_dataset()
-    q.argprun(run)
-    # q.argprun(run_hpo)
+    # q.argprun(run)
+    q.argprun(run_hpo)
     # q.argprun(run_rerank)
