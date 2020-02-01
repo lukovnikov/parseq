@@ -162,6 +162,17 @@ class _Encoder(torch.nn.Module):
         return y, hiddens
 
 
+class RNNEncoder(_Encoder):
+    def create_rnn(self):
+        self.rnn = torch.nn.RNN(self.embdim, self.hdim, self.numlayers,
+                                bias=True, batch_first=True, dropout=self.dropoutp, bidirectional=self.bidir)
+
+    def init_params(self):
+        for name, param in self.rnn.named_parameters():
+            if 'weight' in name or 'bias' in name:
+                param.data.uniform_(-0.1, 0.1)
+
+
 class GRUEncoder(_Encoder):
     def create_rnn(self):
         self.rnn = torch.nn.GRU(self.embdim, self.hdim, self.numlayers,
