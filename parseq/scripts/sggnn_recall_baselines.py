@@ -157,8 +157,31 @@ class BasicGGNNCell(torch.nn.Module):       # RELATIONS: adding vectors
         return {"h": h}
 
 
+class GRUGNN(torch.nn.Module):
+    def __init__(self, indim, hdim, dropout=0., numrels=16, **kw):
+        super(GRUGNN, self).__init__(**kw)
+        self.hdim = hdim
+        self.indim = indim
+        self.node_gru = torch.nn.GRUCell(self.indim, self.hdim)
+
+        self.dropout = torch.nn.Dropout(dropout)
+
+    def message_func(self, edges):
+        msg = edges.src["h"]
+        return {"msg": msg}
+
+    def reduce_func(self, nodes):
+        assert(nodes.mailbox["msg"].size(1) == 1)
+        red = nodes.mailbox["msg"].sum(1)
+        return {"red": red}
+
+    def apply_node_func(self, nodes):
+        h = self.node_gru(self.dropout(nodes.data["x"]), nodes.data["red"])
+        return {"h": h}
+
+
 class SeqGGNN(torch.nn.Module):
-    useposemb = True
+    useposemb = False
     def __init__(self, vocab, embdim, cell, numsteps=10, maxlen=10, **kw):
         super(SeqGGNN, self).__init__(**kw)
         self.vocab = vocab
@@ -184,6 +207,8 @@ class SeqGGNN(torch.nn.Module):
             embs = torch.cat([embs, posembs], 2)
             # embs = embs + posembs
         _embs = embs.view(-1, embs.size(-1))
+        g.ndata["x"] = _embs
+        # g.ndata["h"] = torch.zeros(_embs.size(0), self.hdim, device=x.device)
         g.ndata["h"] = torch.cat([_embs,
                                   torch.zeros(_embs.size(0), self.hdim - _embs.size(-1), device=_embs.device)],
                                  -1)
@@ -236,7 +261,8 @@ def run(lr=0.001,
         device = torch.device("cuda", gpu)
     ds = ConditionalRecallDataset(maxlen=seqlen, NperY=npery)
 
-    m = SeqGGNN(ds.encoder.vocab, embdim, BasicGGNNCell(hdim, dropout=dropout), numsteps=seqlen+4, maxlen=seqlen+2)
+    numsteps_extra = 2
+    m = SeqGGNN(ds.encoder.vocab, embdim, BasicGGNNCell(hdim, dropout=dropout), numsteps=seqlen+numsteps_extra, maxlen=seqlen+2)
 
     # dl = ds.dataloader("train", batsize=batsize, shuffle=True)
     # batch = iter(dl).next()
