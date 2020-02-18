@@ -61,8 +61,11 @@ class Vocab(_Vocab):
                     divider *= 2
                     divider = min(divider, len(sorted_counts))
             if keep_tokens is not None:
-                sorted_counts = [sc for j, sc in enumerate(sorted_counts) if sc[0] in keep_tokens or j < i]
-                self.rare_tokens = set([t[0] for t in sorted_counts[i:]]) & keep_tokens
+                if keep_tokens in ("all", "ALL"):
+                    self.rare_tokens = set([t[0] for t in sorted_counts[i:]])
+                else:
+                    sorted_counts = [sc for j, sc in enumerate(sorted_counts) if sc[0] in keep_tokens or j < i]
+                    self.rare_tokens = set([t[0] for t in sorted_counts[i:]]) & keep_tokens
             else:
                 sorted_counts = sorted_counts[:i]
 
