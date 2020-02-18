@@ -208,7 +208,7 @@ class GeoDataset(object):
         gold_map = None
         maxlen_in, maxlen_out = 0, 0
         if unktokens is not None:
-            gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
+            gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids())
             for rare_token in unktokens:
                 gold_map[self.query_encoder.vocab[rare_token]] = \
                     self.query_encoder.vocab[self.query_encoder.vocab.unktoken]

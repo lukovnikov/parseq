@@ -154,12 +154,11 @@ class GeoDataset(object):
                  test_lang=None,
                  bert_tokenizer=None,
                  min_freq:int=2,
-                 cvfolds=None, testfold=None, reorder_random=False, **kw):
+                 cvfolds=None, testfold=None, **kw):
         super(GeoDataset, self).__init__(**kw)
         self.train_lang = train_lang
         self.test_lang = test_lang if test_lang is not None else train_lang
         self.cvfolds, self.testfold = cvfolds, testfold
-        self.reorder_random = reorder_random
         self._initialize(p, bert_tokenizer, min_freq)
 
     def _initialize(self, p, bert_tokenizer, min_freq:int):
@@ -191,28 +190,20 @@ class GeoDataset(object):
         # initialize output vocabulary
         outvocab = Vocab()
         for token, bertid in self.bert_vocab.D.items():
-            outvocab.counts[token] = 0
+            outvocab.add_token(token, seen=False)
 
         self.query_encoder = SequenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=bert_tokenizer), vocab=outvocab, add_end_token=True)
 
         # build vocabularies
-        unktokens = set()
         for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
-            # self.sentence_encoder.inc_build_vocab(question, seen=split=="train")
-            question_tokens = self.sentence_encoder.convert(question, return_what="tokens")
-            query_tokens = self.query_encoder.inc_build_vocab(query, seen=split=="train")
-            unktokens |= set(query_tokens) - set(question_tokens[0])
-        # for word, wordid in self.sentence_encoder.vocab.D.items():
-        #     self.query_encoder.vocab.add_token(word, seen=False)
-        # self.sentence_encoder.finalize_vocab(min_freq=min_freq, keep_rare=True)
-        self.query_encoder.finalize_vocab(min_freq=min_freq, keep_rare=True)
+            self.query_encoder.inc_build_vocab(query, seen=split=="train")
+        keeptokens = set(self.bert_vocab.D.keys())
+        self.query_encoder.finalize_vocab(min_freq=min_freq, keep_tokens=keeptokens)
 
         token_specs = self.build_token_specs(queries)
         self.token_specs = token_specs
 
-        unktokens = self.query_encoder.vocab.rare_tokens & unktokens
-
-        self.build_data(questions, queries, splits, unktokens=unktokens)
+        self.build_data(questions, queries, splits)
 
     def build_token_specs(self, outputs:Iterable[str]):
         token_specs = dict()
@@ -238,36 +229,34 @@ class GeoDataset(object):
 
         return token_specs
 
-    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str], unktokens:Set[str]=None):
-        gold_map = None
+    def build_data(self, inputs:Iterable[str], outputs:Iterable[str], splits:Iterable[str]):
         maxlen_in, maxlen_out = 0, 0
-        if unktokens is not None:
-            gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
-            for rare_token in unktokens:
-                gold_map[self.query_encoder.vocab[rare_token]] = \
-                    self.query_encoder.vocab[self.query_encoder.vocab.unktoken]
         for inp, out, split in zip(inputs, outputs, splits):
-
-            inp_tensor, inp_tokens = self.sentence_encoder.convert(inp, return_what="tensor,tokens")
-            out_tensor, out_tokens = self.query_encoder.convert(out, return_what="tensor,tokens")
+            # tokenize both input and output
+            inp_tokens = self.sentence_encoder.convert(inp, return_what="tokens")[0]
+            out_tokens = self.query_encoder.convert(out, return_what="tokens")[0]
+            # get gold tree
             gold_tree = lisp_to_tree(" ".join(out_tokens[:-1]))
             assert(gold_tree is not None)
-            if gold_map is not None:
-                out_tensor = gold_map[out_tensor]
+            # replace words in output that can't be copied from given input to UNK tokens
+            unktoken = self.query_encoder.vocab.unktoken
+            inp_tokens_ = set(inp_tokens)
+            out_tokens = [out_token
+                          if out_token
+                             in inp_tokens_
+                             or (out_token in self.query_encoder.vocab
+                                 and not out_token in self.query_encoder.vocab.rare_tokens)
+                          else unktoken
+                          for out_token in out_tokens]
+            # convert token sequences to ids
+            inp_tensor = self.sentence_encoder.convert(inp_tokens, return_what="tensor")[0]
+            out_tensor = self.query_encoder.convert(out_tokens, return_what="tensor")[0]
 
             state = TreeDecoderState([inp], [gold_tree],
                                       inp_tensor[None, :], out_tensor[None, :],
                                       [inp_tokens], [out_tokens],
                                       self.sentence_encoder.vocab, self.query_encoder.vocab,
                                      token_specs=self.token_specs)
-            if split == "train" and self.reorder_random is True:
-                gold_tree_ = tensor2tree(out_tensor, self.query_encoder.vocab)
-                random_gold_tree = random.choice(get_tree_permutations(gold_tree_, orderless={"and"}))
-                out_ = tree_to_lisp(random_gold_tree)
-                out_tensor_, out_tokens_ = self.query_encoder.convert(out_, return_what="tensor,tokens")
-                if gold_map is not None:
-                    out_tensor_ = gold_map[out_tensor_]
-                state.gold_tensor = out_tensor_[None]
 
             if split not in self.data:
                 self.data[split] = []
@@ -566,7 +555,6 @@ def run(lr=0.001,
         seed=123456,
         numcvfolds=6,
         testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
-        reorder_random=False,
         ):
     localargs = locals().copy()
     print(locals())
@@ -582,7 +570,7 @@ def run(lr=0.001,
     bertversion = "bert-base-multilingual-uncased"
     berttokenizer = BertTokenizer.from_pretrained(bertversion)
     ds = GeoDataset(bert_tokenizer=berttokenizer, min_freq=minfreq,
-                    cvfolds=cvfolds, testfold=testfold, reorder_random=reorder_random)
+                    cvfolds=cvfolds, testfold=testfold)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
 

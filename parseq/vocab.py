@@ -33,7 +33,7 @@ class Vocab(_Vocab):
     def nextid(self):
         return max(self.D.values()) + 1
 
-    def finalize(self, min_freq:int=0, top_k:int=np.infty, keep_rare=False):
+    def finalize(self, min_freq:int=0, top_k:int=np.infty, keep_tokens=None):
         self.growing = False
         sorted_counts = sorted(self.counts.items(), key=lambda x: x[1], reverse=True)
 
@@ -60,8 +60,10 @@ class Vocab(_Vocab):
                         where = +1
                     divider *= 2
                     divider = min(divider, len(sorted_counts))
-            self.rare_tokens = set([t[0] for t in sorted_counts[i:]])
-            if not keep_rare:
+            if keep_tokens is not None:
+                sorted_counts = [sc for j, sc in enumerate(sorted_counts) if sc[0] in keep_tokens or j < i]
+                self.rare_tokens = set([t[0] for t in sorted_counts[i:]]) & keep_tokens
+            else:
                 sorted_counts = sorted_counts[:i]
 
         nextid = max(self.D.values()) + 1
@@ -71,7 +73,7 @@ class Vocab(_Vocab):
                 nextid += 1
 
         self.RD = {v: k for k, v in self.D.items()}
-        if keep_rare:
+        if keep_tokens is not None:
             self.rare_ids = set([self[rare_token] for rare_token in self.rare_tokens])
 
     def add_token(self, token, seen:Union[int,bool]=True):
@@ -91,8 +93,8 @@ class Vocab(_Vocab):
     def __call__(self, item:int) -> str:
         return self.RD[item]
 
-    def number_of_ids(self, last_nonrare=True):
-        if not last_nonrare:
+    def number_of_ids(self, exclude_rare=False):
+        if not exclude_rare:
             return max(self.D.values()) + 1
         else:
             return max(set(self.D.values()) - self.rare_ids) + 1
@@ -186,21 +188,26 @@ class SequenceEncoder(VocabBuilder):
         else:
             return []
     
-    def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty, keep_rare=False):
+    def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty, keep_tokens=None):
         self.vocab_final = True
-        self.vocab.finalize(min_freq=min_freq, top_k=top_k, keep_rare=keep_rare)
+        self.vocab.finalize(min_freq=min_freq, top_k=top_k, keep_tokens=keep_tokens)
         
     def vocabs_finalized(self):
         return self.vocab_final
     
-    def convert(self, x:str, return_what="tensor"):     # "tensor", "ids", "tokens" or comma-separated combo of all
+    def convert(self, x:Union[str, List[str]], return_what="tensor"):     # "tensor", "ids", "tokens" or comma-separated combo of all
         rets = [r.strip() for r in return_what.split(",")]
-        tokens = self.tokenizer(x)
-        if self.add_end_token:
+        if isinstance(x, list):
+            tokens = x
+        else:
+            tokens = self.tokenizer(x)
+        if self.add_end_token and tokens[-1] != self.endtoken:
             tokens.append(self.endtoken)
-        ids = [self.vocab[token] for token in tokens]
-        tensor = torch.tensor(ids, dtype=torch.long)
-        ret = {"tokens": tokens, "ids": ids, "tensor": tensor}
+        ret = {"tokens": tokens}
+        if "ids" in rets or "tensor" in rets:
+            ret["ids"] = [self.vocab[token] for token in tokens]
+        if "tensor" in rets:
+            ret["tensor"] = torch.tensor(ret["ids"], dtype=torch.long)
         ret = [ret[r] for r in rets]
         return ret
     

@@ -30,27 +30,27 @@ class TokenEmb(torch.nn.Module):
         torch.nn.init.constant_(self.emb.weight[0], 0)
 
     def _do_rare(self, rare_token_ids:Set[int]=None, rare_id:int=None):
-        self.register_buffer("unkmask", None)
+        self.register_buffer("unkmap", None)
         self.rare_token_ids = self.rare_token_ids if rare_token_ids is None else rare_token_ids
         self.rare_id = self.rare_id if rare_id is None else rare_id
         if self.rare_id is not None and self.rare_token_ids is not None:
             # build id mapper
-            unkmask = torch.ones(self.emb.num_embeddings)
+            unkmap = torch.arange(0, self.emb.num_embeddings)
             save = False
             for id in self.rare_token_ids:
-                if id < unkmask.size(0):
-                    unkmask[id] = 1
+                if id < unkmap.size(0):
+                    unkmap[id] = self.rare_id
                     save = True
             if save:
-                self.register_buffer("unkmask", unkmask)
+                self.register_buffer("unkmap", unkmap)
 
     def forward(self, x:torch.Tensor):
         numembs = self.emb.num_embeddings
         unkmask = x >= numembs
         if torch.any(unkmask):
             x = x.masked_fill(unkmask, self.rare_id)
-        if self.unkmask is not None:
-            x = x.masked_fill(self.unkmask[None, :], self.rare_id)
+        if self.unkmap is not None:
+            x = self.unkmap[x]
         ret = self.emb(x)
         if self.adapter is not None:
             ret = self.adapter(ret)
@@ -354,27 +354,27 @@ class _PtrGenOutput(torch.nn.Module):
     def build_copy_maps(self, inp_vocab:Vocab, str_action_re=re.compile(r"^([^_].*)$")):
         self.inp_vocab = inp_vocab
         self.register_buffer("_inp_to_act",
-             torch.zeros(inp_vocab.number_of_ids(last_nonrare=False), dtype=torch.long))
+             torch.zeros(inp_vocab.number_of_ids(), dtype=torch.long))
         self.register_buffer("_act_to_inp",
-             torch.zeros(self.out_vocab.number_of_ids(last_nonrare=False), dtype=torch.long))
+             torch.zeros(self.out_vocab.number_of_ids(), dtype=torch.long))
 
         # for COPY, initialize mapping from input node vocab (sgb.vocab) to output action vocab (qgb.vocab_actions)
         self._build_copy_maps(str_action_re=str_action_re)
 
         # compute action mask from input: actions that are doable using input copy actions are 1, others are 0
-        actmask = torch.zeros(self.out_vocab.number_of_ids(last_nonrare=False), dtype=torch.uint8)
+        actmask = torch.zeros(self.out_vocab.number_of_ids(), dtype=torch.uint8)
         actmask.index_fill_(0, self._inp_to_act, 1)
         actmask[0] = 0
         self.register_buffer("_inp_actmask", actmask)
 
         # rare actions
         self.rare_token_ids = self.out_vocab.rare_ids
-        self.register_buffer("out_mask", None)
+        self.register_buffer("gen_mask", None)
         if len(self.rare_token_ids) > 0:
-            out_mask = torch.ones(self.out_vocab.number_of_ids(last_nonrare=False))
+            gen_mask = torch.ones(self.out_vocab.number_of_ids())
             for rare_token_id in self.rare_token_ids:
-                out_mask[rare_token_id] = 0
-            self.register_buffer("out_mask", out_mask)
+                gen_mask[rare_token_id] = 0
+            self.register_buffer("gen_mask", gen_mask)
 
     def _build_copy_maps(self, str_action_re):      # TODO test
         if str_action_re is None:
@@ -483,19 +483,16 @@ class PtrGenOutput(_PtrGenOutput):
         :param out_mask:        (batsize, outvocsize)
         :return:
         """
-        if self.training:       # !!!! removing action mask stuff during training !!! probably want to put back
-            out_mask = None
-
         # - generation probs
         gen_probs = self.gen_lin(x)
-        fullvocsize = self.out_vocab.number_of_ids(last_nonrare=False)
+        fullvocsize = self.out_vocab.number_of_ids()
         if gen_probs.size(1) < fullvocsize:
             gen_probs = torch.cat([gen_probs,
                                    torch.log(torch.zeros_like(gen_probs[:, :1]))
                                         .repeat(1, fullvocsize - gen_probs.size(1))],
                                   1)
-        if self.out_mask is not None:
-            gen_probs = gen_probs + torch.log(self.out_mask.float()[None, :])
+        if self.gen_mask is not None:
+            gen_probs = gen_probs + torch.log(self.gen_mask.float()[None, :])
         if out_mask is not None:
             gen_probs = gen_probs + torch.log(out_mask.float())
 
@@ -509,7 +506,7 @@ class PtrGenOutput(_PtrGenOutput):
             # - point or generate probs
             ptr_or_gen_probs = self.copy_or_gen(x)  # (batsize, 2)
             if out_mask is not None:
-                cancopy_mask = self._inp_actmask.unsqueeze(0) * out_mask
+                cancopy_mask = self._inp_actmask.unsqueeze(0).float() * out_mask.float()
                 cancopy_mask = cancopy_mask.sum(
                     1) > 0  # if any overlap between allowed actions and actions doable by copy, set mask to 1
                 cancopy_mask = torch.stack([torch.ones_like(cancopy_mask), cancopy_mask], 1)
@@ -522,12 +519,12 @@ class PtrGenOutput(_PtrGenOutput):
             attn_probs = self.sm(attn_scores)
             # get distributions over input vocabulary
             ctx_ids = inptensor
-            inpdist = torch.zeros(gen_probs.size(0), self.inp_vocab.number_of_ids(last_nonrare=False), dtype=torch.float,
+            inpdist = torch.zeros(gen_probs.size(0), self.inp_vocab.number_of_ids(), dtype=torch.float,
                                   device=gen_probs.device)
             inpdist.scatter_add_(1, ctx_ids, attn_probs)
 
             # map to distribution over output actions
-            ptr_scores = torch.zeros(gen_probs.size(0), self.out_vocab.number_of_ids(last_nonrare=False),
+            ptr_scores = torch.zeros(gen_probs.size(0), self.out_vocab.number_of_ids(),
                                      dtype=torch.float, device=gen_probs.device)  # - np.infty
             ptr_scores.scatter_(1, self._inp_to_act.unsqueeze(0).repeat(gen_probs.size(0), 1),
                                 inpdist)
