@@ -26,6 +26,10 @@ class Vocab(_Vocab):
         self.RD = {v: k for k, v in self.D.items()}
         self.growing = True
 
+    def set_dict(self, D):
+        self.D = D
+        self.RD = {v: k for k, v in self.D.items()}
+
     def nextid(self):
         return max(self.D.values()) + 1
 

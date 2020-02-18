@@ -337,15 +337,15 @@ class SumPtrGenOutputOLD(torch.nn.Module):
 
 
 class _PtrGenOutput(torch.nn.Module):
-    def __init__(self, h_dim: int, out_vocab:Vocab=None, **kw):
+    def __init__(self, h_dim: int, vocab:Vocab=None, **kw):
         super(_PtrGenOutput, self).__init__(**kw)
         # initialize modules
-        self.gen_lin = torch.nn.Linear(h_dim, out_vocab.number_of_ids(), bias=True)
+        self.gen_lin = torch.nn.Linear(h_dim, vocab.number_of_ids(), bias=True)
         self.copy_or_gen = torch.nn.Linear(h_dim, 2, bias=True)
         self.sm = torch.nn.Softmax(-1)
         self.logsm = torch.nn.LogSoftmax(-1)
 
-        self.inp_vocab, self.out_vocab = None, out_vocab
+        self.inp_vocab, self.out_vocab = None, vocab
 
         self.naningrad = torch.nn.Parameter(torch.zeros(1))
         self.naningrad2 = torch.nn.Parameter(torch.zeros(1))
@@ -377,23 +377,35 @@ class _PtrGenOutput(torch.nn.Module):
             self.register_buffer("out_mask", out_mask)
 
     def _build_copy_maps(self, str_action_re):      # TODO test
-        string_action_vocab = {}
-        for k, v in self.out_vocab:
-            if str_action_re.match(k):
-                string_action_vocab[str_action_re.match(k).group(1)] = v
-        for k, inp_v in self.inp_vocab:
-            if k[0] == "@" and k[-1] == "@" and len(k) > 2:
-                pass
-            elif k[0] == "[" and k[-1] == "]" and len(k) > 2:
-                pass
-            else:
-                # assert (k in self.qgb.vocab_actions)
-                if k not in string_action_vocab:
-                    print(k)
-                assert (k in string_action_vocab)
-                out_v = string_action_vocab[k]
-                self._inp_to_act[inp_v] = out_v
-                self._act_to_inp[out_v] = inp_v
+        if str_action_re is None:
+            string_action_vocab = {k: v for k, v in self.out_vocab}
+            for k, inp_v in self.inp_vocab:
+                if k[0] == "@" and k[-1] == "@" and len(k) > 2:
+                    pass
+                elif k[0] == "[" and k[-1] == "]" and len(k) > 2:
+                    pass
+                else:
+                    if k in string_action_vocab:
+                        out_v = string_action_vocab[k]
+                        self._inp_to_act[inp_v] = out_v
+                        self._act_to_inp[out_v] = inp_v
+        else:
+            string_action_vocab = {}
+            for k, v in self.out_vocab:
+                if str_action_re.match(k):
+                    string_action_vocab[str_action_re.match(k).group(1)] = v
+            for k, inp_v in self.inp_vocab:
+                if k[0] == "@" and k[-1] == "@" and len(k) > 2:
+                    pass
+                elif k[0] == "[" and k[-1] == "]" and len(k) > 2:
+                    pass
+                else:
+                    if k not in string_action_vocab:
+                        print(k)
+                    assert (k in string_action_vocab)
+                    out_v = string_action_vocab[k]
+                    self._inp_to_act[inp_v] = out_v
+                    self._act_to_inp[out_v] = inp_v
 
 
 class PtrGenOutput2(_PtrGenOutput):
