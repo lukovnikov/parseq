@@ -1,0 +1,5282 @@
+[
+    {
+        "id":0,
+        "nl":"ge mig st\u00e4derna i virginia .",
+        "mrl":"answer(city(loc_2(stateid('virginia'))))",
+        "split":"train"
+    },
+    {
+        "id":1,
+        "nl":"vilka \u00e4r de h\u00f6gsta punkterna i staterna kring mississippi ?",
+        "mrl":"answer(high_point_1(state(next_to_2(stateid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":2,
+        "nl":"namnge floderna i arkansas .",
+        "mrl":"answer(river(loc_2(stateid('arkansas'))))",
+        "split":"train"
+    },
+    {
+        "id":3,
+        "nl":"namnge alla floder i colorado .",
+        "mrl":"answer(river(loc_2(stateid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":4,
+        "nl":"kan du s\u00e4ga mig namnet p\u00e5 texas huvudstad ?",
+        "mrl":"answer(capital(loc_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":5,
+        "nl":"kan du s\u00e4ga mig vilken som \u00e4r h\u00f6gsta punkten i delstaten oregon ?",
+        "mrl":"answer(highest(place(loc_2(state(stateid('oregon'))))))",
+        "split":"train"
+    },
+    {
+        "id":6,
+        "nl":"r\u00e4kna de stater som har h\u00f6jder l\u00e4gre \u00e4n vad alabama har .",
+        "mrl":"answer(count(state(low_point_2(lower_2(low_point_1(stateid('alabama')))))))",
+        "split":"test"
+    },
+    {
+        "id":7,
+        "nl":"ge mig alla stater i usa .",
+        "mrl":"answer(state(loc_2(countryid('usa'))))",
+        "split":"train"
+    },
+    {
+        "id":8,
+        "nl":"ge mig st\u00e4derna i texas .",
+        "mrl":"answer(city(loc_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":9,
+        "nl":"ge mig st\u00e4derna i usa .",
+        "mrl":"answer(city(loc_2(countryid('usa'))))",
+        "split":"train"
+    },
+    {
+        "id":10,
+        "nl":"ge mig st\u00e4derna i virginia .",
+        "mrl":"answer(city(loc_2(stateid('virginia'))))",
+        "split":"train"
+    },
+    {
+        "id":11,
+        "nl":"ge mig de st\u00e4der som ligger i texas .",
+        "mrl":"answer(city(loc_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":12,
+        "nl":"ge mig sj\u00f6arna i kalifornien .",
+        "mrl":"answer(lake(loc_2(stateid('california'))))",
+        "split":"train"
+    },
+    {
+        "id":13,
+        "nl":"ge mig den st\u00f6rsta staten .",
+        "mrl":"answer(largest(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":14,
+        "nl":"ge mig den l\u00e4ngsta floden som passerar genom usa .",
+        "mrl":"answer(longest(river(traverse_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":15,
+        "nl":"ge mig antalet floder i kalifornien .",
+        "mrl":"answer(count(river(loc_2(stateid('california')))))",
+        "split":"test"
+    },
+    {
+        "id":16,
+        "nl":"ge mig de stater som gr\u00e4nsar till utah .",
+        "mrl":"answer(state(next_to_2(stateid('utah'))))",
+        "split":"test"
+    },
+    {
+        "id":17,
+        "nl":"hur stort \u00e4r alaska ?",
+        "mrl":"answer(size(stateid('alaska')))",
+        "split":"train"
+    },
+    {
+        "id":18,
+        "nl":"hur stort \u00e4r massachusetts ?",
+        "mrl":"answer(size(stateid('massachusetts')))",
+        "split":"train"
+    },
+    {
+        "id":19,
+        "nl":"hur stort \u00e4r new mexico ?",
+        "mrl":"answer(size(stateid('new mexico')))",
+        "split":"train"
+    },
+    {
+        "id":20,
+        "nl":"hur stort \u00e4r north dakota ?",
+        "mrl":"answer(size(stateid('north dakota')))",
+        "split":"train"
+    },
+    {
+        "id":21,
+        "nl":"hur stort \u00e4r texas ?",
+        "mrl":"answer(size(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":22,
+        "nl":"hur stor \u00e4r staden new york ?",
+        "mrl":"answer(size(city(cityid('new york', _))))",
+        "split":"train"
+    },
+    {
+        "id":23,
+        "nl":"hur h\u00f6ga \u00e4r de h\u00f6gsta punkterna i alla stater ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":24,
+        "nl":"hur h\u00f6g \u00e4r guadalupe peak ?",
+        "mrl":"answer(elevation_1(placeid('guadalupe peak')))",
+        "split":"train"
+    },
+    {
+        "id":25,
+        "nl":"hur h\u00f6g \u00e4r mount mckinley ?",
+        "mrl":"answer(elevation_1(placeid('mount mckinley')))",
+        "split":"test"
+    },
+    {
+        "id":26,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i amerika ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":27,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i montana ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('montana'))))))",
+        "split":"train"
+    },
+    {
+        "id":28,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i den st\u00f6rsta staten ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(largest(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":29,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i alabama ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('alabama'))))))",
+        "split":"test"
+    },
+    {
+        "id":30,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i delaware ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('delaware'))))))",
+        "split":"train"
+    },
+    {
+        "id":31,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i florida ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('florida'))))))",
+        "split":"train"
+    },
+    {
+        "id":32,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i louisiana ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('louisiana'))))))",
+        "split":"train"
+    },
+    {
+        "id":33,
+        "nl":"hur stort \u00e4r alaska ?",
+        "mrl":"answer(size(stateid('alaska')))",
+        "split":"test"
+    },
+    {
+        "id":34,
+        "nl":"hur stort \u00e4r texas ?",
+        "mrl":"answer(size(stateid('texas')))",
+        "split":"test"
+    },
+    {
+        "id":35,
+        "nl":"hur stor \u00e4r den st\u00f6rsta staden i alaska ?",
+        "mrl":"answer(size(largest(city(loc_2(stateid('alaska'))))))",
+        "split":"train"
+    },
+    {
+        "id":36,
+        "nl":"hur l\u00e5ng \u00e4r rio grande ?",
+        "mrl":"answer(len(riverid('rio grande')))",
+        "split":"train"
+    },
+    {
+        "id":37,
+        "nl":"hur l\u00e5ng \u00e4r coloradofloden ?",
+        "mrl":"answer(len(river(riverid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":38,
+        "nl":"hur l\u00e5ng \u00e4r delawarefloden ?",
+        "mrl":"answer(len(river(riverid('delaware'))))",
+        "split":"test"
+    },
+    {
+        "id":39,
+        "nl":"hur l\u00e5ng \u00e4r den l\u00e4ngsta floden i kalifornien ?",
+        "mrl":"answer(len(longest(river(loc_2(stateid('california'))))))",
+        "split":"test"
+    },
+    {
+        "id":40,
+        "nl":"hur l\u00e5ng \u00e4r den l\u00e4ngsta floden i usa ?",
+        "mrl":"answer(len(longest(river(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":41,
+        "nl":"hur l\u00e5ng \u00e4r mississippi ?",
+        "mrl":"answer(len(riverid('mississippi')))",
+        "split":"train"
+    },
+    {
+        "id":42,
+        "nl":"hur l\u00e5ng \u00e4r mississippifloden ?",
+        "mrl":"answer(len(river(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":43,
+        "nl":"hur l\u00e5ng \u00e4r mississippifloden i miles ?",
+        "mrl":"answer(len(river(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":44,
+        "nl":"hur l\u00e5ng \u00e4r missourifloden ?",
+        "mrl":"answer(len(river(riverid('missouri'))))",
+        "split":"train"
+    },
+    {
+        "id":45,
+        "nl":"hur l\u00e5ng \u00e4r north platte floden ?",
+        "mrl":"answer(len(river(riverid('north platte'))))",
+        "split":"test"
+    },
+    {
+        "id":46,
+        "nl":"hur l\u00e5ng \u00e4r ohiofloden ?",
+        "mrl":"answer(len(river(riverid('ohio'))))",
+        "split":"test"
+    },
+    {
+        "id":47,
+        "nl":"hur l\u00e5ng \u00e4r rio grande floden ?",
+        "mrl":"answer(len(river(riverid('rio grande'))))",
+        "split":"train"
+    },
+    {
+        "id":48,
+        "nl":"hur l\u00e5ng \u00e4r den kortaste floden i usa ?",
+        "mrl":"answer(len(shortest(river(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":49,
+        "nl":"hur m\u00e5nga stora st\u00e4der finns i pennsylvania ?",
+        "mrl":"answer(count(major(city(loc_2(stateid('pennsylvania'))))))",
+        "split":"train"
+    },
+    {
+        "id":50,
+        "nl":"hur m\u00e5nga huvudst\u00e4der har rhode island ?",
+        "mrl":"answer(count(capital(loc_2(stateid('rhode island')))))",
+        "split":"test"
+    },
+    {
+        "id":51,
+        "nl":"hur m\u00e5nga st\u00e4der finns i louisiana ?",
+        "mrl":"answer(count(city(loc_2(stateid('louisiana')))))",
+        "split":"train"
+    },
+    {
+        "id":52,
+        "nl":"hur m\u00e5nga st\u00e4der finns i montana ?",
+        "mrl":"answer(count(city(loc_2(stateid('montana')))))",
+        "split":"train"
+    },
+    {
+        "id":53,
+        "nl":"hur m\u00e5nga st\u00e4der finns det i usa ?",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":54,
+        "nl":"hur m\u00e5nga st\u00e4der finns det i usa ?",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":55,
+        "nl":"hur m\u00e5nga st\u00e4der finns det i usa ?",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":56,
+        "nl":"hur m\u00e5nga st\u00e4der finns det i usa ?",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":57,
+        "nl":"hur m\u00e5nga st\u00e4der har texas ?",
+        "mrl":"answer(count(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":58,
+        "nl":"hur m\u00e5nga st\u00e4der har usa ?",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":59,
+        "nl":"hur m\u00e5nga st\u00e4der som heter austin finns det i usa ?",
+        "mrl":"answer(count(intersection(city(cityid('austin', _)), loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":60,
+        "nl":"hur m\u00e5nga medborgare har den st\u00f6rsta staden i usa ?",
+        "mrl":"answer(population_1(largest(city(all))))",
+        "split":"test"
+    },
+    {
+        "id":61,
+        "nl":"hur m\u00e5nga medborgare i alabama ?",
+        "mrl":"answer(population_1(stateid('alabama')))",
+        "split":"train"
+    },
+    {
+        "id":62,
+        "nl":"hur m\u00e5nga medborgare i boulder ?",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":63,
+        "nl":"hur m\u00e5nga medborgare bor i kalifornien ?",
+        "mrl":"answer(population_1(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":64,
+        "nl":"hur m\u00e5nga floder har colorado ?",
+        "mrl":"answer(count(river(riverid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":65,
+        "nl":"hur m\u00e5nga inv\u00e5nare har montgomery ?",
+        "mrl":"answer(population_1(cityid('montgomery', _)))",
+        "split":"train"
+    },
+    {
+        "id":66,
+        "nl":"hur m\u00e5nga stora st\u00e4der finns i arizona ?",
+        "mrl":"answer(count(major(city(loc_2(stateid('arizona'))))))",
+        "split":"train"
+    },
+    {
+        "id":67,
+        "nl":"hur m\u00e5nga stora st\u00e4der finns i florida ?",
+        "mrl":"answer(count(major(city(loc_2(stateid('florida'))))))",
+        "split":"train"
+    },
+    {
+        "id":68,
+        "nl":"hur m\u00e5nga stora st\u00e4der finns i de stater som gr\u00e4nsar till nebraska ?",
+        "mrl":"answer(count(major(city(loc_2(state(next_to_2(stateid('nebraska'))))))))",
+        "split":"train"
+    },
+    {
+        "id":69,
+        "nl":"hur m\u00e5nga stora st\u00e4der finns i de stater som gr\u00e4nsar till utah ?",
+        "mrl":"answer(count(major(city(loc_2(state(next_to_2(stateid('utah'))))))))",
+        "split":"train"
+    },
+    {
+        "id":70,
+        "nl":"hur m\u00e5nga stora st\u00e4der finns i texas ?",
+        "mrl":"answer(count(major(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":71,
+        "nl":"hur m\u00e5nga stora st\u00e4der finns det ?",
+        "mrl":"answer(count(major(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":72,
+        "nl":"hur m\u00e5nga stora st\u00e4der finns det i oregon ?",
+        "mrl":"answer(count(major(city(loc_2(stateid('oregon'))))))",
+        "split":"train"
+    },
+    {
+        "id":73,
+        "nl":"hur m\u00e5nga stora floder korsar ohio ?",
+        "mrl":"answer(count(major(river(traverse_2(stateid('ohio'))))))",
+        "split":"train"
+    },
+    {
+        "id":74,
+        "nl":"hur m\u00e5nga personer finns det i delstaten nevada ?",
+        "mrl":"answer(population_1(state(stateid('nevada'))))",
+        "split":"train"
+    },
+    {
+        "id":75,
+        "nl":"hur m\u00e5nga personer finns det i iowa ?",
+        "mrl":"answer(population_1(stateid('iowa')))",
+        "split":"train"
+    },
+    {
+        "id":76,
+        "nl":"hur m\u00e5nga personer finns det i new york ?",
+        "mrl":"answer(population_1(stateid('new york')))",
+        "split":"train"
+    },
+    {
+        "id":77,
+        "nl":"hur m\u00e5nga m\u00e4nniskor i boulder ?",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":78,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i austin ?",
+        "mrl":"answer(population_1(cityid('austin', _)))",
+        "split":"train"
+    },
+    {
+        "id":79,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i austin texas ?",
+        "mrl":"answer(population_1(cityid('austin', 'tx')))",
+        "split":"train"
+    },
+    {
+        "id":80,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i kalifornien ?",
+        "mrl":"answer(population_1(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":81,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i chicago ?",
+        "mrl":"answer(population_1(cityid('chicago', _)))",
+        "split":"train"
+    },
+    {
+        "id":82,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i detroit ?",
+        "mrl":"answer(population_1(cityid('detroit', _)))",
+        "split":"test"
+    },
+    {
+        "id":83,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor p\u00e5 hawaii ?",
+        "mrl":"answer(population_1(stateid('hawaii')))",
+        "split":"train"
+    },
+    {
+        "id":84,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i houston ?",
+        "mrl":"answer(population_1(cityid('houston', _)))",
+        "split":"test"
+    },
+    {
+        "id":85,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i kalamazoo ?",
+        "mrl":"answer(population_1(cityid('kalamazoo', _)))",
+        "split":"train"
+    },
+    {
+        "id":86,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i kansas ?",
+        "mrl":"answer(population_1(stateid('kansas')))",
+        "split":"train"
+    },
+    {
+        "id":87,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i minneapolis minnesota ?",
+        "mrl":"answer(population_1(cityid('minneapolis', 'mn')))",
+        "split":"test"
+    },
+    {
+        "id":88,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i mississippi ?",
+        "mrl":"answer(population_1(stateid('mississippi')))",
+        "split":"test"
+    },
+    {
+        "id":89,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i montana ?",
+        "mrl":"answer(population_1(stateid('montana')))",
+        "split":"train"
+    },
+    {
+        "id":90,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i new hampshire ?",
+        "mrl":"answer(population_1(stateid('new hampshire')))",
+        "split":"train"
+    },
+    {
+        "id":91,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i new mexico ?",
+        "mrl":"answer(population_1(stateid('new mexico')))",
+        "split":"train"
+    },
+    {
+        "id":92,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i new york ?",
+        "mrl":"answer(population_1(stateid('new york')))",
+        "split":"train"
+    },
+    {
+        "id":93,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i rhode island ?",
+        "mrl":"answer(population_1(stateid('rhode island')))",
+        "split":"test"
+    },
+    {
+        "id":94,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i riverside ?",
+        "mrl":"answer(population_1(cityid('riverside', _)))",
+        "split":"train"
+    },
+    {
+        "id":95,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i san francisco ?",
+        "mrl":"answer(population_1(cityid('san francisco', _)))",
+        "split":"train"
+    },
+    {
+        "id":96,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i south dakota ?",
+        "mrl":"answer(population_1(stateid('south dakota')))",
+        "split":"train"
+    },
+    {
+        "id":97,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i spokane washington ?",
+        "mrl":"answer(population_1(cityid('spokane', 'wa')))",
+        "split":"train"
+    },
+    {
+        "id":98,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i texas ?",
+        "mrl":"answer(population_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":99,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i den st\u00f6rsta staden i staten new york ?",
+        "mrl":"answer(population_1(largest(city(loc_2(state(stateid('new york')))))))",
+        "split":"test"
+    },
+    {
+        "id":100,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i georgiens huvudstad ?",
+        "mrl":"answer(population_1(capital(loc_2(stateid('georgia')))))",
+        "split":"train"
+    },
+    {
+        "id":101,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i huvudstaden av texas ?",
+        "mrl":"answer(population_1(capital(loc_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":102,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i den minsta staten som gr\u00e4nsar till wyoming ?",
+        "mrl":"answer(population_1(smallest(state(next_to_2(stateid('wyoming'))))))",
+        "split":"train"
+    },
+    {
+        "id":103,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i staten som har den h\u00f6gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(population_1(largest_one(density_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":104,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i usa ?",
+        "mrl":"answer(population_1(countryid('usa')))",
+        "split":"test"
+    },
+    {
+        "id":105,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i washington ?",
+        "mrl":"answer(population_1(stateid('washington')))",
+        "split":"train"
+    },
+    {
+        "id":106,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i washington dc ?",
+        "mrl":"answer(population_1(cityid('washington', 'dc')))",
+        "split":"train"
+    },
+    {
+        "id":107,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bodde i austin ?",
+        "mrl":"answer(population_1(cityid('austin', _)))",
+        "split":"test"
+    },
+    {
+        "id":108,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i utah ?",
+        "mrl":"answer(population_1(stateid('utah')))",
+        "split":"test"
+    },
+    {
+        "id":109,
+        "nl":"hur m\u00e5nga m\u00e4nniskor bor i utah ?",
+        "mrl":"answer(population_1(stateid('utah')))",
+        "split":"train"
+    },
+    {
+        "id":110,
+        "nl":"hur m\u00e5nga inv\u00e5nare bor i texas ?",
+        "mrl":"answer(population_1(stateid('texas')))",
+        "split":"test"
+    },
+    {
+        "id":111,
+        "nl":"hur m\u00e5nga floder kallas colorado ?",
+        "mrl":"answer(count(river(riverid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":112,
+        "nl":"hur m\u00e5nga floder finns i colorado ?",
+        "mrl":"answer(count(river(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":113,
+        "nl":"hur m\u00e5nga floder har colorado ?",
+        "mrl":"answer(count(river(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":114,
+        "nl":"hur m\u00e5nga floder har iowa ?",
+        "mrl":"answer(count(river(loc_2(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":115,
+        "nl":"hur m\u00e5nga floder har missouri ?",
+        "mrl":"answer(count(river(loc_2(stateid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":116,
+        "nl":"hur m\u00e5nga floder har new york ?",
+        "mrl":"answer(count(river(loc_2(stateid('new york')))))",
+        "split":"train"
+    },
+    {
+        "id":117,
+        "nl":"hur m\u00e5nga floder har den stat som har h\u00f6gst antal floder ?",
+        "mrl":"answer(count(river(loc_2(most(state(loc_1(river(all))))))))",
+        "split":"test"
+    },
+    {
+        "id":118,
+        "nl":"hur m\u00e5nga floder har staten med den h\u00f6gsta punkten ?",
+        "mrl":"answer(count(river(loc_2(state(loc_1(highest(place(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":119,
+        "nl":"hur m\u00e5nga floder har staten med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(count(river(loc_2(largest_one(population_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":120,
+        "nl":"hur m\u00e5nga floder finns i idaho ?",
+        "mrl":"answer(count(river(loc_2(stateid('idaho')))))",
+        "split":"train"
+    },
+    {
+        "id":121,
+        "nl":"hur m\u00e5nga floder finns i texas ?",
+        "mrl":"answer(count(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":122,
+        "nl":"hur m\u00e5nga floder finns i usa ?",
+        "mrl":"answer(count(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":123,
+        "nl":"hur m\u00e5nga floder korsar inte staten med huvudstaden albany ?",
+        "mrl":"answer(count(exclude(river(all), traverse_2(state(loc_1(capital(cityid('albany', _))))))))",
+        "split":"train"
+    },
+    {
+        "id":124,
+        "nl":"hur m\u00e5nga floder har alaska ?",
+        "mrl":"answer(count(river(loc_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":125,
+        "nl":"hur m\u00e5nga floder har colorado ?",
+        "mrl":"answer(count(river(loc_2(stateid('colorado')))))",
+        "split":"test"
+    },
+    {
+        "id":126,
+        "nl":"hur m\u00e5nga floder i texas \u00e4r l\u00e4ngre \u00e4n den r\u00f6da ?",
+        "mrl":"answer(count(intersection(river(loc_2(stateid('texas'))), longer(riverid('red')))))",
+        "split":"train"
+    },
+    {
+        "id":127,
+        "nl":"hur m\u00e5nga floder i washington ?",
+        "mrl":"answer(count(river(loc_2(stateid('washington')))))",
+        "split":"train"
+    },
+    {
+        "id":128,
+        "nl":"hur m\u00e5nga floder l\u00f6per genom texas ?",
+        "mrl":"answer(count(river(traverse_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":129,
+        "nl":"hur m\u00e5nga floder l\u00f6per genom de stater som gr\u00e4nsar till colorado ?",
+        "mrl":"answer(count(river(traverse_2(state(next_to_2(stateid('colorado')))))))",
+        "split":"train"
+    },
+    {
+        "id":130,
+        "nl":"hur m\u00e5nga kvadratkilometer i usa ?",
+        "mrl":"answer(area_1(countryid('usa')))",
+        "split":"train"
+    },
+    {
+        "id":131,
+        "nl":"hur m\u00e5nga stater finns det i usa ?",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":132,
+        "nl":"hur m\u00e5nga stater finns det i usa ?",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":133,
+        "nl":"hur m\u00e5nga stater ligger bredvid stora floder ?",
+        "mrl":"answer(count(state(next_to_2(major(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":134,
+        "nl":"hur m\u00e5nga stater finns det ?",
+        "mrl":"answer(count(state(all)))",
+        "split":"test"
+    },
+    {
+        "id":135,
+        "nl":"hur m\u00e5nga stater finns det i usa ?",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":136,
+        "nl":"hur m\u00e5nga stater finns det i usa ?",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":137,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till alaska ?",
+        "mrl":"answer(count(state(next_to_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":138,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till minst en annan stat ?",
+        "mrl":"answer(count(state(next_to_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":139,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till colorado och gr\u00e4nsar till new mexico ?",
+        "mrl":"answer(count(state(intersection(next_to_2(stateid('colorado')) , next_to_2(stateid('new mexico'))))))",
+        "split":"train"
+    },
+    {
+        "id":140,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till hawaii ?",
+        "mrl":"answer(count(state(next_to_2(stateid('hawaii')))))",
+        "split":"train"
+    },
+    {
+        "id":141,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till iowa ?",
+        "mrl":"answer(count(state(next_to_2(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":142,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till den stat vars huvudstad \u00e4r boston ?",
+        "mrl":"answer(count(state(next_to_2(state(loc_1(capital(cityid('boston', _))))))))",
+        "split":"train"
+    },
+    {
+        "id":143,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till tennessee ?",
+        "mrl":"answer(count(state(next_to_2(stateid('tennessee')))))",
+        "split":"train"
+    },
+    {
+        "id":144,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till texas ?",
+        "mrl":"answer(count(state(next_to_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":145,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till den st\u00f6rsta staten ?",
+        "mrl":"answer(count(state(next_to_2(largest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":146,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till mississippifloden ?",
+        "mrl":"answer(count(state(next_to_2(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":147,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till den stat som gr\u00e4nsar till flest antal stater ?",
+        "mrl":"answer(count(state(next_to_2(most(state(next_to_2(state(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":148,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar till staten med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(count(state(next_to_2(largest_one(population_1(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":149,
+        "nl":"hur m\u00e5nga stater har inga floder ?",
+        "mrl":"answer(count(exclude(state(all), loc_1(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":150,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar iowa till ?",
+        "mrl":"answer(count(state(next_to_1(stateid('iowa')))))",
+        "split":"train"
+    },
+    {
+        "id":151,
+        "nl":"hur m\u00e5nga stater gr\u00e4nsar missouri till ?",
+        "mrl":"answer(count(state(next_to_1(stateid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":152,
+        "nl":"hur m\u00e5nga stater gr\u00e4nasr tennessee till ?",
+        "mrl":"answer(count(state(next_to_1(stateid('tennessee')))))",
+        "split":"test"
+    },
+    {
+        "id":153,
+        "nl":"hur m\u00e5nga stater fl\u00f6dar coloradofloden genom ?",
+        "mrl":"answer(count(state(traverse_1(river(riverid('colorado'))))))",
+        "split":"train"
+    },
+    {
+        "id":154,
+        "nl":"hur m\u00e5nga stater l\u00f6per coloradofloden genom ?",
+        "mrl":"answer(count(state(traverse_1(river(riverid('colorado'))))))",
+        "split":"train"
+    },
+    {
+        "id":155,
+        "nl":"hur m\u00e5nga stater l\u00f6per mississippifloden genom ?",
+        "mrl":"answer(count(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":156,
+        "nl":"hur m\u00e5nga stater l\u00f6per floden mississippi genom ?",
+        "mrl":"answer(count(state(traverse_1(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":157,
+        "nl":"hur m\u00e5nga stater l\u00f6per missourifloden igenom ?",
+        "mrl":"answer(count(state(traverse_1(river(riverid('missouri'))))))",
+        "split":"train"
+    },
+    {
+        "id":158,
+        "nl":"hur m\u00e5nga stater har usa ?",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":159,
+        "nl":"hur m\u00e5nga stater har en stad som heter rochester ?",
+        "mrl":"answer(count(state(loc_1(city(cityid('rochester', _))))))",
+        "split":"train"
+    },
+    {
+        "id":160,
+        "nl":"hur m\u00e5nga stater har en stad som heter springfield ?",
+        "mrl":"answer(count(state(loc_1(city(cityid('springfield', _))))))",
+        "split":"train"
+    },
+    {
+        "id":161,
+        "nl":"hur m\u00e5nga stater har en h\u00f6gre punkt \u00e4n den h\u00f6gsta punkten i staten med den st\u00f6rsta huvudstaden i usa ?",
+        "mrl":"answer(count(state(loc_1(place(higher_2(highest(place(loc_2(state(loc_1(largest(capital(city(loc_2(countryid('usa'))))))))))))))))",
+        "split":"test"
+    },
+    {
+        "id":162,
+        "nl":"hur m\u00e5nga stater har st\u00e4der som heter austin ?",
+        "mrl":"answer(count(state(loc_1(city(cityid('austin', _))))))",
+        "split":"train"
+    },
+    {
+        "id":163,
+        "nl":"hur m\u00e5nga stater har st\u00e4der eller t\u00e4torter som heter springfield ?",
+        "mrl":"answer(count(state(loc_1(city(cityid('springfield', _))))))",
+        "split":"train"
+    },
+    {
+        "id":164,
+        "nl":"hur m\u00e5nga stater har stora floder ?",
+        "mrl":"answer(count(state(loc_1(major(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":165,
+        "nl":"hur m\u00e5nga delstater i usa l\u00f6per den kortaste floden genom ?",
+        "mrl":"answer(count(intersection(state(loc_2(countryid('usa'))),traverse_1(shortest(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":166,
+        "nl":"hur stor befolkning har texas ?",
+        "mrl":"answer(population_1(stateid('texas')))",
+        "split":"test"
+    },
+    {
+        "id":167,
+        "nl":"hur h\u00f6g \u00e4r mount mckinley ?",
+        "mrl":"answer(elevation_1(placeid('mount mckinley')))",
+        "split":"test"
+    },
+    {
+        "id":168,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i montana ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('montana'))))))",
+        "split":"test"
+    },
+    {
+        "id":169,
+        "nl":"i vilken stat ligger mount mckinley ?",
+        "mrl":"answer(state(loc_1(placeid('mount mckinley'))))",
+        "split":"train"
+    },
+    {
+        "id":170,
+        "nl":"i vilken stat finns den h\u00f6gsta punkten i usa ?",
+        "mrl":"answer(state(loc_1(highest(place(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":171,
+        "nl":"i vilken stat ligger rochester ?",
+        "mrl":"answer(state(loc_1(cityid('rochester', _))))",
+        "split":"train"
+    },
+    {
+        "id":172,
+        "nl":"iowa gr\u00e4nsar till hur m\u00e5nga stater ?",
+        "mrl":"answer(count(state(next_to_1(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":173,
+        "nl":"lista staterna .",
+        "mrl":"answer(state(all))",
+        "split":"train"
+    },
+    {
+        "id":174,
+        "nl":"namnge alla sj\u00f6ar i usa .",
+        "mrl":"answer(lake(loc_2(countryid('usa'))))",
+        "split":"train"
+    },
+    {
+        "id":175,
+        "nl":"namnge alla floder i colorado .",
+        "mrl":"answer(river(loc_2(stateid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":176,
+        "nl":"namnge de 50 huvudst\u00e4derna i usa .",
+        "mrl":"answer(capital(loc_2(countryid('usa'))))",
+        "split":"train"
+    },
+    {
+        "id":177,
+        "nl":"namnge den l\u00e4ngsta floden i usa .",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":178,
+        "nl":"namnge de stora sj\u00f6arna i michigan .",
+        "mrl":"answer(major(lake(loc_2(stateid('michigan')))))",
+        "split":"train"
+    },
+    {
+        "id":179,
+        "nl":"namnge de stora floderna i florida .",
+        "mrl":"answer(major(river(loc_2(stateid('florida')))))",
+        "split":"test"
+    },
+    {
+        "id":180,
+        "nl":"namnge floderna i arkansas .",
+        "mrl":"answer(river(loc_2(stateid('arkansas'))))",
+        "split":"train"
+    },
+    {
+        "id":181,
+        "nl":"namnge de stater som inte har n\u00e5gra angr\u00e4nsande stater .",
+        "mrl":"answer(exclude(state(all), next_to_2(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":182,
+        "nl":"antal medborgare i boulder ?",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":183,
+        "nl":"antal personer i boulder ?",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"test"
+    },
+    {
+        "id":184,
+        "nl":"antal stater som gr\u00e4nsar till iowa ?",
+        "mrl":"answer(count(state(next_to_2(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":185,
+        "nl":"vilken utav de stater som sk\u00f6ljs av mississippifloden har den l\u00e4gsta punkten ?",
+        "mrl":"answer(state(loc_1(lowest(place(loc_2(state(traverse_1(river(riverid('mississippi'))))))))))",
+        "split":"train"
+    },
+    {
+        "id":186,
+        "nl":"m\u00e4nniskor i boulder ?",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":187,
+        "nl":"befolkning i boulder ?",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":188,
+        "nl":"floder i new york ?",
+        "mrl":"answer(river(loc_2(stateid('new york'))))",
+        "split":"test"
+    },
+    {
+        "id":189,
+        "nl":"sacramento \u00e4r huvudstad i vilken stat ?",
+        "mrl":"answer(state(loc_1(capital(cityid('sacramento', _)))))",
+        "split":"train"
+    },
+    {
+        "id":190,
+        "nl":"san antonio ligger i vilken stat ?",
+        "mrl":"answer(state(loc_1(cityid('san antonio', _))))",
+        "split":"test"
+    },
+    {
+        "id":191,
+        "nl":"visa stora st\u00e4der i colorado .",
+        "mrl":"answer(major(city(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":192,
+        "nl":"visa mig alla de stora sj\u00f6arna i usa .",
+        "mrl":"answer(major(lake(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":193,
+        "nl":"s\u00e4g staten med den st\u00f6rsta arean .",
+        "mrl":"answer(largest_one(area_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":194,
+        "nl":"stater som gr\u00e4nsar till iowa ?",
+        "mrl":"answer(state(next_to_2(stateid('iowa'))))",
+        "split":"train"
+    },
+    {
+        "id":195,
+        "nl":"ber\u00e4tta vilka st\u00e4der som ligger i texas .",
+        "mrl":"answer(city(loc_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":196,
+        "nl":"genom vilka stater l\u00f6per den l\u00e4ngsta floden i texas genom ?",
+        "mrl":"answer(state(traverse_1(longest(river(loc_2(stateid('texas')))))))",
+        "split":"test"
+    },
+    {
+        "id":197,
+        "nl":"genom vilka stater flyter floden mississippi ?",
+        "mrl":"answer(state(traverse_1(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":198,
+        "nl":"genom vilka stater l\u00f6per floden mississippi genom ?",
+        "mrl":"answer(state(traverse_1(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":199,
+        "nl":"vilka \u00e4r alla floderna i texas ?",
+        "mrl":"answer(river(loc_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":200,
+        "nl":"vilka \u00e4r de stora floderna i texas ?",
+        "mrl":"answer(major(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":201,
+        "nl":"vilka \u00e4r de st\u00f6rsta floderna i texas ?",
+        "mrl":"answer(longest(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":202,
+        "nl":"vilka \u00e4r huvudst\u00e4derna i de stater som gr\u00e4nsar till texas ?",
+        "mrl":"answer(capital(city(loc_2(state(next_to_2(stateid('texas')))))))",
+        "split":"train"
+    },
+    {
+        "id":203,
+        "nl":"vilken \u00e4r huvudstad i texas ?",
+        "mrl":"answer(capital(city(loc_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":204,
+        "nl":"vilka \u00e4r huvudst\u00e4derna i de stater som gr\u00e4nsar till missouri ?",
+        "mrl":"answer(capital(loc_2(state(next_to_2(stateid('missouri'))))))",
+        "split":"test"
+    },
+    {
+        "id":205,
+        "nl":"vilka \u00e4r huvudst\u00e4derna i de stater som gr\u00e4nsar till texas ?",
+        "mrl":"answer(capital(loc_2(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":206,
+        "nl":"vilka \u00e4r st\u00e4derna i kalifornien ?",
+        "mrl":"answer(city(loc_2(stateid('california'))))",
+        "split":"train"
+    },
+    {
+        "id":207,
+        "nl":"vilka \u00e4r st\u00e4derna i de stater genom vilka mississippifloden l\u00f6per ?",
+        "mrl":"answer(city(loc_2(state(traverse_1(riverid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":208,
+        "nl":"vilka \u00e4r st\u00e4derna i staten med den h\u00f6gsta punkten ?",
+        "mrl":"answer(city(loc_2(state(loc_1(highest(place(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":209,
+        "nl":"vilka \u00e4r de h\u00f6gsta punkterna i alla stater ?",
+        "mrl":"answer(highest(place(loc_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":210,
+        "nl":"vilka \u00e4r de h\u00f6gsta punkterna i stater kring mississippi ?",
+        "mrl":"answer(highest(place(loc_2(state(next_to_2(stateid('mississippi')))))))",
+        "split":"train"
+    },
+    {
+        "id":211,
+        "nl":"vilka \u00e4r sj\u00f6arna i staterna som gr\u00e4nsar till texas ?",
+        "mrl":"answer(lake(loc_2(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":212,
+        "nl":"vilka \u00e4r de st\u00f6rsta st\u00e4derna i de stater som gr\u00e4nsar till den st\u00f6rsta staten ?",
+        "mrl":"answer(largest(city(loc_2(state(next_to_2(largest(state(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":213,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i alabama ?",
+        "mrl":"answer(major(city(loc_2(stateid('alabama')))))",
+        "split":"test"
+    },
+    {
+        "id":214,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i alaska ?",
+        "mrl":"answer(major(city(loc_2(stateid('alaska')))))",
+        "split":"test"
+    },
+    {
+        "id":215,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i kalifornien ?",
+        "mrl":"answer(major(city(loc_2(stateid('california')))))",
+        "split":"train"
+    },
+    {
+        "id":216,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i delaware ?",
+        "mrl":"answer(major(city(loc_2(stateid('delaware')))))",
+        "split":"train"
+    },
+    {
+        "id":217,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i kansas ?",
+        "mrl":"answer(major(city(loc_2(stateid('kansas')))))",
+        "split":"train"
+    },
+    {
+        "id":218,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i missouri ?",
+        "mrl":"answer(major(city(loc_2(stateid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":219,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i new mexico ?",
+        "mrl":"answer(major(city(loc_2(stateid('new mexico')))))",
+        "split":"train"
+    },
+    {
+        "id":220,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i new york ?",
+        "mrl":"answer(major(city(loc_2(stateid('new york')))))",
+        "split":"test"
+    },
+    {
+        "id":221,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i north carolina ?",
+        "mrl":"answer(major(city(loc_2(stateid('north carolina')))))",
+        "split":"train"
+    },
+    {
+        "id":222,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i ohio ?",
+        "mrl":"answer(major(city(loc_2(stateid('ohio')))))",
+        "split":"train"
+    },
+    {
+        "id":223,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i oklahoma ?",
+        "mrl":"answer(major(city(loc_2(stateid('oklahoma')))))",
+        "split":"train"
+    },
+    {
+        "id":224,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i rhode island ?",
+        "mrl":"answer(major(city(loc_2(stateid('rhode island')))))",
+        "split":"train"
+    },
+    {
+        "id":225,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i de stater genom vilka mississippifloden l\u00f6per ?",
+        "mrl":"answer(major(city(loc_2(state(traverse_1(riverid('mississippi')))))))",
+        "split":"test"
+    },
+    {
+        "id":226,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i texas ?",
+        "mrl":"answer(major(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":227,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i den st\u00f6rsta staten ?",
+        "mrl":"answer(major(city(loc_2(largest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":228,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i den minsta staten i usa ?",
+        "mrl":"answer(major(city(loc_2(smallest(state(loc_2(countryid('usa'))))))))",
+        "split":"train"
+    },
+    {
+        "id":229,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i delstaten kalifornien ?",
+        "mrl":"answer(major(city(loc_2(state(stateid('california'))))))",
+        "split":"test"
+    },
+    {
+        "id":230,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i de stater genom vilka den st\u00f6rsta floden i virginia l\u00f6per ?",
+        "mrl":"answer(major(city(loc_2(state(traverse_1(major(river(loc_2(stateid('virginia'))))))))))",
+        "split":"train"
+    },
+    {
+        "id":231,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i usa ?",
+        "mrl":"answer(major(city(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":232,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i vermont ?",
+        "mrl":"answer(major(city(loc_2(stateid('vermont')))))",
+        "split":"test"
+    },
+    {
+        "id":233,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i wyoming ?",
+        "mrl":"answer(major(city(loc_2(stateid('wyoming')))))",
+        "split":"train"
+    },
+    {
+        "id":234,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i texas ?",
+        "mrl":"answer(major(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":235,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i f\u00f6renta staterna ?",
+        "mrl":"answer(major(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":236,
+        "nl":"vilka \u00e4r de stora st\u00e4derna som ligger i usa ?",
+        "mrl":"answer(major(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":237,
+        "nl":"vilka \u00e4r de stora sj\u00f6arna i usa ?",
+        "mrl":"answer(major(lake(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":238,
+        "nl":"vilka \u00e4r de stora floderna i ohio ?",
+        "mrl":"answer(major(river(loc_2(stateid('ohio')))))",
+        "split":"test"
+    },
+    {
+        "id":239,
+        "nl":"vilka \u00e4r de stora floderna i usa ?",
+        "mrl":"answer(major(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":240,
+        "nl":"vad heter de stora st\u00e4derna i illinois ?",
+        "mrl":"answer(major(city(loc_2(stateid('illinois')))))",
+        "split":"train"
+    },
+    {
+        "id":241,
+        "nl":"vilka \u00e4r grannstater till michigan ?",
+        "mrl":"answer(state(next_to_2(stateid('michigan'))))",
+        "split":"train"
+    },
+    {
+        "id":242,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i varje stat i usa ?",
+        "mrl":"answer(density_1(state(all)))",
+        "split":"test"
+    },
+    {
+        "id":243,
+        "nl":"vad \u00e4r folkm\u00e4ngden i mississippi ?",
+        "mrl":"answer(population_1(stateid('mississippi')))",
+        "split":"test"
+    },
+    {
+        "id":244,
+        "nl":"vad \u00e4r folkm\u00e4ngden i alla stora st\u00e4der i montana ?",
+        "mrl":"answer(population_1(major(city(loc_2(stateid('montana'))))))",
+        "split":"train"
+    },
+    {
+        "id":245,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater mississippifloden rinner genom ?",
+        "mrl":"answer(population_1(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":246,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater genom vilka mississippifloden rinner ?",
+        "mrl":"answer(population_1(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":247,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater som mississippifloden l\u00f6per genom ?",
+        "mrl":"answer(population_1(state(traverse_1(riverid('mississippi')))))",
+        "split":"test"
+    },
+    {
+        "id":248,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater genom vilka floden mississippi flyter ?",
+        "mrl":"answer(population_1(state(traverse_1(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":249,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater som gr\u00e4nsar texas ?",
+        "mrl":"answer(population_1(state(next_to_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":250,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stora st\u00e4derna i texas ?",
+        "mrl":"answer(population_1(major(city(loc_2(stateid('texas'))))))",
+        "split":"test"
+    },
+    {
+        "id":251,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater genom vilka mississippifloden rinner ?",
+        "mrl":"answer(population_1(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":252,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater genom vilka mississippifloden rinner ?",
+        "mrl":"answer(population_1(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":253,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater genom vilka floden mississippi flyter ?",
+        "mrl":"answer(population_1(state(traverse_1(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":254,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stater genom vilka floden mississippi flyter ?",
+        "mrl":"answer(population_1(state(traverse_1(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":255,
+        "nl":"vilka \u00e4r floderna i alaska ?",
+        "mrl":"answer(river(loc_2(stateid('alaska'))))",
+        "split":"test"
+    },
+    {
+        "id":256,
+        "nl":"vilka \u00e4r floderna i delstaten indiana ?",
+        "mrl":"answer(river(loc_2(state(stateid('indiana')))))",
+        "split":"train"
+    },
+    {
+        "id":257,
+        "nl":"vilka \u00e4r floderna i delstaten texas ?",
+        "mrl":"answer(river(loc_2(state(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":258,
+        "nl":"vilka \u00e4r floderna i montana ?",
+        "mrl":"answer(river(loc_2(stateid('montana'))))",
+        "split":"train"
+    },
+    {
+        "id":259,
+        "nl":"vilka \u00e4r staterna ?",
+        "mrl":"answer(state(all))",
+        "split":"train"
+    },
+    {
+        "id":260,
+        "nl":"vilka \u00e4r de stater som gr\u00e4nsar till staten med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(state(next_to_2(largest_one(population_1(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":261,
+        "nl":"vilka \u00e4r de stater som potomac g\u00e5r genom ?",
+        "mrl":"answer(state(traverse_1(riverid('potomac'))))",
+        "split":"train"
+    },
+    {
+        "id":262,
+        "nl":"vilka \u00e4r de stater genom vilka den l\u00e4ngsta floden rinner ?",
+        "mrl":"answer(state(traverse_1(longest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":263,
+        "nl":"vad kan du ber\u00e4tta om befolkningen i missouri ?",
+        "mrl":"answer(population_1(stateid('missouri')))",
+        "split":"train"
+    },
+    {
+        "id":264,
+        "nl":"vilken huvudstad har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(capital(all))))",
+        "split":"train"
+    },
+    {
+        "id":265,
+        "nl":"vilken huvudstad \u00e4r den st\u00f6rsta i usa ?",
+        "mrl":"answer(largest(capital(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":266,
+        "nl":"vilka st\u00e4der ligger i pennsylvania ?",
+        "mrl":"answer(city(loc_2(stateid('pennsylvania'))))",
+        "split":"train"
+    },
+    {
+        "id":267,
+        "nl":"vilka st\u00e4der i kalifornien ?",
+        "mrl":"answer(city(loc_2(stateid('california'))))",
+        "split":"train"
+    },
+    {
+        "id":268,
+        "nl":"vilka st\u00e4der i texas har flest medborgare ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":269,
+        "nl":"vilka st\u00e4der i texas har den st\u00f6rsta folkm\u00e4ngden ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":270,
+        "nl":"vilken stad har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":271,
+        "nl":"vilken stad har minsta befolkningen ?",
+        "mrl":"answer(smallest_one(population_1(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":272,
+        "nl":"vilken stad har flest m\u00e4nniskor ?",
+        "mrl":"answer(largest_one(population_1(city(all))))",
+        "split":"test"
+    },
+    {
+        "id":273,
+        "nl":"vilken stad i usa har den h\u00f6gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(largest_one(density_1(city(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":274,
+        "nl":"vilken \u00e4r huvudstaden i iowa ?",
+        "mrl":"answer(capital(loc_2(stateid('iowa'))))",
+        "split":"train"
+    },
+    {
+        "id":275,
+        "nl":"vilken \u00e4r huvudstaden i delstaten med den l\u00e4gsta punkten ?",
+        "mrl":"answer(capital(loc_2(state(loc_1(lowest(place(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":276,
+        "nl":"vad \u00e4r st\u00f6rsta huvudstaden ?",
+        "mrl":"answer(largest(capital(all)))",
+        "split":"train"
+    },
+    {
+        "id":277,
+        "nl":"vilken \u00e4r den angr\u00e4nsande staten till kalifornien ?",
+        "mrl":"answer(state(next_to_2(stateid('california'))))",
+        "split":"train"
+    },
+    {
+        "id":278,
+        "nl":"vad \u00e4r alaskas area ?",
+        "mrl":"answer(area_1(stateid('alaska')))",
+        "split":"train"
+    },
+    {
+        "id":279,
+        "nl":"vad \u00e4r arean av alla stater tillsammans ?",
+        "mrl":"answer(sum(area_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":280,
+        "nl":"vad \u00e4r kalifornias area ?",
+        "mrl":"answer(area_1(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":281,
+        "nl":"vad \u00e4r floridas area ?",
+        "mrl":"answer(area_1(stateid('florida')))",
+        "split":"test"
+    },
+    {
+        "id":282,
+        "nl":"vad \u00e4r idahos area ?",
+        "mrl":"answer(area_1(stateid('idaho')))",
+        "split":"train"
+    },
+    {
+        "id":283,
+        "nl":"vad \u00e4r maines area ?",
+        "mrl":"answer(area_1(stateid('maine')))",
+        "split":"train"
+    },
+    {
+        "id":284,
+        "nl":"vad \u00e4r marylands area i kvadratkilometer ?",
+        "mrl":"answer(area_1(stateid('maryland')))",
+        "split":"train"
+    },
+    {
+        "id":285,
+        "nl":"vad \u00e4r new mexicos area ?",
+        "mrl":"answer(area_1(stateid('new mexico')))",
+        "split":"train"
+    },
+    {
+        "id":286,
+        "nl":"vad \u00e4r ohios area ?",
+        "mrl":"answer(area_1(stateid('ohio')))",
+        "split":"test"
+    },
+    {
+        "id":287,
+        "nl":"vad \u00e4r seattles area ?",
+        "mrl":"answer(area_1(cityid('seattle', _)))",
+        "split":"train"
+    },
+    {
+        "id":288,
+        "nl":"vad \u00e4r south carolinas area ?",
+        "mrl":"answer(area_1(stateid('south carolina')))",
+        "split":"train"
+    },
+    {
+        "id":289,
+        "nl":"vad \u00e4r texas area ?",
+        "mrl":"answer(area_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":290,
+        "nl":"vad \u00e4r den st\u00f6rsta statens area ?",
+        "mrl":"answer(area_1(largest(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":291,
+        "nl":"vad \u00e4r den minsta statens area ?",
+        "mrl":"answer(area_1(smallest(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":292,
+        "nl":"vad \u00e4r arean av den stat med huvudstaden albany ?",
+        "mrl":"answer(area_1(state(loc_1(capital(cityid('albany', _))))))",
+        "split":"train"
+    },
+    {
+        "id":293,
+        "nl":"vad \u00e4r det arean av staten med den minsta befolkningst\u00e4theten ?",
+        "mrl":"answer(area_1(smallest_one(density_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":294,
+        "nl":"vad \u00e4r staternas area ?",
+        "mrl":"answer(area_1(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":295,
+        "nl":"vad \u00e4r arean av staten texas ?",
+        "mrl":"answer(area_1(state(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":296,
+        "nl":"vad \u00e4r wisconsins area ?",
+        "mrl":"answer(area_1(stateid('wisconsin')))",
+        "split":"test"
+    },
+    {
+        "id":297,
+        "nl":"vad \u00e4r den genomsnittliga folkm\u00e4ngden i staterna i usa ?",
+        "mrl":"answer(density_1(countryid('usa')))",
+        "split":"train"
+    },
+    {
+        "id":298,
+        "nl":"vad \u00e4r den genomsnittliga folkm\u00e4ngden per kvadratkilometer i pennsylvania ?",
+        "mrl":"answer(density_1(stateid('pennsylvania')))",
+        "split":"train"
+    },
+    {
+        "id":299,
+        "nl":"vad \u00e4r den genomsnittliga folkm\u00e4ngden per kvadratkilometer i usa ?",
+        "mrl":"answer(density_1(countryid('usa')))",
+        "split":"train"
+    },
+    {
+        "id":300,
+        "nl":"vilken \u00e4r den st\u00f6rsta amerikanska staden i en stat med en flod ?",
+        "mrl":"answer(largest(city(loc_2(state(loc_1(river(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":301,
+        "nl":"vilken \u00e4r den st\u00f6rsta huvudstaden i usa ?",
+        "mrl":"answer(largest(capital(city(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":302,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i arizona ?",
+        "mrl":"answer(largest(city(loc_2(stateid('arizona')))))",
+        "split":"train"
+    },
+    {
+        "id":303,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i georgia ?",
+        "mrl":"answer(largest(city(loc_2(stateid('georgia')))))",
+        "split":"train"
+    },
+    {
+        "id":304,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i kansas ?",
+        "mrl":"answer(largest(city(loc_2(stateid('kansas')))))",
+        "split":"test"
+    },
+    {
+        "id":305,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i louisiana ?",
+        "mrl":"answer(largest(city(loc_2(stateid('louisiana')))))",
+        "split":"test"
+    },
+    {
+        "id":306,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i nebraska ?",
+        "mrl":"answer(largest(city(loc_2(stateid('nebraska')))))",
+        "split":"train"
+    },
+    {
+        "id":307,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i oregon ?",
+        "mrl":"answer(largest(city(loc_2(stateid('oregon')))))",
+        "split":"train"
+    },
+    {
+        "id":308,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i texas ?",
+        "mrl":"answer(largest(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":309,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i den minsta staten ?",
+        "mrl":"answer(largest(city(loc_2(smallest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":310,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i usa ?",
+        "mrl":"answer(largest(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":311,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i usa ?",
+        "mrl":"answer(largest(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":312,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i usa ?",
+        "mrl":"answer(largest(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":313,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i wyoming ?",
+        "mrl":"answer(largest(city(loc_2(stateid('wyoming')))))",
+        "split":"train"
+    },
+    {
+        "id":314,
+        "nl":"vilken \u00e4r den st\u00f6rsta floden i illinois ?",
+        "mrl":"answer(longest(river(loc_2(stateid('illinois')))))",
+        "split":"train"
+    },
+    {
+        "id":315,
+        "nl":"vilken \u00e4r den st\u00f6rsta staten ?",
+        "mrl":"answer(largest(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":316,
+        "nl":"vilken \u00e4r den st\u00f6rsta staten i kontinentala usa ?",
+        "mrl":"answer(largest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":317,
+        "nl":"vilken \u00e4r den st\u00f6rsta delstaten i usa ?",
+        "mrl":"answer(largest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":318,
+        "nl":"vilken \u00e4r huvudstaden i den st\u00f6rsta staten i usa ?",
+        "mrl":"answer(capital(city(loc_2(largest(state(loc_2(countryid('usa'))))))))",
+        "split":"train"
+    },
+    {
+        "id":319,
+        "nl":"vilken \u00e4r huvudstaden i kalifornien ?",
+        "mrl":"answer(capital(loc_2(stateid('california'))))",
+        "split":"test"
+    },
+    {
+        "id":320,
+        "nl":"vilken \u00e4r huvudstaden i colorado ?",
+        "mrl":"answer(capital(loc_2(stateid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":321,
+        "nl":"vilken \u00e4r huvudstaden i georgia ?",
+        "mrl":"answer(capital(loc_2(stateid('georgia'))))",
+        "split":"train"
+    },
+    {
+        "id":322,
+        "nl":"vilken \u00e4r huvudstaden i hawaii ?",
+        "mrl":"answer(capital(loc_2(stateid('hawaii'))))",
+        "split":"train"
+    },
+    {
+        "id":323,
+        "nl":"vilken \u00e4r huvudstaden i illinois ?",
+        "mrl":"answer(capital(loc_2(stateid('illinois'))))",
+        "split":"test"
+    },
+    {
+        "id":324,
+        "nl":"vilken \u00e4r huvudstaden i indiana ?",
+        "mrl":"answer(capital(loc_2(stateid('indiana'))))",
+        "split":"train"
+    },
+    {
+        "id":325,
+        "nl":"vilken \u00e4r huvudstaden i iowa ?",
+        "mrl":"answer(capital(loc_2(stateid('iowa'))))",
+        "split":"test"
+    },
+    {
+        "id":326,
+        "nl":"vilken \u00e4r huvudstaden i maine ?",
+        "mrl":"answer(capital(loc_2(stateid('maine'))))",
+        "split":"train"
+    },
+    {
+        "id":327,
+        "nl":"vilken \u00e4r huvudstaden i maryland ?",
+        "mrl":"answer(capital(loc_2(stateid('maryland'))))",
+        "split":"train"
+    },
+    {
+        "id":328,
+        "nl":"vilken \u00e4r huvudstaden i massachusetts ?",
+        "mrl":"answer(capital(loc_2(stateid('massachusetts'))))",
+        "split":"test"
+    },
+    {
+        "id":329,
+        "nl":"vilken \u00e4r huvudstaden i michigan ?",
+        "mrl":"answer(capital(loc_2(stateid('michigan'))))",
+        "split":"train"
+    },
+    {
+        "id":330,
+        "nl":"vilken \u00e4r huvudstaden i new hampshire ?",
+        "mrl":"answer(capital(loc_2(stateid('new hampshire'))))",
+        "split":"train"
+    },
+    {
+        "id":331,
+        "nl":"vilken \u00e4r huvudstaden i new jersey ?",
+        "mrl":"answer(capital(loc_2(stateid('new jersey'))))",
+        "split":"test"
+    },
+    {
+        "id":332,
+        "nl":"vilken \u00e4r huvudstaden i new york ?",
+        "mrl":"answer(capital(loc_2(stateid('new york'))))",
+        "split":"test"
+    },
+    {
+        "id":333,
+        "nl":"vilken \u00e4r huvudstaden i north dakota ?",
+        "mrl":"answer(capital(loc_2(stateid('north dakota'))))",
+        "split":"test"
+    },
+    {
+        "id":334,
+        "nl":"vilken \u00e4r huvudstaden i ohio ?",
+        "mrl":"answer(capital(loc_2(stateid('ohio'))))",
+        "split":"test"
+    },
+    {
+        "id":335,
+        "nl":"vilken \u00e4r huvudstaden i pennsylvania ?",
+        "mrl":"answer(capital(loc_2(stateid('pennsylvania'))))",
+        "split":"train"
+    },
+    {
+        "id":336,
+        "nl":"vilka \u00e4r huvudst\u00e4derna i staterna som har en stad som heter durham ?",
+        "mrl":"answer(capital(loc_2(state(loc_1(city(cityid('durham', _)))))))",
+        "split":"test"
+    },
+    {
+        "id":337,
+        "nl":"vilken \u00e4r huvudstaden i texas ?",
+        "mrl":"answer(capital(loc_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":338,
+        "nl":"vilken \u00e4r huvudstaden i staten alabama ?",
+        "mrl":"answer(capital(loc_2(state(stateid('alabama')))))",
+        "split":"train"
+    },
+    {
+        "id":339,
+        "nl":"vilken \u00e4r huvudstaden i staten florida ?",
+        "mrl":"answer(capital(loc_2(state(stateid('florida')))))",
+        "split":"test"
+    },
+    {
+        "id":340,
+        "nl":"vilken \u00e4r huvudstaden i den st\u00f6rsta staten ?",
+        "mrl":"answer(capital(loc_2(largest(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":341,
+        "nl":"vilken \u00e4r huvudstaden i den minsta staten ?",
+        "mrl":"answer(capital(loc_2(smallest(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":342,
+        "nl":"vilken \u00e4r huvudstaden i delstaten texas ?",
+        "mrl":"answer(capital(loc_2(state(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":343,
+        "nl":"vilken \u00e4r huvudstaden i den stat som gr\u00e4nsar till flest antal stater ?",
+        "mrl":"answer(capital(loc_2(most(state(next_to_2(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":344,
+        "nl":"vilken \u00e4r huvudstaden i den stat som gr\u00e4nsar till staten som gr\u00e4nsar till texas ?",
+        "mrl":"answer(capital(loc_2(state(next_to_2(state(next_to_2(stateid('texas'))))))))",
+        "split":"train"
+    },
+    {
+        "id":345,
+        "nl":"vilken \u00e4r huvudstaden i delstaten med den h\u00f6gsta h\u00f6jden ?",
+        "mrl":"answer(capital(loc_2(state(loc_1(highest(place(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":346,
+        "nl":"vilken \u00e4r huvudstaden i delstaten med den h\u00f6gsta punkten ?",
+        "mrl":"answer(capital(loc_2(state(loc_1(highest(place(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":347,
+        "nl":"vilken \u00e4r huvudstaden i delstaten med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(capital(loc_2(largest_one(population_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":348,
+        "nl":"vilken \u00e4r huvudstaden i delstaten med den st\u00f6rsta befolkningst\u00e4theten ?",
+        "mrl":"answer(capital(loc_2(largest_one(density_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":349,
+        "nl":"vilken \u00e4r huvudstaden i delstaten med den l\u00e4ngsta floden ?",
+        "mrl":"answer(capital(loc_2(state(loc_1(longest(river(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":350,
+        "nl":"vilken \u00e4r huvudstaden i delstaten med flest inv\u00e5nare ?",
+        "mrl":"answer(capital(loc_2(largest_one(population_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":351,
+        "nl":"vilken \u00e4r utahs huvudstad ?",
+        "mrl":"answer(capital(loc_2(stateid('utah'))))",
+        "split":"train"
+    },
+    {
+        "id":352,
+        "nl":"vilken \u00e4r vermonts huvudstad ?",
+        "mrl":"answer(capital(loc_2(stateid('vermont'))))",
+        "split":"train"
+    },
+    {
+        "id":353,
+        "nl":"vilken \u00e4r washingtons huvudstad ?",
+        "mrl":"answer(capital(loc_2(stateid('washington'))))",
+        "split":"train"
+    },
+    {
+        "id":354,
+        "nl":"vilken \u00e4r den stad i texas med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":355,
+        "nl":"vilken \u00e4r staden med den minsta befolkningen ?",
+        "mrl":"answer(smallest_one(population_1(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":356,
+        "nl":"vad \u00e4r den kombinerade arean av alla 50 stater ?",
+        "mrl":"answer(sum(area_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":357,
+        "nl":"vad \u00e4r den sammanlagda folkm\u00e4ngden i alla 50 stater ?",
+        "mrl":"answer(sum(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":358,
+        "nl":"vad \u00e4r t\u00e4theten av texas ?",
+        "mrl":"answer(density_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":359,
+        "nl":"vad \u00e4r t\u00e4theten av new york ?",
+        "mrl":"answer(density_1(stateid('new york')))",
+        "split":"test"
+    },
+    {
+        "id":360,
+        "nl":"vad \u00e4r h\u00f6jden av death valley ?",
+        "mrl":"answer(elevation_1(placeid('death valley')))",
+        "split":"train"
+    },
+    {
+        "id":361,
+        "nl":"vad \u00e4r h\u00f6jden av den h\u00f6gsta punkten i usa ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":362,
+        "nl":"vad \u00e4r h\u00f6jden av mount mckinley ?",
+        "mrl":"answer(elevation_1(placeid('mount mckinley')))",
+        "split":"train"
+    },
+    {
+        "id":363,
+        "nl":"vad \u00e4r h\u00f6jden av det h\u00f6gsta berget i texas ?",
+        "mrl":"answer(elevation_1(highest(mountain(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":364,
+        "nl":"hur h\u00f6g \u00e4r den h\u00f6gsta punkten i usa ?",
+        "mrl":"answer(elevation_1(highest(place(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":365,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i wyoming ?",
+        "mrl":"answer(high_point_1(stateid('wyoming')))",
+        "split":"test"
+    },
+    {
+        "id":366,
+        "nl":"vad \u00e4r den h\u00f6gsta h\u00f6jden i new mexico ?",
+        "mrl":"answer(highest(place(loc_2(stateid('new mexico')))))",
+        "split":"train"
+    },
+    {
+        "id":367,
+        "nl":"vad \u00e4r den h\u00f6gsta h\u00f6jden i south carolina ?",
+        "mrl":"answer(highest(place(loc_2(stateid('south carolina')))))",
+        "split":"train"
+    },
+    {
+        "id":368,
+        "nl":"vad \u00e4r den h\u00f6gsta h\u00f6jden i texas ?",
+        "mrl":"answer(highest(place(loc_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":369,
+        "nl":"vad \u00e4r den h\u00f6gsta h\u00f6jden i usa ?",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":370,
+        "nl":"vad \u00e4r det h\u00f6gsta berget i alaska ?",
+        "mrl":"answer(highest(mountain(loc_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":371,
+        "nl":"vad \u00e4r det h\u00f6gsta berget i texas ?",
+        "mrl":"answer(highest(mountain(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":372,
+        "nl":"vad \u00e4r det h\u00f6gsta berget i usa ?",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":373,
+        "nl":"vad \u00e4r usa : s h\u00f6gsta berg ?",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":374,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i colorado ?",
+        "mrl":"answer(highest(place(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":375,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i delaware ?",
+        "mrl":"answer(highest(place(loc_2(stateid('delaware')))))",
+        "split":"test"
+    },
+    {
+        "id":376,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i varje stat vars l\u00e4gsta punkt \u00e4r vid havsniv\u00e5 ?",
+        "mrl":"answer(highest(place(loc_2(state(loc_1(place(elevation_2(0))))))))",
+        "split":"train"
+    },
+    {
+        "id":377,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i florida ?",
+        "mrl":"answer(highest(place(loc_2(stateid('florida')))))",
+        "split":"train"
+    },
+    {
+        "id":378,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i iowa ?",
+        "mrl":"answer(highest(place(loc_2(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":379,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i kansas ?",
+        "mrl":"answer(highest(place(loc_2(stateid('kansas')))))",
+        "split":"train"
+    },
+    {
+        "id":380,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i maine ?",
+        "mrl":"answer(highest(place(loc_2(stateid('maine')))))",
+        "split":"test"
+    },
+    {
+        "id":381,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i montana ?",
+        "mrl":"answer(highest(place(loc_2(stateid('montana')))))",
+        "split":"test"
+    },
+    {
+        "id":382,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i nevada i meter ?",
+        "mrl":"answer(highest(place(loc_2(stateid('nevada')))))",
+        "split":"test"
+    },
+    {
+        "id":383,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i new mexico ?",
+        "mrl":"answer(highest(place(loc_2(stateid('new mexico')))))",
+        "split":"train"
+    },
+    {
+        "id":384,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i ohio ?",
+        "mrl":"answer(highest(place(loc_2(stateid('ohio')))))",
+        "split":"train"
+    },
+    {
+        "id":385,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i rhode island ?",
+        "mrl":"answer(highest(place(loc_2(stateid('rhode island')))))",
+        "split":"train"
+    },
+    {
+        "id":386,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i delstater som gr\u00e4nsar till georgia ?",
+        "mrl":"answer(highest(place(loc_2(state(next_to_2(stateid('georgia')))))))",
+        "split":"test"
+    },
+    {
+        "id":387,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i texas ?",
+        "mrl":"answer(highest(place(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":388,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i landet ?",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":389,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i den minsta staten ?",
+        "mrl":"answer(highest(place(loc_2(smallest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":390,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i delstaten med huvudstaden austin ?",
+        "mrl":"answer(highest(place(loc_2(state(loc_1(capital(cityid('austin', _))))))))",
+        "split":"test"
+    },
+    {
+        "id":391,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i delstaten med huvudstaden des moines ?",
+        "mrl":"answer(highest(place(loc_2(state(loc_1(capital(cityid('des moines', _))))))))",
+        "split":"train"
+    },
+    {
+        "id":392,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i delstaten vars huvudstad \u00e4r des moines ?",
+        "mrl":"answer(highest(place(loc_2(state(loc_1(capital(cityid('des moines', _))))))))",
+        "split":"train"
+    },
+    {
+        "id":393,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i delstaten med flest antal floder ?",
+        "mrl":"answer(highest(place(loc_2(most(state(traverse_1(river(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":394,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i delstaten med den minsta befolkningen ?",
+        "mrl":"answer(highest(place(loc_2(smallest_one(population_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":395,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i de stater som gr\u00e4nsar till colorado ?",
+        "mrl":"answer(highest(place(loc_2(state(next_to_2(stateid('colorado')))))))",
+        "split":"test"
+    },
+    {
+        "id":396,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i f\u00f6renta staterna ?",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":397,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i usa ?",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":398,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i usa ?",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":399,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i virginia ?",
+        "mrl":"answer(highest(place(loc_2(stateid('virginia')))))",
+        "split":"test"
+    },
+    {
+        "id":400,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i wyoming ?",
+        "mrl":"answer(highest(place(loc_2(stateid('wyoming')))))",
+        "split":"train"
+    },
+    {
+        "id":401,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i staten med den st\u00f6rsta arean ?",
+        "mrl":"answer(highest(place(loc_2(largest_one(area_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":402,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i den stat med den l\u00e4gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(highest(place(loc_2(smallest_one(density_1(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":403,
+        "nl":"vad \u00e4r den h\u00f6gsta punkten i usa ?",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":404,
+        "nl":"vilken \u00e4r den st\u00f6rsta huvudstaden ?",
+        "mrl":"answer(largest(capital(all)))",
+        "split":"train"
+    },
+    {
+        "id":405,
+        "nl":"vilken \u00e4r den st\u00f6rsta huvudstaden i usa ?",
+        "mrl":"answer(largest(capital(city(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":406,
+        "nl":"vilken \u00e4r den st\u00f6rsta staden i en delstat som gr\u00e4nsar till texas ?",
+        "mrl":"answer(largest(city(loc_2(state(next_to_2(stateid('texas')))))))",
+        "split":"train"
+    },
+    {
+        "id":407,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i alabama ?",
+        "mrl":"answer(largest(city(loc_2(stateid('alabama')))))",
+        "split":"train"
+    },
+    {
+        "id":408,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i kalifornien ?",
+        "mrl":"answer(largest(city(loc_2(stateid('california')))))",
+        "split":"test"
+    },
+    {
+        "id":409,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i michigan ?",
+        "mrl":"answer(largest(city(loc_2(stateid('michigan')))))",
+        "split":"train"
+    },
+    {
+        "id":410,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i minnesota enligt befolkning ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('minnesota'))))))",
+        "split":"train"
+    },
+    {
+        "id":411,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i missouri ?",
+        "mrl":"answer(largest(city(loc_2(stateid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":412,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i rhode island ?",
+        "mrl":"answer(largest(city(loc_2(stateid('rhode island')))))",
+        "split":"test"
+    },
+    {
+        "id":413,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i den minsta staten genom vilken mississippi rinner ?",
+        "mrl":"answer(largest(city(loc_2(smallest(state(traverse_1(riverid('mississippi'))))))))",
+        "split":"test"
+    },
+    {
+        "id":414,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i de stater som gr\u00e4nsar till kalifornien ?",
+        "mrl":"answer(largest(city(loc_2(state(next_to_2(stateid('california')))))))",
+        "split":"train"
+    },
+    {
+        "id":415,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i texas ?",
+        "mrl":"answer(largest(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":416,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i den minsta staten i usa ?",
+        "mrl":"answer(largest(city(loc_2(smallest(state(loc_2(countryid('usa'))))))))",
+        "split":"test"
+    },
+    {
+        "id":417,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i wisconsin ?",
+        "mrl":"answer(largest(city(loc_2(stateid('wisconsin')))))",
+        "split":"train"
+    },
+    {
+        "id":418,
+        "nl":"vad \u00e4r den st\u00f6rsta staden i kansas ?",
+        "mrl":"answer(largest(city(loc_2(stateid('kansas')))))",
+        "split":"train"
+    },
+    {
+        "id":419,
+        "nl":"vilken \u00e4r den st\u00f6rsta staten som rio grande rinner genom ?",
+        "mrl":"answer(largest(state(traverse_1(riverid('rio grande')))))",
+        "split":"train"
+    },
+    {
+        "id":420,
+        "nl":"vilken \u00e4r den st\u00f6rsta floden i staten washington ?",
+        "mrl":"answer(longest(river(loc_2(state(stateid('washington'))))))",
+        "split":"test"
+    },
+    {
+        "id":421,
+        "nl":"vad \u00e4r den st\u00f6rsta delstaten ?",
+        "mrl":"answer(largest(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":422,
+        "nl":"vilken \u00e4r den st\u00f6rsta delstaten som gr\u00e4nsar till arkansas ?",
+        "mrl":"answer(largest(state(next_to_2(stateid('arkansas')))))",
+        "split":"test"
+    },
+    {
+        "id":423,
+        "nl":"vilken \u00e4r den st\u00f6rsta delstaten som gr\u00e4nsar till texas ?",
+        "mrl":"answer(largest(state(next_to_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":424,
+        "nl":"vilken \u00e4r den st\u00f6rsta huvudstaden enligt folkm\u00e4ngd ?",
+        "mrl":"answer(largest_one(population_1(capital_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":425,
+        "nl":"vilken \u00e4r den st\u00f6rsta staten i usa ?",
+        "mrl":"answer(largest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":426,
+        "nl":"vad \u00e4r den st\u00f6rsta staten i usa ?",
+        "mrl":"answer(largest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":427,
+        "nl":"vilken \u00e4r den st\u00f6rsta delstaten som gr\u00e4nsar till kalifornien ?",
+        "mrl":"answer(largest(state(next_to_2(stateid('california')))))",
+        "split":"train"
+    },
+    {
+        "id":428,
+        "nl":"vilken \u00e4r den st\u00f6rsta delstaten som gr\u00e4nsar till texas ?",
+        "mrl":"answer(largest(state(next_to_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":429,
+        "nl":"vilken \u00e4r den st\u00f6rsta delstaten som gr\u00e4nsar till staten med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest(state(next_to_2(largest_one(population_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":430,
+        "nl":"vilken \u00e4r den st\u00f6rsta staten som gr\u00e4nsar till staten med den l\u00e4gsta punkten i usa ?",
+        "mrl":"answer(largest(state(next_to_2(state(loc_1(lowest(place(loc_2(countryid('usa'))))))))))",
+        "split":"train"
+    },
+    {
+        "id":431,
+        "nl":"vilken \u00e4r den st\u00f6rsta staten som korsas av mississippifloden ?",
+        "mrl":"answer(largest(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":432,
+        "nl":"vilken \u00e4r den minst befolkade staten ?",
+        "mrl":"answer(smallest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":433,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 coloradofloden ?",
+        "mrl":"answer(len(river(riverid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":434,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 coloradofloden i texas ?",
+        "mrl":"answer(len(intersection(riverid('colorado'), river(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":435,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 den l\u00e4ngsta floden i usa ?",
+        "mrl":"answer(len(longest(river(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":436,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 den l\u00e4ngsta flod som rinner genom texas ?",
+        "mrl":"answer(len(longest(river(traverse_2(stateid('texas'))))))",
+        "split":"test"
+    },
+    {
+        "id":437,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 mississippifloden ?",
+        "mrl":"answer(len(river(riverid('mississippi'))))",
+        "split":"test"
+    },
+    {
+        "id":438,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 floden som flyter genom flest antal stater ?",
+        "mrl":"answer(len(most(river(traverse_2(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":439,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 floden som rinner genom flest antal stater ?",
+        "mrl":"answer(len(most(river(traverse_2(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":440,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 floden som rinner genom flest stater ?",
+        "mrl":"answer(len(most(river(traverse_2(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":441,
+        "nl":"vad \u00e4r l\u00e4ngden p\u00e5 floden som korsar flest stater ?",
+        "mrl":"answer(len(most(river(traverse_2(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":442,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden ?",
+        "mrl":"answer(longest(river(all)))",
+        "split":"train"
+    },
+    {
+        "id":443,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden som rinner genom new york ?",
+        "mrl":"answer(longest(river(traverse_2(stateid('new york')))))",
+        "split":"train"
+    },
+    {
+        "id":444,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i amerika ?",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":445,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i kalifornien ?",
+        "mrl":"answer(longest(river(loc_2(stateid('california')))))",
+        "split":"train"
+    },
+    {
+        "id":446,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i florida ?",
+        "mrl":"answer(longest(river(loc_2(stateid('florida')))))",
+        "split":"test"
+    },
+    {
+        "id":447,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i mississippi ?",
+        "mrl":"answer(longest(river(loc_2(stateid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":448,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i new york ?",
+        "mrl":"answer(longest(river(loc_2(stateid('new york')))))",
+        "split":"train"
+    },
+    {
+        "id":449,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i pennsylvania ?",
+        "mrl":"answer(longest(river(loc_2(stateid('pennsylvania')))))",
+        "split":"train"
+    },
+    {
+        "id":450,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i texas ?",
+        "mrl":"answer(longest(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":451,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i den st\u00f6rsta staten ?",
+        "mrl":"answer(longest(river(loc_2(largest(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":452,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i minsta staten i usa ?",
+        "mrl":"answer(longest(river(loc_2(smallest(state(loc_2(countryid('usa'))))))))",
+        "split":"train"
+    },
+    {
+        "id":453,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i staten med den h\u00f6gsta punkten ?",
+        "mrl":"answer(longest(river(loc_2(state(loc_1(highest(place(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":454,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i staten med flest stora st\u00e4der ?",
+        "mrl":"answer(longest(river(loc_2(most(state(loc_1(major(city(all)))))))))",
+        "split":"test"
+    },
+    {
+        "id":455,
+        "nl":"vilka \u00e4r de l\u00e4ngsta floderna i de stater som gr\u00e4nsar till nebraska ?",
+        "mrl":"answer(longest(river(loc_2(state(next_to_2(stateid('nebraska')))))))",
+        "split":"test"
+    },
+    {
+        "id":456,
+        "nl":"vilken \u00e4r den l\u00e4ngsta floden i usa ?",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":457,
+        "nl":"vad \u00e4r den l\u00e4ngsta floden i usa ?",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":458,
+        "nl":"vilken \u00e4r den l\u00e4ngsta floden som inte rinner genom texas ?",
+        "mrl":"answer(longest(exclude(river(all), traverse_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":459,
+        "nl":"vilken \u00e4r den l\u00e4ngsta floden som rinner genom en stat som gr\u00e4nsar till indiana ?",
+        "mrl":"answer(longest(river(traverse_2(state(next_to_2(stateid('indiana')))))))",
+        "split":"test"
+    },
+    {
+        "id":460,
+        "nl":"vilken \u00e4r den l\u00e4ngsta flod som flyter genom colorado ?",
+        "mrl":"answer(longest(river(traverse_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":461,
+        "nl":"vilken \u00e4r den l\u00e4ngsta floden som passerar genom de stater som gr\u00e4nsar till staten som gr\u00e4nsar till flest stater ?",
+        "mrl":"answer(longest(river(traverse_2(state(next_to_2(most(state(next_to_2(state(all))))))))))",
+        "split":"train"
+    },
+    {
+        "id":462,
+        "nl":"vilken \u00e4r den l\u00e4ngsta floden som rinner genom en stat som gr\u00e4nsar till tennessee ?",
+        "mrl":"answer(longest(river(traverse_2(state(next_to_2(stateid('tennessee')))))))",
+        "split":"train"
+    },
+    {
+        "id":463,
+        "nl":"vilken \u00e4r den l\u00e4gsta h\u00f6jden i pennsylvania ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('pennsylvania')))))",
+        "split":"train"
+    },
+    {
+        "id":464,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i arkansas ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('arkansas')))))",
+        "split":"test"
+    },
+    {
+        "id":465,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i kalifornien ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('california')))))",
+        "split":"train"
+    },
+    {
+        "id":466,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i louisiana ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('louisiana')))))",
+        "split":"train"
+    },
+    {
+        "id":467,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i massachusetts ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('massachusetts')))))",
+        "split":"test"
+    },
+    {
+        "id":468,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i mississippi ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('mississippi')))))",
+        "split":"test"
+    },
+    {
+        "id":469,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i nebraska i meter ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('nebraska')))))",
+        "split":"test"
+    },
+    {
+        "id":470,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i oregon ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('oregon')))))",
+        "split":"train"
+    },
+    {
+        "id":471,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i texas ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":472,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i delstaten kalifornien ?",
+        "mrl":"answer(lowest(place(loc_2(state(stateid('california'))))))",
+        "split":"test"
+    },
+    {
+        "id":473,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i delstaten texas ?",
+        "mrl":"answer(lowest(place(loc_2(state(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":474,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i usa ?",
+        "mrl":"answer(lowest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":475,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i usa ?",
+        "mrl":"answer(lowest(place(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":476,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i wisconsin ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('wisconsin')))))",
+        "split":"train"
+    },
+    {
+        "id":477,
+        "nl":"vad \u00e4r de l\u00e4gsta punkterna i alla stater genom vilka coloradofloden rinner genom ?",
+        "mrl":"answer(lowest(place(loc_2(state(traverse_1(river(riverid('colorado'))))))))",
+        "split":"test"
+    },
+    {
+        "id":478,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i colorado ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":479,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i staten med den st\u00f6rsta arean ?",
+        "mrl":"answer(lowest(place(loc_2(largest_one(area_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":480,
+        "nl":"vad \u00e4r den l\u00e4gsta punkten i usa ?",
+        "mrl":"answer(lowest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":481,
+        "nl":"vilka \u00e4r de stora st\u00e4derna i montana ?",
+        "mrl":"answer(major(city(loc_2(stateid('montana')))))",
+        "split":"train"
+    },
+    {
+        "id":482,
+        "nl":"vad \u00e4r den maximala h\u00f6jden av san francisco ?",
+        "mrl":"answer(highest(place(loc_2(cityid('san francisco', _)))))",
+        "split":"test"
+    },
+    {
+        "id":483,
+        "nl":"vilken \u00e4r mest t\u00e4tbefolkade staten i usa ?",
+        "mrl":"answer(largest_one(density_1(state(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":484,
+        "nl":"vilken \u00e4r den mest befolkade huvudstaden i usa ?",
+        "mrl":"answer(largest_one(population_1(capital(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":485,
+        "nl":"vilken \u00e4r den mest befolkade stat som gr\u00e4nsar till oklahoma ?",
+        "mrl":"answer(largest_one(population_1(state(next_to_2(stateid('oklahoma'))))))",
+        "split":"train"
+    },
+    {
+        "id":486,
+        "nl":"vilken \u00e4r den folkrikaste staden ?",
+        "mrl":"answer(largest_one(population_1(city(all))))",
+        "split":"test"
+    },
+    {
+        "id":487,
+        "nl":"vilken \u00e4r den folkrikaste staden i texas ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":488,
+        "nl":"vilken \u00e4r den folkrikaste staden i wyoming ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('wyoming'))))))",
+        "split":"train"
+    },
+    {
+        "id":489,
+        "nl":"vilken \u00e4r den folkrikaste staten ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":490,
+        "nl":"vilken \u00e4r den folkrikaste staten i usa ?",
+        "mrl":"answer(largest_one(population_1(state(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":491,
+        "nl":"vilken \u00e4r den folkrikaste staten genom vilken mississippi rinner ?",
+        "mrl":"answer(largest_one(population_1(state(traverse_1(riverid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":492,
+        "nl":"vad \u00e4r namnet p\u00e5 den stat med den l\u00e4gsta punkten ?",
+        "mrl":"answer(state(loc_1(lowest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":493,
+        "nl":"hur m\u00e5nga \u00e4r antalet grannstater f\u00f6r kentucky ?",
+        "mrl":"answer(count(state(next_to_2(stateid('kentucky')))))",
+        "split":"train"
+    },
+    {
+        "id":494,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i staten med huvudstaden austin ?",
+        "mrl":"answer(density_1(state(loc_1(capital(cityid('austin', _))))))",
+        "split":"train"
+    },
+    {
+        "id":495,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i maine ?",
+        "mrl":"answer(density_1(stateid('maine')))",
+        "split":"test"
+    },
+    {
+        "id":496,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i south dakota ?",
+        "mrl":"answer(density_1(stateid('south dakota')))",
+        "split":"train"
+    },
+    {
+        "id":497,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i texas ?",
+        "mrl":"answer(density_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":498,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i den st\u00f6rsta staten ?",
+        "mrl":"answer(density_1(largest(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":499,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i den minsta staten ?",
+        "mrl":"answer(density_1(smallest(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":500,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i staten med den minsta arean ?",
+        "mrl":"answer(density_1(smallest_one(area_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":501,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i staten med den minsta befolkningen ?",
+        "mrl":"answer(density_1(smallest_one(population_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":502,
+        "nl":"vad \u00e4r befolkningst\u00e4theten i wyoming ?",
+        "mrl":"answer(density_1(stateid('wyoming')))",
+        "split":"train"
+    },
+    {
+        "id":503,
+        "nl":"vad \u00e4r folkm\u00e4ngden i boston ?",
+        "mrl":"answer(population_1(cityid('boston', _)))",
+        "split":"train"
+    },
+    {
+        "id":504,
+        "nl":"vad \u00e4r folkm\u00e4ngden i alaska ?",
+        "mrl":"answer(population_1(stateid('alaska')))",
+        "split":"test"
+    },
+    {
+        "id":505,
+        "nl":"vad \u00e4r folkm\u00e4ngden i arizona ?",
+        "mrl":"answer(population_1(stateid('arizona')))",
+        "split":"train"
+    },
+    {
+        "id":506,
+        "nl":"vad \u00e4r folkm\u00e4ngden i atlanta ?",
+        "mrl":"answer(population_1(cityid('atlanta', _)))",
+        "split":"train"
+    },
+    {
+        "id":507,
+        "nl":"vad \u00e4r folkm\u00e4ngden i atlanta ga ?",
+        "mrl":"answer(population_1(cityid('atlanta', 'ga')))",
+        "split":"train"
+    },
+    {
+        "id":508,
+        "nl":"vad \u00e4r folkm\u00e4ngden i austin ?",
+        "mrl":"answer(population_1(cityid('austin', _)))",
+        "split":"train"
+    },
+    {
+        "id":509,
+        "nl":"vad \u00e4r folkm\u00e4ngden i austin texas ?",
+        "mrl":"answer(population_1(cityid('austin', 'tx')))",
+        "split":"train"
+    },
+    {
+        "id":510,
+        "nl":"vad \u00e4r folkm\u00e4ngden i boston massachusetts ?",
+        "mrl":"answer(population_1(cityid('boston', 'ma')))",
+        "split":"train"
+    },
+    {
+        "id":511,
+        "nl":"vad \u00e4r folkm\u00e4ngden i boulder ?",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"test"
+    },
+    {
+        "id":512,
+        "nl":"vad \u00e4r folkm\u00e4ngden i kalifornien ?",
+        "mrl":"answer(population_1(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":513,
+        "nl":"vad \u00e4r folkm\u00e4ngden i dallas ?",
+        "mrl":"answer(population_1(cityid('dallas', _)))",
+        "split":"train"
+    },
+    {
+        "id":514,
+        "nl":"vad \u00e4r folkm\u00e4ngden i denver ?",
+        "mrl":"answer(population_1(cityid('denver', _)))",
+        "split":"train"
+    },
+    {
+        "id":515,
+        "nl":"vad \u00e4r folkm\u00e4ngden i erie pennsylvania ?",
+        "mrl":"answer(population_1(cityid('erie', 'pa')))",
+        "split":"test"
+    },
+    {
+        "id":516,
+        "nl":"vad \u00e4r folkm\u00e4ngden i hawaii ?",
+        "mrl":"answer(population_1(stateid('hawaii')))",
+        "split":"test"
+    },
+    {
+        "id":517,
+        "nl":"vad \u00e4r folkm\u00e4ngden i houston ?",
+        "mrl":"answer(population_1(cityid('houston', _)))",
+        "split":"test"
+    },
+    {
+        "id":518,
+        "nl":"vad \u00e4r folkm\u00e4ngden i idaho ?",
+        "mrl":"answer(population_1(stateid('idaho')))",
+        "split":"train"
+    },
+    {
+        "id":519,
+        "nl":"vad \u00e4r folkm\u00e4ngden i illinois ?",
+        "mrl":"answer(population_1(stateid('illinois')))",
+        "split":"train"
+    },
+    {
+        "id":520,
+        "nl":"vad \u00e4r folkm\u00e4ngden i maine ?",
+        "mrl":"answer(population_1(stateid('maine')))",
+        "split":"train"
+    },
+    {
+        "id":521,
+        "nl":"vad \u00e4r folkm\u00e4ngden i maryland ?",
+        "mrl":"answer(population_1(stateid('maryland')))",
+        "split":"test"
+    },
+    {
+        "id":522,
+        "nl":"vad \u00e4r folkm\u00e4ngden i minnesota ?",
+        "mrl":"answer(population_1(stateid('minnesota')))",
+        "split":"train"
+    },
+    {
+        "id":523,
+        "nl":"vad \u00e4r folkm\u00e4ngden i montana ?",
+        "mrl":"answer(population_1(stateid('montana')))",
+        "split":"train"
+    },
+    {
+        "id":524,
+        "nl":"vad \u00e4r folkm\u00e4ngden i new mexico ?",
+        "mrl":"answer(population_1(stateid('new mexico')))",
+        "split":"test"
+    },
+    {
+        "id":525,
+        "nl":"vad \u00e4r folkm\u00e4ngden i new york ?",
+        "mrl":"answer(population_1(stateid('new york')))",
+        "split":"train"
+    },
+    {
+        "id":526,
+        "nl":"vad \u00e4r folkm\u00e4ngden i new york city ?",
+        "mrl":"answer(population_1(city(cityid('new york', _))))",
+        "split":"test"
+    },
+    {
+        "id":527,
+        "nl":"vad \u00e4r folkm\u00e4ngden i oregon ?",
+        "mrl":"answer(population_1(stateid('oregon')))",
+        "split":"train"
+    },
+    {
+        "id":528,
+        "nl":"vad \u00e4r folkm\u00e4ngden i portland maine ?",
+        "mrl":"answer(population_1(cityid('portland', 'me')))",
+        "split":"train"
+    },
+    {
+        "id":529,
+        "nl":"vad \u00e4r folkm\u00e4ngden i rhode island ?",
+        "mrl":"answer(population_1(stateid('rhode island')))",
+        "split":"train"
+    },
+    {
+        "id":530,
+        "nl":"vad \u00e4r folkm\u00e4ngden i sacramento ?",
+        "mrl":"answer(population_1(cityid('sacramento', _)))",
+        "split":"train"
+    },
+    {
+        "id":531,
+        "nl":"vad \u00e4r folkm\u00e4ngden i san antonio ?",
+        "mrl":"answer(population_1(cityid('san antonio', _)))",
+        "split":"test"
+    },
+    {
+        "id":532,
+        "nl":"vad \u00e4r folkm\u00e4ngden i seattle ?",
+        "mrl":"answer(population_1(cityid('seattle', _)))",
+        "split":"train"
+    },
+    {
+        "id":533,
+        "nl":"vad \u00e4r folkm\u00e4ngden i seattle washington ?",
+        "mrl":"answer(population_1(cityid('seattle', 'wa')))",
+        "split":"train"
+    },
+    {
+        "id":534,
+        "nl":"vad \u00e4r folkm\u00e4ngden i south dakota ?",
+        "mrl":"answer(population_1(stateid('south dakota')))",
+        "split":"train"
+    },
+    {
+        "id":535,
+        "nl":"vad \u00e4r folkm\u00e4ngden i springfield missouri ?",
+        "mrl":"answer(population_1(cityid('springfield', 'mo')))",
+        "split":"train"
+    },
+    {
+        "id":536,
+        "nl":"vad \u00e4r folkm\u00e4ngden i springfield south dakota ?",
+        "mrl":"answer(population_1(cityid('springfield', 'sd')))",
+        "split":"train"
+    },
+    {
+        "id":537,
+        "nl":"vad \u00e4r folkm\u00e4ngden i tempe arizona ?",
+        "mrl":"answer(population_1(cityid('tempe', 'az')))",
+        "split":"test"
+    },
+    {
+        "id":538,
+        "nl":"vad \u00e4r folkm\u00e4ngden i texas ?",
+        "mrl":"answer(population_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":539,
+        "nl":"vad \u00e4r folkm\u00e4ngden i huvudstaden i den st\u00f6rsta staten ?",
+        "mrl":"answer(population_1(capital(loc_2(largest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":540,
+        "nl":"vad \u00e4r folkm\u00e4ngden i huvudstaden i den st\u00f6rsta staten genom vilken mississippifloden rinner ?",
+        "mrl":"answer(population_1(capital(loc_2(largest(state(traverse_1(riverid('mississippi'))))))))",
+        "split":"train"
+    },
+    {
+        "id":541,
+        "nl":"vad \u00e4r folkm\u00e4ngden i huvudstaden i den minsta staten ?",
+        "mrl":"answer(population_1(capital(loc_2(smallest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":542,
+        "nl":"vad \u00e4r folkm\u00e4ngden i den st\u00f6rsta staden i staten med den st\u00f6rsta arean ?",
+        "mrl":"answer(population_1(largest(city(loc_2(largest_one(area_1(state(all))))))))",
+        "split":"test"
+    },
+    {
+        "id":543,
+        "nl":"vad \u00e4r folkm\u00e4ngden i den st\u00f6rsta staten ?",
+        "mrl":"answer(population_1(largest(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":544,
+        "nl":"vad \u00e4r folkm\u00e4ngden i den st\u00f6rsta staten som gr\u00e4nsar till texas ?",
+        "mrl":"answer(population_1(largest(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":545,
+        "nl":"vad \u00e4r folkm\u00e4ngden i de stora st\u00e4derna i wisconsin ?",
+        "mrl":"answer(population_1(major(city(loc_2(stateid('wisconsin'))))))",
+        "split":"train"
+    },
+    {
+        "id":546,
+        "nl":"vad \u00e4r folkm\u00e4ngden i den minsta staten ?",
+        "mrl":"answer(smallest(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":547,
+        "nl":"vad \u00e4r folkm\u00e4ngden i den stat som gr\u00e4nsar till flest stater ?",
+        "mrl":"answer(population_1(most(state(next_to_2(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":548,
+        "nl":"vad \u00e4r folkm\u00e4ngden i staten med den h\u00f6gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(population_1(largest_one(density_1(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":549,
+        "nl":"vad \u00e4r folkm\u00e4ngden i staten med den st\u00f6rsta arean ?",
+        "mrl":"answer(population_1(largest_one(area_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":550,
+        "nl":"vad \u00e4r folkm\u00e4ngden i tucson ?",
+        "mrl":"answer(population_1(cityid('tucson', _)))",
+        "split":"test"
+    },
+    {
+        "id":551,
+        "nl":"vad \u00e4r folkm\u00e4ngden i utah ?",
+        "mrl":"answer(population_1(stateid('utah')))",
+        "split":"test"
+    },
+    {
+        "id":552,
+        "nl":"vad \u00e4r folkm\u00e4ngden i washington ?",
+        "mrl":"answer(population_1(stateid('washington')))",
+        "split":"test"
+    },
+    {
+        "id":553,
+        "nl":"vad \u00e4r folkm\u00e4ngden i washington dc ?",
+        "mrl":"answer(population_1(cityid('washington', 'dc')))",
+        "split":"train"
+    },
+    {
+        "id":554,
+        "nl":"vilken \u00e4r floden som korsar ohio ?",
+        "mrl":"answer(river(traverse_2(stateid('ohio'))))",
+        "split":"train"
+    },
+    {
+        "id":555,
+        "nl":"vilken \u00e4r den kortaste floden ?",
+        "mrl":"answer(shortest(river(all)))",
+        "split":"train"
+    },
+    {
+        "id":556,
+        "nl":"vilken \u00e4r den kortaste floden i alaska ?",
+        "mrl":"answer(shortest(river(loc_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":557,
+        "nl":"vilken \u00e4r den kortaste floden i iowa ?",
+        "mrl":"answer(shortest(river(loc_2(stateid('iowa')))))",
+        "split":"train"
+    },
+    {
+        "id":558,
+        "nl":"vilken \u00e4r den kortaste floden i nebraska ?",
+        "mrl":"answer(shortest(river(loc_2(stateid('nebraska')))))",
+        "split":"train"
+    },
+    {
+        "id":559,
+        "nl":"vilken \u00e4r den kortaste floden i texas ?",
+        "mrl":"answer(shortest(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":560,
+        "nl":"vilken \u00e4r den kortaste floden i usa ?",
+        "mrl":"answer(shortest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":561,
+        "nl":"vilken \u00e4r den kortaste floden i usa ?",
+        "mrl":"answer(shortest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":562,
+        "nl":"vilken \u00e4r den kortaste floden i usa ?",
+        "mrl":"answer(shortest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":563,
+        "nl":"vad \u00e4r storleken p\u00e5 california ?",
+        "mrl":"answer(size(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":564,
+        "nl":"vad \u00e4r storleken p\u00e5 florida ?",
+        "mrl":"answer(size(stateid('florida')))",
+        "split":"train"
+    },
+    {
+        "id":565,
+        "nl":"vad \u00e4r storleken p\u00e5 texas ?",
+        "mrl":"answer(size(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":566,
+        "nl":"vad \u00e4r storleken p\u00e5 huvudstaden i texas ?",
+        "mrl":"answer(size(capital(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":567,
+        "nl":"vad \u00e4r storleken p\u00e5 den st\u00f6rsta staten i usa ?",
+        "mrl":"answer(size(largest(state(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":568,
+        "nl":"vilken \u00e4r den minsta staden i alaska ?",
+        "mrl":"answer(smallest(city(loc_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":569,
+        "nl":"vilken \u00e4r den minsta staden i arkansas ?",
+        "mrl":"answer(smallest(city(loc_2(stateid('arkansas')))))",
+        "split":"train"
+    },
+    {
+        "id":570,
+        "nl":"vilken \u00e4r den minsta staden p\u00e5 hawaii ?",
+        "mrl":"answer(smallest(city(loc_2(stateid('hawaii')))))",
+        "split":"train"
+    },
+    {
+        "id":571,
+        "nl":"vilken \u00e4r den minsta staden i den st\u00f6rsta staten ?",
+        "mrl":"answer(smallest(city(loc_2(largest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":572,
+        "nl":"vilken \u00e4r den minsta staden i usa ?",
+        "mrl":"answer(smallest(city(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":573,
+        "nl":"vad \u00e4r den minsta staden i usa ?",
+        "mrl":"answer(smallest(city(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":574,
+        "nl":"vilken \u00e4r den minsta staden i washington ?",
+        "mrl":"answer(smallest(city(loc_2(stateid('washington')))))",
+        "split":"train"
+    },
+    {
+        "id":575,
+        "nl":"vilken \u00e4r den minsta staden i den minsta staten i usa ?",
+        "mrl":"answer(smallest(city(loc_2(smallest(state(loc_2(countryid('usa'))))))))",
+        "split":"train"
+    },
+    {
+        "id":576,
+        "nl":"vilken \u00e4r den minsta staten som gr\u00e4nsar till ohio ?",
+        "mrl":"answer(smallest(state(next_to_2(stateid('ohio')))))",
+        "split":"train"
+    },
+    {
+        "id":577,
+        "nl":"vilken \u00e4r den minsta staten som gr\u00e4nsar till wyoming ?",
+        "mrl":"answer(smallest(state(next_to_2(stateid('wyoming')))))",
+        "split":"test"
+    },
+    {
+        "id":578,
+        "nl":"vilken \u00e4r det minsta staten enligt area ?",
+        "mrl":"answer(smallest_one(area_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":579,
+        "nl":"vilken \u00e4r det minsta staten i usa ?",
+        "mrl":"answer(smallest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":580,
+        "nl":"vilken \u00e4r det minsta staten som gr\u00e4nsar till texas ?",
+        "mrl":"answer(smallest(state(next_to_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":581,
+        "nl":"vilken \u00e4r det minsta staten som gr\u00e4nsar till flest stater ?",
+        "mrl":"answer(smallest(most(state(next_to_2(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":582,
+        "nl":"vilken \u00e4r den minsta staten som mississippifloden rinner genom ?",
+        "mrl":"answer(smallest(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":583,
+        "nl":"vilken \u00e4r den minsta staten genom vilken den l\u00e4ngsta floden rinner ?",
+        "mrl":"answer(smallest(state(traverse_1(longest(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":584,
+        "nl":"vilken stat har den h\u00f6gsta punkten ?",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":585,
+        "nl":"vilken stat har den h\u00f6gsta h\u00f6jden i usa ?",
+        "mrl":"answer(state(loc_1(highest(place(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":586,
+        "nl":"vilken stat har den st\u00f6rsta arean ?",
+        "mrl":"answer(largest_one(area_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":587,
+        "nl":"vilken stat har den h\u00f6gsta befolkningst\u00e4theten i usa ?",
+        "mrl":"answer(largest_one(density_1(state(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":588,
+        "nl":"vilken stat har den st\u00f6rsta befolkningst\u00e4theten ?",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":589,
+        "nl":"vilken stat har den l\u00e4gsta punkten ?",
+        "mrl":"answer(state(loc_1(lowest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":590,
+        "nl":"vilken stat har den minsta befolkningen ?",
+        "mrl":"answer(smallest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":591,
+        "nl":"vilken stat har den l\u00e4gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":592,
+        "nl":"vilken stat har den minsta arean ?",
+        "mrl":"answer(smallest_one(area_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":593,
+        "nl":"vad \u00e4r det h\u00f6gsta berget i amerika ?",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":594,
+        "nl":"vad \u00e4r det h\u00f6gsta berget i usa ?",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":595,
+        "nl":"vad \u00e4r den totala arean av usa ?",
+        "mrl":"answer(area_1(countryid('usa')))",
+        "split":"train"
+    },
+    {
+        "id":596,
+        "nl":"vad \u00e4r den totala l\u00e4ngden av alla floder i usa ?",
+        "mrl":"answer(sum(len(river(all))))",
+        "split":"test"
+    },
+    {
+        "id":597,
+        "nl":"vad \u00e4r den totala folkm\u00e4ngden av de stater som gr\u00e4nsar till texas ?",
+        "mrl":"answer(sum(population_1(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":598,
+        "nl":"hur l\u00e5ng \u00e4r mississippi ?",
+        "mrl":"answer(len(riverid('mississippi')))",
+        "split":"test"
+    },
+    {
+        "id":599,
+        "nl":"vilka stora st\u00e4der ligger i pennsylvania ?",
+        "mrl":"answer(major(city(loc_2(stateid('pennsylvania')))))",
+        "split":"test"
+    },
+    {
+        "id":600,
+        "nl":"vilka stora floder flyter genom illinois ?",
+        "mrl":"answer(major(river(traverse_2(stateid('illinois')))))",
+        "split":"train"
+    },
+    {
+        "id":601,
+        "nl":"vilka berg finns i alaska ?",
+        "mrl":"answer(mountain(loc_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":602,
+        "nl":"vilken flod flyter genom kansas ?",
+        "mrl":"answer(river(traverse_2(stateid('kansas'))))",
+        "split":"train"
+    },
+    {
+        "id":603,
+        "nl":"vilken flod flyter genom texas ?",
+        "mrl":"answer(river(traverse_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":604,
+        "nl":"vilken flod flyter genom flest stater ?",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":605,
+        "nl":"vilken flod \u00e4r den l\u00e4ngsta i usa ?",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":606,
+        "nl":"vilken flod rinner genom illinois ?",
+        "mrl":"answer(river(traverse_2(stateid('illinois'))))",
+        "split":"train"
+    },
+    {
+        "id":607,
+        "nl":"vilken flod rinner genom flest delstater ?",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":608,
+        "nl":"vilken flod rinner genom staten med flest st\u00e4der ?",
+        "mrl":"answer(river(traverse_2(most(state(loc_1(city(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":609,
+        "nl":"vilken flod rinner genom virginia ?",
+        "mrl":"answer(river(traverse_2(stateid('virginia'))))",
+        "split":"train"
+    },
+    {
+        "id":610,
+        "nl":"vilken flod korsar flest stater ?",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":611,
+        "nl":"vilken flod korsar den stat som gr\u00e4nsar till flest stater ?",
+        "mrl":"answer(river(traverse_2(most(state(next_to_2(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":612,
+        "nl":"vilka floder \u00e4r i nevada ?",
+        "mrl":"answer(river(loc_2(stateid('nevada'))))",
+        "split":"train"
+    },
+    {
+        "id":613,
+        "nl":"vilka floder \u00e4r i new mexico ?",
+        "mrl":"answer(river(loc_2(stateid('new mexico'))))",
+        "split":"train"
+    },
+    {
+        "id":614,
+        "nl":"vilka floder \u00e4r i oregon ?",
+        "mrl":"answer(river(loc_2(stateid('oregon'))))",
+        "split":"train"
+    },
+    {
+        "id":615,
+        "nl":"vilka floder \u00e4r i stater som gr\u00e4nsar texas ?",
+        "mrl":"answer(river(loc_2(state(next_to_2(stateid('texas'))))))",
+        "split":"test"
+    },
+    {
+        "id":616,
+        "nl":"vilka floder \u00e4r i texas ?",
+        "mrl":"answer(river(loc_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":617,
+        "nl":"vilka floder \u00e4r i utah ?",
+        "mrl":"answer(river(loc_2(stateid('utah'))))",
+        "split":"train"
+    },
+    {
+        "id":618,
+        "nl":"vilka floder finns i texas ?",
+        "mrl":"answer(river(loc_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":619,
+        "nl":"vilka floder g\u00e5r inte genom tennessee ?",
+        "mrl":"answer(exclude(river(all), traverse_2(stateid('tennessee'))))",
+        "split":"train"
+    },
+    {
+        "id":620,
+        "nl":"vilka floder flyter genom colorado ?",
+        "mrl":"answer(river(traverse_2(stateid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":621,
+        "nl":"vilka floder flyter genom missouri ?",
+        "mrl":"answer(river(traverse_2(stateid('missouri'))))",
+        "split":"train"
+    },
+    {
+        "id":622,
+        "nl":"vilka floder flyter genom stater som gr\u00e4nsar till alabama ?",
+        "mrl":"answer(river(traverse_2(state(next_to_1(stateid('alabama'))))))",
+        "split":"train"
+    },
+    {
+        "id":623,
+        "nl":"vilka floder flyter genom stater som gr\u00e4nsar till staten med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(river(traverse_2(state(next_to_2(largest_one(population_1(state(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":624,
+        "nl":"vilka floder flyter genom den st\u00f6rsta staten ?",
+        "mrl":"answer(river(traverse_2(largest(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":625,
+        "nl":"vilka floder flyter genom staten med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(river(traverse_2(largest_one(population_1(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":626,
+        "nl":"vilka floder l\u00f6per genom arizona ?",
+        "mrl":"answer(river(traverse_2(stateid('arizona'))))",
+        "split":"train"
+    },
+    {
+        "id":627,
+        "nl":"vilka floder l\u00f6per genom austin texas ?",
+        "mrl":"answer(river(traverse_2(cityid('austin', 'tx'))))",
+        "split":"train"
+    },
+    {
+        "id":628,
+        "nl":"vilka floder l\u00f6per genom colorado ?",
+        "mrl":"answer(river(traverse_2(stateid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":629,
+        "nl":"vilka floder l\u00f6per genom louisiana ?",
+        "mrl":"answer(river(traverse_2(stateid('louisiana'))))",
+        "split":"train"
+    },
+    {
+        "id":630,
+        "nl":"vilka floder l\u00f6per genom maine ?",
+        "mrl":"answer(river(traverse_2(stateid('maine'))))",
+        "split":"train"
+    },
+    {
+        "id":631,
+        "nl":"vilka floder l\u00f6per genom new york ?",
+        "mrl":"answer(river(traverse_2(stateid('new york'))))",
+        "split":"test"
+    },
+    {
+        "id":632,
+        "nl":"vilka floder l\u00f6per genom staten med den l\u00e4gsta punkten i usa ?",
+        "mrl":"answer(river(traverse_2(state(loc_1(lowest(place(loc_2(countryid('usa')))))))))",
+        "split":"train"
+    },
+    {
+        "id":633,
+        "nl":"vilka floder l\u00f6per genom de stater som gr\u00e4nsar till staten med huvudstaden atlanta ?",
+        "mrl":"answer(river(traverse_2(state(next_to_2(state(loc_1(capital(cityid('atlanta', _)))))))))",
+        "split":"train"
+    },
+    {
+        "id":634,
+        "nl":"vilka floder l\u00f6per genom west virginia ?",
+        "mrl":"answer(river(traverse_2(stateid('west virginia'))))",
+        "split":"train"
+    },
+    {
+        "id":635,
+        "nl":"vilka floder korsar staten som gr\u00e4nsar till flest stater ?",
+        "mrl":"answer(river(traverse_2(most(state(next_to_2(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":636,
+        "nl":"vilken stat som gr\u00e4nsar till nevada har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(next_to_2(stateid('nevada'))))))",
+        "split":"test"
+    },
+    {
+        "id":637,
+        "nl":"vilken stat gr\u00e4nsar till michigan ?",
+        "mrl":"answer(state(next_to_2(stateid('michigan'))))",
+        "split":"train"
+    },
+    {
+        "id":638,
+        "nl":"vilken stat gr\u00e4nsar till flest andra stater ?",
+        "mrl":"answer(most(state(next_to_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":639,
+        "nl":"vilken stat gr\u00e4nsar till new york ?",
+        "mrl":"answer(state(next_to_2(stateid('new york'))))",
+        "split":"test"
+    },
+    {
+        "id":640,
+        "nl":"vilka stater gr\u00e4nsar till minst antal stater ?",
+        "mrl":"answer(fewest(state(next_to_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":641,
+        "nl":"vilka stater gr\u00e4nsar till minst antal stater utom alaska och utom hawaii ?",
+        "mrl":"answer(fewest(state(next_to_2(exclude(exclude(state(all), stateid('alaska')), stateid('hawaii'))))))",
+        "split":"train"
+    },
+    {
+        "id":642,
+        "nl":"vilken stat gr\u00e4nsar flest stater ?",
+        "mrl":"answer(most(state(next_to_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":643,
+        "nl":"vilka stater gr\u00e4nsar till staten med den minsta befolkningen ?",
+        "mrl":"answer(state(next_to_2(smallest_one(population_1(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":644,
+        "nl":"vilken stat har den h\u00f6gsta punkten i usa ?",
+        "mrl":"answer(state(loc_1(highest(place(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":645,
+        "nl":"vilken stat har den h\u00f6gsta punkten av de som coloradofloden korsar ?",
+        "mrl":"answer(state(loc_1(highest(place(loc_2(state(traverse_1(river(riverid('colorado'))))))))))",
+        "split":"test"
+    },
+    {
+        "id":646,
+        "nl":"vilken stat har h\u00f6gst h\u00f6jd ?",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":647,
+        "nl":"vilken stat har inga floder ?",
+        "mrl":"answer(exclude(state(all), loc_1(river(all))))",
+        "split":"train"
+    },
+    {
+        "id":648,
+        "nl":"vilken stat har huvudstad salem ?",
+        "mrl":"answer(state(loc_1(capital(cityid('salem', _)))))",
+        "split":"train"
+    },
+    {
+        "id":649,
+        "nl":"vilken stat har staden flint ?",
+        "mrl":"answer(state(loc_1(city(cityid('flint', _)))))",
+        "split":"train"
+    },
+    {
+        "id":650,
+        "nl":"vilken stat har staden med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(state(loc_1(largest_one(population_1(city(all))))))",
+        "split":"train"
+    },
+    {
+        "id":651,
+        "nl":"vilken stat har staden med mest befolkning ?",
+        "mrl":"answer(state(loc_1(largest_one(population_1(city(all))))))",
+        "split":"train"
+    },
+    {
+        "id":652,
+        "nl":"vilken stat har st\u00f6rsta befolkningst\u00e4theten ?",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":653,
+        "nl":"vilken stat har den h\u00f6gsta h\u00f6jden ?",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":654,
+        "nl":"vilken stat har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":655,
+        "nl":"vilken stat har den h\u00f6gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":656,
+        "nl":"vilken stat har den st\u00f6rsta arean ?",
+        "mrl":"answer(largest_one(area_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":657,
+        "nl":"vilken stat har den st\u00f6rsta huvudstaden ?",
+        "mrl":"answer(state(loc_1(largest(capital(all)))))",
+        "split":"test"
+    },
+    {
+        "id":658,
+        "nl":"vilken stat har den st\u00f6rsta staden ?",
+        "mrl":"answer(state(loc_1(largest(city(all)))))",
+        "split":"train"
+    },
+    {
+        "id":659,
+        "nl":"vilken stat har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":660,
+        "nl":"vilken stat har den st\u00f6rsta befolkningst\u00e4theten ?",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":661,
+        "nl":"vilken stat har den st\u00f6rsta stadsbefolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":662,
+        "nl":"vilken stat har minsta befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":663,
+        "nl":"vilken stat har den l\u00e4ngsta flod ?",
+        "mrl":"answer(state(loc_1(longest(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":664,
+        "nl":"vilken stat har den l\u00e4gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":665,
+        "nl":"vilken stat har flest st\u00e4der ?",
+        "mrl":"answer(most(state(loc_1(city(all)))))",
+        "split":"train"
+    },
+    {
+        "id":666,
+        "nl":"vilken stat har flest stora st\u00e4der ?",
+        "mrl":"answer(most(state(loc_1(major(city(all))))))",
+        "split":"test"
+    },
+    {
+        "id":667,
+        "nl":"vilken stat har flest stora floder som rinner genom den ?",
+        "mrl":"answer(most(state(traverse_1(major(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":668,
+        "nl":"vilken stat har flest m\u00e4nniskor ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":669,
+        "nl":"vilken stat har flest floder ?",
+        "mrl":"answer(most(state(loc_1(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":670,
+        "nl":"vilken stat har flest floder som rinner genom den ?",
+        "mrl":"answer(most(state(traverse_1(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":671,
+        "nl":"vilken stat har kortaste floden ?",
+        "mrl":"answer(state(loc_1(shortest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":672,
+        "nl":"vilken stat har den minsta arean ?",
+        "mrl":"answer(smallest_one(area_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":673,
+        "nl":"vilken stat har den minsta huvudstaden ?",
+        "mrl":"answer(state(loc_1(smallest(capital(all)))))",
+        "split":"train"
+    },
+    {
+        "id":674,
+        "nl":"vilken stat har den minsta befolkningen ?",
+        "mrl":"answer(smallest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":675,
+        "nl":"vilken stat har den minsta befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":676,
+        "nl":"vilken stat har den minsta stadsbefolkningen ?",
+        "mrl":"answer(smallest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":677,
+        "nl":"vilken stat har den glesaste befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":678,
+        "nl":"vilken stat ligger austin i ?",
+        "mrl":"answer(state(loc_1(cityid('austin', _))))",
+        "split":"test"
+    },
+    {
+        "id":679,
+        "nl":"vilken stat \u00e4r austin huvudstad i ?",
+        "mrl":"answer(state(loc_1(capital(cityid('austin', _)))))",
+        "split":"train"
+    },
+    {
+        "id":680,
+        "nl":"vad stat ligger boston i ?",
+        "mrl":"answer(state(loc_1(cityid('boston', _))))",
+        "split":"train"
+    },
+    {
+        "id":681,
+        "nl":"vilken stat \u00e4r columbus huvudstad i ?",
+        "mrl":"answer(state(loc_1(capital(cityid('columbus', _)))))",
+        "split":"train"
+    },
+    {
+        "id":682,
+        "nl":"viken stat ligger dallas i ?",
+        "mrl":"answer(state(loc_1(cityid('dallas', _))))",
+        "split":"train"
+    },
+    {
+        "id":683,
+        "nl":"vilken stat ligger des moines i ?",
+        "mrl":"answer(state(loc_1(cityid('des moines', _))))",
+        "split":"train"
+    },
+    {
+        "id":684,
+        "nl":"vilken stat ligger miami i ?",
+        "mrl":"answer(state(loc_1(cityid('miami', _))))",
+        "split":"test"
+    },
+    {
+        "id":685,
+        "nl":"vad stat ligger pittsburgh i ?",
+        "mrl":"answer(state(loc_1(cityid('pittsburgh', _))))",
+        "split":"train"
+    },
+    {
+        "id":686,
+        "nl":"vilken stat \u00e4r den st\u00f6rsta ?",
+        "mrl":"answer(largest(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":687,
+        "nl":"vilken stat \u00e4r den st\u00f6rsta enligt befolkning ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":688,
+        "nl":"vilken stat \u00e4r staten med flest floder ?",
+        "mrl":"answer(state(most(state(loc_1(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":689,
+        "nl":"vilken stat som gr\u00e4nsar till texas har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":690,
+        "nl":"vilken stat som gr\u00e4nsar texas \u00e4r den st\u00f6rsta ?",
+        "mrl":"answer(largest(state(next_to_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":691,
+        "nl":"vilken stat som mississippi rinner genom har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(traverse_1(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":692,
+        "nl":"vilka stater ligger bredvid arizona ?",
+        "mrl":"answer(state(next_to_2(stateid('arizona'))))",
+        "split":"test"
+    },
+    {
+        "id":693,
+        "nl":"vilka stater ligger bredvid texas ?",
+        "mrl":"answer(state(next_to_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":694,
+        "nl":"vilka stater ligger bredvid mississippi ?",
+        "mrl":"answer(state(next_to_2(stateid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":695,
+        "nl":"vilka stater gr\u00e4nsar till alaska ?",
+        "mrl":"answer(state(next_to_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":696,
+        "nl":"vilka stater gr\u00e4nsar till arkansas ?",
+        "mrl":"answer(state(next_to_2(stateid('arkansas'))))",
+        "split":"train"
+    },
+    {
+        "id":697,
+        "nl":"vilka stater gr\u00e4nsar till delaware ?",
+        "mrl":"answer(state(next_to_2(stateid('delaware'))))",
+        "split":"train"
+    },
+    {
+        "id":698,
+        "nl":"vilka stater gr\u00e4nsar till florida ?",
+        "mrl":"answer(state(next_to_2(stateid('florida'))))",
+        "split":"test"
+    },
+    {
+        "id":699,
+        "nl":"vilka stater gr\u00e4nsar till georgia ?",
+        "mrl":"answer(state(next_to_2(stateid('georgia'))))",
+        "split":"train"
+    },
+    {
+        "id":700,
+        "nl":"vilka stater gr\u00e4nsar till hawaii ?",
+        "mrl":"answer(state(next_to_2(stateid('hawaii'))))",
+        "split":"train"
+    },
+    {
+        "id":701,
+        "nl":"vilka stater gr\u00e4nsar till indiana ?",
+        "mrl":"answer(state(next_to_2(stateid('indiana'))))",
+        "split":"test"
+    },
+    {
+        "id":702,
+        "nl":"vilka stater gr\u00e4nsar till kentucky ?",
+        "mrl":"answer(state(next_to_2(stateid('kentucky'))))",
+        "split":"train"
+    },
+    {
+        "id":703,
+        "nl":"vilka stater gr\u00e4nsar till michigan ?",
+        "mrl":"answer(state(next_to_2(stateid('michigan'))))",
+        "split":"test"
+    },
+    {
+        "id":704,
+        "nl":"vilka stater gr\u00e4nsar till missouri ?",
+        "mrl":"answer(state(next_to_2(stateid('missouri'))))",
+        "split":"train"
+    },
+    {
+        "id":705,
+        "nl":"vilka stater gr\u00e4nsar till montana ?",
+        "mrl":"answer(state(next_to_2(stateid('montana'))))",
+        "split":"test"
+    },
+    {
+        "id":706,
+        "nl":"vilka stater gr\u00e4nsar till new hampshire ?",
+        "mrl":"answer(state(next_to_2(stateid('new hampshire'))))",
+        "split":"train"
+    },
+    {
+        "id":707,
+        "nl":"vilka stater gr\u00e4nsar till new jersey ?",
+        "mrl":"answer(state(next_to_2(stateid('new jersey'))))",
+        "split":"test"
+    },
+    {
+        "id":708,
+        "nl":"vilka stater gr\u00e4nsar till ohio ?",
+        "mrl":"answer(state(next_to_2(stateid('ohio'))))",
+        "split":"train"
+    },
+    {
+        "id":709,
+        "nl":"vilka stater gr\u00e4nsar till rhode island ?",
+        "mrl":"answer(state(next_to_2(stateid('rhode island'))))",
+        "split":"train"
+    },
+    {
+        "id":710,
+        "nl":"vilka stater gr\u00e4nsar till de stare som gr\u00e4nsar till colorado ?",
+        "mrl":"answer(state(next_to_2(state(next_to_2(stateid('colorado'))))))",
+        "split":"train"
+    },
+    {
+        "id":711,
+        "nl":"vilka stater gr\u00e4nsar till de stater som gr\u00e4nsar till mississippi ?",
+        "mrl":"answer(state(next_to_2(state(next_to_2(stateid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":712,
+        "nl":"vilka stater gr\u00e4nsar till staterna som gr\u00e4nsar till staterna som gr\u00e4nsar till florida ?",
+        "mrl":"answer(state(next_to_2(state(next_to_2(state(next_to_2(stateid('florida'))))))))",
+        "split":"train"
+    },
+    {
+        "id":713,
+        "nl":"vilka stater gr\u00e4nsar till staterna som gr\u00e4nsar till staterna som gr\u00e4nsar till staterna som gr\u00e4nsar till texas ?",
+        "mrl":"answer(state(next_to_2(state(next_to_2(state(next_to_2(state(next_to_2(stateid('texas'))))))))))",
+        "split":"train"
+    },
+    {
+        "id":714,
+        "nl":"vilka stater gr\u00e4nsar stater som gr\u00e4nsar till staten med den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(state(next_to_2(state(next_to_2(largest_one(population_1(state(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":715,
+        "nl":"vilka stater gr\u00e4nsar till stater som mississippi rinner genom ?",
+        "mrl":"answer(state(next_to_2(state(traverse_1(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":716,
+        "nl":"vilka stater gr\u00e4nsar till stater som ohio rinner genom ?",
+        "mrl":"answer(state(next_to_2(state(traverse_1(riverid('ohio'))))))",
+        "split":"test"
+    },
+    {
+        "id":717,
+        "nl":"vilka stater gr\u00e4nsar till stater som mississippi rinner genom ?",
+        "mrl":"answer(state(next_to_2(state(traverse_1(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":718,
+        "nl":"vilka stater gr\u00e4nsar texas ?",
+        "mrl":"answer(state(next_to_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":719,
+        "nl":"vilka stater gr\u00e4nsar till texas och har en stor flod ?",
+        "mrl":"answer(intersection(state(next_to_2(stateid('texas'))), loc_1(major(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":720,
+        "nl":"vilka stater gr\u00e4nsar till mississippifloden ?",
+        "mrl":"answer(state(next_to_2(river(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":721,
+        "nl":"vilka stater gr\u00e4nsar till folkrikaste staten ?",
+        "mrl":"answer(state(next_to_2(largest_one(population_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":722,
+        "nl":"vilka stater gr\u00e4nsar till staten som gr\u00e4nsar till flest stater ?",
+        "mrl":"answer(state(next_to_2(most(state(next_to_2(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":723,
+        "nl":"vilka stater gr\u00e4nsar till staten med flest antal st\u00e4der ?",
+        "mrl":"answer(state(next_to_2(most(state(loc_1(city(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":724,
+        "nl":"vilka stater gr\u00e4nsar till staten med flest antal stora st\u00e4der ?",
+        "mrl":"answer(state(next_to_2(most(state(loc_1(major(city(all))))))))",
+        "split":"test"
+    },
+    {
+        "id":725,
+        "nl":"vilka stater gr\u00e4nsar till staten med minsta arean ?",
+        "mrl":"answer(state(next_to_2(smallest_one(area_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":726,
+        "nl":"vilka stater gr\u00e4nsar till staterna med flest st\u00e4der ?",
+        "mrl":"answer(state(next_to_2(most(state(loc_1(city(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":727,
+        "nl":"vilka stater gr\u00e4nsar till wisconsin ?",
+        "mrl":"answer(state(next_to_2(stateid('wisconsin'))))",
+        "split":"train"
+    },
+    {
+        "id":728,
+        "nl":"vilken stats huvudstad \u00e4r dover ?",
+        "mrl":"answer(state(capital_2(cityid('dover', _))))",
+        "split":"train"
+    },
+    {
+        "id":729,
+        "nl":"vilka stater har minst en stor flod ?",
+        "mrl":"answer(state(loc_1(major(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":730,
+        "nl":"vilka stater rinner coloradofloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":731,
+        "nl":"vilka stater rinner delawarefloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('delaware')))))",
+        "split":"test"
+    },
+    {
+        "id":732,
+        "nl":"vilka stater rinner mississippifloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('mississippi')))))",
+        "split":"test"
+    },
+    {
+        "id":733,
+        "nl":"vilka stater rinner mississippi genom ?",
+        "mrl":"answer(state(traverse_1(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":734,
+        "nl":"vilka stater rinner missourifloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":735,
+        "nl":"vilka stater rinner missouri genom ?",
+        "mrl":"answer(state(traverse_1(riverid('missouri'))))",
+        "split":"test"
+    },
+    {
+        "id":736,
+        "nl":"vilka stater g\u00e5r ohiofloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('ohio')))))",
+        "split":"train"
+    },
+    {
+        "id":737,
+        "nl":"vilka stater rinner ohiofloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('ohio')))))",
+        "split":"test"
+    },
+    {
+        "id":738,
+        "nl":"vilka stater rinner den kortaste floden genom ?",
+        "mrl":"answer(state(traverse_1(shortest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":739,
+        "nl":"vilka stater har en huvudstad som \u00e4r den h\u00f6gsta punkten i staten ?",
+        "mrl":"answer(state(loc_1(capital(highest(place(all))))))",
+        "split":"train"
+    },
+    {
+        "id":740,
+        "nl":"vilka stater har en stad som heter austin ?",
+        "mrl":"answer(state(loc_1(city(cityid('austin', _)))))",
+        "split":"train"
+    },
+    {
+        "id":741,
+        "nl":"vilka stater har st\u00e4der som heter austin ?",
+        "mrl":"answer(state(loc_1(city(cityid('austin', _)))))",
+        "split":"train"
+    },
+    {
+        "id":742,
+        "nl":"vilka stater har st\u00e4der som heter dallas ?",
+        "mrl":"answer(state(loc_1(city(cityid('dallas', _)))))",
+        "split":"test"
+    },
+    {
+        "id":743,
+        "nl":"vilka stater har st\u00e4der som heter plano ?",
+        "mrl":"answer(state(loc_1(city(cityid('plano', _)))))",
+        "split":"test"
+    },
+    {
+        "id":744,
+        "nl":"vilka stater har st\u00e4der som heter portland ?",
+        "mrl":"answer(state(loc_1(city(cityid('portland', _)))))",
+        "split":"test"
+    },
+    {
+        "id":745,
+        "nl":"vilka stater har st\u00e4der som heter rochester ?",
+        "mrl":"answer(state(loc_1(city(cityid('rochester', _)))))",
+        "split":"test"
+    },
+    {
+        "id":746,
+        "nl":"vilka stater har st\u00e4der som heter salt lake city ?",
+        "mrl":"answer(state(loc_1(city(cityid('salt lake city', _)))))",
+        "split":"test"
+    },
+    {
+        "id":747,
+        "nl":"vilka stater har inga gr\u00e4nsande stater ?",
+        "mrl":"answer(exclude(state(all), next_to_2(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":748,
+        "nl":"vilka stater har floder som heter colorado ?",
+        "mrl":"answer(state(loc_1(river(riverid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":749,
+        "nl":"vilka stater har floder som rinner genom dem ?",
+        "mrl":"answer(state(traverse_1(river(all))))",
+        "split":"train"
+    },
+    {
+        "id":750,
+        "nl":"vilka stater har st\u00e4der som heter springfield ?",
+        "mrl":"answer(state(loc_1(city(cityid('springfield', _)))))",
+        "split":"train"
+    },
+    {
+        "id":751,
+        "nl":"vilken stats h\u00f6gsta punkt \u00e4r h\u00f6gre \u00e4n den i colorado ?",
+        "mrl":"answer(state(high_point_2(higher_2(high_point_1(stateid('colorado'))))))",
+        "split":"train"
+    },
+    {
+        "id":752,
+        "nl":"vilka stater i f\u00f6renta staterna har en stad springfield ?",
+        "mrl":"answer(intersection(state(loc_2(countryid('usa'))), loc_1(city(cityid('springfield', _)))))",
+        "split":"train"
+    },
+    {
+        "id":753,
+        "nl":"vilka stater \u00e4r grannar till maine ?",
+        "mrl":"answer(state(next_to_2(stateid('maine'))))",
+        "split":"train"
+    },
+    {
+        "id":754,
+        "nl":"vilka stater ligger kring kentucky ?",
+        "mrl":"answer(state(next_to_2(stateid('kentucky'))))",
+        "split":"test"
+    },
+    {
+        "id":755,
+        "nl":"vilken stad i texas har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":756,
+        "nl":"vad \u00e4r den st\u00f6rsta staden ?",
+        "mrl":"answer(largest(city(all)))",
+        "split":"train"
+    },
+    {
+        "id":757,
+        "nl":"vart finns det berg ?",
+        "mrl":"answer(loc_1(mountain(all)))",
+        "split":"test"
+    },
+    {
+        "id":758,
+        "nl":"vart ligger austin ?",
+        "mrl":"answer(loc_1(cityid('austin', _)))",
+        "split":"train"
+    },
+    {
+        "id":759,
+        "nl":"vart ligger baton rouge ?",
+        "mrl":"answer(loc_1(cityid('baton rouge', _)))",
+        "split":"train"
+    },
+    {
+        "id":760,
+        "nl":"vart \u00e4r dallas ?",
+        "mrl":"answer(loc_1(cityid('dallas', _)))",
+        "split":"test"
+    },
+    {
+        "id":761,
+        "nl":"vart ligger fort wayne ?",
+        "mrl":"answer(loc_1(cityid('fort wayne', _)))",
+        "split":"train"
+    },
+    {
+        "id":762,
+        "nl":"vart ligger houston ?",
+        "mrl":"answer(loc_1(cityid('houston', _)))",
+        "split":"train"
+    },
+    {
+        "id":763,
+        "nl":"vart ligger indianapolis ?",
+        "mrl":"answer(loc_1(cityid('indianapolis', _)))",
+        "split":"train"
+    },
+    {
+        "id":764,
+        "nl":"vart ligger massachusetts ?",
+        "mrl":"answer(loc_1(stateid('massachusetts')))",
+        "split":"train"
+    },
+    {
+        "id":765,
+        "nl":"vart ligger mount whitney ?",
+        "mrl":"answer(loc_1(placeid('mount whitney')))",
+        "split":"train"
+    },
+    {
+        "id":766,
+        "nl":"vart \u00e4r mount whitney ?",
+        "mrl":"answer(loc_1(placeid('mount whitney')))",
+        "split":"train"
+    },
+    {
+        "id":767,
+        "nl":"vart ligger new hampshire ?",
+        "mrl":"answer(loc_1(stateid('new hampshire')))",
+        "split":"train"
+    },
+    {
+        "id":768,
+        "nl":"vart ligger new orleans ?",
+        "mrl":"answer(loc_1(cityid('new orleans', _)))",
+        "split":"train"
+    },
+    {
+        "id":769,
+        "nl":"vart ligger portland ?",
+        "mrl":"answer(loc_1(cityid('portland', _)))",
+        "split":"test"
+    },
+    {
+        "id":770,
+        "nl":"vart ligger san diego ?",
+        "mrl":"answer(loc_1(cityid('san diego', _)))",
+        "split":"train"
+    },
+    {
+        "id":771,
+        "nl":"vart ligger san jose ?",
+        "mrl":"answer(loc_1(cityid('san jose', _)))",
+        "split":"train"
+    },
+    {
+        "id":772,
+        "nl":"vart ligger scotts valley ?",
+        "mrl":"answer(loc_1(cityid('scotts valley', _)))",
+        "split":"train"
+    },
+    {
+        "id":773,
+        "nl":"vart ligger springfield ?",
+        "mrl":"answer(loc_1(cityid('springfield', _)))",
+        "split":"train"
+    },
+    {
+        "id":774,
+        "nl":"vart ligger chattahoochee floden ?",
+        "mrl":"answer(loc_1(river(riverid('chattahoochee'))))",
+        "split":"test"
+    },
+    {
+        "id":775,
+        "nl":"vart ligger det h\u00f6gsta berget i usa ?",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":776,
+        "nl":"vart ligger den h\u00f6gsta punkten i hawaii ?",
+        "mrl":"answer(highest(place(loc_2(stateid('hawaii')))))",
+        "split":"test"
+    },
+    {
+        "id":777,
+        "nl":"vart ligger den h\u00f6gsta punkten i montana ?",
+        "mrl":"answer(highest(place(loc_2(stateid('montana')))))",
+        "split":"train"
+    },
+    {
+        "id":778,
+        "nl":"vart ligger den l\u00e4gsta punkten i maryland ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('maryland')))))",
+        "split":"test"
+    },
+    {
+        "id":779,
+        "nl":"vart ligger den l\u00e4gsta punkten i usa ?",
+        "mrl":"answer(lowest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":780,
+        "nl":"vart \u00e4r den l\u00e4gsta punkten i iowa ?",
+        "mrl":"answer(lowest(place(loc_2(stateid('iowa')))))",
+        "split":"train"
+    },
+    {
+        "id":781,
+        "nl":"vart \u00e4r det mest befolkade omr\u00e5det i new mexico ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('new mexico'))))))",
+        "split":"test"
+    },
+    {
+        "id":782,
+        "nl":"vart \u00e4r den minsta staden ?",
+        "mrl":"answer(loc_1(smallest(city(all))))",
+        "split":"test"
+    },
+    {
+        "id":783,
+        "nl":"vilka huvudst\u00e4der ligger i de stater som gr\u00e4nsar till texas ?",
+        "mrl":"answer(capital(loc_2(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":784,
+        "nl":"vilka huvudst\u00e4der ligger inte i stora st\u00e4der ?",
+        "mrl":"answer(exclude(capital(all), major(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":785,
+        "nl":"vilken stad i kalifornien har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('california'))))))",
+        "split":"test"
+    },
+    {
+        "id":786,
+        "nl":"vad \u00e4r t\u00e4theten av den stat som den st\u00f6rsta floden i usa rinner genom ?",
+        "mrl":"answer(density_1(state(traverse_1(longest(river(loc_2(countryid('usa'))))))))",
+        "split":"test"
+    },
+    {
+        "id":787,
+        "nl":"vilken \u00e4r den h\u00f6gsta toppen som inte \u00e4r i alaska ?",
+        "mrl":"answer(highest(exclude(mountain(all),  loc_2(stateid('alaska')))))",
+        "split":"test"
+    },
+    {
+        "id":788,
+        "nl":"vilken \u00e4r den l\u00e4ngsta floden i usa ?",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":789,
+        "nl":"vilken \u00e4r den l\u00e4gsta punkten av de stater som mississippi rinner genom ?",
+        "mrl":"answer(lowest(place(loc_2(state(traverse_1(riverid('mississippi')))))))",
+        "split":"train"
+    },
+    {
+        "id":790,
+        "nl":"vilken \u00e4r den kortaste floden ?",
+        "mrl":"answer(shortest(river(all)))",
+        "split":"train"
+    },
+    {
+        "id":791,
+        "nl":"vilken \u00e4r den minsta staten ?",
+        "mrl":"answer(smallest(state(all)))",
+        "split":"test"
+    },
+    {
+        "id":792,
+        "nl":"vilken av de stater som gr\u00e4nsar till pennsylvania har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(next_to_2(stateid('pennsylvania'))))))",
+        "split":"test"
+    },
+    {
+        "id":793,
+        "nl":"vilken flod g\u00e5r genom flest stater ?",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":794,
+        "nl":"vilken flod rinner genom flest stater ?",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":795,
+        "nl":"vilken flod rinner genom flest antal stater ?",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":796,
+        "nl":"vilken flod korsar flest stater ?",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":797,
+        "nl":"vilka floder ligger i alaska ?",
+        "mrl":"answer(river(loc_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":798,
+        "nl":"vilka floder rinner inte genom texas ?",
+        "mrl":"answer(exclude(river(all), traverse_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":799,
+        "nl":"vilka floder rinner inte genom usa ?",
+        "mrl":"answer(exclude(river(all), traverse_2(countryid('usa'))))",
+        "split":"test"
+    },
+    {
+        "id":800,
+        "nl":"vilka floder flyter genom alaska ?",
+        "mrl":"answer(river(traverse_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":801,
+        "nl":"vilka floder l\u00f6per genom stater som gr\u00e4nsar till new mexico ?",
+        "mrl":"answer(river(traverse_2(state(next_to_2(stateid('new mexico'))))))",
+        "split":"train"
+    },
+    {
+        "id":802,
+        "nl":"vilka floder rinner genom stater som gr\u00e4nsar till staten med huvudstaden austin ?",
+        "mrl":"answer(river(traverse_2(state(next_to_2(state(loc_1(capital(cityid('austin', _)))))))))",
+        "split":"test"
+    },
+    {
+        "id":803,
+        "nl":"vilka floder l\u00f6per genom stater med minst antal st\u00e4der ?",
+        "mrl":"answer(river(traverse_2(fewest(state(loc_1(city(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":804,
+        "nl":"vilka floder l\u00f6per genom staten med den st\u00f6rsta staden i usa ?",
+        "mrl":"answer(river(traverse_2(state(loc_1(largest(city(loc_2(countryid('usa')))))))))",
+        "split":"train"
+    },
+    {
+        "id":805,
+        "nl":"vilka floder l\u00f6per genom staten med l\u00e4gsta h\u00f6jden i usa ?",
+        "mrl":"answer(river(traverse_2(state(loc_1(lowest(place(loc_2(countryid('usa')))))))))",
+        "split":"train"
+    },
+    {
+        "id":806,
+        "nl":"vilken stat gr\u00e4nsar till kentucky ?",
+        "mrl":"answer(state(next_to_2(stateid('kentucky'))))",
+        "split":"train"
+    },
+    {
+        "id":807,
+        "nl":"vilken stat gr\u00e4nsar till florida ?",
+        "mrl":"answer(state(next_to_2(stateid('florida'))))",
+        "split":"train"
+    },
+    {
+        "id":808,
+        "nl":"vilken stat gr\u00e4nsar till hawaii ?",
+        "mrl":"answer(state(next_to_2(stateid('hawaii'))))",
+        "split":"test"
+    },
+    {
+        "id":809,
+        "nl":"vilken stat gr\u00e4nsar till flest stater ?",
+        "mrl":"answer(most(state(next_to_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":810,
+        "nl":"vilken stat gr\u00e4nsar till flest antal stater ?",
+        "mrl":"answer(most(state(next_to_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":811,
+        "nl":"vilken stats hvuudstad har den minsta befolkningen ?",
+        "mrl":"answer(smallest_one(population_1(capital(all))))",
+        "split":"test"
+    },
+    {
+        "id":812,
+        "nl":"vilken stat har flest vattendrag ?",
+        "mrl":"answer(most(state(loc_1(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":813,
+        "nl":"vilken stat har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":814,
+        "nl":"vilken stat har den h\u00f6gsta densiteten ?",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":815,
+        "nl":"vilken stat har den st\u00f6rsta befolkningen ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":816,
+        "nl":"vilken stat har den h\u00f6gsta h\u00f6jden ?",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"test"
+    },
+    {
+        "id":817,
+        "nl":"vilken stat har den h\u00f6gsta toppen i landet ?",
+        "mrl":"answer(state(loc_1(highest(mountain(all)))))",
+        "split":"train"
+    },
+    {
+        "id":818,
+        "nl":"vilken stat har den h\u00f6gsta punkten ?",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"test"
+    },
+    {
+        "id":819,
+        "nl":"vilken stat har den h\u00f6gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":820,
+        "nl":"vilken stat har den st\u00f6rsta staden ?",
+        "mrl":"answer(state(loc_1(largest(city(all)))))",
+        "split":"train"
+    },
+    {
+        "id":821,
+        "nl":"vilken stat har den st\u00f6rsta t\u00e4theten ?",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":822,
+        "nl":"vilken stat har l\u00e4gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":823,
+        "nl":"vilken stat har den l\u00e4ngsta floden ?",
+        "mrl":"answer(state(loc_1(longest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":824,
+        "nl":"vilken stat har den l\u00e4gsta h\u00f6jden ?",
+        "mrl":"answer(state(loc_1(lowest(place(all)))))",
+        "split":"test"
+    },
+    {
+        "id":825,
+        "nl":"vilken stat har den l\u00e4gsta punkten som gr\u00e4nsar till idaho ?",
+        "mrl":"answer(state(loc_1(lowest(place(loc_2(next_to_2(stateid('idaho'))))))))",
+        "split":"test"
+    },
+    {
+        "id":826,
+        "nl":"vilken stat har den l\u00e4gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":827,
+        "nl":"vilken stat har flest stora st\u00e4der ?",
+        "mrl":"answer(most(state(loc_1(major(city(all))))))",
+        "split":"test"
+    },
+    {
+        "id":828,
+        "nl":"vilken stat har flest stora floder ?",
+        "mrl":"answer(most(state(loc_1(major(river(all))))))",
+        "split":"test"
+    },
+    {
+        "id":829,
+        "nl":"vilken stat har flest stora floder som rinner genom den ?",
+        "mrl":"answer(most(state(traverse_1(major(river(all))))))",
+        "split":"test"
+    },
+    {
+        "id":830,
+        "nl":"vilken stat har flest m\u00e4nniskor ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":831,
+        "nl":"vilken stat har st\u00f6rst befolkning ?",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":832,
+        "nl":"vilken stat har flest floder ?",
+        "mrl":"answer(most(state(loc_1(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":833,
+        "nl":"vilken stat har flest floder som rinner genom den ?",
+        "mrl":"answer(most(state(traverse_1(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":834,
+        "nl":"vilken stat har red river ?",
+        "mrl":"answer(state(loc_1(river(riverid('red')))))",
+        "split":"train"
+    },
+    {
+        "id":835,
+        "nl":"vilken stat har den minsta arean som gr\u00e4nsar texas ?",
+        "mrl":"answer(smallest_one(area_1(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":836,
+        "nl":"vilken stat har den minsta genomsnittliga urbana befolkningen ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":837,
+        "nl":"vilken stat har den minsta befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":838,
+        "nl":"vilken stat har den glesaste befolkningst\u00e4theten ?",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":839,
+        "nl":"vilken stat \u00e4r kalamazoo i ?",
+        "mrl":"answer(state(loc_1(cityid('kalamazoo', _))))",
+        "split":"train"
+    },
+    {
+        "id":840,
+        "nl":"vilken stat \u00e4r mount mckinley i ?",
+        "mrl":"answer(state(loc_1(placeid('mount mckinley'))))",
+        "split":"test"
+    },
+    {
+        "id":841,
+        "nl":"vilken stat ligger staden denver i ?",
+        "mrl":"answer(state(loc_1(city(cityid('denver', _)))))",
+        "split":"train"
+    },
+    {
+        "id":842,
+        "nl":"vilken stat ligger den st\u00f6rsta staden i montana i ?",
+        "mrl":"answer(state(loc_1(largest(city(loc_2(stateid('montana')))))))",
+        "split":"train"
+    },
+    {
+        "id":843,
+        "nl":"vilken stat \u00e4r den minsta ?",
+        "mrl":"answer(smallest(state(all)))",
+        "split":"test"
+    },
+    {
+        "id":844,
+        "nl":"vilka stater gr\u00e4nsar alabama ?",
+        "mrl":"answer(state(next_to_2(stateid('alabama'))))",
+        "split":"train"
+    },
+    {
+        "id":845,
+        "nl":"vilka stater gr\u00e4nsar alabama ?",
+        "mrl":"answer(state(next_to_2(stateid('alabama'))))",
+        "split":"train"
+    },
+    {
+        "id":846,
+        "nl":"vilka stater gr\u00e4nsar alaska ?",
+        "mrl":"answer(state(next_to_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":847,
+        "nl":"vilka stater gr\u00e4nsar arizona ?",
+        "mrl":"answer(state(next_to_2(stateid('arizona'))))",
+        "split":"train"
+    },
+    {
+        "id":848,
+        "nl":"vilka stater gr\u00e4nsar colorado ?",
+        "mrl":"answer(state(next_to_2(stateid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":849,
+        "nl":"vilka stater gr\u00e4nsar hawaii ?",
+        "mrl":"answer(state(next_to_2(stateid('hawaii'))))",
+        "split":"train"
+    },
+    {
+        "id":850,
+        "nl":"vilka stater gr\u00e4nsar illinois ?",
+        "mrl":"answer(state(next_to_2(stateid('illinois'))))",
+        "split":"test"
+    },
+    {
+        "id":851,
+        "nl":"vilka stater gr\u00e4nsar iowa ?",
+        "mrl":"answer(state(next_to_2(stateid('iowa'))))",
+        "split":"train"
+    },
+    {
+        "id":852,
+        "nl":"vilka stater gr\u00e4nsar kentucky ?",
+        "mrl":"answer(state(next_to_2(stateid('kentucky'))))",
+        "split":"test"
+    },
+    {
+        "id":853,
+        "nl":"vilka stater gr\u00e4nsar michigan ?",
+        "mrl":"answer(state(next_to_2(stateid('michigan'))))",
+        "split":"train"
+    },
+    {
+        "id":854,
+        "nl":"vilka stater gr\u00e4nsar new york ?",
+        "mrl":"answer(state(next_to_2(stateid('new york'))))",
+        "split":"train"
+    },
+    {
+        "id":855,
+        "nl":"vilka stater gr\u00e4nsar inga andra stater ?",
+        "mrl":"answer(exclude(state(all), next_to_2(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":856,
+        "nl":"vilka stater gr\u00e4nsar south dakota ?",
+        "mrl":"answer(state(next_to_2(stateid('south dakota'))))",
+        "split":"train"
+    },
+    {
+        "id":857,
+        "nl":"vilka stater gr\u00e4nsar till stater genom vilka mississippi korsar ?",
+        "mrl":"answer(state(next_to_2(state(traverse_1(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":858,
+        "nl":"vilka stater gr\u00e4nsar till texas ?",
+        "mrl":"answer(state(next_to_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":859,
+        "nl":"vilka stater gr\u00e4nsar till den l\u00e4ngsta floden i usa ?",
+        "mrl":"answer(state(next_to_2(longest(river(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":860,
+        "nl":"vilka stater gr\u00e4nsar till missourifloden ?",
+        "mrl":"answer(state(next_to_2(river(riverid('missouri')))))",
+        "split":"test"
+    },
+    {
+        "id":861,
+        "nl":"vilka stater gr\u00e4nsar till staten med minsta arean ?",
+        "mrl":"answer(state(next_to_2(smallest_one(area_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":862,
+        "nl":"vilken stats huvudstad \u00e4r den st\u00f6rsta ?",
+        "mrl":"answer(state(loc_1(largest(city(capital_1(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":863,
+        "nl":"vilka stater fl\u00f6dar coloradofloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":864,
+        "nl":"vilka stater gr\u00e4nsar inte texas ?",
+        "mrl":"answer(exclude(state(all), next_to_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":865,
+        "nl":"vilka stater rinner floden chattahoochee genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('chattahoochee')))))",
+        "split":"test"
+    },
+    {
+        "id":866,
+        "nl":"vilka stater rinner coloradofloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":867,
+        "nl":"vilka stater rinner den l\u00e4ngsta floden genom ?",
+        "mrl":"answer(state(traverse_1(longest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":868,
+        "nl":"vilka stater l\u00f6per den l\u00e4ngsta floden genom ?",
+        "mrl":"answer(state(traverse_1(longest(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":869,
+        "nl":"vilka stater rinner mississippifloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":870,
+        "nl":"vilka stater rinner mississippi genom ?",
+        "mrl":"answer(state(traverse_1(riverid('mississippi'))))",
+        "split":"test"
+    },
+    {
+        "id":871,
+        "nl":"vilka stater passerar missourifloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":872,
+        "nl":"vilka stater rinner missourifloden genom ?",
+        "mrl":"answer(state(traverse_1(river(riverid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":873,
+        "nl":"vilken stat har en stor stad som heter austin ?",
+        "mrl":"answer(state(loc_1(major(city(cityid('austin', _))))))",
+        "split":"train"
+    },
+    {
+        "id":874,
+        "nl":"vilka stater har en flod ?",
+        "mrl":"answer(state(loc_1(river(all))))",
+        "split":"test"
+    },
+    {
+        "id":875,
+        "nl":"vilka stater har st\u00e4der som heter austin ?",
+        "mrl":"answer(state(loc_1(city(cityid('austin', _)))))",
+        "split":"test"
+    },
+    {
+        "id":876,
+        "nl":"vilka stater har h\u00f6gre punkter \u00e4n den h\u00f6gsta punkten i colorado ?",
+        "mrl":"answer(state(loc_1(place(higher_2(highest(place(loc_2(stateid('colorado')))))))))",
+        "split":"train"
+    },
+    {
+        "id":877,
+        "nl":"vilka stater har punkter som \u00e4r h\u00f6gre \u00e4n den h\u00f6gsta punkten i texas ?",
+        "mrl":"answer(state(loc_1(place(higher_2(highest(place(loc_2(stateid('texas')))))))))",
+        "split":"train"
+    },
+    {
+        "id":878,
+        "nl":"vilka stater ligger p\u00e5 den st\u00f6rsta floden i usa ?",
+        "mrl":"answer(state(traverse_1(longest(river(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":879,
+        "nl":"vilken amerikansk stad har den h\u00f6gsta befolkningst\u00e4theten ?",
+        "mrl":"answer(largest_one(density_1(city(all))))",
+        "split":"test"
+    }
+]

@@ -1,0 +1,5282 @@
+[
+    {
+        "id":0,
+        "nl":"\u544a\u8bc9 \u6211 \u5728 \u5f17\u5409\u5c3c\u4e9a \u5dde \u7684 \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(stateid('virginia'))))",
+        "split":"train"
+    },
+    {
+        "id":1,
+        "nl":"\u4ec0\u4e48 \u662f \u5bc6\u897f\u897f\u6bd4 \u5dde \u5468\u8fb9 \u7684 \u5dde \u7684 \u9ad8\u70b9",
+        "mrl":"answer(high_point_1(state(next_to_2(stateid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":2,
+        "nl":"\u8bf4\u51fa \u5728 \u963f\u80af\u8272 \u5dde \u7684 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('arkansas'))))",
+        "split":"train"
+    },
+    {
+        "id":3,
+        "nl":"\u5217\u51fa \u5728 \u79d1\u7f57\u62c9\u591a \u5dde \u6240\u6709 \u7684 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":4,
+        "nl":"\u4f60 \u80fd \u544a\u8bc9 \u6211 \u5f97\u514b\u8428\u65af \u5dde \u7684 \u7701\u4f1a \u5417",
+        "mrl":"answer(capital(loc_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":5,
+        "nl":"\u4f60 \u80fd \u544a\u8bc9 \u6211 \u4fc4\u52d2\u5188 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(state(stateid('oregon'))))))",
+        "split":"train"
+    },
+    {
+        "id":6,
+        "nl":"\u6570\u4e00\u6570 \u62e5\u6709 \u6bd4 \u7f8e\u56fd \u963f\u62c9\u5df4\u9a6c \u5dde \u7684 \u6d77\u62d4 \u4f4e \u7684 \u5dde \u6709 \u591a\u5c11",
+        "mrl":"answer(count(state(low_point_2(lower_2(low_point_1(stateid('alabama')))))))",
+        "split":"test"
+    },
+    {
+        "id":7,
+        "nl":"\u7ed9 \u6211 \u7f8e\u56fd \u6240\u6709 \u7684 \u5dde",
+        "mrl":"answer(state(loc_2(countryid('usa'))))",
+        "split":"train"
+    },
+    {
+        "id":8,
+        "nl":"\u7ed9 \u6211 \u5728 \u5f97\u514b\u8428\u65af \u5dde \u7684 \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":9,
+        "nl":"\u7ed9 \u6211 \u5728 \u7f8e\u56fd \u7684 \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(countryid('usa'))))",
+        "split":"train"
+    },
+    {
+        "id":10,
+        "nl":"\u7ed9 \u6211 \u5728 \u5f17\u5409\u5c3c\u4e9a \u5dde \u7684 \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(stateid('virginia'))))",
+        "split":"train"
+    },
+    {
+        "id":11,
+        "nl":"\u7ed9 \u6211 \u5728 \u5fb7\u514b\u8428\u65af \u5dde \u7684 \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":12,
+        "nl":"\u7ed9 \u6211 \u5728 \u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u7684 \u6e56\u6cca",
+        "mrl":"answer(lake(loc_2(stateid('california'))))",
+        "split":"train"
+    },
+    {
+        "id":13,
+        "nl":"\u7ed9 \u6211 \u6700\u5927 \u7684 \u5dde",
+        "mrl":"answer(largest(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":14,
+        "nl":"\u7ed9 \u6211 \u6d41\u7ecf \u7f8e\u56fd \u7684 \u6700\u957f \u7684 \u6cb3\u6d41",
+        "mrl":"answer(longest(river(traverse_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":15,
+        "nl":"\u544a\u8bc9 \u6211 \u5728 \u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(stateid('california')))))",
+        "split":"test"
+    },
+    {
+        "id":16,
+        "nl":"\u544a\u8bc9\u6211 \u4e0e \u72b9\u4ed6 \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(state(next_to_2(stateid('utah'))))",
+        "split":"test"
+    },
+    {
+        "id":17,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('alaska')))",
+        "split":"train"
+    },
+    {
+        "id":18,
+        "nl":"\u9a6c\u8428\u8bf8\u585e \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('massachusetts')))",
+        "split":"train"
+    },
+    {
+        "id":19,
+        "nl":"\u65b0\u58a8\u897f\u54e5 \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('new mexico')))",
+        "split":"train"
+    },
+    {
+        "id":20,
+        "nl":"\u5317\u8fbe\u79d1\u4ed6 \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('north dakota')))",
+        "split":"train"
+    },
+    {
+        "id":21,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":22,
+        "nl":"\u7ebd\u7ea6 \u5e02 \u6709 \u591a\u5927",
+        "mrl":"answer(size(city(cityid('new york', _))))",
+        "split":"train"
+    },
+    {
+        "id":23,
+        "nl":"\u6240\u6709 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":24,
+        "nl":"\u74dc\u5cf0 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(placeid('guadalupe peak')))",
+        "split":"train"
+    },
+    {
+        "id":25,
+        "nl":"\u9ea6\u91d1\u5229 \u5c71 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(placeid('mount mckinley')))",
+        "split":"test"
+    },
+    {
+        "id":26,
+        "nl":"\u7f8e\u56fd \u7684 \u6700\u9ad8 \u70b9 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":27,
+        "nl":"\u8499\u5927\u62ff \u5dde \u7684 \u6700\u9ad8 \u70b9 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('montana'))))))",
+        "split":"train"
+    },
+    {
+        "id":28,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(largest(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":29,
+        "nl":"\u963f\u62c9\u5df4\u9a6c \u5dde \u7684 \u6700\u9ad8 \u70b9 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('alabama'))))))",
+        "split":"test"
+    },
+    {
+        "id":30,
+        "nl":"\u7279\u62c9\u534e \u5dde \u7684 \u6700\u9ad8 \u70b9 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('delaware'))))))",
+        "split":"train"
+    },
+    {
+        "id":31,
+        "nl":"\u4f5b\u7f57\u91cc\u8fbe \u5dde \u7684 \u6700\u9ad8 \u70b9 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('florida'))))))",
+        "split":"train"
+    },
+    {
+        "id":32,
+        "nl":"\u8def\u6613\u65af\u5b89\u90a3 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('louisiana'))))))",
+        "split":"train"
+    },
+    {
+        "id":33,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('alaska')))",
+        "split":"test"
+    },
+    {
+        "id":34,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('texas')))",
+        "split":"test"
+    },
+    {
+        "id":35,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u6709 \u591a\u5927",
+        "mrl":"answer(size(largest(city(loc_2(stateid('alaska'))))))",
+        "split":"train"
+    },
+    {
+        "id":36,
+        "nl":"\u683c\u5170\u5fb7 \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(riverid('rio grande')))",
+        "split":"train"
+    },
+    {
+        "id":37,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(river(riverid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":38,
+        "nl":"\u7279\u62c9\u534e \u6cb3 \u662f \u591a\u957f",
+        "mrl":"answer(len(river(riverid('delaware'))))",
+        "split":"test"
+    },
+    {
+        "id":39,
+        "nl":"\u5728 \u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u6700\u957f \u7684 \u6cb3\u6d41 \u6709 \u591a\u957f",
+        "mrl":"answer(len(longest(river(loc_2(stateid('california'))))))",
+        "split":"test"
+    },
+    {
+        "id":40,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u957f \u7684 \u6cb3\u6d41 \u6709 \u591a\u957f",
+        "mrl":"answer(len(longest(river(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":41,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(riverid('mississippi')))",
+        "split":"train"
+    },
+    {
+        "id":42,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(river(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":43,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6709 \u591a\u5c11 \u82f1\u91cc \u957f",
+        "mrl":"answer(len(river(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":44,
+        "nl":"\u5bc6\u82cf\u91cc \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(river(riverid('missouri'))))",
+        "split":"train"
+    },
+    {
+        "id":45,
+        "nl":"\u5317\u666e\u62c9\u7279 \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(river(riverid('north platte'))))",
+        "split":"test"
+    },
+    {
+        "id":46,
+        "nl":"\u4fc4\u4ea5\u4fc4 \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(river(riverid('ohio'))))",
+        "split":"test"
+    },
+    {
+        "id":47,
+        "nl":"\u91cc\u5965\u683c\u5170\u5fb7 \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(river(riverid('rio grande'))))",
+        "split":"train"
+    },
+    {
+        "id":48,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u77ed \u7684 \u6cb3\u6d41 \u6709 \u591a\u957f",
+        "mrl":"answer(len(shortest(river(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":49,
+        "nl":"\u5728 \u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde \u6709 \u591a\u5c11 \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(count(major(city(loc_2(stateid('pennsylvania'))))))",
+        "split":"train"
+    },
+    {
+        "id":50,
+        "nl":"\u7f57\u5fb7\u5c9b \u6709 \u591a\u5c11 \u7701\u4f1a \u57ce\u5e02 \u5462",
+        "mrl":"answer(count(capital(loc_2(stateid('rhode island')))))",
+        "split":"test"
+    },
+    {
+        "id":51,
+        "nl":"\u5728 \u8def\u6613\u65af\u5b89\u90a3 \u5dde \u6709 \u591a\u5c11 \u57ce\u5e02",
+        "mrl":"answer(count(city(loc_2(stateid('louisiana')))))",
+        "split":"train"
+    },
+    {
+        "id":52,
+        "nl":"\u5728 \u8499\u5927\u62ff \u5dde \u6709 \u591a\u5c11 \u57ce\u5e02",
+        "mrl":"answer(count(city(loc_2(stateid('montana')))))",
+        "split":"train"
+    },
+    {
+        "id":53,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u57ce\u5e02",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":54,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u57ce\u5e02",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":55,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u57ce\u5e02",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":56,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u57ce\u5e02",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":57,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u6709 \u591a\u5c11 \u57ce\u5e02 \u5462",
+        "mrl":"answer(count(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":58,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u57ce\u5e02 \u5462",
+        "mrl":"answer(count(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":59,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u57ce\u5e02 \u4ee5 \u5965\u65af\u6c40 \u4e3a\u540d",
+        "mrl":"answer(count(intersection(city(cityid('austin', _)), loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":60,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u5927 \u7684 \u57ce\u5e02 \u6709 \u591a\u5c11 \u5e02\u6c11",
+        "mrl":"answer(population_1(largest(city(all))))",
+        "split":"test"
+    },
+    {
+        "id":61,
+        "nl":"\u5728 \u963f\u62c9\u5df4\u9a6c \u5dde \u6709 \u591a\u5c11 \u516c\u6c11",
+        "mrl":"answer(population_1(stateid('alabama')))",
+        "split":"train"
+    },
+    {
+        "id":62,
+        "nl":"\u5728 \u535a\u5c14\u5fb7 \u6709 \u591a\u5c11 \u4eba",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":63,
+        "nl":"\u5728 \u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u4f4f \u4e86 \u591a\u5c11 \u516c\u6c11",
+        "mrl":"answer(population_1(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":64,
+        "nl":"\u88ab \u79f0\u4e3a \u79d1\u7f57\u62c9\u591a \u7684 \u6cb3\u6d41 \u6709 \u591a\u5c11 \u5462",
+        "mrl":"answer(count(river(riverid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":65,
+        "nl":"\u8499\u54e5\u9a6c\u5229 \u5e02 \u6709 \u591a\u5c11 \u5c45\u6c11 \u5462",
+        "mrl":"answer(population_1(cityid('montgomery', _)))",
+        "split":"train"
+    },
+    {
+        "id":66,
+        "nl":"\u5728 \u4e9a\u5229\u6851\u90a3 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u6709 \u591a\u5c11",
+        "mrl":"answer(count(major(city(loc_2(stateid('arizona'))))))",
+        "split":"train"
+    },
+    {
+        "id":67,
+        "nl":"\u5728 \u4f5b\u7f57\u91cc\u8fbe \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u6709 \u591a\u5c11",
+        "mrl":"answer(count(major(city(loc_2(stateid('florida'))))))",
+        "split":"train"
+    },
+    {
+        "id":68,
+        "nl":"\u5728 \u4e0e \u5185\u5e03\u62c9\u65af\u52a0 \u63a5\u58e4 \u7684 \u5dde \u91cc \u6709 \u591a\u5c11 \u4e3b\u8981 \u57ce\u5e02 \u5462",
+        "mrl":"answer(count(major(city(loc_2(state(next_to_2(stateid('nebraska'))))))))",
+        "split":"train"
+    },
+    {
+        "id":69,
+        "nl":"\u5728 \u4e0e \u72b9\u4ed6 \u5dde \u63a5\u58e4 \u7684 \u5dde \u91cc \u6709 \u591a\u5c11 \u4e3b\u8981 \u57ce\u5e02 \u5462",
+        "mrl":"answer(count(major(city(loc_2(state(next_to_2(stateid('utah'))))))))",
+        "split":"train"
+    },
+    {
+        "id":70,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u6709 \u591a\u5c11 \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(count(major(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":71,
+        "nl":"\u6709 \u591a\u5c11 \u4e2a \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(count(major(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":72,
+        "nl":"\u5728 \u4fc4\u52d2\u5188 \u5dde \u6709 \u591a\u5c11 \u4e2a \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(count(major(city(loc_2(stateid('oregon'))))))",
+        "split":"train"
+    },
+    {
+        "id":73,
+        "nl":"\u6709 \u591a\u5c11 \u4e3b\u8981 \u6cb3\u6d41 \u8d2f\u7a7f \u4fc4\u4ea5\u4fc4 \u5dde",
+        "mrl":"answer(count(major(river(traverse_2(stateid('ohio'))))))",
+        "split":"train"
+    },
+    {
+        "id":74,
+        "nl":"\u5728 \u5185\u534e\u8fbe \u5dde \u6709 \u591a\u5c11 \u4eba",
+        "mrl":"answer(population_1(state(stateid('nevada'))))",
+        "split":"train"
+    },
+    {
+        "id":75,
+        "nl":"\u5728 \u7231\u8377\u534e \u5dde \u6709 \u591a\u5c11 \u4eba",
+        "mrl":"answer(population_1(stateid('iowa')))",
+        "split":"train"
+    },
+    {
+        "id":76,
+        "nl":"\u5728 \u7ebd\u7ea6 \u6709 \u591a\u5c11 \u4eba",
+        "mrl":"answer(population_1(stateid('new york')))",
+        "split":"train"
+    },
+    {
+        "id":77,
+        "nl":"\u535a\u5c14\u5fb7 \u5e02 \u6709 \u591a\u5c11 \u4eba\u53e3",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":78,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u5c45\u4f4f \u5728 \u5965\u65af\u6c40",
+        "mrl":"answer(population_1(cityid('austin', _)))",
+        "split":"train"
+    },
+    {
+        "id":79,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u5f97\u514b\u8428\u65af \u5dde \u7684 \u5965\u65af\u6c40",
+        "mrl":"answer(population_1(cityid('austin', 'tx')))",
+        "split":"train"
+    },
+    {
+        "id":80,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u52a0\u5229\u798f\u5c3c\u4e9a",
+        "mrl":"answer(population_1(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":81,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u829d\u52a0\u54e5",
+        "mrl":"answer(population_1(cityid('chicago', _)))",
+        "split":"train"
+    },
+    {
+        "id":82,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u5e95\u7279\u5f8b",
+        "mrl":"answer(population_1(cityid('detroit', _)))",
+        "split":"test"
+    },
+    {
+        "id":83,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u590f\u5a01\u5937",
+        "mrl":"answer(population_1(stateid('hawaii')))",
+        "split":"train"
+    },
+    {
+        "id":84,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u4f11\u65af\u6566",
+        "mrl":"answer(population_1(cityid('houston', _)))",
+        "split":"test"
+    },
+    {
+        "id":85,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u5c45\u4f4f \u5728 \u5361\u62c9\u9a6c\u7956",
+        "mrl":"answer(population_1(cityid('kalamazoo', _)))",
+        "split":"train"
+    },
+    {
+        "id":86,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u582a\u8428\u65af \u5dde",
+        "mrl":"answer(population_1(stateid('kansas')))",
+        "split":"train"
+    },
+    {
+        "id":87,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u660e\u5c3c\u82cf\u8fbe \u5dde \u7684 \u660e\u5c3c\u963f\u6ce2\u5229\u65af \u5e02",
+        "mrl":"answer(population_1(cityid('minneapolis', 'mn')))",
+        "split":"test"
+    },
+    {
+        "id":88,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u5bc6\u897f\u897f\u6bd4 \u5dde",
+        "mrl":"answer(population_1(stateid('mississippi')))",
+        "split":"test"
+    },
+    {
+        "id":89,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u8499\u5927\u62ff \u5dde",
+        "mrl":"answer(population_1(stateid('montana')))",
+        "split":"train"
+    },
+    {
+        "id":90,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u65b0\u7f55\u5e03\u4ec0\u5c14 \u5dde",
+        "mrl":"answer(population_1(stateid('new hampshire')))",
+        "split":"train"
+    },
+    {
+        "id":91,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u65b0\u58a8\u897f\u54e5 \u5dde",
+        "mrl":"answer(population_1(stateid('new mexico')))",
+        "split":"train"
+    },
+    {
+        "id":92,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u7ebd\u7ea6",
+        "mrl":"answer(population_1(stateid('new york')))",
+        "split":"train"
+    },
+    {
+        "id":93,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u7f57\u5f97\u5c9b",
+        "mrl":"answer(population_1(stateid('rhode island')))",
+        "split":"test"
+    },
+    {
+        "id":94,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u91cc\u5f17\u8d5b\u5fb7\u65af\u5854\u7279 \u5e02",
+        "mrl":"answer(population_1(cityid('riverside', _)))",
+        "split":"train"
+    },
+    {
+        "id":95,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u751f\u6d3b \u5728 \u65e7\u91d1\u5c71",
+        "mrl":"answer(population_1(cityid('san francisco', _)))",
+        "split":"train"
+    },
+    {
+        "id":96,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u5357\u8fbe\u79d1\u4ed6 \u5dde",
+        "mrl":"answer(population_1(stateid('south dakota')))",
+        "split":"train"
+    },
+    {
+        "id":97,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u534e\u76db\u987f \u5dde \u7684 \u65af\u6ce2\u574e \u5e02",
+        "mrl":"answer(population_1(cityid('spokane', 'wa')))",
+        "split":"train"
+    },
+    {
+        "id":98,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u5f97\u514b\u8428\u65af \u5dde",
+        "mrl":"answer(population_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":99,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u5c45\u4f4f \u5728 \u7ebd\u7ea6 \u5dde \u6700\u5927 \u7684 \u57ce\u5e02",
+        "mrl":"answer(population_1(largest(city(loc_2(state(stateid('new york')))))))",
+        "split":"test"
+    },
+    {
+        "id":100,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u5c45\u4f4f \u5728 \u4f50\u6cbb\u4e9a \u5dde \u7684 \u7701\u5e9c",
+        "mrl":"answer(population_1(capital(loc_2(stateid('georgia')))))",
+        "split":"train"
+    },
+    {
+        "id":101,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u5f97\u514b\u8428\u65af \u5dde \u7684 \u9996\u5e9c",
+        "mrl":"answer(population_1(capital(loc_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":102,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u4e0e \u6000\u4fc4\u660e \u5dde \u63a5\u58e4 \u7684 \u6700\u5c0f \u7684 \u5dde \u91cc",
+        "mrl":"answer(population_1(smallest(state(next_to_2(stateid('wyoming'))))))",
+        "split":"train"
+    },
+    {
+        "id":103,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u5c45\u4f4f \u5728 \u4eba\u53e3 \u5bc6\u5ea6 \u6700\u5927 \u7684 \u5dde \u91cc",
+        "mrl":"answer(population_1(largest_one(density_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":104,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u7f8e\u56fd",
+        "mrl":"answer(population_1(countryid('usa')))",
+        "split":"test"
+    },
+    {
+        "id":105,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u534e\u76db\u987f",
+        "mrl":"answer(population_1(stateid('washington')))",
+        "split":"train"
+    },
+    {
+        "id":106,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u534e\u76db\u987f \u7279\u533a",
+        "mrl":"answer(population_1(cityid('washington', 'dc')))",
+        "split":"train"
+    },
+    {
+        "id":107,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u5965\u65af\u6c40",
+        "mrl":"answer(population_1(cityid('austin', _)))",
+        "split":"test"
+    },
+    {
+        "id":108,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u5c45\u4f4f \u5728 \u72b9\u4ed6 \u5dde",
+        "mrl":"answer(population_1(stateid('utah')))",
+        "split":"test"
+    },
+    {
+        "id":109,
+        "nl":"\u6709 \u591a\u5c11 \u4eba \u4f4f \u5728 \u72b9\u4ed6 \u5dde",
+        "mrl":"answer(population_1(stateid('utah')))",
+        "split":"train"
+    },
+    {
+        "id":110,
+        "nl":"\u6709 \u591a\u5c11 \u5c45\u6c11 \u5c45\u4f4f \u5728 \u5f97\u514b\u8428\u65af",
+        "mrl":"answer(population_1(stateid('texas')))",
+        "split":"test"
+    },
+    {
+        "id":111,
+        "nl":"\u6709 \u591a\u5c11 \u6cb3\u6d41 \u88ab \u79f0\u4e3a \u79d1\u7f57\u62c9\u591a",
+        "mrl":"answer(count(river(riverid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":112,
+        "nl":"\u5728 \u79d1\u7f57\u62c9\u591a \u5dde \u88ab \u53d1\u73b0 \u6709 \u591a\u5c11 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":113,
+        "nl":"\u5728 \u79d1\u7f57\u62c9\u591a \u5dde \u6709 \u591a\u5c11 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":114,
+        "nl":"\u5728 \u827e\u5965\u74e6 \u5dde \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":115,
+        "nl":"\u5728 \u5bc6\u82cf\u91cc \u5dde \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(stateid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":116,
+        "nl":"\u5728 \u7ebd\u7ea6 \u5dde \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(stateid('new york')))))",
+        "split":"train"
+    },
+    {
+        "id":117,
+        "nl":"\u5728 \u6cb3\u6d41 \u6570 \u6700\u591a \u7684 \u5dde \u91cc \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(most(state(loc_1(river(all))))))))",
+        "split":"test"
+    },
+    {
+        "id":118,
+        "nl":"\u5728 \u56fd\u5bb6 \u6700\u9ad8 \u70b9 \u7684 \u6240\u5728 \u5dde \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(state(loc_1(highest(place(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":119,
+        "nl":"\u5728 \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u91cc \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(largest_one(population_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":120,
+        "nl":"\u6709 \u591a\u5c11 \u6cb3\u6d41 \u5728 \u7231\u8fbe\u8377 \u5dde",
+        "mrl":"answer(count(river(loc_2(stateid('idaho')))))",
+        "split":"train"
+    },
+    {
+        "id":121,
+        "nl":"\u6709 \u591a\u5c11 \u6cb3\u6d41 \u8d2f\u7a7f \u5f97\u514b\u8428\u65af \u5dde",
+        "mrl":"answer(count(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":122,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":123,
+        "nl":"\u6709 \u591a\u5c11 \u6cb3\u6d41 \u6ca1\u6709 \u7a7f\u8d8a \u5965\u5c14\u5df4\u5c3c \u9996\u5e9c \u7684 \u6240\u5728 \u5dde",
+        "mrl":"answer(count(exclude(river(all), traverse_2(state(loc_1(capital(cityid('albany', _))))))))",
+        "split":"train"
+    },
+    {
+        "id":124,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u6709 \u591a\u5c11 \u6cb3\u6d41 \u5462",
+        "mrl":"answer(count(river(loc_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":125,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u5dde \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41 \u5462",
+        "mrl":"answer(count(river(loc_2(stateid('colorado')))))",
+        "split":"test"
+    },
+    {
+        "id":126,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41 \u6bd4 \u7ea2 \u6cb3 \u957f",
+        "mrl":"answer(count(intersection(river(loc_2(stateid('texas'))), longer(riverid('red')))))",
+        "split":"train"
+    },
+    {
+        "id":127,
+        "nl":"\u5728 \u534e\u76db\u987f \u6709 \u591a\u5c11 \u6761 \u6cb3\u6d41",
+        "mrl":"answer(count(river(loc_2(stateid('washington')))))",
+        "split":"train"
+    },
+    {
+        "id":128,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u6709 \u591a\u5c11 \u6cb3\u6d41",
+        "mrl":"answer(count(river(traverse_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":129,
+        "nl":"\u6709 \u591a\u5c11 \u6cb3\u6d41 \u6d41\u7ecf \u4e0e \u79d1\u7f57\u62c9\u591a \u63a5\u58e4 \u7684 \u5dde \u5462",
+        "mrl":"answer(count(river(traverse_2(state(next_to_2(stateid('colorado')))))))",
+        "split":"train"
+    },
+    {
+        "id":130,
+        "nl":"\u7f8e\u56fd \u6709 \u591a\u5c11 \u5e73\u65b9\u516c\u91cc \u5462",
+        "mrl":"answer(area_1(countryid('usa')))",
+        "split":"train"
+    },
+    {
+        "id":131,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u5dde",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":132,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u5dde",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":133,
+        "nl":"\u6709 \u591a\u5c11 \u4e2a \u5dde \u662f \u4e34\u8fd1 \u4e3b\u8981 \u6cb3\u6d41 \u7684",
+        "mrl":"answer(count(state(next_to_2(major(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":134,
+        "nl":"\u6709 \u591a\u5c11 \u4e2a \u5dde",
+        "mrl":"answer(count(state(all)))",
+        "split":"test"
+    },
+    {
+        "id":135,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u5dde",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":136,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u5dde",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":137,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u963f\u62c9\u65af\u52a0 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":138,
+        "nl":"\u81f3\u5c11 \u4e0e \u4e24\u4e2a \u4ee5\u4e0a \u5176\u5b83 \u5dde \u63a5\u58e4 \u7684 \u5dde \u6709 \u591a\u5c11",
+        "mrl":"answer(count(state(next_to_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":139,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u79d1\u7f57\u62c9\u591a \u5dde \u548c \u65b0\u58a8\u897f\u54e5 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(intersection(next_to_2(stateid('colorado')) , next_to_2(stateid('new mexico'))))))",
+        "split":"train"
+    },
+    {
+        "id":140,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u590f\u5a01\u5937 \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(stateid('hawaii')))))",
+        "split":"train"
+    },
+    {
+        "id":141,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u827e\u5965\u74e6 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":142,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u6ce2\u58eb\u987f \u9996\u5e9c \u7684 \u6240\u5728 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(state(loc_1(capital(cityid('boston', _))))))))",
+        "split":"train"
+    },
+    {
+        "id":143,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u7530\u7eb3\u897f \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(stateid('tennessee')))))",
+        "split":"train"
+    },
+    {
+        "id":144,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":145,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u6700\u5927 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(largest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":146,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":147,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u548c \u6700\u591a \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(most(state(next_to_2(state(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":148,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_2(largest_one(population_1(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":149,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u6ca1\u6709 \u6cb3\u6d41",
+        "mrl":"answer(count(exclude(state(all), loc_1(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":150,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u827e\u5965\u74e6 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_1(stateid('iowa')))))",
+        "split":"train"
+    },
+    {
+        "id":151,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u5bc6\u82cf\u91cc \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_1(stateid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":152,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u4e0e \u7530\u7eb3\u897f \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_1(stateid('tennessee')))))",
+        "split":"test"
+    },
+    {
+        "id":153,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u6cb3 \u6d41\u7ecf \u591a\u5c11 \u5dde",
+        "mrl":"answer(count(state(traverse_1(river(riverid('colorado'))))))",
+        "split":"train"
+    },
+    {
+        "id":154,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u6cb3 \u8d2f\u7a7f \u591a\u5c11 \u5dde",
+        "mrl":"answer(count(state(traverse_1(river(riverid('colorado'))))))",
+        "split":"train"
+    },
+    {
+        "id":155,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u591a\u5c11 \u5dde",
+        "mrl":"answer(count(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":156,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u88ab \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f",
+        "mrl":"answer(count(state(traverse_1(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":157,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u88ab \u5bc6\u82cf\u91cc \u6cb3 \u8d2f\u7a7f \u5462",
+        "mrl":"answer(count(state(traverse_1(river(riverid('missouri'))))))",
+        "split":"train"
+    },
+    {
+        "id":158,
+        "nl":"\u7f8e\u56fd \u6709 \u591a\u5c11 \u5dde \u5462",
+        "mrl":"answer(count(state(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":159,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u542b\u6709 \u4e00\u4e2a \u53eb \u7f57\u5207\u65af\u7279 \u7684 \u57ce\u5e02",
+        "mrl":"answer(count(state(loc_1(city(cityid('rochester', _))))))",
+        "split":"train"
+    },
+    {
+        "id":160,
+        "nl":"\u6709 \u591a\u5c11 \u5dde \u542b\u6709 \u4e00\u4e2a \u540d\u4e3a \u65af\u666e\u6797\u83f2\u5c14\u5fb7 \u7684 \u57ce\u5e02",
+        "mrl":"answer(count(state(loc_1(city(cityid('springfield', _))))))",
+        "split":"train"
+    },
+    {
+        "id":161,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u591a\u5c11 \u5dde \u6709 \u6bd4 \u9996\u5e9c \u57ce\u5e02 \u6700\u5927 \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u9ad8 \u7684 \u5730\u533a",
+        "mrl":"answer(count(state(loc_1(place(higher_2(highest(place(loc_2(state(loc_1(largest(capital(city(loc_2(countryid('usa'))))))))))))))))",
+        "split":"test"
+    },
+    {
+        "id":162,
+        "nl":"\u542b\u6709 \u540d\u4e3a \u5965\u65af\u6c40 \u7684 \u57ce\u5e02 \u7684 \u5dde \u6709 \u591a\u5c11",
+        "mrl":"answer(count(state(loc_1(city(cityid('austin', _))))))",
+        "split":"train"
+    },
+    {
+        "id":163,
+        "nl":"\u542b\u6709 \u540d\u4e3a \u65af\u666e\u6797\u83f2\u5c14\u5fb7 \u7684 \u57ce\u5e02 \u6216 \u5c0f\u9547 \u7684 \u5dde \u6709 \u591a\u5c11",
+        "mrl":"answer(count(state(loc_1(city(cityid('springfield', _))))))",
+        "split":"train"
+    },
+    {
+        "id":164,
+        "nl":"\u6709 \u591a\u5c11 \u4e2a \u5dde \u6709 \u4e3b\u8981 \u6cb3\u6d41",
+        "mrl":"answer(count(state(loc_1(major(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":165,
+        "nl":"\u6700\u77ed \u7684 \u6cb3\u6d41 \u8d2f\u7a7f \u7f8e\u56fd \u591a\u5c11 \u5dde",
+        "mrl":"answer(count(intersection(state(loc_2(countryid('usa'))),traverse_1(shortest(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":166,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u6709 \u591a\u5c11 \u4eba\u53e3 \u5462",
+        "mrl":"answer(population_1(stateid('texas')))",
+        "split":"test"
+    },
+    {
+        "id":167,
+        "nl":"\u9ea6\u91d1\u5229 \u5c71 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(placeid('mount mckinley')))",
+        "split":"test"
+    },
+    {
+        "id":168,
+        "nl":"\u8499\u5927\u62ff \u5dde \u7684 \u6700\u9ad8 \u70b9 \u6709 \u591a\u9ad8",
+        "mrl":"answer(elevation_1(highest(place(loc_2(stateid('montana'))))))",
+        "split":"test"
+    },
+    {
+        "id":169,
+        "nl":"\u9ea6\u91d1\u5229 \u5c71 \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(placeid('mount mckinley'))))",
+        "split":"train"
+    },
+    {
+        "id":170,
+        "nl":"\u54ea\u4e2a \u5dde \u5305\u542b \u7f8e\u56fd \u7684 \u6700\u9ad8 \u70b9 \u5462",
+        "mrl":"answer(state(loc_1(highest(place(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":171,
+        "nl":"\u7f57\u5207\u65af\u7279 \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(cityid('rochester', _))))",
+        "split":"train"
+    },
+    {
+        "id":172,
+        "nl":"\u827e\u5965\u74e6 \u5dde \u548c \u591a\u5c11 \u5dde \u63a5\u58e4",
+        "mrl":"answer(count(state(next_to_1(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":173,
+        "nl":"\u5217\u4e3e \u51fa \u5dde",
+        "mrl":"answer(state(all))",
+        "split":"train"
+    },
+    {
+        "id":174,
+        "nl":"\u5217\u4e3e \u51fa \u7f8e\u56fd \u6240\u6709 \u6e56\u6cca",
+        "mrl":"answer(lake(loc_2(countryid('usa'))))",
+        "split":"train"
+    },
+    {
+        "id":175,
+        "nl":"\u5217\u51fa \u5728 \u79d1\u7f57\u62c9\u591a \u5dde \u6240\u6709 \u7684 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":176,
+        "nl":"\u8bf4\u51fa \u7f8e\u56fd \u7684 50 \u4e2a \u9996\u5e9c \u540d",
+        "mrl":"answer(capital(loc_2(countryid('usa'))))",
+        "split":"train"
+    },
+    {
+        "id":177,
+        "nl":"\u7f8e\u56fd \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":178,
+        "nl":"\u5217\u51fa \u5728 \u5bc6\u6b47\u6839 \u5dde \u7684 \u4e3b\u8981 \u6e56\u6cca",
+        "mrl":"answer(major(lake(loc_2(stateid('michigan')))))",
+        "split":"train"
+    },
+    {
+        "id":179,
+        "nl":"\u8bf4\u51fa \u5728 \u4f5b\u7f57\u91cc\u8fbe \u5dde \u7684 \u4e3b\u8981 \u6cb3\u6d41",
+        "mrl":"answer(major(river(loc_2(stateid('florida')))))",
+        "split":"test"
+    },
+    {
+        "id":180,
+        "nl":"\u5217\u51fa \u963f\u80af\u8272 \u5dde \u7684 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('arkansas'))))",
+        "split":"train"
+    },
+    {
+        "id":181,
+        "nl":"\u5217\u51fa \u6240\u6709 \u4e0d\u8ddf \u5176\u5b83 \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(exclude(state(all), next_to_2(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":182,
+        "nl":"\u5728 \u535a\u5c14\u5fb7 \u6709 \u591a\u5c11 \u516c\u6c11",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":183,
+        "nl":"\u535a\u5c14\u5fb7 \u5e02 \u6709 \u591a\u5c11 \u4eba",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"test"
+    },
+    {
+        "id":184,
+        "nl":"\u4e0e \u827e\u5965\u74e6 \u5dde \u63a5\u58e4 \u7684 \u5dde \u6709 \u591a\u5c11",
+        "mrl":"answer(count(state(next_to_2(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":185,
+        "nl":"\u5728 \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6d41\u7ecf \u7684 \u5dde \u91cc \u54ea \u4e00\u4e2a \u5dde \u6709 \u6700\u4f4e \u70b9",
+        "mrl":"answer(state(loc_1(lowest(place(loc_2(state(traverse_1(river(riverid('mississippi'))))))))))",
+        "split":"train"
+    },
+    {
+        "id":186,
+        "nl":"\u535a\u5c14\u5fb7 \u5e02 \u6709 \u591a\u5c11 \u4eba",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":187,
+        "nl":"\u535a\u5c14\u5fb7 \u5e02 \u7684 \u5c45\u6c11 \u4eba\u6570 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"train"
+    },
+    {
+        "id":188,
+        "nl":"\u5217\u51fa \u6240\u6709 \u7ebd\u7ea6 \u5dde \u7684 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('new york'))))",
+        "split":"test"
+    },
+    {
+        "id":189,
+        "nl":"\u8428\u514b\u62c9\u95e8\u6258 \u662f \u54ea\u4e2a \u5dde \u7684 \u9996\u5e9c",
+        "mrl":"answer(state(loc_1(capital(cityid('sacramento', _)))))",
+        "split":"train"
+    },
+    {
+        "id":190,
+        "nl":"\u5723\u5b89\u4e1c\u5c3c\u5965 \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(cityid('san antonio', _))))",
+        "split":"test"
+    },
+    {
+        "id":191,
+        "nl":"\u5217\u51fa \u5728 \u79d1\u7f57\u62c9\u591a \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(major(city(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":192,
+        "nl":"\u544a\u8bc9 \u6211 \u5728 \u7f8e\u56fd \u6240\u6709 \u7684 \u4e3b\u8981 \u6e56\u6cca",
+        "mrl":"answer(major(lake(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":193,
+        "nl":"\u8bf4\u51fa \u9762\u79ef \u6700\u5927 \u7684 \u5dde",
+        "mrl":"answer(largest_one(area_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":194,
+        "nl":"\u5217\u51fa \u4e0e \u827e\u5965\u74e6 \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(state(next_to_2(stateid('iowa'))))",
+        "split":"train"
+    },
+    {
+        "id":195,
+        "nl":"\u544a\u8bc9 \u6211 \u5728 \u5f97\u514b\u8428\u65af \u5dde \u6709 \u54ea\u4e9b \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":196,
+        "nl":"\u5728 \u5fb7\u514b\u8428\u65af \u5dde \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(longest(river(loc_2(stateid('texas')))))))",
+        "split":"test"
+    },
+    {
+        "id":197,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6d41\u7ecf \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":198,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":199,
+        "nl":"\u5728 \u5fb7\u514b\u8428\u65af \u5dde \u6240\u6709 \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e9b",
+        "mrl":"answer(river(loc_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":200,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u7684 \u4e3b\u8981 \u6cb3\u6d41 \u662f \u54ea\u4e9b",
+        "mrl":"answer(major(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":201,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u6700\u5927 \u7684 \u6cb3\u6d41 \u662f \u4ec0\u4e48",
+        "mrl":"answer(longest(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":202,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u9996\u5e9c \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(city(loc_2(state(next_to_2(stateid('texas')))))))",
+        "split":"train"
+    },
+    {
+        "id":203,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u7684 \u9996\u5e9c \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(city(loc_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":204,
+        "nl":"\u4e0e \u5bc6\u82cf\u91cc \u63a5\u58e4 \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(state(next_to_2(stateid('missouri'))))))",
+        "split":"test"
+    },
+    {
+        "id":205,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":206,
+        "nl":"\u5728 \u52a0 \u5dde \u6709 \u4ec0\u4e48 \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(stateid('california'))))",
+        "split":"train"
+    },
+    {
+        "id":207,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6240 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u57ce\u5e02 \u6709 \u54ea\u4e9b",
+        "mrl":"answer(city(loc_2(state(traverse_1(riverid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":208,
+        "nl":"\u6700\u9ad8 \u70b9 \u6240\u5728 \u5dde \u6709 \u4ec0\u4e48 \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(state(loc_1(highest(place(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":209,
+        "nl":"\u6240\u6709 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":210,
+        "nl":"\u4ec0\u4e48 \u662f \u5bc6\u897f\u897f\u6bd4 \u5dde \u7684 \u5468\u8fb9 \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9",
+        "mrl":"answer(highest(place(loc_2(state(next_to_2(stateid('mississippi')))))))",
+        "split":"train"
+    },
+    {
+        "id":211,
+        "nl":"\u54ea\u4e9b \u6e56\u6cca \u5728 \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(lake(loc_2(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":212,
+        "nl":"\u4e0e \u6700\u5927 \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(city(loc_2(state(next_to_2(largest(state(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":213,
+        "nl":"\u963f\u62c9\u5df4\u9a6c \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('alabama')))))",
+        "split":"test"
+    },
+    {
+        "id":214,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('alaska')))))",
+        "split":"test"
+    },
+    {
+        "id":215,
+        "nl":"\u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('california')))))",
+        "split":"train"
+    },
+    {
+        "id":216,
+        "nl":"\u7279\u62c9\u534e \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('delaware')))))",
+        "split":"train"
+    },
+    {
+        "id":217,
+        "nl":"\u582a\u8428\u65af \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('kansas')))))",
+        "split":"train"
+    },
+    {
+        "id":218,
+        "nl":"\u5bc6\u82cf\u91cc \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":219,
+        "nl":"\u65b0\u58a8\u897f\u54e5 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('new mexico')))))",
+        "split":"train"
+    },
+    {
+        "id":220,
+        "nl":"\u7ebd\u7ea6 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('new york')))))",
+        "split":"test"
+    },
+    {
+        "id":221,
+        "nl":"\u5317\u5361\u7f57\u6765\u7eb3 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('north carolina')))))",
+        "split":"train"
+    },
+    {
+        "id":222,
+        "nl":"\u4fc4\u4ea5\u4fc4 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('ohio')))))",
+        "split":"train"
+    },
+    {
+        "id":223,
+        "nl":"\u4fc4\u514b\u62c9\u8377\u9a6c \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('oklahoma')))))",
+        "split":"train"
+    },
+    {
+        "id":224,
+        "nl":"\u7f57\u5fb7\u5c9b \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('rhode island')))))",
+        "split":"train"
+    },
+    {
+        "id":225,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(state(traverse_1(riverid('mississippi')))))))",
+        "split":"test"
+    },
+    {
+        "id":226,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":227,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(largest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":228,
+        "nl":"\u7f8e\u56fd \u7684 \u6700\u5c0f \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(smallest(state(loc_2(countryid('usa'))))))))",
+        "split":"train"
+    },
+    {
+        "id":229,
+        "nl":"\u7f8e\u56fd \u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(state(stateid('california'))))))",
+        "split":"test"
+    },
+    {
+        "id":230,
+        "nl":"\u5f17\u5409\u5c3c\u4e9a \u5dde \u7684 \u4e3b\u8981 \u6cb3\u6d41 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u6709 \u54ea\u4e9b",
+        "mrl":"answer(major(city(loc_2(state(traverse_1(major(river(loc_2(stateid('virginia'))))))))))",
+        "split":"train"
+    },
+    {
+        "id":231,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u4ec0\u4e48 \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(major(city(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":232,
+        "nl":"\u4f5b\u8499\u7279 \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('vermont')))))",
+        "split":"test"
+    },
+    {
+        "id":233,
+        "nl":"\u6000\u4fc4\u660e \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('wyoming')))))",
+        "split":"train"
+    },
+    {
+        "id":234,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":235,
+        "nl":"\u7f8e\u56fd \u6709 \u54ea\u4e9b \u4e3b\u8981 \u57ce\u5e02 \u5462",
+        "mrl":"answer(major(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":236,
+        "nl":"\u7f8e\u56fd \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":237,
+        "nl":"\u7f8e\u56fd \u6709 \u54ea\u4e9b \u4e3b\u8981 \u6e56\u6cca \u5462",
+        "mrl":"answer(major(lake(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":238,
+        "nl":"\u5728 \u4fc4\u4ea5\u4fc4 \u5dde \u6709 \u54ea\u4e9b \u4e3b\u8981 \u6cb3\u6d41",
+        "mrl":"answer(major(river(loc_2(stateid('ohio')))))",
+        "split":"test"
+    },
+    {
+        "id":239,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u54ea\u4e9b \u4e3b\u8981 \u6cb3\u6d41 \u5462",
+        "mrl":"answer(major(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":240,
+        "nl":"\u5728 \u4f0a\u5229\u8bfa\u4f0a \u5dde \u4e3b\u8981 \u57ce\u5e02 \u7684 \u540d\u79f0 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('illinois')))))",
+        "split":"train"
+    },
+    {
+        "id":241,
+        "nl":"\u54ea\u4e9b \u662f \u548c \u5bc6\u6b47\u6839 \u5dde \u76f8\u90bb \u7684 \u5dde",
+        "mrl":"answer(state(next_to_2(stateid('michigan'))))",
+        "split":"train"
+    },
+    {
+        "id":242,
+        "nl":"\u7f8e\u56fd \u5404 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u4ec0\u4e48",
+        "mrl":"answer(density_1(state(all)))",
+        "split":"test"
+    },
+    {
+        "id":243,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('mississippi')))",
+        "split":"test"
+    },
+    {
+        "id":244,
+        "nl":"\u5728 \u8499\u5927\u62ff \u5dde \u6240\u6709 \u4e3b\u8981 \u57ce\u5e02 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(major(city(loc_2(stateid('montana'))))))",
+        "split":"train"
+    },
+    {
+        "id":245,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6240 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":246,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6240 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":247,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6240 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(state(traverse_1(riverid('mississippi')))))",
+        "split":"test"
+    },
+    {
+        "id":248,
+        "nl":"\u88ab \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6240 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(state(traverse_1(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":249,
+        "nl":"\u4e0e \u5fb7 \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(state(next_to_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":250,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(major(city(loc_2(stateid('texas'))))))",
+        "split":"test"
+    },
+    {
+        "id":251,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6240 \u8d2f\u7a7f \u7684 \u5dde \u6709 \u591a\u5c11 \u4eba",
+        "mrl":"answer(population_1(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":252,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6240 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":253,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6240 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(state(traverse_1(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":254,
+        "nl":"\u88ab \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(state(traverse_1(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":255,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('alaska'))))",
+        "split":"test"
+    },
+    {
+        "id":256,
+        "nl":"\u5370\u7b2c\u5b89\u7eb3 \u5dde \u7684 \u6cb3\u6d41 \u662f \u4ec0\u4e48",
+        "mrl":"answer(river(loc_2(state(stateid('indiana')))))",
+        "split":"train"
+    },
+    {
+        "id":257,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u6709 \u54ea\u4e9b \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(state(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":258,
+        "nl":"\u8499\u5927\u62ff \u5dde \u7684 \u6cb3\u6d41 \u662f \u4ec0\u4e48",
+        "mrl":"answer(river(loc_2(stateid('montana'))))",
+        "split":"train"
+    },
+    {
+        "id":259,
+        "nl":"\u6709 \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(all))",
+        "split":"train"
+    },
+    {
+        "id":260,
+        "nl":"\u6709 \u54ea\u4e9b \u5dde \u4e0e \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(largest_one(population_1(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":261,
+        "nl":"\u6ce2\u6258\u9a6c\u514b \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(riverid('potomac'))))",
+        "split":"train"
+    },
+    {
+        "id":262,
+        "nl":"\u6700\u957f \u7684 \u6cb3\u6d41 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(longest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":263,
+        "nl":"\u4f60 \u80fd \u544a\u8bc9 \u6211 \u5bc6\u82cf\u91cc \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11 \u5417",
+        "mrl":"answer(population_1(stateid('missouri')))",
+        "split":"train"
+    },
+    {
+        "id":264,
+        "nl":"\u54ea\u4e2a \u9996\u5e9c \u7684 \u4eba\u53e3 \u6700\u591a",
+        "mrl":"answer(largest_one(population_1(capital(all))))",
+        "split":"train"
+    },
+    {
+        "id":265,
+        "nl":"\u5728 \u7f8e\u56fd \u54ea\u4e2a \u9996\u5e9c \u6700\u5927",
+        "mrl":"answer(largest(capital(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":266,
+        "nl":"\u54ea\u4e9b \u57ce\u5e02 \u662f \u4f4d\u4e8e \u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde \u7684",
+        "mrl":"answer(city(loc_2(stateid('pennsylvania'))))",
+        "split":"train"
+    },
+    {
+        "id":267,
+        "nl":"\u52a0 \u5dde \u6709 \u4ec0\u4e48 \u57ce\u5e02",
+        "mrl":"answer(city(loc_2(stateid('california'))))",
+        "split":"train"
+    },
+    {
+        "id":268,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u54ea\u4e2a \u57ce\u5e02 \u7684 \u5e02\u6c11 \u4eba\u6570 \u6700\u591a",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":269,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u4eba\u53e3 \u6700\u591a \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":270,
+        "nl":"\u54ea\u4e2a \u57ce\u5e02 \u62e5\u6709 \u4eba\u53e3 \u6700\u591a",
+        "mrl":"answer(largest_one(population_1(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":271,
+        "nl":"\u54ea\u4e2a \u57ce\u5e02 \u7684 \u4eba\u53e3 \u6700\u5c11",
+        "mrl":"answer(smallest_one(population_1(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":272,
+        "nl":"\u54ea\u4e2a \u57ce\u5e02 \u62e5\u6709 \u6700\u591a \u7684 \u4eba",
+        "mrl":"answer(largest_one(population_1(city(all))))",
+        "split":"test"
+    },
+    {
+        "id":273,
+        "nl":"\u5728 \u7f8e\u56fd \u4ec0\u4e48 \u57ce\u5e02 \u62e5\u6709 \u6700\u9ad8 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(largest_one(density_1(city(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":274,
+        "nl":"\u827e\u5965\u74e6 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(stateid('iowa'))))",
+        "split":"train"
+    },
+    {
+        "id":275,
+        "nl":"\u6700\u4f4e \u70b9 \u6240\u5728 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(state(loc_1(lowest(place(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":276,
+        "nl":"\u6700\u5927 \u7684 \u9996\u5e9c \u662f \u54ea\u91cc",
+        "mrl":"answer(largest(capital(all)))",
+        "split":"train"
+    },
+    {
+        "id":277,
+        "nl":"\u4e0e \u52a0 \u5dde \u76f8\u90bb \u7684 \u662f \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(next_to_2(stateid('california'))))",
+        "split":"train"
+    },
+    {
+        "id":278,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('alaska')))",
+        "split":"train"
+    },
+    {
+        "id":279,
+        "nl":"\u6240\u6709 \u5dde \u7684 \u9762\u79ef \u603b\u548c \u662f \u591a\u5c11",
+        "mrl":"answer(sum(area_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":280,
+        "nl":"\u52a0 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":281,
+        "nl":"\u4f5b\u7f57\u91cc\u8fbe \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('florida')))",
+        "split":"test"
+    },
+    {
+        "id":282,
+        "nl":"\u7231\u8fbe\u8377 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('idaho')))",
+        "split":"train"
+    },
+    {
+        "id":283,
+        "nl":"\u7f05\u56e0 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('maine')))",
+        "split":"train"
+    },
+    {
+        "id":284,
+        "nl":"\u9a6c\u91cc\u5170 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11 \u5e73\u65b9\u516c\u91cc",
+        "mrl":"answer(area_1(stateid('maryland')))",
+        "split":"train"
+    },
+    {
+        "id":285,
+        "nl":"\u65b0\u58a8\u897f\u54e5 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('new mexico')))",
+        "split":"train"
+    },
+    {
+        "id":286,
+        "nl":"\u4fc4\u4ea5\u4fc4 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('ohio')))",
+        "split":"test"
+    },
+    {
+        "id":287,
+        "nl":"\u897f\u96c5\u56fe \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(cityid('seattle', _)))",
+        "split":"train"
+    },
+    {
+        "id":288,
+        "nl":"\u5357\u5361\u7f57\u6765\u7eb3 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('south carolina')))",
+        "split":"train"
+    },
+    {
+        "id":289,
+        "nl":"\u5f97\u514b\u8428\u65af \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":290,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(largest(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":291,
+        "nl":"\u6700\u5c0f \u7684 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(smallest(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":292,
+        "nl":"\u5965\u5c14\u5df4\u5c3c \u9996\u5e9c \u7684 \u6240\u5728 \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(state(loc_1(capital(cityid('albany', _))))))",
+        "split":"train"
+    },
+    {
+        "id":293,
+        "nl":"\u4eba\u53e3 \u5bc6\u5ea6 \u6700\u5c0f \u7684 \u5dde \u7684 \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(smallest_one(density_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":294,
+        "nl":"\u7f8e\u56fd \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":295,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(state(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":296,
+        "nl":"\u5a01\u65af\u5eb7\u661f \u5dde \u7684 \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(stateid('wisconsin')))",
+        "split":"test"
+    },
+    {
+        "id":297,
+        "nl":"\u7f8e\u56fd \u5404 \u5dde \u7684 \u5e73\u5747 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(countryid('usa')))",
+        "split":"train"
+    },
+    {
+        "id":298,
+        "nl":"\u5728 \u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde \u6bcf \u5e73\u65b9\u516c\u91cc \u7684 \u5e73\u5747 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(stateid('pennsylvania')))",
+        "split":"train"
+    },
+    {
+        "id":299,
+        "nl":"\u5728 \u7f8e\u56fd \u6bcf \u5e73\u65b9\u516c\u91cc \u7684 \u5e73\u5747 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(countryid('usa')))",
+        "split":"train"
+    },
+    {
+        "id":300,
+        "nl":"\u5728 \u7f8e\u56fd \u6240\u6709 \u6709 \u6cb3\u6d41 \u7684 \u5dde \u91cc \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(state(loc_1(river(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":301,
+        "nl":"\u7f8e\u56fd \u6700\u5927 \u7684 \u9996\u5e9c \u57ce\u5e02 \u662f \u54ea\u4e2a \u5462",
+        "mrl":"answer(largest(capital(city(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":302,
+        "nl":"\u4e9a\u5229\u6851\u90a3 \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('arizona')))))",
+        "split":"train"
+    },
+    {
+        "id":303,
+        "nl":"\u4f50\u6cbb\u4e9a \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('georgia')))))",
+        "split":"train"
+    },
+    {
+        "id":304,
+        "nl":"\u582a\u8428\u65af \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('kansas')))))",
+        "split":"test"
+    },
+    {
+        "id":305,
+        "nl":"\u8def\u6613\u65af\u5b89\u90a3 \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('louisiana')))))",
+        "split":"test"
+    },
+    {
+        "id":306,
+        "nl":"\u5185\u5e03\u62c9\u65af\u52a0 \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('nebraska')))))",
+        "split":"train"
+    },
+    {
+        "id":307,
+        "nl":"\u5728 \u4fc4\u52d2\u5188 \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('oregon')))))",
+        "split":"train"
+    },
+    {
+        "id":308,
+        "nl":"\u5728 \u5fb7\u514b\u8428\u65af \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":309,
+        "nl":"\u5728 \u6700\u5c0f \u7684 \u5dde \u4e2d \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(smallest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":310,
+        "nl":"\u4ec0\u4e48 \u662f \u7f8e\u56fd \u6700\u5927 \u7684 \u57ce\u5e02",
+        "mrl":"answer(largest(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":311,
+        "nl":"\u54ea\u4e2a \u662f \u7f8e\u56fd \u6700\u5927 \u7684 \u57ce\u5e02",
+        "mrl":"answer(largest(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":312,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":313,
+        "nl":"\u5728 \u6000\u4fc4\u660e \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('wyoming')))))",
+        "split":"train"
+    },
+    {
+        "id":314,
+        "nl":"\u4f0a\u5229\u8bfa\u4f0a \u5dde \u6700\u5927 \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(loc_2(stateid('illinois')))))",
+        "split":"train"
+    },
+    {
+        "id":315,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":316,
+        "nl":"\u7f8e\u56fd \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":317,
+        "nl":"\u7f8e\u56fd \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":318,
+        "nl":"\u7f8e\u56fd \u6700\u5927 \u7684 \u5dde \u7684 \u9996\u5e9c \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(city(loc_2(largest(state(loc_2(countryid('usa'))))))))",
+        "split":"train"
+    },
+    {
+        "id":319,
+        "nl":"\u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(stateid('california'))))",
+        "split":"test"
+    },
+    {
+        "id":320,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(stateid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":321,
+        "nl":"\u4f50\u6cbb\u4e9a \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('georgia'))))",
+        "split":"train"
+    },
+    {
+        "id":322,
+        "nl":"\u590f\u5a01\u5937 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(stateid('hawaii'))))",
+        "split":"train"
+    },
+    {
+        "id":323,
+        "nl":"\u4f0a\u5229\u8bfa\u4f0a \u5dde \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('illinois'))))",
+        "split":"test"
+    },
+    {
+        "id":324,
+        "nl":"\u5370\u7b2c\u5b89\u7eb3 \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('indiana'))))",
+        "split":"train"
+    },
+    {
+        "id":325,
+        "nl":"\u827e\u5965\u74e6 \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('iowa'))))",
+        "split":"test"
+    },
+    {
+        "id":326,
+        "nl":"\u7f05\u56e0 \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('maine'))))",
+        "split":"train"
+    },
+    {
+        "id":327,
+        "nl":"\u9a6c\u91cc\u5170 \u5dde \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('maryland'))))",
+        "split":"train"
+    },
+    {
+        "id":328,
+        "nl":"\u9a6c\u8428\u8bf8\u585e \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('massachusetts'))))",
+        "split":"test"
+    },
+    {
+        "id":329,
+        "nl":"\u5bc6\u6b47\u6839 \u5dde \u7684 \u9996\u90fd \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('michigan'))))",
+        "split":"train"
+    },
+    {
+        "id":330,
+        "nl":"\u65b0\u7f55\u5e03\u4ec0\u5c14 \u5dde \u7684 \u9996\u90fd \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('new hampshire'))))",
+        "split":"train"
+    },
+    {
+        "id":331,
+        "nl":"\u65b0\u6cfd\u897f \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('new jersey'))))",
+        "split":"test"
+    },
+    {
+        "id":332,
+        "nl":"\u7ebd\u7ea6 \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('new york'))))",
+        "split":"test"
+    },
+    {
+        "id":333,
+        "nl":"\u5317\u8fbe\u79d1\u4ed6 \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('north dakota'))))",
+        "split":"test"
+    },
+    {
+        "id":334,
+        "nl":"\u4fc4\u4ea5\u4fc4 \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('ohio'))))",
+        "split":"test"
+    },
+    {
+        "id":335,
+        "nl":"\u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('pennsylvania'))))",
+        "split":"train"
+    },
+    {
+        "id":336,
+        "nl":"\u542b\u6709 \u57ce\u5e02 \u540d\u4e3a \u8fbe\u52d2\u59c6 \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(state(loc_1(city(cityid('durham', _)))))))",
+        "split":"test"
+    },
+    {
+        "id":337,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":338,
+        "nl":"\u963f\u62c9\u5df4\u9a6c \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(state(stateid('alabama')))))",
+        "split":"train"
+    },
+    {
+        "id":339,
+        "nl":"\u4f5b\u7f57\u91cc\u8fbe \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(state(stateid('florida')))))",
+        "split":"test"
+    },
+    {
+        "id":340,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(largest(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":341,
+        "nl":"\u6700\u5c0f \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(smallest(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":342,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u9996\u5e9c \u662f \u54ea\u513f",
+        "mrl":"answer(capital(loc_2(state(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":343,
+        "nl":"\u548c \u6700\u591a \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(most(state(next_to_2(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":344,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(state(next_to_2(state(next_to_2(stateid('texas'))))))))",
+        "split":"train"
+    },
+    {
+        "id":345,
+        "nl":"\u6d77\u62d4 \u6700\u9ad8 \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(state(loc_1(highest(place(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":346,
+        "nl":"\u6700\u9ad8 \u70b9 \u6240\u5728 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(state(loc_1(highest(place(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":347,
+        "nl":"\u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(largest_one(population_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":348,
+        "nl":"\u4eba\u53e3 \u5bc6\u5ea6 \u6700\u5927 \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(largest_one(density_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":349,
+        "nl":"\u6700\u957f \u7684 \u6cb3\u6d41 \u7684 \u6240\u5728 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(state(loc_1(longest(river(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":350,
+        "nl":"\u5c45\u6c11 \u6570 \u6700\u591a \u7684 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(largest_one(population_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":351,
+        "nl":"\u72b9\u4ed6 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(stateid('utah'))))",
+        "split":"train"
+    },
+    {
+        "id":352,
+        "nl":"\u4f5b\u8499\u7279 \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(stateid('vermont'))))",
+        "split":"train"
+    },
+    {
+        "id":353,
+        "nl":"\u534e\u76db\u987f \u5dde \u7684 \u9996\u5e9c \u662f \u4ec0\u4e48",
+        "mrl":"answer(capital(loc_2(stateid('washington'))))",
+        "split":"train"
+    },
+    {
+        "id":354,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u4eba\u53e3 \u6700\u591a \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":355,
+        "nl":"\u4eba\u53e3 \u6700\u5c11 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest_one(population_1(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":356,
+        "nl":"\u6240\u6709 50 \u4e2a \u5dde \u7684 \u603b \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(sum(area_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":357,
+        "nl":"\u6240\u6709 50 \u4e2a \u5dde \u7684 \u603b \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(sum(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":358,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":359,
+        "nl":"\u7ebd\u7ea6 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(stateid('new york')))",
+        "split":"test"
+    },
+    {
+        "id":360,
+        "nl":"\u6b7b\u4ea1\u8c37 \u6d77\u62d4 \u662f \u591a\u5c11",
+        "mrl":"answer(elevation_1(placeid('death valley')))",
+        "split":"train"
+    },
+    {
+        "id":361,
+        "nl":"\u7f8e\u56fd \u6700\u9ad8 \u70b9 \u7684 \u6d77\u62d4 \u662f \u591a\u5c11",
+        "mrl":"answer(elevation_1(highest(place(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":362,
+        "nl":"\u9ea6\u91d1\u5229 \u5c71 \u7684 \u9ad8\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(elevation_1(placeid('mount mckinley')))",
+        "split":"train"
+    },
+    {
+        "id":363,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u6700\u9ad8 \u7684 \u5c71\u5cf0 \u7684 \u9ad8\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(elevation_1(highest(mountain(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":364,
+        "nl":"\u7f8e\u56fd \u6700\u9ad8 \u70b9 \u7684 \u9ad8\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(elevation_1(highest(place(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":365,
+        "nl":"\u6000\u4fc4\u660e \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(high_point_1(stateid('wyoming')))",
+        "split":"test"
+    },
+    {
+        "id":366,
+        "nl":"\u65b0\u58a8\u897f\u54e5 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('new mexico')))))",
+        "split":"train"
+    },
+    {
+        "id":367,
+        "nl":"\u5357\u5361\u7f57\u6765\u7eb3 \u5dde \u6700\u9ad8 \u6d77\u62d4 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('south carolina')))))",
+        "split":"train"
+    },
+    {
+        "id":368,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":369,
+        "nl":"\u7f8e\u56fd \u6700\u9ad8 \u6d77\u62d4 \u662f \u54ea\u513f",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":370,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u6700\u9ad8 \u7684 \u5c71\u5cf0 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(mountain(loc_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":371,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u6700\u9ad8 \u7684 \u5c71\u5cf0 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(mountain(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":372,
+        "nl":"\u7f8e\u56fd \u6700\u9ad8 \u7684 \u5c71\u5cf0 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":373,
+        "nl":"\u7f8e\u56fd \u6700\u9ad8 \u7684 \u5c71\u5cf0 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":374,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":375,
+        "nl":"\u7279\u62c9\u534e \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('delaware')))))",
+        "split":"test"
+    },
+    {
+        "id":376,
+        "nl":"\u5728 \u5404\u4e2a \u6700\u4f4e \u70b9 \u4e0e \u6d77\u5e73\u9762 \u6301\u5e73 \u7684 \u5dde \u91cc \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(state(loc_1(place(elevation_2(0))))))))",
+        "split":"train"
+    },
+    {
+        "id":377,
+        "nl":"\u4f5b\u7f57\u91cc\u8fbe \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('florida')))))",
+        "split":"train"
+    },
+    {
+        "id":378,
+        "nl":"\u7231\u8377\u534e \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('iowa')))))",
+        "split":"test"
+    },
+    {
+        "id":379,
+        "nl":"\u582a\u8428\u65af \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('kansas')))))",
+        "split":"train"
+    },
+    {
+        "id":380,
+        "nl":"\u7f05\u56e0 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('maine')))))",
+        "split":"test"
+    },
+    {
+        "id":381,
+        "nl":"\u8499\u5927\u62ff \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('montana')))))",
+        "split":"test"
+    },
+    {
+        "id":382,
+        "nl":"\u5185\u534e\u8fbe \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('nevada')))))",
+        "split":"test"
+    },
+    {
+        "id":383,
+        "nl":"\u65b0\u58a8\u897f\u54e5 \u5dde \u6700\u9ad8 \u6d77\u62d4 \u662f \u591a\u5c11",
+        "mrl":"answer(highest(place(loc_2(stateid('new mexico')))))",
+        "split":"train"
+    },
+    {
+        "id":384,
+        "nl":"\u4fc4\u4ea5\u4fc4 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('ohio')))))",
+        "split":"train"
+    },
+    {
+        "id":385,
+        "nl":"\u7f57\u5f97\u5c9b \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('rhode island')))))",
+        "split":"train"
+    },
+    {
+        "id":386,
+        "nl":"\u4e0e \u4f50\u6cbb\u4e9a \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(state(next_to_2(stateid('georgia')))))))",
+        "split":"test"
+    },
+    {
+        "id":387,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":388,
+        "nl":"\u8fd9\u4e2a \u56fd\u5bb6 \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":389,
+        "nl":"\u6700\u5c0f \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(smallest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":390,
+        "nl":"\u5965\u65af\u6c40 \u9996\u5e9c \u6240\u5728 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(state(loc_1(capital(cityid('austin', _))))))))",
+        "split":"test"
+    },
+    {
+        "id":391,
+        "nl":"\u5fb7\u6885\u56e0 \u9996\u5e9c \u6240\u5728 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(state(loc_1(capital(cityid('des moines', _))))))))",
+        "split":"train"
+    },
+    {
+        "id":392,
+        "nl":"\u5fb7\u6885\u56e0 \u9996\u5e9c \u6240\u5728 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(state(loc_1(capital(cityid('des moines', _))))))))",
+        "split":"train"
+    },
+    {
+        "id":393,
+        "nl":"\u6cb3\u6d41 \u6700\u591a \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(most(state(traverse_1(river(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":394,
+        "nl":"\u4eba\u53e3 \u6700\u5c11 \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(smallest_one(population_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":395,
+        "nl":"\u4e0e \u79d1\u7f57\u62c9\u591a \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(state(next_to_2(stateid('colorado')))))))",
+        "split":"test"
+    },
+    {
+        "id":396,
+        "nl":"\u7f8e\u56fd \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":397,
+        "nl":"\u7f8e\u56fd \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48 \u5462",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":398,
+        "nl":"\u7f8e\u56fd \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":399,
+        "nl":"\u5f17\u5409\u5c3c\u4e9a \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('virginia')))))",
+        "split":"test"
+    },
+    {
+        "id":400,
+        "nl":"\u6000\u4fc4\u660e \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(stateid('wyoming')))))",
+        "split":"train"
+    },
+    {
+        "id":401,
+        "nl":"\u9762\u79ef \u6700\u5927 \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(largest_one(area_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":402,
+        "nl":"\u4eba\u53e3 \u5bc6\u5ea6 \u6700\u5c0f \u7684 \u5dde \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(smallest_one(density_1(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":403,
+        "nl":"\u7f8e\u56fd \u7684 \u6700\u9ad8 \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(highest(place(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":404,
+        "nl":"\u6700\u5927 \u7684 \u9996\u5e9c \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(capital(all)))",
+        "split":"train"
+    },
+    {
+        "id":405,
+        "nl":"\u7f8e\u56fd \u6700\u5927 \u7684 \u9996\u5e9c \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(capital(city(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":406,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(city(loc_2(state(next_to_2(stateid('texas')))))))",
+        "split":"train"
+    },
+    {
+        "id":407,
+        "nl":"\u963f\u62c9\u5df4\u9a6c \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('alabama')))))",
+        "split":"train"
+    },
+    {
+        "id":408,
+        "nl":"\u52a0 \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('california')))))",
+        "split":"test"
+    },
+    {
+        "id":409,
+        "nl":"\u5bc6\u6b47\u6839 \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('michigan')))))",
+        "split":"train"
+    },
+    {
+        "id":410,
+        "nl":"\u660e\u5c3c\u82cf\u8fbe \u5dde \u4eba\u53e3 \u6700\u591a \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('minnesota'))))))",
+        "split":"train"
+    },
+    {
+        "id":411,
+        "nl":"\u5bc6\u82cf\u91cc \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":412,
+        "nl":"\u7f57\u5f97\u5c9b \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(stateid('rhode island')))))",
+        "split":"test"
+    },
+    {
+        "id":413,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u7684 \u6700\u5c0f \u5dde \u7684 \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(city(loc_2(smallest(state(traverse_1(riverid('mississippi'))))))))",
+        "split":"test"
+    },
+    {
+        "id":414,
+        "nl":"\u4e0e \u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(city(loc_2(state(next_to_2(stateid('california')))))))",
+        "split":"train"
+    },
+    {
+        "id":415,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(city(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":416,
+        "nl":"\u7f8e\u56fd \u6700\u5c0f \u7684 \u5dde \u91cc \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(city(loc_2(smallest(state(loc_2(countryid('usa'))))))))",
+        "split":"test"
+    },
+    {
+        "id":417,
+        "nl":"\u5a01\u65af\u5eb7\u661f \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(city(loc_2(stateid('wisconsin')))))",
+        "split":"train"
+    },
+    {
+        "id":418,
+        "nl":"\u582a\u8428\u65af \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(city(loc_2(stateid('kansas')))))",
+        "split":"train"
+    },
+    {
+        "id":419,
+        "nl":"\u683c\u5170\u5fb7 \u6cb3 \u8d2f\u7a7f \u7684 \u6700\u5927 \u7684 \u5dde \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(state(traverse_1(riverid('rio grande')))))",
+        "split":"train"
+    },
+    {
+        "id":420,
+        "nl":"\u534e\u76db\u987f \u5dde \u6700\u5927 \u7684 \u6cb3\u6d41 \u662f \u4ec0\u4e48",
+        "mrl":"answer(longest(river(loc_2(state(stateid('washington'))))))",
+        "split":"test"
+    },
+    {
+        "id":421,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":422,
+        "nl":"\u4e0e \u963f\u80af\u8272 \u5dde \u63a5\u58e4 \u7684 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(next_to_2(stateid('arkansas')))))",
+        "split":"test"
+    },
+    {
+        "id":423,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(next_to_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":424,
+        "nl":"\u4eba\u53e3 \u6700\u591a \u7684 \u9996\u5e9c \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(capital_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":425,
+        "nl":"\u7f8e\u56fd \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a \u5462",
+        "mrl":"answer(largest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":426,
+        "nl":"\u7f8e\u56fd \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":427,
+        "nl":"\u4e0e \u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u63a5\u58e4 \u7684 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(next_to_2(stateid('california')))))",
+        "split":"train"
+    },
+    {
+        "id":428,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(next_to_2(stateid('texas')))))",
+        "split":"test"
+    },
+    {
+        "id":429,
+        "nl":"\u4e0e \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u6700\u5927 \u7684 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(next_to_2(largest_one(population_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":430,
+        "nl":"\u4e0e \u7f8e\u56fd \u7684 \u6700\u4f4e \u70b9 \u6240\u5728 \u5dde \u63a5\u58e4 \u7684 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(next_to_2(state(loc_1(lowest(place(loc_2(countryid('usa'))))))))))",
+        "split":"train"
+    },
+    {
+        "id":431,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6d41\u7ecf \u7684 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":432,
+        "nl":"\u4eba\u53e3 \u6700\u5c11 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":433,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u6cb3 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(river(riverid('colorado'))))",
+        "split":"test"
+    },
+    {
+        "id":434,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u7684 \u79d1\u7f57\u62c9\u591a \u6cb3 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(intersection(riverid('colorado'), river(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":435,
+        "nl":"\u7f8e\u56fd \u6700\u957f \u7684 \u6cb3\u6d41 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(longest(river(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":436,
+        "nl":"\u6d41\u7ecf \u5f97\u514b\u8428\u65af \u5dde \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(longest(river(traverse_2(stateid('texas'))))))",
+        "split":"test"
+    },
+    {
+        "id":437,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(river(riverid('mississippi'))))",
+        "split":"test"
+    },
+    {
+        "id":438,
+        "nl":"\u6d41\u7ecf \u6700\u591a \u5dde \u7684 \u6cb3\u6d41 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(most(river(traverse_2(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":439,
+        "nl":"\u8d2f\u7a7f \u6570\u91cf \u6700\u591a \u7684 \u5dde \u7684 \u6cb3\u6d41 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(most(river(traverse_2(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":440,
+        "nl":"\u8d2f\u7a7f \u6700\u591a \u5dde \u7684 \u6cb3\u6d41 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(most(river(traverse_2(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":441,
+        "nl":"\u6d41\u7ecf \u6700\u591a \u5dde \u7684 \u6cb3\u6d41 \u7684 \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(len(most(river(traverse_2(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":442,
+        "nl":"\u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(all)))",
+        "split":"train"
+    },
+    {
+        "id":443,
+        "nl":"\u6d41\u7ecf \u7ebd\u7ea6 \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(traverse_2(stateid('new york')))))",
+        "split":"train"
+    },
+    {
+        "id":444,
+        "nl":"\u7f8e\u56fd \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u4ec0\u4e48",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":445,
+        "nl":"\u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(stateid('california')))))",
+        "split":"train"
+    },
+    {
+        "id":446,
+        "nl":"\u4f5b\u7f57\u91cc\u8fbe \u5dde \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(stateid('florida')))))",
+        "split":"test"
+    },
+    {
+        "id":447,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u5dde \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(stateid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":448,
+        "nl":"\u7ebd\u7ea6 \u5dde \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(stateid('new york')))))",
+        "split":"train"
+    },
+    {
+        "id":449,
+        "nl":"\u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(stateid('pennsylvania')))))",
+        "split":"train"
+    },
+    {
+        "id":450,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":451,
+        "nl":"\u5728 \u6700\u5927 \u7684 \u5dde \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(loc_2(largest(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":452,
+        "nl":"\u5728 \u9762\u79ef \u6700\u5c0f \u7684 \u5dde \u91cc \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(loc_2(smallest(state(loc_2(countryid('usa'))))))))",
+        "split":"train"
+    },
+    {
+        "id":453,
+        "nl":"\u6700\u9ad8 \u70b9 \u6240\u5728 \u5dde \u7684 \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(state(loc_1(highest(place(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":454,
+        "nl":"\u5728 \u4e3b\u8981 \u57ce\u5e02 \u6700\u591a \u7684 \u5dde \u91cc \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(most(state(loc_1(major(city(all)))))))))",
+        "split":"test"
+    },
+    {
+        "id":455,
+        "nl":"\u4e0e \u5185\u5e03\u62c9\u65af\u52a0 \u5dde \u63a5\u58e4 \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(loc_2(state(next_to_2(stateid('nebraska')))))))",
+        "split":"test"
+    },
+    {
+        "id":456,
+        "nl":"\u7f8e\u56fd \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u4ec0\u4e48",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":457,
+        "nl":"\u7f8e\u56fd \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":458,
+        "nl":"\u6ca1\u6709 \u6d41\u7ecf \u5f97\u514b\u8428\u65af \u5dde \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(exclude(river(all), traverse_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":459,
+        "nl":"\u6d41\u7ecf \u4e0e \u5370\u7b2c\u5b89\u7eb3 \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(traverse_2(state(next_to_2(stateid('indiana')))))))",
+        "split":"test"
+    },
+    {
+        "id":460,
+        "nl":"\u6d41\u7ecf \u79d1\u7f57\u62c9\u591a \u5dde \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(traverse_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":461,
+        "nl":"\u6d41\u7ecf \u4e0e \u6700\u591a \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(longest(river(traverse_2(state(next_to_2(most(state(next_to_2(state(all))))))))))",
+        "split":"train"
+    },
+    {
+        "id":462,
+        "nl":"\u8d2f\u7a7f \u4e0e \u7530\u7eb3\u897f \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(traverse_2(state(next_to_2(stateid('tennessee')))))))",
+        "split":"train"
+    },
+    {
+        "id":463,
+        "nl":"\u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde \u7684 \u6700\u4f4e \u6d77\u62d4 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('pennsylvania')))))",
+        "split":"train"
+    },
+    {
+        "id":464,
+        "nl":"\u963f\u80af\u8272 \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('arkansas')))))",
+        "split":"test"
+    },
+    {
+        "id":465,
+        "nl":"\u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('california')))))",
+        "split":"train"
+    },
+    {
+        "id":466,
+        "nl":"\u8def\u6613\u65af\u5b89\u90a3 \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('louisiana')))))",
+        "split":"train"
+    },
+    {
+        "id":467,
+        "nl":"\u9a6c\u8428\u8bf8\u585e \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('massachusetts')))))",
+        "split":"test"
+    },
+    {
+        "id":468,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('mississippi')))))",
+        "split":"test"
+    },
+    {
+        "id":469,
+        "nl":"\u5185\u5e03\u62c9\u65af\u52a0 \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('nebraska')))))",
+        "split":"test"
+    },
+    {
+        "id":470,
+        "nl":"\u4fc4\u52d2\u5188 \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('oregon')))))",
+        "split":"train"
+    },
+    {
+        "id":471,
+        "nl":"\u5fb7\u514b\u8428\u65af \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":472,
+        "nl":"\u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(state(stateid('california'))))))",
+        "split":"test"
+    },
+    {
+        "id":473,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(state(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":474,
+        "nl":"\u7f8e\u56fd \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":475,
+        "nl":"\u7f8e\u56fd \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":476,
+        "nl":"\u5a01\u65af\u5eb7\u661f \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('wisconsin')))))",
+        "split":"train"
+    },
+    {
+        "id":477,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u6cb3 \u8d2f\u7a7f \u7684 \u6240\u6709 \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(state(traverse_1(river(riverid('colorado'))))))))",
+        "split":"test"
+    },
+    {
+        "id":478,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(stateid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":479,
+        "nl":"\u9762\u79ef \u6700\u5927 \u7684 \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(largest_one(area_1(state(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":480,
+        "nl":"\u7f8e\u56fd \u6700\u4f4e \u70b9 \u662f \u4ec0\u4e48",
+        "mrl":"answer(lowest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":481,
+        "nl":"\u8499\u5927\u62ff \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(major(city(loc_2(stateid('montana')))))",
+        "split":"train"
+    },
+    {
+        "id":482,
+        "nl":"\u65e7\u91d1\u5c71 \u6700\u9ad8 \u6d77\u62d4 \u662f \u591a\u5c11",
+        "mrl":"answer(highest(place(loc_2(cityid('san francisco', _)))))",
+        "split":"test"
+    },
+    {
+        "id":483,
+        "nl":"\u7f8e\u56fd \u6700 \u5bc6\u96c6 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(density_1(state(loc_2(countryid('usa'))))))",
+        "split":"test"
+    },
+    {
+        "id":484,
+        "nl":"\u7f8e\u56fd \u4eba\u53e3 \u6700\u591a \u7684 \u9996\u5e9c \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(capital(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":485,
+        "nl":"\u4e0e \u4fc4\u514b\u62c9\u8377\u9a6c \u5dde \u63a5\u58e4 \u7684 \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(state(next_to_2(stateid('oklahoma'))))))",
+        "split":"train"
+    },
+    {
+        "id":486,
+        "nl":"\u4eba\u53e3 \u6700\u591a \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(city(all))))",
+        "split":"test"
+    },
+    {
+        "id":487,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u4eba\u53e3 \u6700\u591a \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":488,
+        "nl":"\u5728 \u6000\u4fc4\u660e \u5dde \u4eba\u53e3 \u6700\u591a \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('wyoming'))))))",
+        "split":"train"
+    },
+    {
+        "id":489,
+        "nl":"\u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":490,
+        "nl":"\u7f8e\u56fd \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(state(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":491,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u7684 \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(population_1(state(traverse_1(riverid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":492,
+        "nl":"\u6700\u4f4e \u70b9 \u6240\u5728 \u5dde \u7684 \u540d\u5b57 \u662f \u4ec0\u4e48",
+        "mrl":"answer(state(loc_1(lowest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":493,
+        "nl":"\u4e0e \u80af\u5854\u57fa \u5dde \u76f8\u90bb \u7684 \u5dde \u6709 \u591a\u5c11",
+        "mrl":"answer(count(state(next_to_2(stateid('kentucky')))))",
+        "split":"train"
+    },
+    {
+        "id":494,
+        "nl":"\u5965\u65af\u6c40 \u9996\u5e9c \u6240\u5728 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(state(loc_1(capital(cityid('austin', _))))))",
+        "split":"train"
+    },
+    {
+        "id":495,
+        "nl":"\u7f05\u56e0 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(stateid('maine')))",
+        "split":"test"
+    },
+    {
+        "id":496,
+        "nl":"\u5357\u8fbe\u79d1\u4ed6 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(stateid('south dakota')))",
+        "split":"train"
+    },
+    {
+        "id":497,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":498,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(largest(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":499,
+        "nl":"\u9762\u79ef \u6700\u5c0f \u7684 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(smallest(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":500,
+        "nl":"\u9762\u79ef \u6700\u5c0f \u7684 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(smallest_one(area_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":501,
+        "nl":"\u4eba\u53e3 \u6700\u5c11 \u7684 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(smallest_one(population_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":502,
+        "nl":"\u6000\u4fc4\u660e \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(stateid('wyoming')))",
+        "split":"train"
+    },
+    {
+        "id":503,
+        "nl":"\u6ce2\u58eb\u987f \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('boston', _)))",
+        "split":"train"
+    },
+    {
+        "id":504,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('alaska')))",
+        "split":"test"
+    },
+    {
+        "id":505,
+        "nl":"\u4e9a\u5229\u6851\u90a3 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('arizona')))",
+        "split":"train"
+    },
+    {
+        "id":506,
+        "nl":"\u4e9a\u7279\u5170\u5927 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('atlanta', _)))",
+        "split":"train"
+    },
+    {
+        "id":507,
+        "nl":"\u4f50\u6cbb\u4e9a \u5dde \u4e9a\u7279\u5170\u5927 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('atlanta', 'ga')))",
+        "split":"train"
+    },
+    {
+        "id":508,
+        "nl":"\u5965\u65af\u6c40 \u5e02 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('austin', _)))",
+        "split":"train"
+    },
+    {
+        "id":509,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u5965\u65af\u6c40 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('austin', 'tx')))",
+        "split":"train"
+    },
+    {
+        "id":510,
+        "nl":"\u9a6c\u8428\u8bf8\u585e \u5dde \u6ce2\u58eb\u987f \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('boston', 'ma')))",
+        "split":"train"
+    },
+    {
+        "id":511,
+        "nl":"\u535a\u5c14\u5fb7 \u5e02 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('boulder', _)))",
+        "split":"test"
+    },
+    {
+        "id":512,
+        "nl":"\u52a0 \u5dde \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":513,
+        "nl":"\u8fbe\u62c9\u65af \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('dallas', _)))",
+        "split":"train"
+    },
+    {
+        "id":514,
+        "nl":"\u4e39\u4f5b \u5e02 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('denver', _)))",
+        "split":"train"
+    },
+    {
+        "id":515,
+        "nl":"\u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde \u4f0a\u5229 \u5e02 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('erie', 'pa')))",
+        "split":"test"
+    },
+    {
+        "id":516,
+        "nl":"\u590f\u5a01\u5937 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('hawaii')))",
+        "split":"test"
+    },
+    {
+        "id":517,
+        "nl":"\u4f11\u65af\u987f \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('houston', _)))",
+        "split":"test"
+    },
+    {
+        "id":518,
+        "nl":"\u7231\u8fbe\u8377 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('idaho')))",
+        "split":"train"
+    },
+    {
+        "id":519,
+        "nl":"\u4f0a\u5229\u8bfa\u4f0a \u5dde \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('illinois')))",
+        "split":"train"
+    },
+    {
+        "id":520,
+        "nl":"\u7f05\u56e0 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('maine')))",
+        "split":"train"
+    },
+    {
+        "id":521,
+        "nl":"\u9a6c\u91cc\u5170 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('maryland')))",
+        "split":"test"
+    },
+    {
+        "id":522,
+        "nl":"\u660e\u5c3c\u82cf\u8fbe \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('minnesota')))",
+        "split":"train"
+    },
+    {
+        "id":523,
+        "nl":"\u8499\u5927\u62ff \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('montana')))",
+        "split":"train"
+    },
+    {
+        "id":524,
+        "nl":"\u65b0\u58a8\u897f\u54e5 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('new mexico')))",
+        "split":"test"
+    },
+    {
+        "id":525,
+        "nl":"\u7ebd\u7ea6 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('new york')))",
+        "split":"train"
+    },
+    {
+        "id":526,
+        "nl":"\u7ebd\u7ea6 \u5e02 \u7684 \u4eba\u53e3 \u6709 \u591a\u5c11",
+        "mrl":"answer(population_1(city(cityid('new york', _))))",
+        "split":"test"
+    },
+    {
+        "id":527,
+        "nl":"\u4fc4\u52d2\u5188 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('oregon')))",
+        "split":"train"
+    },
+    {
+        "id":528,
+        "nl":"\u7f05\u56e0 \u5dde \u6ce2\u7279\u5170 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('portland', 'me')))",
+        "split":"train"
+    },
+    {
+        "id":529,
+        "nl":"\u7f57\u5f97\u5c9b \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('rhode island')))",
+        "split":"train"
+    },
+    {
+        "id":530,
+        "nl":"\u8428\u514b\u62c9\u95e8\u6258 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('sacramento', _)))",
+        "split":"train"
+    },
+    {
+        "id":531,
+        "nl":"\u5723\u5b89\u4e1c\u5c3c\u5965 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('san antonio', _)))",
+        "split":"test"
+    },
+    {
+        "id":532,
+        "nl":"\u897f\u96c5\u56fe \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('seattle', _)))",
+        "split":"train"
+    },
+    {
+        "id":533,
+        "nl":"\u534e\u76db\u987f \u5dde \u897f\u96c5\u56fe \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('seattle', 'wa')))",
+        "split":"train"
+    },
+    {
+        "id":534,
+        "nl":"\u5357\u8fbe\u79d1\u4ed6 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('south dakota')))",
+        "split":"train"
+    },
+    {
+        "id":535,
+        "nl":"\u7f8e\u56fd \u5bc6\u82cf\u91cc \u5dde \u65af\u666e\u6797\u83f2\u5c14\u5fb7 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('springfield', 'mo')))",
+        "split":"train"
+    },
+    {
+        "id":536,
+        "nl":"\u5357\u8fbe\u79d1\u4ed6 \u5dde \u7684 \u65af\u666e\u6797\u83f2\u5c14\u5fb7 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('springfield', 'sd')))",
+        "split":"train"
+    },
+    {
+        "id":537,
+        "nl":"\u4e9a\u5229\u6851\u90a3 \u5dde \u5766\u4f69 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('tempe', 'az')))",
+        "split":"test"
+    },
+    {
+        "id":538,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":539,
+        "nl":"\u6700\u5927 \u5dde \u7684 \u9996\u5e9c \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(capital(loc_2(largest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":540,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6d41\u7ecf \u7684 \u6700\u5927 \u5dde \u7684 \u9996\u5e9c \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(capital(loc_2(largest(state(traverse_1(riverid('mississippi'))))))))",
+        "split":"train"
+    },
+    {
+        "id":541,
+        "nl":"\u6700\u5c0f \u7684 \u5dde \u7684 \u9996\u5e9c \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(capital(loc_2(smallest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":542,
+        "nl":"\u9762\u79ef \u6700\u5927 \u7684 \u5dde \u7684 \u6700\u5927 \u7684 \u57ce\u5e02 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(largest(city(loc_2(largest_one(area_1(state(all))))))))",
+        "split":"test"
+    },
+    {
+        "id":543,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(largest(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":544,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u6700\u5927 \u7684 \u5dde \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(largest(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":545,
+        "nl":"\u5a01\u65af\u5eb7\u661f \u5dde \u7684 \u4e3b\u8981 \u57ce\u5e02 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(major(city(loc_2(stateid('wisconsin'))))))",
+        "split":"train"
+    },
+    {
+        "id":546,
+        "nl":"\u6700\u5c0f \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(smallest(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":547,
+        "nl":"\u548c \u6700\u591a \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(most(state(next_to_2(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":548,
+        "nl":"\u4eba\u53e3 \u5bc6\u5ea6 \u6700\u9ad8 \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(largest_one(density_1(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":549,
+        "nl":"\u9762\u79ef \u6700\u5927 \u7684 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(largest_one(area_1(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":550,
+        "nl":"\u56fe\u68ee \u5e02 \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('tucson', _)))",
+        "split":"test"
+    },
+    {
+        "id":551,
+        "nl":"\u72b9\u4ed6 \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('utah')))",
+        "split":"test"
+    },
+    {
+        "id":552,
+        "nl":"\u534e\u76db\u987f \u5dde \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(stateid('washington')))",
+        "split":"test"
+    },
+    {
+        "id":553,
+        "nl":"\u534e\u76db\u987f \u7279\u533a \u7684 \u4eba\u53e3 \u662f \u591a\u5c11",
+        "mrl":"answer(population_1(cityid('washington', 'dc')))",
+        "split":"train"
+    },
+    {
+        "id":554,
+        "nl":"\u6a2a\u8d2f \u4fc4\u4ea5\u4fc4 \u5dde \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(river(traverse_2(stateid('ohio'))))",
+        "split":"train"
+    },
+    {
+        "id":555,
+        "nl":"\u54ea\u4e2a \u662f \u6700\u77ed \u7684 \u6cb3\u6d41",
+        "mrl":"answer(shortest(river(all)))",
+        "split":"train"
+    },
+    {
+        "id":556,
+        "nl":"\u963f\u62c9\u65af\u52a0 \u5dde \u6700\u77ed \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(shortest(river(loc_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":557,
+        "nl":"\u7231\u8377\u534e \u5dde \u6700\u77ed \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(shortest(river(loc_2(stateid('iowa')))))",
+        "split":"train"
+    },
+    {
+        "id":558,
+        "nl":"\u5185\u5e03\u62c9\u65af\u52a0 \u5dde \u6700\u77ed \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(shortest(river(loc_2(stateid('nebraska')))))",
+        "split":"train"
+    },
+    {
+        "id":559,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u6700\u77ed \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(shortest(river(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":560,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u77ed \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(shortest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":561,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u77ed \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(shortest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":562,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u77ed \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(shortest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":563,
+        "nl":"\u52a0 \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('california')))",
+        "split":"train"
+    },
+    {
+        "id":564,
+        "nl":"\u4f5b\u7f57\u91cc\u8fbe \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('florida')))",
+        "split":"train"
+    },
+    {
+        "id":565,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(stateid('texas')))",
+        "split":"train"
+    },
+    {
+        "id":566,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u9996\u5e9c \u7684 \u6709\u591a\u5927",
+        "mrl":"answer(size(capital(loc_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":567,
+        "nl":"\u7f8e\u56fd \u6700\u5927 \u7684 \u5dde \u6709 \u591a\u5927",
+        "mrl":"answer(size(largest(state(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":568,
+        "nl":"\u5728 \u963f\u62c9\u65af\u52a0 \u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(city(loc_2(stateid('alaska')))))",
+        "split":"train"
+    },
+    {
+        "id":569,
+        "nl":"\u5728 \u963f\u80af\u8272 \u5dde \u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(city(loc_2(stateid('arkansas')))))",
+        "split":"train"
+    },
+    {
+        "id":570,
+        "nl":"\u5728 \u590f\u5a01\u5937 \u5dde \u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(city(loc_2(stateid('hawaii')))))",
+        "split":"train"
+    },
+    {
+        "id":571,
+        "nl":"\u6700\u5927 \u7684 \u5dde \u4e2d \u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(city(loc_2(largest(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":572,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(city(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":573,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(city(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":574,
+        "nl":"\u534e\u76db\u987f \u7684 \u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(city(loc_2(stateid('washington')))))",
+        "split":"train"
+    },
+    {
+        "id":575,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u5c0f \u7684 \u5dde \u91cc \u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(city(loc_2(smallest(state(loc_2(countryid('usa'))))))))",
+        "split":"train"
+    },
+    {
+        "id":576,
+        "nl":"\u4e0e \u4fc4\u4ea5\u4fc4 \u5dde \u63a5\u58e4 \u7684 \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(state(next_to_2(stateid('ohio')))))",
+        "split":"train"
+    },
+    {
+        "id":577,
+        "nl":"\u4e0e \u6000\u4fc4\u660e \u5dde \u63a5\u58e4 \u7684 \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(state(next_to_2(stateid('wyoming')))))",
+        "split":"test"
+    },
+    {
+        "id":578,
+        "nl":"\u9762\u79ef \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest_one(area_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":579,
+        "nl":"\u7f8e\u56fd \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(state(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":580,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(state(next_to_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":581,
+        "nl":"\u4e0e \u6700\u591a \u7684 \u5dde \u63a5\u58e4 \u800c\u4e14 \u9762\u79ef \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(most(state(next_to_2(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":582,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u7684 \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(state(traverse_1(river(riverid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":583,
+        "nl":"\u88ab \u6700\u957f \u7684 \u6cb3\u6d41 \u8d2f\u7a7f \u7684 \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest(state(traverse_1(longest(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":584,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u9ad8 \u6d77\u62d4",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":585,
+        "nl":"\u7f8e\u56fd \u6d77\u62d4 \u6700\u9ad8 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(state(loc_1(highest(place(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":586,
+        "nl":"\u9762\u79ef \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(area_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":587,
+        "nl":"\u5728 \u7f8e\u56fd \u5bc6\u5ea6 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(density_1(state(loc_2(countryid('usa'))))))",
+        "split":"train"
+    },
+    {
+        "id":588,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u9ad8 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":589,
+        "nl":"\u542b\u6709 \u6700\u4f4e \u70b9 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(state(loc_1(lowest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":590,
+        "nl":"\u4eba\u53e3 \u6700\u5c11 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":591,
+        "nl":"\u4eba\u53e3 \u5bc6\u5ea6 \u6700\u4f4e \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":592,
+        "nl":"\u6700\u5c0f \u7684 \u9762\u79ef \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest_one(area_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":593,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u9ad8 \u7684 \u5c71 \u662f \u54ea\u4e2a",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":594,
+        "nl":"\u5728 \u7f8e\u56fd \u6700\u9ad8 \u7684 \u5c71 \u662f \u54ea\u4e2a",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":595,
+        "nl":"\u7f8e\u56fd \u7684 \u603b \u9762\u79ef \u662f \u591a\u5c11",
+        "mrl":"answer(area_1(countryid('usa')))",
+        "split":"train"
+    },
+    {
+        "id":596,
+        "nl":"\u7f8e\u56fd \u6240\u6709 \u7684 \u6cb3\u6d41 \u7684 \u603b \u957f\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(sum(len(river(all))))",
+        "split":"test"
+    },
+    {
+        "id":597,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u4eba\u53e3 \u603b\u6570 \u662f \u591a\u5c11",
+        "mrl":"answer(sum(population_1(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":598,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6709 \u591a\u957f",
+        "mrl":"answer(len(riverid('mississippi')))",
+        "split":"test"
+    },
+    {
+        "id":599,
+        "nl":"\u6709 \u54ea\u4e9b \u4e3b\u8981 \u57ce\u5e02 \u4f4d\u4e8e \u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde",
+        "mrl":"answer(major(city(loc_2(stateid('pennsylvania')))))",
+        "split":"test"
+    },
+    {
+        "id":600,
+        "nl":"\u54ea\u4e9b \u4e3b\u8981 \u6cb3\u6d41 \u6d41\u7ecf \u4f0a\u5229\u8bfa\u4f0a \u5dde",
+        "mrl":"answer(major(river(traverse_2(stateid('illinois')))))",
+        "split":"train"
+    },
+    {
+        "id":601,
+        "nl":"\u5728 \u963f\u62c9\u65af\u52a0 \u5dde \u6709 \u4ec0\u4e48 \u5c71",
+        "mrl":"answer(mountain(loc_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":602,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u582a\u8428\u65af \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('kansas'))))",
+        "split":"train"
+    },
+    {
+        "id":603,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u5f97\u514b\u8428\u65af \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":604,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":605,
+        "nl":"\u7f8e\u56fd \u6700\u957f \u7684 \u6cb3\u6d41 \u662f \u54ea\u6761",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":606,
+        "nl":"\u54ea\u6761 \u6cb3\u6d41 \u8d2f\u7a7f \u4f0a\u5229\u8bfa\u4f0a \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('illinois'))))",
+        "split":"train"
+    },
+    {
+        "id":607,
+        "nl":"\u54ea\u6761 \u6cb3\u6d41 \u8d2f\u7a7f \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":608,
+        "nl":"\u54ea\u6761 \u6cb3\u6d41 \u8d2f\u7a7f \u57ce\u5e02 \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(most(state(loc_1(city(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":609,
+        "nl":"\u54ea\u6761 \u6cb3\u6d41 \u8d2f\u7a7f \u5f17\u5409\u5c3c\u4e9a",
+        "mrl":"answer(river(traverse_2(stateid('virginia'))))",
+        "split":"train"
+    },
+    {
+        "id":610,
+        "nl":"\u54ea\u6761 \u6cb3\u6d41 \u6d41\u7ecf \u7684 \u5dde \u6700\u591a",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":611,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u4e0e \u6700\u591a \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(most(state(next_to_2(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":612,
+        "nl":"\u5185\u534e\u8fbe \u5dde \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('nevada'))))",
+        "split":"train"
+    },
+    {
+        "id":613,
+        "nl":"\u65b0\u58a8\u897f\u54e5 \u5dde \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('new mexico'))))",
+        "split":"train"
+    },
+    {
+        "id":614,
+        "nl":"\u4fc4\u52d2\u5188 \u5dde \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('oregon'))))",
+        "split":"train"
+    },
+    {
+        "id":615,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u91cc \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(state(next_to_2(stateid('texas'))))))",
+        "split":"test"
+    },
+    {
+        "id":616,
+        "nl":"\u5728 \u5f97\u514b\u8428\u65af \u5dde \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":617,
+        "nl":"\u5728 \u72b9\u4ed6 \u5dde \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('utah'))))",
+        "split":"train"
+    },
+    {
+        "id":618,
+        "nl":"\u5728 \u5fb7\u514b\u8428\u65af \u5dde \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(loc_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":619,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u4e0d \u8d2f\u7a7f \u7530\u7eb3\u897f \u5dde",
+        "mrl":"answer(exclude(river(all), traverse_2(stateid('tennessee'))))",
+        "split":"train"
+    },
+    {
+        "id":620,
+        "nl":"\u6d41\u7ecf \u79d1\u7f57\u62c9\u591a \u5dde \u7684 \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(traverse_2(stateid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":621,
+        "nl":"\u6d41\u7ecf \u5bc6\u82cf\u91cc \u5dde \u7684 \u6709 \u4ec0\u4e48 \u6cb3\u6d41",
+        "mrl":"answer(river(traverse_2(stateid('missouri'))))",
+        "split":"train"
+    },
+    {
+        "id":622,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u4e0e \u963f\u62c9\u5df4\u9a6c \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(state(next_to_1(stateid('alabama'))))))",
+        "split":"train"
+    },
+    {
+        "id":623,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u4e0e \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(state(next_to_2(largest_one(population_1(state(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":624,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u6700\u5927 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(largest(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":625,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u4eba\u53e3 \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(largest_one(population_1(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":626,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u4e9a\u5229\u6851\u90a3 \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('arizona'))))",
+        "split":"train"
+    },
+    {
+        "id":627,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u8d2f\u7a7f \u5f97\u514b\u8428\u65af \u5dde \u5965\u65af\u6c40",
+        "mrl":"answer(river(traverse_2(cityid('austin', 'tx'))))",
+        "split":"train"
+    },
+    {
+        "id":628,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u8d2f\u7a7f \u79d1\u7f57\u62c9\u591a \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":629,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u8d2f\u7a7f \u8def\u6613\u65af\u5b89\u90a3 \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('louisiana'))))",
+        "split":"train"
+    },
+    {
+        "id":630,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u8d2f\u7a7f \u7f05\u56e0 \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('maine'))))",
+        "split":"train"
+    },
+    {
+        "id":631,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u8d2f\u7a7f \u7ebd\u7ea6 \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('new york'))))",
+        "split":"test"
+    },
+    {
+        "id":632,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u8d2f\u7a7f \u7f8e\u56fd \u6700\u4f4e \u70b9 \u7684 \u6240\u5728 \u5dde",
+        "mrl":"answer(river(traverse_2(state(loc_1(lowest(place(loc_2(countryid('usa')))))))))",
+        "split":"train"
+    },
+    {
+        "id":633,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u8d2f\u7a7f \u4e0e \u9996\u5e9c \u4e9a\u7279\u5170\u5927 \u6240\u5728 \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(state(next_to_2(state(loc_1(capital(cityid('atlanta', _)))))))))",
+        "split":"train"
+    },
+    {
+        "id":634,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u8d2f\u7a7f \u897f\u5f17\u5409\u5c3c\u4e9a \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('west virginia'))))",
+        "split":"train"
+    },
+    {
+        "id":635,
+        "nl":"\u4ec0\u4e48 \u6cb3\u6d41 \u6d41\u7ecf \u4e0e \u5176\u5b83 \u5dde \u63a5\u58e4 \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(most(state(next_to_2(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":636,
+        "nl":"\u4e0e \u5185\u534e\u8fbe \u5dde \u63a5\u58e4 \u7684 \u54ea\u4e2a \u5dde \u5177\u6709 \u6700\u591a \u7684 \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(next_to_2(stateid('nevada'))))))",
+        "split":"test"
+    },
+    {
+        "id":637,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u5bc6\u6b47\u6839 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('michigan'))))",
+        "split":"train"
+    },
+    {
+        "id":638,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u6700\u591a \u7684 \u5176\u4ed6 \u5dde \u63a5\u58e4",
+        "mrl":"answer(most(state(next_to_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":639,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u7ebd\u7ea6 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('new york'))))",
+        "split":"test"
+    },
+    {
+        "id":640,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u5176\u5b83 \u5dde \u63a5\u58e4 \u6700\u5c11",
+        "mrl":"answer(fewest(state(next_to_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":641,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u9664 \u963f\u62c9\u65af\u52a0 \u548c \u590f\u5a01\u5937 \u5dde \u4e4b\u5916 \u7684 \u5176\u5b83 \u5dde \u63a5\u58e4 \u6700\u5c11",
+        "mrl":"answer(fewest(state(next_to_2(exclude(exclude(state(all), stateid('alaska')), stateid('hawaii'))))))",
+        "split":"train"
+    },
+    {
+        "id":642,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u6700\u591a \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(most(state(next_to_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":643,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u4eba\u53e3 \u6700\u5c11 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(smallest_one(population_1(state(all))))))",
+        "split":"train"
+    },
+    {
+        "id":644,
+        "nl":"\u54ea\u4e2a \u5dde \u5305\u542b \u7f8e\u56fd \u7684 \u6700\u9ad8 \u70b9 \u5462",
+        "mrl":"answer(state(loc_1(highest(place(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":645,
+        "nl":"\u7f8e\u56fd \u54ea\u4e2a \u5dde \u5305\u542b \u79d1\u7f57\u62c9\u591a \u6cb3 \u7a7f\u8d8a \u7684 \u6700\u9ad8 \u70b9 \u5462",
+        "mrl":"answer(state(loc_1(highest(place(loc_2(state(traverse_1(river(riverid('colorado'))))))))))",
+        "split":"test"
+    },
+    {
+        "id":646,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u9ad8 \u6d77\u62d4",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":647,
+        "nl":"\u4ec0\u4e48 \u5dde \u6ca1\u6709 \u6cb3\u6d41",
+        "mrl":"answer(exclude(state(all), loc_1(river(all))))",
+        "split":"train"
+    },
+    {
+        "id":648,
+        "nl":"\u54ea\u4e2a \u5dde \u7684 \u9996\u5e9c \u662f \u585e\u52d2\u59c6",
+        "mrl":"answer(state(loc_1(capital(cityid('salem', _)))))",
+        "split":"train"
+    },
+    {
+        "id":649,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u5f17\u6797\u7279 \u5e02",
+        "mrl":"answer(state(loc_1(city(cityid('flint', _)))))",
+        "split":"train"
+    },
+    {
+        "id":650,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u4eba\u53e3 \u6700\u591a \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(largest_one(population_1(city(all))))))",
+        "split":"train"
+    },
+    {
+        "id":651,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u4eba\u53e3 \u6700\u591a \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(largest_one(population_1(city(all))))))",
+        "split":"train"
+    },
+    {
+        "id":652,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u5927 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":653,
+        "nl":"\u54ea\u4e2a \u5dde \u7684 \u6d77\u62d4 \u6700\u9ad8",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"train"
+    },
+    {
+        "id":654,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":655,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u5927 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":656,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u5927 \u7684 \u9762\u79ef",
+        "mrl":"answer(largest_one(area_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":657,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u5927 \u7684 \u9996\u5e9c",
+        "mrl":"answer(state(loc_1(largest(capital(all)))))",
+        "split":"test"
+    },
+    {
+        "id":658,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u5927 \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(largest(city(all)))))",
+        "split":"train"
+    },
+    {
+        "id":659,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":660,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u5927 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":661,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u7684 \u57ce\u9547 \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":662,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u5c0f \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":663,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u957f \u7684 \u6cb3\u6d41",
+        "mrl":"answer(state(loc_1(longest(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":664,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u4f4e \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":665,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u7684 \u57ce\u5e02",
+        "mrl":"answer(most(state(loc_1(city(all)))))",
+        "split":"train"
+    },
+    {
+        "id":666,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u7684 \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(most(state(loc_1(major(city(all))))))",
+        "split":"test"
+    },
+    {
+        "id":667,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6d41\u7ecf \u5b83\u7684 \u6700\u591a \u4e3b\u8981 \u6cb3\u6d41",
+        "mrl":"answer(most(state(traverse_1(major(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":668,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u591a \u4eba",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":669,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u591a \u6cb3\u6d41",
+        "mrl":"answer(most(state(loc_1(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":670,
+        "nl":"\u54ea\u4e2a \u5dde \u6d41\u7ecf \u5b83\u7684 \u6cb3\u6d41 \u6700\u591a",
+        "mrl":"answer(most(state(traverse_1(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":671,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u77ed \u7684 \u6cb3\u6d41",
+        "mrl":"answer(state(loc_1(shortest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":672,
+        "nl":"\u54ea\u4e2a \u5dde \u7684 \u9762\u79ef \u6700\u5c0f",
+        "mrl":"answer(smallest_one(area_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":673,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u5c0f \u7684 \u9996\u5e9c",
+        "mrl":"answer(state(loc_1(smallest(capital(all)))))",
+        "split":"train"
+    },
+    {
+        "id":674,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u5c11 \u7684 \u4eba\u53e3",
+        "mrl":"answer(smallest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":675,
+        "nl":"\u54ea\u4e2a \u5dde \u5177\u6709 \u6700\u5c0f \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":676,
+        "nl":"\u54ea\u4e2a \u5dde \u5177\u6709 \u6700\u5c11 \u7684 \u57ce\u9547 \u4eba\u53e3",
+        "mrl":"answer(smallest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":677,
+        "nl":"\u54ea\u4e2a \u5dde \u5177\u6709 \u6700 \u7a00\u5c11 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":678,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u5965\u65af\u6c40",
+        "mrl":"answer(state(loc_1(cityid('austin', _))))",
+        "split":"test"
+    },
+    {
+        "id":679,
+        "nl":"\u5965\u65af\u6c40 \u662f \u54ea\u4e2a \u5dde \u7684 \u9996\u5e9c",
+        "mrl":"answer(state(loc_1(capital(cityid('austin', _)))))",
+        "split":"train"
+    },
+    {
+        "id":680,
+        "nl":"\u6ce2\u58eb\u987f \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(cityid('boston', _))))",
+        "split":"train"
+    },
+    {
+        "id":681,
+        "nl":"\u54e5\u4f26\u5e03 \u662f \u54ea\u4e2a \u5dde \u7684 \u9996\u5e9c",
+        "mrl":"answer(state(loc_1(capital(cityid('columbus', _)))))",
+        "split":"train"
+    },
+    {
+        "id":682,
+        "nl":"\u8fbe\u62c9\u65af \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(cityid('dallas', _))))",
+        "split":"train"
+    },
+    {
+        "id":683,
+        "nl":"\u5fb7\u6885\u56e0 \u4f4d\u4e8e \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(cityid('des moines', _))))",
+        "split":"train"
+    },
+    {
+        "id":684,
+        "nl":"\u8fc8\u963f\u5bc6 \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(cityid('miami', _))))",
+        "split":"test"
+    },
+    {
+        "id":685,
+        "nl":"\u5339\u5179\u5821 \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(cityid('pittsburgh', _))))",
+        "split":"train"
+    },
+    {
+        "id":686,
+        "nl":"\u54ea\u4e2a \u5dde \u6700\u5927",
+        "mrl":"answer(largest(state(all)))",
+        "split":"train"
+    },
+    {
+        "id":687,
+        "nl":"\u54ea\u4e2a \u5dde \u7684 \u4eba\u53e3 \u6700\u591a",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":688,
+        "nl":"\u54ea\u4e2a \u5dde \u662f \u62e5\u6709 \u6cb3\u6d41 \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(state(most(state(loc_1(river(all))))))",
+        "split":"train"
+    },
+    {
+        "id":689,
+        "nl":"\u54ea\u4e2a \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u7684 \u4eba\u53e3 \u6700\u591a",
+        "mrl":"answer(largest_one(population_1(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":690,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest(state(next_to_2(stateid('texas')))))",
+        "split":"train"
+    },
+    {
+        "id":691,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u6d41\u7ecf \u7684 \u54ea\u4e2a \u5dde \u6709 \u6700\u591a \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(traverse_1(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":692,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u4e9a\u5229\u6851\u90a3 \u5dde \u76f8\u90bb",
+        "mrl":"answer(state(next_to_2(stateid('arizona'))))",
+        "split":"test"
+    },
+    {
+        "id":693,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u76f8\u90bb",
+        "mrl":"answer(state(next_to_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":694,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u5bc6\u897f\u897f\u6bd4 \u5dde \u76f8\u90bb",
+        "mrl":"answer(state(next_to_2(stateid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":695,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u963f\u62c9\u65af\u52a0 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":696,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u963f\u80af\u8272 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('arkansas'))))",
+        "split":"train"
+    },
+    {
+        "id":697,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u7279\u62c9\u534e \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('delaware'))))",
+        "split":"train"
+    },
+    {
+        "id":698,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u4f5b\u7f57\u91cc\u8fbe \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('florida'))))",
+        "split":"test"
+    },
+    {
+        "id":699,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u4f50\u6cbb\u4e9a \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('georgia'))))",
+        "split":"train"
+    },
+    {
+        "id":700,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u590f\u5a01\u5937 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('hawaii'))))",
+        "split":"train"
+    },
+    {
+        "id":701,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u5370\u7b2c\u5b89\u7eb3 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('indiana'))))",
+        "split":"test"
+    },
+    {
+        "id":702,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u80af\u5854\u57fa \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('kentucky'))))",
+        "split":"train"
+    },
+    {
+        "id":703,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u5bc6\u6b47\u6839 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('michigan'))))",
+        "split":"test"
+    },
+    {
+        "id":704,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u5bc6\u82cf\u91cc \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('missouri'))))",
+        "split":"train"
+    },
+    {
+        "id":705,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u8499\u5927\u62ff \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('montana'))))",
+        "split":"test"
+    },
+    {
+        "id":706,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u65b0\u7f55\u5e03\u4ec0\u5c14 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('new hampshire'))))",
+        "split":"train"
+    },
+    {
+        "id":707,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u65b0\u6cfd\u897f \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('new jersey'))))",
+        "split":"test"
+    },
+    {
+        "id":708,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u4fc4\u4ea5\u4fc4 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('ohio'))))",
+        "split":"train"
+    },
+    {
+        "id":709,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u7f57\u5f97\u5c9b \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('rhode island'))))",
+        "split":"train"
+    },
+    {
+        "id":710,
+        "nl":"\u548c \u79d1\u7f57\u62c9\u591a \u63a5\u58e4 \u7684 \u5dde \u4e0e \u54ea\u4e9b \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(next_to_2(stateid('colorado'))))))",
+        "split":"train"
+    },
+    {
+        "id":711,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u548c \u5bc6\u897f\u897f\u6bd4 \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(next_to_2(stateid('mississippi'))))))",
+        "split":"test"
+    },
+    {
+        "id":712,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u4e0e \u4f5b\u7f57\u91cc\u8fbe \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(next_to_2(state(next_to_2(stateid('florida'))))))))",
+        "split":"train"
+    },
+    {
+        "id":713,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(next_to_2(state(next_to_2(state(next_to_2(stateid('texas'))))))))))",
+        "split":"train"
+    },
+    {
+        "id":714,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u4e0e \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(next_to_2(largest_one(population_1(state(all))))))))",
+        "split":"train"
+    },
+    {
+        "id":715,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(traverse_1(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":716,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u4fc4\u4ea5\u4fc4 \u6cb3 \u8d2f\u7a7f \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(traverse_1(riverid('ohio'))))))",
+        "split":"test"
+    },
+    {
+        "id":717,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(traverse_1(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":718,
+        "nl":"\u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u662f \u4ec0\u4e48 \u5dde",
+        "mrl":"answer(state(next_to_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":719,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u5e76 \u6709 \u4e3b\u8981 \u6cb3\u6d41",
+        "mrl":"answer(intersection(state(next_to_2(stateid('texas'))), loc_1(major(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":720,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(river(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":721,
+        "nl":"\u4ec0\u4e48 \u5dde \u4e0e \u4eba\u53e3 \u6700\u591a \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(largest_one(population_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":722,
+        "nl":"\u54ea\u4e9b \u5dde \u548c \u4e0e \u6700\u591a \u5dde \u63a5\u58e4 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(most(state(next_to_2(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":723,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u62e5\u6709 \u6700\u591a \u57ce\u5e02 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(most(state(loc_1(city(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":724,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u62e5\u6709 \u6700\u591a \u4e3b\u8981 \u57ce\u5e02 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(most(state(loc_1(major(city(all))))))))",
+        "split":"test"
+    },
+    {
+        "id":725,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u9762\u79ef \u6700\u5c0f \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(smallest_one(area_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":726,
+        "nl":"\u4ec0\u4e48 \u5dde \u548c \u62e5\u6709 \u6700\u591a \u57ce\u5e02 \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(most(state(loc_1(city(all)))))))",
+        "split":"train"
+    },
+    {
+        "id":727,
+        "nl":"\u4e0e \u5a01\u65af\u5eb7\u661f \u5dde \u63a5\u58e4 \u7684 \u5dde \u662f \u4ec0\u4e48",
+        "mrl":"answer(state(next_to_2(stateid('wisconsin'))))",
+        "split":"train"
+    },
+    {
+        "id":728,
+        "nl":"\u54ea\u4e2a \u5dde \u7684 \u9996\u90fd \u662f \u591a\u4f5b \u5e02",
+        "mrl":"answer(state(capital_2(cityid('dover', _))))",
+        "split":"train"
+    },
+    {
+        "id":729,
+        "nl":"\u54ea\u4e9b \u5dde \u5305\u542b \u81f3\u5c11 \u4e00\u4e2a \u4e3b\u8981 \u6cb3\u6d41",
+        "mrl":"answer(state(loc_1(major(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":730,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":731,
+        "nl":"\u7279\u62c9\u534e \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('delaware')))))",
+        "split":"test"
+    },
+    {
+        "id":732,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('mississippi')))))",
+        "split":"test"
+    },
+    {
+        "id":733,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(riverid('mississippi'))))",
+        "split":"train"
+    },
+    {
+        "id":734,
+        "nl":"\u5bc6\u82cf\u91cc \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":735,
+        "nl":"\u5bc6\u82cf\u91cc \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(riverid('missouri'))))",
+        "split":"test"
+    },
+    {
+        "id":736,
+        "nl":"\u4fc4\u4ea5\u4fc4 \u6cb3 \u7ecf\u8fc7 \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('ohio')))))",
+        "split":"train"
+    },
+    {
+        "id":737,
+        "nl":"\u4fc4\u4ea5\u4fc4 \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('ohio')))))",
+        "split":"test"
+    },
+    {
+        "id":738,
+        "nl":"\u6700\u77ed \u7684 \u6cb3\u6d41 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(shortest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":739,
+        "nl":"\u54ea\u4e9b \u5dde \u7684 \u9996\u5e9c \u662f \u5dde \u7684 \u6700\u9ad8 \u70b9",
+        "mrl":"answer(state(loc_1(capital(highest(place(all))))))",
+        "split":"train"
+    },
+    {
+        "id":740,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u4e00\u4e2a \u540d\u4e3a \u5965\u65af\u6c40 \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(city(cityid('austin', _)))))",
+        "split":"train"
+    },
+    {
+        "id":741,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u540d\u4e3a \u5965\u65af\u6c40 \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(city(cityid('austin', _)))))",
+        "split":"train"
+    },
+    {
+        "id":742,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u540d\u4e3a \u8fbe\u62c9\u65af \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(city(cityid('dallas', _)))))",
+        "split":"test"
+    },
+    {
+        "id":743,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u57ce\u5e02 \u540d\u4e3a \u666e\u83b1\u8bfa",
+        "mrl":"answer(state(loc_1(city(cityid('plano', _)))))",
+        "split":"test"
+    },
+    {
+        "id":744,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u57ce\u5e02 \u540d\u4e3a \u6ce2\u7279\u5170",
+        "mrl":"answer(state(loc_1(city(cityid('portland', _)))))",
+        "split":"test"
+    },
+    {
+        "id":745,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u540d\u4e3a \u7f57\u5207\u65af\u7279 \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(city(cityid('rochester', _)))))",
+        "split":"test"
+    },
+    {
+        "id":746,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u540d\u4e3a \u76d0\u6e56\u57ce \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(city(cityid('salt lake city', _)))))",
+        "split":"test"
+    },
+    {
+        "id":747,
+        "nl":"\u54ea\u4e9b \u5dde \u6ca1\u6709 \u548c \u5176\u5b83 \u5dde \u63a5\u58e4",
+        "mrl":"answer(exclude(state(all), next_to_2(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":748,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u53eb \u79d1\u7f57\u62c9\u591a \u7684 \u6cb3\u6d41",
+        "mrl":"answer(state(loc_1(river(riverid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":749,
+        "nl":"\u54ea\u4e9b \u5dde \u88ab \u6cb3\u6d41 \u8d2f\u7a7f",
+        "mrl":"answer(state(traverse_1(river(all))))",
+        "split":"train"
+    },
+    {
+        "id":750,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u540d\u4e3a \u65af\u666e\u6797\u83f2\u5c14\u5fb7 \u7684 \u5c0f\u9547",
+        "mrl":"answer(state(loc_1(city(cityid('springfield', _)))))",
+        "split":"train"
+    },
+    {
+        "id":751,
+        "nl":"\u54ea\u4e9b \u5dde \u7684 \u9ad8\u70b9 \u6bd4 \u79d1\u7f57\u62c9\u591a \u5dde \u7684 \u9ad8\u70b9 \u9ad8",
+        "mrl":"answer(state(high_point_2(higher_2(high_point_1(stateid('colorado'))))))",
+        "split":"train"
+    },
+    {
+        "id":752,
+        "nl":"\u5728 \u7f8e\u56fd \u6709 \u4ec0\u4e48 \u5dde \u6709 \u4e00\u4e2a \u65af\u666e\u6797\u83f2\u5c14\u5fb7 \u5e02",
+        "mrl":"answer(intersection(state(loc_2(countryid('usa'))), loc_1(city(cityid('springfield', _)))))",
+        "split":"train"
+    },
+    {
+        "id":753,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u7f05\u56e0 \u5dde \u76f8\u90bb",
+        "mrl":"answer(state(next_to_2(stateid('maine'))))",
+        "split":"train"
+    },
+    {
+        "id":754,
+        "nl":"\u54ea\u4e9b \u5dde \u73af\u7ed5 \u7740 \u80af\u5854\u57fa \u5dde",
+        "mrl":"answer(state(next_to_2(stateid('kentucky'))))",
+        "split":"test"
+    },
+    {
+        "id":755,
+        "nl":"\u5f97\u514b\u8428\u65af \u5dde \u7684 \u4ec0\u4e48 \u57ce\u5e02 \u7684 \u4eba\u53e3 \u6700\u591a",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":756,
+        "nl":"\u6700\u5927 \u7684 \u57ce\u5e02 \u662f \u4ec0\u4e48",
+        "mrl":"answer(largest(city(all)))",
+        "split":"train"
+    },
+    {
+        "id":757,
+        "nl":"\u5c71 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(mountain(all)))",
+        "split":"test"
+    },
+    {
+        "id":758,
+        "nl":"\u5965\u65af\u6c40 \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('austin', _)))",
+        "split":"train"
+    },
+    {
+        "id":759,
+        "nl":"\u5df4\u541e\u9c81\u65e5 \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('baton rouge', _)))",
+        "split":"train"
+    },
+    {
+        "id":760,
+        "nl":"\u8fbe\u62c9\u65af \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('dallas', _)))",
+        "split":"test"
+    },
+    {
+        "id":761,
+        "nl":"\u97e6\u6069\u5821 \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('fort wayne', _)))",
+        "split":"train"
+    },
+    {
+        "id":762,
+        "nl":"\u4f11\u65af\u987f \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('houston', _)))",
+        "split":"train"
+    },
+    {
+        "id":763,
+        "nl":"\u5370\u7b2c\u5b89\u7eb3\u6ce2\u5229\u65af \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('indianapolis', _)))",
+        "split":"train"
+    },
+    {
+        "id":764,
+        "nl":"\u54ea\u91cc \u662f \u9a6c\u8428\u8bf8\u585e \u5dde",
+        "mrl":"answer(loc_1(stateid('massachusetts')))",
+        "split":"train"
+    },
+    {
+        "id":765,
+        "nl":"\u60e0\u7279\u5c3c \u5c71 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(placeid('mount whitney')))",
+        "split":"train"
+    },
+    {
+        "id":766,
+        "nl":"\u60e0\u7279\u5c3c \u5c71 \u5750\u843d \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(placeid('mount whitney')))",
+        "split":"train"
+    },
+    {
+        "id":767,
+        "nl":"\u65b0\u7f55\u5e03\u4ec0\u5c14 \u5dde \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(stateid('new hampshire')))",
+        "split":"train"
+    },
+    {
+        "id":768,
+        "nl":"\u65b0\u5965\u5c14\u826f \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('new orleans', _)))",
+        "split":"train"
+    },
+    {
+        "id":769,
+        "nl":"\u6ce2\u7279\u5170 \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('portland', _)))",
+        "split":"test"
+    },
+    {
+        "id":770,
+        "nl":"\u5723\u5730\u4e9a\u54e5 \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('san diego', _)))",
+        "split":"train"
+    },
+    {
+        "id":771,
+        "nl":"\u5723\u4f55\u585e \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('san jose', _)))",
+        "split":"train"
+    },
+    {
+        "id":772,
+        "nl":"\u65af\u79d1\u8328\u74e6\u5229 \u5e02 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('scotts valley', _)))",
+        "split":"train"
+    },
+    {
+        "id":773,
+        "nl":"\u65af\u666e\u6797\u83f2\u5c14\u5fb7 \u9547 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(cityid('springfield', _)))",
+        "split":"train"
+    },
+    {
+        "id":774,
+        "nl":"\u67e5\u5854\u80e1\u5947 \u6cb3 \u5728 \u54ea\u91cc",
+        "mrl":"answer(loc_1(river(riverid('chattahoochee'))))",
+        "split":"test"
+    },
+    {
+        "id":775,
+        "nl":"\u7f8e\u56fd \u6700\u9ad8 \u7684 \u5c71\u5cf0 \u5728 \u54ea\u91cc",
+        "mrl":"answer(highest(mountain(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":776,
+        "nl":"\u54ea\u91cc \u662f \u590f\u5a01\u5937 \u7684 \u6700\u9ad8 \u70b9",
+        "mrl":"answer(highest(place(loc_2(stateid('hawaii')))))",
+        "split":"test"
+    },
+    {
+        "id":777,
+        "nl":"\u54ea\u91cc \u662f \u8499\u5927\u62ff \u5dde \u7684 \u6700\u9ad8 \u70b9",
+        "mrl":"answer(highest(place(loc_2(stateid('montana')))))",
+        "split":"train"
+    },
+    {
+        "id":778,
+        "nl":"\u54ea\u91cc \u662f \u9a6c\u91cc\u5170 \u5dde \u7684 \u6700\u4f4e \u70b9",
+        "mrl":"answer(lowest(place(loc_2(stateid('maryland')))))",
+        "split":"test"
+    },
+    {
+        "id":779,
+        "nl":"\u54ea\u91cc \u662f \u7f8e\u56fd \u7684 \u6700\u4f4e \u70b9",
+        "mrl":"answer(lowest(place(loc_2(countryid('usa')))))",
+        "split":"train"
+    },
+    {
+        "id":780,
+        "nl":"\u54ea\u91cc \u662f \u7231\u8377\u534e \u5dde \u7684 \u6700\u4f4e \u70b9",
+        "mrl":"answer(lowest(place(loc_2(stateid('iowa')))))",
+        "split":"train"
+    },
+    {
+        "id":781,
+        "nl":"\u54ea\u91cc \u662f \u65b0\u58a8\u897f\u54e5 \u5dde \u4eba\u53e3 \u6700\u591a \u7684 \u5730\u533a",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('new mexico'))))))",
+        "split":"test"
+    },
+    {
+        "id":782,
+        "nl":"\u6700\u5c0f \u7684 \u57ce\u5e02 \u662f \u54ea\u91cc",
+        "mrl":"answer(loc_1(smallest(city(all))))",
+        "split":"test"
+    },
+    {
+        "id":783,
+        "nl":"\u54ea\u4e9b \u9996\u5e9c \u662f \u5728 \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u5dde \u91cc",
+        "mrl":"answer(capital(loc_2(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":784,
+        "nl":"\u54ea\u4e9b \u9996\u5e9c \u4e0d\u662f \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(exclude(capital(all), major(city(all))))",
+        "split":"train"
+    },
+    {
+        "id":785,
+        "nl":"\u52a0\u5229\u798f\u5c3c\u4e9a \u5dde \u7684 \u54ea\u4e2a \u57ce\u5e02 \u6709 \u6700\u591a \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(city(loc_2(stateid('california'))))))",
+        "split":"test"
+    },
+    {
+        "id":786,
+        "nl":"\u88ab \u7f8e\u56fd \u7684 \u6700\u5927 \u6cb3\u6d41 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u662f \u591a\u5c11",
+        "mrl":"answer(density_1(state(traverse_1(longest(river(loc_2(countryid('usa'))))))))",
+        "split":"test"
+    },
+    {
+        "id":787,
+        "nl":"\u54ea\u4e2a \u662f \u4e0d \u5728 \u963f\u62c9\u65af\u52a0 \u5dde \u7684 \u6700\u9ad8 \u5c71\u5cf0",
+        "mrl":"answer(highest(exclude(mountain(all),  loc_2(stateid('alaska')))))",
+        "split":"test"
+    },
+    {
+        "id":788,
+        "nl":"\u54ea\u4e2a \u662f \u7f8e\u56fd \u6700\u957f \u7684 \u6cb3\u6d41",
+        "mrl":"answer(longest(river(loc_2(countryid('usa')))))",
+        "split":"test"
+    },
+    {
+        "id":789,
+        "nl":"\u88ab \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u7684 \u5dde \u7684 \u6700\u4f4e \u70b9 \u662f \u54ea\u4e2a",
+        "mrl":"answer(lowest(place(loc_2(state(traverse_1(riverid('mississippi')))))))",
+        "split":"train"
+    },
+    {
+        "id":790,
+        "nl":"\u6700\u77ed \u7684 \u6cb3\u6d41 \u662f \u54ea\u4e2a",
+        "mrl":"answer(shortest(river(all)))",
+        "split":"train"
+    },
+    {
+        "id":791,
+        "nl":"\u54ea\u4e2a \u662f \u6700\u5c0f \u7684 \u5dde",
+        "mrl":"answer(smallest(state(all)))",
+        "split":"test"
+    },
+    {
+        "id":792,
+        "nl":"\u4e0e \u5bbe\u5915\u6cd5\u5c3c\u4e9a \u5dde \u63a5\u58e4 \u7684 \u5dde \u91cc \u54ea\u4e2a \u6709 \u6700\u591a \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(next_to_2(stateid('pennsylvania'))))))",
+        "split":"test"
+    },
+    {
+        "id":793,
+        "nl":"\u54ea\u4e2a \u6cb3\u6d41 \u6d41\u7ecf \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":794,
+        "nl":"\u54ea\u4e2a \u6cb3\u6d41 \u8d2f\u7a7f \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":795,
+        "nl":"\u54ea\u4e2a \u6cb3\u6d41 \u8d2f\u7a7f \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":796,
+        "nl":"\u54ea\u4e2a \u6cb3\u6d41 \u6d41\u7ecf \u6700\u591a \u7684 \u5dde",
+        "mrl":"answer(most(river(traverse_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":797,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u5728 \u963f\u62c9\u65af\u52a0",
+        "mrl":"answer(river(loc_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":798,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u4e0d \u8d2f\u7a7f \u5f97\u514b\u8428\u65af",
+        "mrl":"answer(exclude(river(all), traverse_2(stateid('texas'))))",
+        "split":"test"
+    },
+    {
+        "id":799,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u4e0d \u8d2f\u7a7f \u7f8e\u56fd",
+        "mrl":"answer(exclude(river(all), traverse_2(countryid('usa'))))",
+        "split":"test"
+    },
+    {
+        "id":800,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u6d41\u7ecf \u963f\u62c9\u65af\u52a0 \u5dde",
+        "mrl":"answer(river(traverse_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":801,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u6d41\u7ecf \u4e0e \u65b0\u58a8\u897f\u54e5 \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(state(next_to_2(stateid('new mexico'))))))",
+        "split":"train"
+    },
+    {
+        "id":802,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u8d2f\u7a7f \u4e0e \u4ee5 \u5965\u65af\u6c40 \u4e3a \u9996\u5e9c \u7684 \u5dde \u63a5\u58e4 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(state(next_to_2(state(loc_1(capital(cityid('austin', _)))))))))",
+        "split":"test"
+    },
+    {
+        "id":803,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u8d2f\u7a7f \u62e5\u6709 \u6700\u5c11 \u57ce\u5e02 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(fewest(state(loc_1(city(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":804,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u8d2f\u7a7f \u62e5\u6709 \u7f8e\u56fd \u6700\u5927 \u57ce\u5e02 \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(state(loc_1(largest(city(loc_2(countryid('usa')))))))))",
+        "split":"train"
+    },
+    {
+        "id":805,
+        "nl":"\u54ea\u4e9b \u6cb3\u6d41 \u8d2f\u7a7f \u7f8e\u56fd \u6d77\u62d4 \u6700\u4f4e \u7684 \u5dde",
+        "mrl":"answer(river(traverse_2(state(loc_1(lowest(place(loc_2(countryid('usa')))))))))",
+        "split":"train"
+    },
+    {
+        "id":806,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u80af\u5854\u57fa \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('kentucky'))))",
+        "split":"train"
+    },
+    {
+        "id":807,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u4f5b\u7f57\u91cc\u8fbe \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('florida'))))",
+        "split":"train"
+    },
+    {
+        "id":808,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u590f\u5a01\u5937 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('hawaii'))))",
+        "split":"test"
+    },
+    {
+        "id":809,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u6700\u591a \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(most(state(next_to_2(state(all)))))",
+        "split":"train"
+    },
+    {
+        "id":810,
+        "nl":"\u54ea\u4e2a \u5dde \u4e0e \u6700\u591a \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(most(state(next_to_2(state(all)))))",
+        "split":"test"
+    },
+    {
+        "id":811,
+        "nl":"\u54ea\u4e2a \u9996\u5e9c \u6709 \u6700\u5c11 \u7684 \u4eba\u53e3",
+        "mrl":"answer(smallest_one(population_1(capital(all))))",
+        "split":"test"
+    },
+    {
+        "id":812,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u591a \u7684 \u6cb3\u6d41",
+        "mrl":"answer(most(state(loc_1(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":813,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u591a \u7684 \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":814,
+        "nl":"\u4eba\u53e3 \u5bc6\u5ea6 \u6700\u5927 \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":815,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u591a \u7684 \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":816,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u9ad8 \u70b9",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"test"
+    },
+    {
+        "id":817,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u7f8e\u56fd \u7684 \u6700\u9ad8 \u5cf0",
+        "mrl":"answer(state(loc_1(highest(mountain(all)))))",
+        "split":"train"
+    },
+    {
+        "id":818,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u9ad8 \u7684 \u6d77\u62d4",
+        "mrl":"answer(state(loc_1(highest(place(all)))))",
+        "split":"test"
+    },
+    {
+        "id":819,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u9ad8 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":820,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u5927 \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(largest(city(all)))))",
+        "split":"train"
+    },
+    {
+        "id":821,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u5927 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(largest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":822,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u5c0f \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":823,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u957f \u7684 \u6cb3\u6d41",
+        "mrl":"answer(state(loc_1(longest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":824,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u4f4e \u6d77\u62d4",
+        "mrl":"answer(state(loc_1(lowest(place(all)))))",
+        "split":"test"
+    },
+    {
+        "id":825,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u4e0e \u7231\u8fbe\u8377 \u5dde \u63a5\u58e4 \u7684 \u6700\u4f4e \u70b9",
+        "mrl":"answer(state(loc_1(lowest(place(loc_2(next_to_2(stateid('idaho'))))))))",
+        "split":"test"
+    },
+    {
+        "id":826,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u4f4e \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":827,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u7684 \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(most(state(loc_1(major(city(all))))))",
+        "split":"test"
+    },
+    {
+        "id":828,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u7684 \u4e3b\u8981 \u6cb3\u6d41",
+        "mrl":"answer(most(state(loc_1(major(river(all))))))",
+        "split":"test"
+    },
+    {
+        "id":829,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u7684 \u6d41\u7ecf \u5b83\u7684 \u4e3b\u8981 \u6cb3\u6d41",
+        "mrl":"answer(most(state(traverse_1(major(river(all))))))",
+        "split":"test"
+    },
+    {
+        "id":830,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u7684 \u4eba",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":831,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u591a \u7684 \u4eba\u53e3",
+        "mrl":"answer(largest_one(population_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":832,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u7684 \u6cb3\u6d41",
+        "mrl":"answer(most(state(loc_1(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":833,
+        "nl":"\u54ea\u4e2a \u5dde \u62e5\u6709 \u6700\u591a \u6d41\u7ecf \u5b83\u7684 \u6cb3\u6d41",
+        "mrl":"answer(most(state(traverse_1(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":834,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u7ea2 \u6cb3",
+        "mrl":"answer(state(loc_1(river(riverid('red')))))",
+        "split":"train"
+    },
+    {
+        "id":835,
+        "nl":"\u548c \u5fb7\u514b\u8428\u65af \u5dde \u63a5\u58e4 \u7684 \u9762\u79ef \u6700\u5c0f \u7684 \u5dde \u662f \u54ea\u4e2a",
+        "mrl":"answer(smallest_one(area_1(state(next_to_2(stateid('texas'))))))",
+        "split":"train"
+    },
+    {
+        "id":836,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u5c11 \u7684 \u5e73\u5747 \u57ce\u5e02 \u4eba\u53e3",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":837,
+        "nl":"\u54ea\u4e2a \u5dde \u6709 \u6700\u5c0f \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"test"
+    },
+    {
+        "id":838,
+        "nl":"\u54ea\u4e2a \u5dde \u7684 \u4eba\u53e3 \u5bc6\u5ea6 \u6700 \u7a00\u5c11",
+        "mrl":"answer(smallest_one(density_1(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":839,
+        "nl":"\u5361\u62c9\u9a6c\u7956 \u662f \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(cityid('kalamazoo', _))))",
+        "split":"train"
+    },
+    {
+        "id":840,
+        "nl":"\u9ea6\u91d1\u5229 \u5c71 \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(placeid('mount mckinley'))))",
+        "split":"test"
+    },
+    {
+        "id":841,
+        "nl":"\u4e39\u4f5b \u5e02 \u4f4d\u4e8e \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(city(cityid('denver', _)))))",
+        "split":"train"
+    },
+    {
+        "id":842,
+        "nl":"\u8499\u5927\u62ff \u5dde \u6700\u5927 \u7684 \u57ce\u5e02 \u5728 \u54ea\u4e2a \u5dde",
+        "mrl":"answer(state(loc_1(largest(city(loc_2(stateid('montana')))))))",
+        "split":"train"
+    },
+    {
+        "id":843,
+        "nl":"\u54ea\u4e2a \u5dde \u662f \u6700\u5c0f \u7684",
+        "mrl":"answer(smallest(state(all)))",
+        "split":"test"
+    },
+    {
+        "id":844,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u963f\u62c9\u5df4\u9a6c \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('alabama'))))",
+        "split":"train"
+    },
+    {
+        "id":845,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u963f\u62c9\u5df4\u9a6c \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('alabama'))))",
+        "split":"train"
+    },
+    {
+        "id":846,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u963f\u62c9\u65af\u52a0 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('alaska'))))",
+        "split":"train"
+    },
+    {
+        "id":847,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u4e9a\u5229\u6851\u90a3 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('arizona'))))",
+        "split":"train"
+    },
+    {
+        "id":848,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u79d1\u7f57\u62c9\u591a \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('colorado'))))",
+        "split":"train"
+    },
+    {
+        "id":849,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u590f\u5a01\u5937 \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('hawaii'))))",
+        "split":"train"
+    },
+    {
+        "id":850,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u4f0a\u5229\u8bfa\u4f0a \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('illinois'))))",
+        "split":"test"
+    },
+    {
+        "id":851,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u827e\u5965\u74e6 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('iowa'))))",
+        "split":"train"
+    },
+    {
+        "id":852,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u80af\u5854\u57fa \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('kentucky'))))",
+        "split":"test"
+    },
+    {
+        "id":853,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u5bc6\u6b47\u6839 \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('michigan'))))",
+        "split":"train"
+    },
+    {
+        "id":854,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u7ebd\u7ea6 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('new york'))))",
+        "split":"train"
+    },
+    {
+        "id":855,
+        "nl":"\u54ea\u4e9b \u5dde \u6ca1\u6709 \u4e0e \u5176\u5b83 \u5dde \u63a5\u58e4",
+        "mrl":"answer(exclude(state(all), next_to_2(state(all))))",
+        "split":"train"
+    },
+    {
+        "id":856,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u5357\u8fbe\u79d1\u4ed6 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('south dakota'))))",
+        "split":"train"
+    },
+    {
+        "id":857,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u88ab \u5bc6\u897f\u897f\u6bd4 \u6cb3 \u7a7f\u8d8a \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(state(traverse_1(riverid('mississippi'))))))",
+        "split":"train"
+    },
+    {
+        "id":858,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":859,
+        "nl":"\u5728 \u7f8e\u56fd \u54ea\u4e9b \u5dde \u4e0e \u6700\u957f \u7684 \u6cb3\u6d41 \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(longest(river(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":860,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u5bc6\u82cf\u91cc \u6cb3 \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(river(riverid('missouri')))))",
+        "split":"test"
+    },
+    {
+        "id":861,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0e \u9762\u79ef \u6700\u5c0f \u7684 \u5dde \u63a5\u58e4",
+        "mrl":"answer(state(next_to_2(smallest_one(area_1(state(all))))))",
+        "split":"test"
+    },
+    {
+        "id":862,
+        "nl":"\u54ea\u4e2a \u5dde \u7684 \u9996\u5e9c \u57ce\u5e02 \u662f \u6700\u5927 \u7684",
+        "mrl":"answer(state(loc_1(largest(city(capital_1(state(all)))))))",
+        "split":"test"
+    },
+    {
+        "id":863,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u6cb3 \u6d41\u7ecf \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":864,
+        "nl":"\u54ea\u4e9b \u5dde \u4e0d \u4e0e \u5f97\u514b\u8428\u65af \u5dde \u63a5\u58e4",
+        "mrl":"answer(exclude(state(all), next_to_2(stateid('texas'))))",
+        "split":"train"
+    },
+    {
+        "id":865,
+        "nl":"\u67e5\u5854\u80e1\u5947 \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('chattahoochee')))))",
+        "split":"test"
+    },
+    {
+        "id":866,
+        "nl":"\u79d1\u7f57\u62c9\u591a \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('colorado')))))",
+        "split":"train"
+    },
+    {
+        "id":867,
+        "nl":"\u6700\u957f \u7684 \u6cb3\u6d41 \u7a7f\u8fc7 \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(longest(river(all)))))",
+        "split":"train"
+    },
+    {
+        "id":868,
+        "nl":"\u6700\u957f \u7684 \u6cb3\u6d41 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(longest(river(all)))))",
+        "split":"test"
+    },
+    {
+        "id":869,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('mississippi')))))",
+        "split":"train"
+    },
+    {
+        "id":870,
+        "nl":"\u5bc6\u897f\u897f\u6bd4 \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(riverid('mississippi'))))",
+        "split":"test"
+    },
+    {
+        "id":871,
+        "nl":"\u5bc6\u82cf\u91cc \u6cb3 \u6d41\u7ecf \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":872,
+        "nl":"\u5bc6\u82cf\u91cc \u6cb3 \u8d2f\u7a7f \u54ea\u4e9b \u5dde",
+        "mrl":"answer(state(traverse_1(river(riverid('missouri')))))",
+        "split":"train"
+    },
+    {
+        "id":873,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u4e00\u4e2a \u540d\u4e3a \u5965\u65af\u6c40 \u7684 \u4e3b\u8981 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(major(city(cityid('austin', _))))))",
+        "split":"train"
+    },
+    {
+        "id":874,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u6cb3\u6d41",
+        "mrl":"answer(state(loc_1(river(all))))",
+        "split":"test"
+    },
+    {
+        "id":875,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u540d\u4e3a \u5965\u65af\u6c40 \u7684 \u57ce\u5e02",
+        "mrl":"answer(state(loc_1(city(cityid('austin', _)))))",
+        "split":"test"
+    },
+    {
+        "id":876,
+        "nl":"\u54ea\u4e9b \u5dde \u6709 \u6bd4 \u79d1\u7f57\u62c9\u591a \u5dde \u7684 \u6700\u9ad8 \u70b9 \u66f4\u9ad8 \u7684 \u70b9",
+        "mrl":"answer(state(loc_1(place(higher_2(highest(place(loc_2(stateid('colorado')))))))))",
+        "split":"train"
+    },
+    {
+        "id":877,
+        "nl":"\u54ea\u4e9b \u5dde \u542b\u6709 \u6bd4 \u5fb7\u514b\u8428\u65af \u5dde \u7684 \u6700\u9ad8 \u70b9 \u9ad8 \u7684 \u70b9",
+        "mrl":"answer(state(loc_1(place(higher_2(highest(place(loc_2(stateid('texas')))))))))",
+        "split":"train"
+    },
+    {
+        "id":878,
+        "nl":"\u54ea\u4e9b \u5dde \u88ab \u7f8e\u56fd \u6700\u5927 \u7684 \u6cb3\u6d41 \u7a7f\u8d8a",
+        "mrl":"answer(state(traverse_1(longest(river(loc_2(countryid('usa')))))))",
+        "split":"train"
+    },
+    {
+        "id":879,
+        "nl":"\u54ea\u4e2a \u7f8e\u56fd \u7684 \u57ce\u5e02 \u5177\u6709 \u6700\u9ad8 \u7684 \u4eba\u53e3 \u5bc6\u5ea6",
+        "mrl":"answer(largest_one(density_1(city(all))))",
+        "split":"test"
+    }
+]
