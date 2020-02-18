@@ -590,22 +590,23 @@ def run(lr=0.001,
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
 
+    orderless = {"_intersection"}
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and"})])
+                                                          orderless=orderless)])
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
 
     freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
                              eval=[SeqAccuracies(),
                                    TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and"})])
+                                                orderless=orderless)])
     vlosses = make_loss_array("seq_acc", "tree_acc")
 
     beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize, copy_deep=True,
                               eval=[SeqAccuracies()],
                               eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and"})])
+                                                orderless=orderless)])
     beamlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # 4. define optim
@@ -674,7 +675,7 @@ def run(lr=0.001,
         _freedecoder = BeamDecoder(_model, maxtime=100, beamsize=beamsize, copy_deep=True,
                                   eval=[SeqAccuracies()],
                                   eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and"})])
+                                                          orderless=orderless)])
 
         # testing
         tt.tick("testing reloaded")
