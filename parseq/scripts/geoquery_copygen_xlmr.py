@@ -675,10 +675,10 @@ def run(lr=0.001,
         seed=123456,
         numcvfolds=6,
         testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
-        bertversion="bert-base-multilingual-uncased",
+        xlmrversion="xlmr.base",
         ):
     localargs = locals().copy()
-    print(ujson.dumps(localargs, indent=4))
+    print(locals())
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -690,7 +690,7 @@ def run(lr=0.001,
 
     # bertversion = "bert-base-multilingual-uncased"
     # bertversion = "bert-base-uncased"
-    berttokenizer = BertTokenizer.from_pretrained(bertversion)
+    xlmr = torch.hub.load("pytorch/fairseq", xlmrversion)
     ds = GeoDataset(bert_tokenizer=berttokenizer, min_freq=minfreq,
                     cvfolds=cvfolds, testfold=testfold)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
@@ -703,7 +703,6 @@ def run(lr=0.001,
     # print(batch.batched_states)
 
     # bert = None
-    bert = BertModel.from_pretrained(bertversion)
     model = BasicGenModel(bert=bert, embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
 
