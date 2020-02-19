@@ -741,7 +741,7 @@ def run(lr=0.001,
             "params": otherparams
         }
     ]
-    optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
+    optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
 
     train_on = "train"
     valid_on = "test" if testfold is None else "valid"
