@@ -729,8 +729,8 @@ def run(lr=0.001,
 
     # 4. define optim
     # optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
-    bertparams = [p for (n, p) in tfdecoder.parameters() if n.startswith("model.bert.")]
-    otherparams = [p for (n, p) in tfdecoder.parameters() if not n.startswith("model.bert.")]
+    bertparams = [p for (n, p) in tfdecoder.named_parameters() if n.startswith("model.bert.")]
+    otherparams = [p for (n, p) in tfdecoder.named_parameters() if not n.startswith("model.bert.")]
     paramgroups = [
         {
             "params": bertparams,
