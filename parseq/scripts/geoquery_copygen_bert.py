@@ -675,6 +675,7 @@ def run(lr=0.001,
         seed=123456,
         numcvfolds=6,
         testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
+        bertversion="bert-base-multilingual-uncased",
         ):
     localargs = locals().copy()
     print(locals())
@@ -687,8 +688,8 @@ def run(lr=0.001,
     cvfolds = None if testfold == -1 else numcvfolds
     testfold = None if testfold == -1 else testfold
 
-    bertversion = "bert-base-multilingual-uncased"
-    bertversion = "bert-base-uncased"
+    # bertversion = "bert-base-multilingual-uncased"
+    # bertversion = "bert-base-uncased"
     berttokenizer = BertTokenizer.from_pretrained(bertversion)
     ds = GeoDataset(bert_tokenizer=berttokenizer, min_freq=minfreq,
                     cvfolds=cvfolds, testfold=testfold)
