@@ -190,13 +190,16 @@ class GeoDataset(object):
 
         # initialize output vocabulary
         outvocab = Vocab()
-        for token, bertid in self.xlmr_vocab.D.items():
-            outvocab.add_token(token, seen=False)
+        # for token, bertid in self.xlmr_vocab.D.items():
+        #     outvocab.add_token(token, seen=False)
 
         self.query_encoder = SequenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=lambda x: xlmr.bpe.encode(x).split()), vocab=outvocab, add_end_token=True)
 
         # build vocabularies
         for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
+            question_tokens = self.sentence_encoder.convert(question, return_what="tokens")[0]
+            for token in question_tokens:
+                self.query_encoder.vocab.add_token(token, seen=False)
             self.query_encoder.inc_build_vocab(query, seen=split=="train")
         keeptokens = set(self.xlmr_vocab.D.keys())
         self.query_encoder.finalize_vocab(min_freq=min_freq, keep_tokens=keeptokens)

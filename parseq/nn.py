@@ -491,7 +491,7 @@ class PtrGenOutput(_PtrGenOutput):
                                    torch.log(torch.zeros_like(gen_probs[:, :1]))
                                         .repeat(1, fullvocsize - gen_probs.size(1))],
                                   1)
-        if self.gen_mask is not None and False:     # TODO: enable back
+        if self.gen_mask is not None: # and False:     # : enable back
             gen_probs = gen_probs + torch.log(self.gen_mask.float()[None, :])
         if out_mask is not None:
             gen_probs = gen_probs + torch.log(out_mask.float())
@@ -505,10 +505,10 @@ class PtrGenOutput(_PtrGenOutput):
 
             # - point or generate probs
             ptr_or_gen_probs = self.copy_or_gen(x)  # (batsize, 2)
-            # TODO: remove this -- disables copy
-            ptr_or_gen_mask = torch.zeros_like(ptr_or_gen_probs)
-            ptr_or_gen_mask[:, 0] = 1
-            ptr_or_gen_probs = ptr_or_gen_probs + torch.log(ptr_or_gen_mask)
+            # # : remove this -- disables copy
+            # ptr_or_gen_mask = torch.zeros_like(ptr_or_gen_probs)
+            # ptr_or_gen_mask[:, 0] = 1
+            # ptr_or_gen_probs = ptr_or_gen_probs + torch.log(ptr_or_gen_mask)
             if out_mask is not None:
                 cancopy_mask = self._inp_actmask.unsqueeze(0).float() * out_mask.float()
                 cancopy_mask = cancopy_mask.sum(
