@@ -49,7 +49,7 @@ def stem_id_words(pas, idparents, stem=False, strtok=None):
             assert(isinstance(pas, str))
             if re.match(r"'([^']+)'", pas):
                 pas = re.match(r"'([^']+)'", pas).group(1)
-                pas = strtok.tokenize(pas)
+                pas = strtok(pas)
                 return [("str", pas)]
             else:
                 return [pas]
@@ -152,20 +152,21 @@ class GeoDataset(object):
                  p="../../datasets/geo880_multiling/geoquery/",
                  train_lang="en",
                  test_lang=None,
-                 bert_tokenizer=None,
+                 xlmr=None,
                  min_freq:int=2,
                  cvfolds=None, testfold=None, **kw):
         super(GeoDataset, self).__init__(**kw)
         self.train_lang = train_lang
         self.test_lang = test_lang if test_lang is not None else train_lang
         self.cvfolds, self.testfold = cvfolds, testfold
-        self._initialize(p, bert_tokenizer, min_freq)
+        self._initialize(p, xlmr, min_freq)
 
-    def _initialize(self, p, bert_tokenizer, min_freq:int):
+    def _initialize(self, p, xlmr, min_freq:int):
         self.data = {}
-        self.bert_vocab = Vocab()
-        self.bert_vocab.set_dict(bert_tokenizer.vocab)
-        self.sentence_encoder = SequenceEncoder(lambda x: bert_tokenizer.tokenize(f"[CLS] {x} [SEP]"), vocab=self.bert_vocab)
+        self.xlmr = xlmr
+        self.xlmr_vocab = Vocab()
+        self.xlmr_vocab.set_dict(xlmr.model.decoder.dictionary.indices)
+        self.sentence_encoder = SequenceEncoder(lambda x: f"<s> {xlmr.bpe.encode(x)} </s>".split(), vocab=self.xlmr_vocab)
         trainlines = [x for x in ujson.load(open(os.path.join(p, f"geo-{self.train_lang}.json"), "r"))]
         testlines = [x for x in ujson.load(open(os.path.join(p, f"geo-{self.train_lang}.json"), "r"))]
         trainlines = [x for x in trainlines if x["split"] == "train"]
@@ -189,15 +190,15 @@ class GeoDataset(object):
 
         # initialize output vocabulary
         outvocab = Vocab()
-        for token, bertid in self.bert_vocab.D.items():
+        for token, bertid in self.xlmr_vocab.D.items():
             outvocab.add_token(token, seen=False)
 
-        self.query_encoder = SequenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=bert_tokenizer), vocab=outvocab, add_end_token=True)
+        self.query_encoder = SequenceEncoder(tokenizer=partial(basic_query_tokenizer, strtok=lambda x: xlmr.bpe.encode(x).split()), vocab=outvocab, add_end_token=True)
 
         # build vocabularies
         for i, (question, query, split) in enumerate(zip(questions, queries, splits)):
             self.query_encoder.inc_build_vocab(query, seen=split=="train")
-        keeptokens = set(self.bert_vocab.D.keys())
+        keeptokens = set(self.xlmr_vocab.D.keys())
         self.query_encoder.finalize_vocab(min_freq=min_freq, keep_tokens=keeptokens)
 
         token_specs = self.build_token_specs(queries)
@@ -250,6 +251,8 @@ class GeoDataset(object):
                           for out_token in out_tokens]
             # convert token sequences to ids
             inp_tensor = self.sentence_encoder.convert(inp_tokens, return_what="tensor")[0]
+            _inp_tensor_ref = self.xlmr.encode(inp)
+            assert(torch.allclose(inp_tensor, _inp_tensor_ref))
             out_tensor = self.query_encoder.convert(out_tokens, return_what="tensor")[0]
 
             state = TreeDecoderState([inp], [gold_tree],
@@ -274,6 +277,7 @@ class GeoDataset(object):
 
     @staticmethod
     def collate_fn(data:Iterable):
+        padding_id = 1      # only for xlmr
         goldmaxlen = 0
         inpmaxlen = 0
         data = [state.make_copy(detach=True, deep=True) for state in data]
@@ -286,7 +290,7 @@ class GeoDataset(object):
                 state.gold_tensor.new_zeros(1, goldmaxlen - state.gold_tensor.size(1))], 1)
             state.inp_tensor = torch.cat([
                 state.inp_tensor,
-                state.inp_tensor.new_zeros(1, inpmaxlen - state.inp_tensor.size(1))], 1)
+                state.inp_tensor.new_ones(1, inpmaxlen - state.inp_tensor.size(1))], 1) * padding_id
         ret = data[0].merge(data)
         return ret
 
@@ -459,14 +463,14 @@ class BasicGenModelNOBERT(TransitionModel):
 
 
 class BasicGenModel(TransitionModel):
-    def __init__(self, bert, embdim, hdim, numlayers:int=1, dropout=0.,
+    def __init__(self, xlmr, embdim, hdim, numlayers:int=1, dropout=0.,
                  sentence_encoder:SequenceEncoder=None,
                  query_encoder:SequenceEncoder=None,
                  feedatt=False, store_attn=True, **kw):
         super(BasicGenModel, self).__init__(**kw)
 
-        self.bert = bert
-        encoder_dim = self.bert.config.hidden_size
+        self.xlmr = xlmr
+        encoder_dim = self.xlmr.args.encoder_embed_dim
 
         decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
         decoder_emb = TokenEmb(decoder_emb, rare_token_ids=query_encoder.vocab.rare_ids, rare_id=1)
@@ -517,9 +521,9 @@ class BasicGenModel(TransitionModel):
             # encode input
             inptensor = x.inp_tensor
             mask = inptensor != 0
-            bertstates, bertpool = self.bert(inptensor, attention_mask=mask)
-            inpenc = bertstates
-            final_enc = bertstates[:, 0, :]
+            xlmrstates = self.xlmr.extract_features(inptensor)
+            inpenc = xlmrstates
+            final_enc = xlmrstates[:, 0, :]
             for i in range(len(self.enc_to_dec)):    # iter over layers
                 _fenc = self.enc_to_dec[i](final_enc)
                 init_states.append(_fenc)
@@ -691,7 +695,10 @@ def run(lr=0.001,
     # bertversion = "bert-base-multilingual-uncased"
     # bertversion = "bert-base-uncased"
     xlmr = torch.hub.load("pytorch/fairseq", xlmrversion)
-    ds = GeoDataset(bert_tokenizer=berttokenizer, min_freq=minfreq,
+    xlmr_vocab = xlmr.model.decoder.dictionary.indices
+    xlmr_tokenizer = lambda x: xlmr.encode(x)
+    xlmr.encode("i am denis")
+    ds = GeoDataset(xlmr=xlmr, min_freq=minfreq,
                     cvfolds=cvfolds, testfold=testfold)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
@@ -703,7 +710,7 @@ def run(lr=0.001,
     # print(batch.batched_states)
 
     # bert = None
-    model = BasicGenModel(bert=bert, embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
+    model = BasicGenModel(xlmr=xlmr, embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
 
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
