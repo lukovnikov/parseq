@@ -688,6 +688,7 @@ def run(lr=0.001,
     testfold = None if testfold == -1 else testfold
 
     bertversion = "bert-base-multilingual-uncased"
+    bertversion = "bert-base-uncased"
     berttokenizer = BertTokenizer.from_pretrained(bertversion)
     ds = GeoDataset(bert_tokenizer=berttokenizer, min_freq=minfreq,
                     cvfolds=cvfolds, testfold=testfold)
