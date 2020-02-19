@@ -338,6 +338,126 @@ def try_dataset():
     tt.tock("dataset built")
 
 
+class BasicGenModelNOBERT(TransitionModel):
+    def __init__(self, bert, embdim, hdim, numlayers:int=1, dropout=0.,
+                 sentence_encoder:SequenceEncoder=None,
+                 query_encoder:SequenceEncoder=None,
+                 feedatt=False, store_attn=True, **kw):
+        super(BasicGenModel, self).__init__(**kw)
+
+        inpemb = torch.nn.Embedding(sentence_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        inpemb = TokenEmb(inpemb, rare_token_ids=sentence_encoder.vocab.rare_ids, rare_id=1)
+        # _, covered_word_ids = load_pretrained_embeddings(inpemb.emb, sentence_encoder.vocab.D,
+        #                                                  p="../../data/glove/glove300uncased")  # load glove embeddings where possible into the inner embedding class
+        # inpemb._do_rare(inpemb.rare_token_ids - covered_word_ids)
+        self.inp_emb = inpemb
+
+        encoder_dim = hdim
+        encoder = LSTMEncoder(embdim, hdim // 2, num_layers=numlayers, dropout=dropout, bidirectional=True)
+        # encoder = q.LSTMEncoder(embdim, *([encoder_dim // 2] * numlayers), bidir=True, dropout_in=dropout)
+        self.inp_enc = encoder
+
+        decoder_emb = torch.nn.Embedding(query_encoder.vocab.number_of_ids(), embdim, padding_idx=0)
+        decoder_emb = TokenEmb(decoder_emb, rare_token_ids=query_encoder.vocab.rare_ids, rare_id=1)
+        self.out_emb = decoder_emb
+
+        dec_rnn_in_dim = embdim + (encoder_dim if feedatt else 0)
+        decoder_rnn = LSTMTransition(dec_rnn_in_dim, hdim, numlayers, dropout=dropout)
+        self.out_rnn = decoder_rnn
+
+        decoder_out = PtrGenOutput(hdim + encoder_dim, vocab=query_encoder.vocab)
+        decoder_out.build_copy_maps(inp_vocab=sentence_encoder.vocab, str_action_re=None)
+        self.out_lin = decoder_out
+
+        self.att = q.Attention(q.SimpleFwdAttComp(hdim, encoder_dim, hdim), dropout=min(0.1, dropout))
+
+        self.enc_to_dec = torch.nn.ModuleList([torch.nn.Sequential(
+            torch.nn.Linear(encoder_dim, hdim),
+            torch.nn.Tanh()
+        ) for _ in range(numlayers)])
+
+        self.feedatt = feedatt
+
+        self.store_attn = store_attn
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        def _param_reset(m):
+            if type(m) == torch.nn.Linear:
+                torch.nn.init.uniform_(m.weight, -0.1, 0.1)
+                if m.bias is not None:
+                    torch.nn.init.uniform_(m.bias, -0.1, 0.1)
+            elif type(m) in (torch.nn.LSTM, torch.nn.GRU):
+                for name, param in m.named_parameters():
+                    if "weight" in name or "bias" in name:
+                        torch.nn.init.uniform(param, -0.1, 0.1)
+            elif type(m) == torch.nn.Embedding:
+                torch.nn.init.uniform_(m.weight, -0.1, 0.1)
+                torch.nn.init.constant_(m.weight[0], 0)
+        # self.apply(_param_reset)
+
+    def forward(self, x:State):
+        if not "mstate" in x:
+            x.mstate = State()
+        mstate = x.mstate
+        init_states = []
+        if not "ctx" in mstate:
+            # encode input
+            inptensor = x.inp_tensor
+            mask = inptensor != 0
+            inpembs = self.inp_emb(inptensor)
+            # inpembs = self.dropout(inpembs)
+            inpenc, final_encs = self.inp_enc(inpembs, mask)
+            for i, final_enc in enumerate(final_encs):    # iter over layers
+                _fenc = self.enc_to_dec[i](final_enc[0])
+                init_states.append(_fenc)
+            mstate.ctx = inpenc
+            mstate.ctx_mask = mask
+
+        ctx = mstate.ctx
+        ctx_mask = mstate.ctx_mask
+
+        emb = self.out_emb(x.prev_actions)
+
+        if not "rnnstate" in mstate:
+            init_rnn_state = self.out_rnn.get_init_state(emb.size(0), emb.device)
+            # uncomment next line to initialize decoder state with last state of encoder
+            # init_rnn_state[f"{len(init_rnn_state)-1}"]["c"] = final_enc
+            if len(init_states) == init_rnn_state.h.size(1):
+                init_rnn_state.h = torch.stack(init_states, 1).contiguous()
+            mstate.rnnstate = init_rnn_state
+
+        if "prev_summ" not in mstate:
+            # mstate.prev_summ = torch.zeros_like(ctx[:, 0])
+            mstate.prev_summ = final_encs[-1][0]
+        _emb = emb
+        if self.feedatt == True:
+            _emb = torch.cat([_emb, mstate.prev_summ], 1)
+        enc, new_rnnstate = self.out_rnn(_emb, mstate.rnnstate)
+        mstate.rnnstate = new_rnnstate
+
+        alphas, summ, scores = self.att(enc, ctx, ctx_mask)
+        mstate.prev_summ = summ
+        enc = torch.cat([enc, summ], -1)
+
+        if self.training:
+            out_mask = None
+        else:
+            out_mask = x.get_out_mask(device=enc.device)
+
+        outs = self.out_lin(enc, x.inp_tensor, scores, out_mask=out_mask)
+        outs = (outs,) if not q.issequence(outs) else outs
+        # _, preds = outs.max(-1)
+
+        if self.store_attn:
+            if "stored_attentions" not in x:
+                x.stored_attentions = torch.zeros(alphas.size(0), 0, alphas.size(1), device=alphas.device)
+            x.stored_attentions = torch.cat([x.stored_attentions, alphas.detach()[:, None, :]], 1)
+
+        return outs[0], x
+
+
 class BasicGenModel(TransitionModel):
     def __init__(self, bert, embdim, hdim, numlayers:int=1, dropout=0.,
                  sentence_encoder:SequenceEncoder=None,
@@ -580,6 +700,7 @@ def run(lr=0.001,
     # print("input graph")
     # print(batch.batched_states)
 
+    # bert = None
     bert = BertModel.from_pretrained(bertversion)
     model = BasicGenModel(bert=bert, embdim=embdim, hdim=encdim, dropout=dropout, numlayers=numlayers,
                              sentence_encoder=ds.sentence_encoder, query_encoder=ds.query_encoder, feedatt=True)
@@ -587,26 +708,39 @@ def run(lr=0.001,
     # sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     # do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
 
+    orderless = {"_intersection"}
     tfdecoder = SeqDecoder(model, tf_ratio=1.,
                            eval=[CELoss(ignore_index=0, mode="logprobs", smoothing=smoothing),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                          orderless={"and"})])
+                                                          orderless=orderless)])
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
 
     freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
                              eval=[SeqAccuracies(),
                                    TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and"})])
+                                                orderless=orderless)])
     vlosses = make_loss_array("seq_acc", "tree_acc")
 
     beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize, copy_deep=True,
                               eval=[SeqAccuracies()],
                               eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
-                                                orderless={"and"})])
+                                                orderless=orderless)])
     beamlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # 4. define optim
     # optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)
+    allparams = tfdecoder.named_parameters()
+    bertparams = [p for (n, p) in allparams if n.startswith("model.bert.")]
+    otherparams = [p for (n, p) in allparams if not n.startswith("model.bert.")]
+    paramgroups = [
+        {
+            "params": bertparams,
+            "lr": lr * 0.1
+        },
+        {
+            "params": otherparams
+        }
+    ]
     optim = torch.optim.Adam(tfdecoder.parameters(), lr=lr, weight_decay=wreg)
 
     train_on = "train"
