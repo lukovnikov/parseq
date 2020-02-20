@@ -686,7 +686,7 @@ def run(lr=0.001,
         testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
         xlmrversion="xlmr.base",
         trainlang="en",
-        testlang="de", #"[SAME]",
+        testlang="[SAME]",
         ):
     localargs = locals().copy()
     print(ujson.dumps(localargs, indent=4))
