@@ -168,7 +168,7 @@ class GeoDataset(object):
         self.xlmr_vocab.set_dict(xlmr.model.decoder.dictionary.indices)
         self.sentence_encoder = SequenceEncoder(lambda x: f"<s> {xlmr.bpe.encode(x)} </s>".split(), vocab=self.xlmr_vocab)
         trainlines = [x for x in ujson.load(open(os.path.join(p, f"geo-{self.train_lang}.json"), "r"))]
-        testlines = [x for x in ujson.load(open(os.path.join(p, f"geo-{self.train_lang}.json"), "r"))]
+        testlines = [x for x in ujson.load(open(os.path.join(p, f"geo-{self.test_lang}.json"), "r"))]
         trainlines = [x for x in trainlines if x["split"] == "train"]
         testlines = [x for x in testlines if x["split"] == "test"]
         if self.cvfolds is None:
