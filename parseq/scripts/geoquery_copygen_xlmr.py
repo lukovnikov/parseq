@@ -683,9 +683,12 @@ def run(lr=0.001,
         numcvfolds=6,
         testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
         xlmrversion="xlmr.base",
+        trainlang="en",
+        testlang="[SAME]",
         ):
     localargs = locals().copy()
-    print(locals())
+    print(ujson.dumps(localargs, indent=4))
+    testlang = testlang if testlang is not "[SAME]" else trainlang
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
