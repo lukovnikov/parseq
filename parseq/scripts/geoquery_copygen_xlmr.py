@@ -211,6 +211,9 @@ class GeoDataset(object):
 
     def build_token_specs(self, outputs:Iterable[str]):
         token_specs = dict()
+        specialones = set("_cityid _stateid _countryid _riverid _placeid".split(" "))
+        for specialone in specialones:
+            token_specs[specialone] = [1, 10]
 
         def walk_the_tree(t, _ts):
             l = t.label()
