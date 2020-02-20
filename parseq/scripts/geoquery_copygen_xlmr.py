@@ -684,7 +684,7 @@ def run(lr=0.001,
         testfold=-1,      # if non-default, must be within number of splits, the chosen value is used for validation
         xlmrversion="xlmr.base",
         trainlang="en",
-        testlang="[SAME]",
+        testlang="de", #"[SAME]",
         ):
     localargs = locals().copy()
     print(ujson.dumps(localargs, indent=4))
@@ -704,7 +704,7 @@ def run(lr=0.001,
     xlmr_vocab = xlmr.model.decoder.dictionary.indices
     xlmr_tokenizer = lambda x: xlmr.encode(x)
     xlmr.encode("i am denis")
-    ds = GeoDataset(xlmr=xlmr, min_freq=minfreq,
+    ds = GeoDataset(xlmr=xlmr, min_freq=minfreq, train_lang=trainlang, test_lang=testlang,
                     cvfolds=cvfolds, testfold=testfold)
     print(f"max lens: {ds.maxlen_input} (input) and {ds.maxlen_output} (output)")
     tt.tock("data loaded")
