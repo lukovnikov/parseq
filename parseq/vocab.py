@@ -200,7 +200,7 @@ class SequenceEncoder(VocabBuilder):
     
     def convert(self, x:Union[str, List[str]], return_what="tensor"):     # "tensor", "ids", "tokens" or comma-separated combo of all
         rets = [r.strip() for r in return_what.split(",")]
-        if isinstance(x, list):
+        if isinstance(x, list) and (len(x) == 0 or isinstance(x[0], str)):
             tokens = x
         else:
             tokens = self.tokenizer(x)

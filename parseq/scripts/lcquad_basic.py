@@ -147,7 +147,7 @@ class LCQuaDnoENTDataset(object):
         avgsize_after = []
         afterstring = set()
 
-        def convert_to_lispstr(_x):
+        def convert_to_prologstr(_x):
             splits = _x.split()
             assert(sum([1 if xe == "~" else 0 for xe in splits]) == 1)
             assert(splits[1] == "~")
@@ -161,7 +161,7 @@ class LCQuaDnoENTDataset(object):
         for i, line in enumerate(lines):
             question = line["question"]
             query = line["logical_form"]
-            query = convert_to_lispstr(query)
+            query = convert_to_prologstr(query)
             z, ltp = prolog_to_pas(query, ltp)
             if z is not None:
                 ztree = pas_to_tree(z)
@@ -223,7 +223,7 @@ class LCQuaDnoENTDataset(object):
         maxlen_in, maxlen_out = 0, 0
         eid = 0
 
-        gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids(last_nonrare=False))
+        gold_map = torch.arange(0, self.query_encoder.vocab.number_of_ids())
         rare_tokens = self.query_encoder.vocab.rare_tokens - set(self.sentence_encoder.vocab.D.keys())
         for rare_token in rare_tokens:
             gold_map[self.query_encoder.vocab[rare_token]] = \
