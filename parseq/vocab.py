@@ -16,10 +16,12 @@ class Vocab(_Vocab):
     unktoken = "@UNK@"
     starttoken = "@START@"
     endtoken = "@END@"
-    def __init__(self, padid:int=0, unkid:int=1, startid:int=2, endid:int=3, **kw):
+    masktoken = "@MASK@"
+    def __init__(self, padid:int=0, unkid:int=1, startid:int=2, endid:int=3, maskid:int=4, **kw):
         self.D = {self.padtoken: padid, self.unktoken: unkid}
         self.D[self.starttoken] = startid
         self.D[self.endtoken] = endid
+        self.D[self.masktoken] = maskid
         self.counts = {k: np.infty for k in self.D.keys()}
         self.rare_tokens = set()
         self.rare_ids = set()
@@ -198,8 +200,8 @@ class SequenceEncoder(VocabBuilder):
     def vocabs_finalized(self):
         return self.vocab_final
     
-    def convert(self, x:Union[str, List[str]], return_what="tensor"):     # "tensor", "ids", "tokens" or comma-separated combo of all
-        rets = [r.strip() for r in return_what.split(",")]
+    def convert(self, x:Union[str, List[str]], return_what:Union[str, List[str]]="tensor"):     # "tensor", "ids", "tokens" or comma-separated combo of all
+        return_what = [r.strip() for r in return_what.split(",")] if isinstance(return_what, str) and "," in return_what else return_what
         if isinstance(x, list) and (len(x) == 0 or isinstance(x[0], str)):
             tokens = x
         else:
@@ -207,11 +209,20 @@ class SequenceEncoder(VocabBuilder):
         if self.add_end_token and tokens[-1] != self.endtoken:
             tokens.append(self.endtoken)
         ret = {"tokens": tokens}
-        if "ids" in rets or "tensor" in rets:
+
+        # returns
+        return_single = False
+        if isinstance(return_what, str):
+            return_single = True
+            return_what = [return_what]
+        if "ids" in return_what or "tensor" in return_what:
             ret["ids"] = [self.vocab[token] for token in tokens]
-        if "tensor" in rets:
+        if "tensor" in return_what:
             ret["tensor"] = torch.tensor(ret["ids"], dtype=torch.long)
-        ret = [ret[r] for r in rets]
+        ret = [ret[r] for r in return_what]
+        if return_single:
+            assert(len(ret) == 1)
+            ret = ret[0]
         return ret
     
     

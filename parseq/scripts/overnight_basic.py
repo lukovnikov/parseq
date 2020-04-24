@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader
 # from funcparse.states import FuncTreeState, FuncTreeStateBatch, BasicState, BasicStateBatch
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
-from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamDecoder, BeamTransition
+from parseq.decoding import SeqDecoder, BeamDecoder, BeamTransition
 from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree
@@ -699,12 +699,12 @@ def run(lr=0.001,
     sentence_rare_tokens = set([ds.sentence_encoder.vocab(i) for i in model.inp_emb.rare_token_ids])
     do_rare_stats(ds, sentence_rare_tokens=sentence_rare_tokens)
 
-    tfdecoder = SeqDecoder(TFTransition(model),
-                           [CELoss(ignore_index=0, mode="logprobs"),
+    tfdecoder = SeqDecoder(model, tf_ratio=1.,
+                           eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"op:and", "SW:concat"})])
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
-    freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize,
+    freedecoder = BeamDecoder(model, maxtime=50, beamsize=beamsize, tf_ratio=0.,
                               eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                  orderless={"op:and", "SW:concat"})])
 

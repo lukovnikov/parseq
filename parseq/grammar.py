@@ -247,6 +247,14 @@ def tree_to_lisp(x:Tree):
         return x.label()
 
 
+def tree_to_lisp_tokens(x:Tree):
+    if len(x) > 0:
+        children = [tree_to_lisp_tokens(xe) for xe in x]
+        return ["(", x.label()] + [childe for child in children for childe in child] + [")"]
+    else:
+        return [x.label()]
+
+
 def tree_to_prolog(x:Tree):
     if len(x) > 0:
         children = [tree_to_prolog(tc) for tc in x]
