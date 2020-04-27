@@ -3,6 +3,7 @@ from typing import Union, Callable, List, Dict
 import numpy as np
 
 import torch
+from nltk import Tree
 
 from parseq.grammar import FuncGrammar
 
@@ -202,7 +203,8 @@ class SequenceEncoder(VocabBuilder):
     
     def convert(self, x:Union[str, List[str]], return_what:Union[str, List[str]]="tensor"):     # "tensor", "ids", "tokens" or comma-separated combo of all
         return_what = [r.strip() for r in return_what.split(",")] if isinstance(return_what, str) and "," in return_what else return_what
-        if isinstance(x, list) and (len(x) == 0 or isinstance(x[0], str)):
+        if isinstance(x, list) and not isinstance(x, Tree) \
+                and (x == [] or isinstance(x[0], str)):
             tokens = x
         else:
             tokens = self.tokenizer(x)

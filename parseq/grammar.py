@@ -15,7 +15,7 @@ def pas_to_str(x):
 
 
 class TreeStrParser(ABC):
-    def __init__(self, x:str=None):
+    def __init__(self, x:str=None, brackets="()"):
         super(TreeStrParser, self).__init__()
         self.stack = [[]]
         self.curstring = None
@@ -23,6 +23,7 @@ class TreeStrParser(ABC):
         self.prevescape = 0
         self.next_is_sibling = False
         self.nameless_func = "@NAMELESS@"
+        self.brackets = brackets
 
         if x is not None:
             self.feed(x)
@@ -59,10 +60,10 @@ class TreeStrParser(ABC):
                 self.next_is_sibling = False
                 next_token = next_token.strip()
                 self.prevescape = False
-                if next_token == "(":
+                if next_token == self.brackets[0]:
                     # add one level on stack
                     self.add_level()
-                elif next_token == ")":
+                elif next_token == self.brackets[1]:
                     # close last level on stack, merge into subtree
                     self.close_level()
                 elif next_token == "" or next_token == " ":
@@ -138,7 +139,7 @@ class LispToTree(TreeStrParser):
         self.stack[-1].append(Tree(next_token, []))
 
 
-def _inc_convert_treestr(x, cls, self=-1):
+def _inc_convert_treestr(x, cls, self=-1, brackets="()"):
     """
     :param x: lisp-style string
     strings must be surrounded by single quotes (') and may not contain anything but single quotes
@@ -148,7 +149,7 @@ def _inc_convert_treestr(x, cls, self=-1):
         ret = self.feed(x)
         return ret, self
     else:
-        _self = cls(x) if not isinstance(self, cls) else self
+        _self = cls(x, brackets=brackets) if not isinstance(self, cls) else self
         ret = _self.feed("")
         if ret is None:
             return None, _self
@@ -159,36 +160,36 @@ def _inc_convert_treestr(x, cls, self=-1):
                 return ret
 
 
-def lisp_to_pas(x:str, self:LispToPas=-1):
-    return _inc_convert_treestr(x, LispToPas, self=self)
+def lisp_to_pas(x:str, self:LispToPas=-1, brackets="()"):
+    return _inc_convert_treestr(x, LispToPas, self=self, brackets=brackets)
 
 
-def prolog_to_pas(x:str, self:PrologToPas=-1):
-    return _inc_convert_treestr(x, PrologToPas, self=self)
+def prolog_to_pas(x:str, self:PrologToPas=-1, brackets="()"):
+    return _inc_convert_treestr(x, PrologToPas, self=self, brackets=brackets)
 
 
-def lisp_to_tree(x:str, self:LispToTree=-1):
-    return _inc_convert_treestr(x, LispToTree, self=self)
+def lisp_to_tree(x:str, self:LispToTree=-1, brackets="()"):
+    return _inc_convert_treestr(x, LispToTree, self=self, brackets=brackets)
 
 
-def prolog_to_tree(x: str, self:PrologToTree = -1):
-    return _inc_convert_treestr(x, PrologToTree, self=self)
+def prolog_to_tree(x: str, self:PrologToTree = -1, brackets="()"):
+    return _inc_convert_treestr(x, PrologToTree, self=self, brackets=brackets)
 
 
-def pas_to_lisp(x):
+def pas_to_lisp(x, brackets="()"):
     if isinstance(x, tuple):    # has children
         head = x[0]
-        children = [pas_to_lisp(e) for e in x[1]]
-        return f"({head} {' '.join(children)})"
+        children = [pas_to_lisp(e, brackets=brackets) for e in x[1]]
+        return f"{brackets[0]}{head} {' '.join(children)}{brackets[1]}"
     else:
         return x
 
 
-def pas_to_prolog(x):
+def pas_to_prolog(x, brackets="()"):
     if isinstance(x, tuple):
         head = x[0]
-        children = [pas_to_prolog(e) for e in x[1]]
-        return f"{head} ( {', '.join(children)} )"
+        children = [pas_to_prolog(e, brackets=brackets) for e in x[1]]
+        return f"{head} {brackets[0]} {', '.join(children)} {brackets[1]}"
     else:
         return x
 
@@ -239,26 +240,26 @@ def pas_to_tree(x):
     return node
 
 
-def tree_to_lisp(x:Tree):
+def tree_to_lisp(x:Tree, brackets="()"):
     if len(x) > 0:
-        children = [tree_to_lisp(xe) for xe in x]
-        return f"({x.label()} {' '.join(children)})"
+        children = [tree_to_lisp(xe, brackets=brackets) for xe in x]
+        return f"{brackets[0]}{x.label()} {' '.join(children)}{brackets[1]}"
     else:
         return x.label()
 
 
-def tree_to_lisp_tokens(x:Tree):
+def tree_to_lisp_tokens(x:Tree, brackets="()"):
     if len(x) > 0:
-        children = [tree_to_lisp_tokens(xe) for xe in x]
-        return ["(", x.label()] + [childe for child in children for childe in child] + [")"]
+        children = [tree_to_lisp_tokens(xe, brackets=brackets) for xe in x]
+        return [brackets[0], x.label()] + [childe for child in children for childe in child] + [brackets[1]]
     else:
         return [x.label()]
 
 
-def tree_to_prolog(x:Tree):
+def tree_to_prolog(x:Tree, brackets="()"):
     if len(x) > 0:
-        children = [tree_to_prolog(tc) for tc in x]
-        return f"{x.label()} ( {', '.join(children)} )"
+        children = [tree_to_prolog(tc, brackets=brackets) for tc in x]
+        return f"{x.label()} {brackets[0]} {', '.join(children)} {brackets[1]}"
     else:
         return x.label()
 

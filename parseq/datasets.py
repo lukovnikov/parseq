@@ -1,16 +1,26 @@
+import csv
+import json
 import os
 import random
+import timeit
 from abc import abstractmethod
+from copy import copy
 from typing import List, Tuple, Callable
 
 import nltk
+import torch
 import ujson
 from nltk import Tree, Nonterminal
 import numpy as np
+import qelos as q
 from nltk.parse.generate import generate
+from torch.utils.data import DataLoader
+from torch.utils.data.dataloader import default_collate
+from tqdm import tqdm
 
 from parseq.grammar import lisp_to_pas, pas_to_tree, tree_size, tree_to_lisp, tree_to_lisp_tokens
 from parseq.vocab import SequenceEncoder, Vocab
+from transformers import BartTokenizer
 
 
 class Dataset(object):
@@ -31,10 +41,45 @@ class Dataset(object):
     def __len__(self):
         return len(self._examples)
 
+    def _filter_inner(self, ex, f, ret):
+        if isinstance(f, Callable) and f(ex):
+            ret.append(ex)
+        elif isinstance(f, tuple):
+            assert (isinstance(ex, (tuple, list)))
+            assert (len(f) == len(ex))
+            keep = True
+            for fe, exe in zip(f, ex):
+                if fe is not None:
+                    if isinstance(fe, Callable):
+                        keep = keep and fe(exe)
+                    else:
+                        keep = keep and (fe == exe)
+            if keep:
+                ret.append(ex)
+        elif isinstance(f, dict):
+            assert (isinstance(ex, dict))
+            keep = True
+            for k in f:
+                assert (k in ex)
+                if isinstance(f[k], Callable):
+                    keep = keep and f[k](ex[k])
+                else:
+                    keep = keep and (f[k] == ex[k])
+            if keep:
+                ret.append(ex)
+        return ret
+
+    def filter(self, f):
+        ret = []
+        for ex in self._examples:
+            ret = self._filter_inner(ex, f, ret)
+        ret = Dataset(ret)
+        return ret
+
     def __getitem__(self, item):
-        if isinstance(item, Callable):
-            ret = [rete for rete in self._examples if item(rete)]
-            return Dataset(ret)
+        if isinstance(item, (Callable, tuple, dict)):
+            ret = self.filter(item)
+            return ret
         else:
             ret = self._examples[item]
             return ret
@@ -47,13 +92,17 @@ class Dataset(object):
         return ret
 
 
-class MappedDataset(Dataset):
-    def __init__(self, baseds, f, use_cache=True, **kw):
-        super(MappedDataset, self).__init__(**kw)
-        self.baseds = baseds
-        self.f = f
+class CachedDataset(object):
+    def __init__(self, use_cache=False, **kw):
+        super(CachedDataset, self).__init__(**kw)
         self.use_cache = use_cache
         self._examples_cache = {}
+        self.baseds = None
+
+    def cache(self):
+        """ Enable cache at this level. """
+        self.enable_cache()
+        return self
 
     def clear_cache(self):
         self._examples_cache = {}
@@ -69,54 +118,88 @@ class MappedDataset(Dataset):
 
     def deep_disable_cache(self):
         self.disable_cache()
-        if isinstance(self.baseds, MappedDataset):
+        if isinstance(self.baseds, CachedDataset):
             self.baseds.deep_disable_cache()
         return self
 
     def deep_enable_cache(self):
         self.enable_cache()
-        if isinstance(self.baseds, MappedDataset):
+        if isinstance(self.baseds, CachedDataset):
             self.baseds.deep_enable_cache()
         return self
+
+
+class MappedDataset(Dataset, CachedDataset):
+    def __init__(self, baseds:Dataset, f, use_cache=False, **kw):
+        self._kw = copy(kw)
+        super(MappedDataset, self).__init__(use_cache=use_cache, **kw)
+        self.baseds = baseds
+        self.f = f
 
     def __len__(self):
         return len(self.baseds)
 
+    @property
+    def examples(self):
+        ret = [self[i] for i in range(len(self))]
+        return ret
+
+    def filter(self, f):
+        newbase = self.baseds.filter(lambda x: f(self.f(x)))
+        ret = newbase.map(self.f)
+        return ret
+
     def __getitem__(self, item):
-        if isinstance(item, str):
-            ret = self.baseds[item]
-            return MappedDataset(ret, self.f)
+        if isinstance(item, (Callable, tuple, dict)):
+            ret = self.filter(item)
+            return ret
         else:
-            if item in self._examples_cache and self.use_cache:
+            if self.use_cache and item in self._examples_cache:
                 ret = self._examples_cache[item]
+                return ret
             else:
                 example = self.baseds[item]
                 ret = self.f(example)
                 if self.use_cache:
                     self._examples_cache[item] = ret
-            return ret
+                return ret
 
 
-class GeneratedDataset(Dataset):
-    def __init__(self, N=np.infty, seed=12345678, **kw):
-        super(GeneratedDataset, self).__init__(**kw)
+class GeneratedDataset(Dataset, CachedDataset):
+    def __init__(self, N=int(9e9), seed=12345678, use_cache=False, **kw):
+        super(GeneratedDataset, self).__init__(use_cache=use_cache, **kw)
         self.seed = seed
         self.N = N
 
     def __len__(self):
         return self.N
 
+    def filter(self, f):
+        if self.N >= 1e6:
+            print(f"WARNING: number of examples is huge ({self.N}), a stored Dataset is being created. Please reconsider.")
+        ret = []
+        for i in tqdm(range(self.N), disable=False):
+            ex = self[i]
+            ret = self._filter_inner(ex, f, ret)
+        ret = Dataset(ret)
+        return ret
+
     def __getitem__(self, item):
-        if isinstance(item, Callable):
-            pass    # TODO
-            raise NotImplemented()
+        if isinstance(item, (Callable, tuple, dict)):
+            return self.filter(item)
         else:
+            if self.use_cache and item in self._examples_cache:
+                ret = self._examples_cache[item]
+                return ret
             rng = np.random.RandomState(self.seed + item)
-            return self.generate(rng=rng)
+            ret = self.generate(rng=rng)
+            if self.use_cache:
+                self._examples_cache[item] = ret
+            return ret
 
     @property
     def examples(self):
-        for i in range(self.N):
+        for i in range(len(self)):
             yield self[i]
 
     @abstractmethod
@@ -129,12 +212,45 @@ class GeneratedDataset(Dataset):
 class GeneratedMappedDataset(MappedDataset):
     @property
     def examples(self):
-        for i in range(self.N):
+        for i in range(len(self)):
             yield self[i]
+
+    def __getitem__(self, item):
+        if isinstance(item, (Callable, tuple, dict)):
+            return self.filter(item)
+        else:
+            if self.use_cache and item in self._examples_cache:
+                ret = self._examples_cache[item]
+                return ret
+            else:
+                example = self.baseds[item]
+                ret = self.f(example)
+                if self.use_cache:
+                    self._examples_cache[item] = ret
+                return ret
+
+    def map(self, f):
+        return GeneratedMappedDataset(self, f)
+
+
+class Pipeline(object):
+    def __init__(self, **kw):
+        super(Pipeline, self).__init__(**kw)
+        self.transforms = []
+
+    def add(self, f):
+        self.transforms.append(f)
+        return self
+
+    def __call__(self, x):
+        ret = x
+        for f in self.transforms:
+            ret = f(ret)
+        return ret
 
 
 class PCFGDataset(GeneratedDataset):
-    def __init__(self, pcfg, N=np.infty, seed=12345678, **kw):
+    def __init__(self, pcfg, N=int(1e6), seed=12345678, **kw):
         super(PCFGDataset, self).__init__(N=N, seed=seed, **kw)
         self._pcfg = pcfg
 
@@ -160,6 +276,38 @@ class PCFGDataset(GeneratedDataset):
         return ret
 
 
+class PCFGBuilder(object):
+    def __init__(self, orderless=tuple(), **kw):
+        super(PCFGBuilder, self).__init__(**kw)
+        self.orderless = set(orderless)
+
+    def build(self, examples=tuple()):
+        allproductions = []
+        for example in examples:
+            q = example
+            t = self.grammarify(q)
+            t = Tree("S", [t])
+            productions = t.productions()
+            allproductions += productions
+        pcfg = nltk.induce_pcfg(Nonterminal("S"), allproductions)
+        return pcfg
+
+    def grammarify(self, x, parents=tuple()):
+        if len(x) > 0:
+            children = [self.grammarify(xe, parents=parents+(x,)) for xe in x]
+            children = [
+                Tree(f"NT-{x.label()}-ARG{i}", [xe])
+                    if x.label() not in self.orderless else
+                Tree(f"NT-{x.label()}-ARG", [xe])
+                for i, xe in enumerate(children)]
+            children = [x.label()] + children
+            t = Tree(f"NT-{x.label()}", children)
+            # t = Tree(f"S", [t])
+        else:
+            t = x.label()
+        return t
+
+
 def build_vocab_from_pcfg(pcfg, min_freq=0, top_k=np.infty)->Vocab:
     vocab = Vocab()
     vocab.add_token("(")
@@ -172,25 +320,65 @@ def build_vocab_from_pcfg(pcfg, min_freq=0, top_k=np.infty)->Vocab:
     return vocab
 
 
-class SpanMasker(object):
+def pad_and_default_collate(x):
+    y = list(zip(*x))
+    for i, yi in enumerate(y):
+        if isinstance(yi[0], torch.LongTensor) and yi[0].dim() == 1:
+            y[i] = q.pad_tensors(yi, 0, 0)
+    x = list(zip(*y))
+    ret = default_collate(x)
+    return ret
+
+
+# region NOISE FUNCTIONS
+class TokenMasker(object):
     mask_symbol = "@MASK@"
-    def __init__(self, p=.1, lamda=1.2, seed=None, **kw):
+    def __init__(self, p=.2, seed=None, **kw):
+        super(TokenMasker, self).__init__(**kw)
+        self.p = p
+        self.rng = np.random.RandomState(seed)
+
+    def __call__(self, tokens:List[str])->List[str]:
+        ret = []
+        i = 0
+        while i < len(tokens):
+            if self.p > self.rng.random_sample():
+                ret.append(self.mask_symbol)
+            else:
+                ret.append(tokens[i])
+            i += 1
+        return ret
+
+
+class TokenDeleter(object):
+    def __call__(self, tokens:List[str])->List[str]:
+        ret = []
+        i = 0
+        while i < len(tokens):
+            if self.p > self.rng.random_sample():
+                pass
+            else:
+                ret.append(tokens[i])
+            i += 1
+        return ret
+
+
+class SpanMasker(TokenMasker):
+    def __init__(self, p=.1, lamda=2.2, seed=None, **kw):
         """
         :param p: probability of replacing a span with mask symbol
         :param lamda: parameter for Poisson distribution on the length of span (0 ==> length 1 always)
         :param kw:
         """
-        super(SpanMasker, self).__init__(**kw)
+        super(SpanMasker, self).__init__(p=p, seed=seed, **kw)
         self.lamda = lamda
-        self.p = p
-        self.rng = np.random.RandomState(seed)
 
-    def __call__(self, tokens:List[str]):
+    def __call__(self, tokens:List[str])->List[str]:
         ret = []
         i = 0
         while i < len(tokens):
-            if self.p < np.random.random():
-                l = np.random.poisson(self.lamda)
+            if self.p > self.rng.random_sample():
+                l = self.rng.poisson(self.lamda)
                 ret.append(self.mask_symbol)
                 i += l
             else:
@@ -199,7 +387,17 @@ class SpanMasker(object):
         return ret
 
 
+class SubtreeMasker(TokenMasker):
+    def __call__(self, x:Tree):
+        if self.p > self.rng.random_sample():
+            return Tree(self.mask_symbol, [])
+        else:
+            return Tree(x.label(), [self(xe) for xe in x])
 
+# endregion
+
+
+# region SPECIFIC DATASETS
 class OvernightDatasetLoader(object):
     def __init__(self,
                  p="../datasets/overnightData/",
@@ -447,41 +645,61 @@ class OvernightDatasetLoader(object):
         return examples
 
 
-class PCFGBuilder(object):
-    def __init__(self, orderless=tuple(), **kw):
-        super(PCFGBuilder, self).__init__(**kw)
-        self.orderless = set(orderless)
+class TOPDatasetLoader(object):
+    def __init__(self,
+                 p="../datasets/top/",
+                 include_unsupported=False, **kw):
+        super(TOPDatasetLoader, self).__init__(**kw)
+        self._p = p
+        self._include_unsupported = include_unsupported
 
-    def build(self, examples=tuple()):
-        allproductions = []
-        for example in examples:
-            q = example
-            t = self.grammarify(q)
-            t = Tree("S", [t])
-            productions = t.productions()
-            allproductions += productions
-        pcfg = nltk.induce_pcfg(Nonterminal("S"), allproductions)
-        return pcfg
+    def lines_to_examples(self, x:List[List[str]]):
+        def convert_leaf_str_to_tree(_tree):
+            if isinstance(_tree, str):
+                return Tree(_tree, [])
+            else:
+                return Tree(_tree.label(), [convert_leaf_str_to_tree(_tree_e) for _tree_e in _tree])
+        ret = []
+        for example in x:
+            if example[0].replace(" ", "") != example[1].replace(" ", ""):
+                assert(example[0] == example[1])
+            example = (example[1], example[2])
+            tree = Tree.fromstring(example[1], brackets='[]')
+            if not self._include_unsupported and tree.label().startswith("IN:UNSUPPORTED"):
+                continue
+            tree = convert_leaf_str_to_tree(tree)
+            # print(tree)
+            example = (example[0], tree)
+            ret.append(example)
+        return ret
 
-    def grammarify(self, x, parents=tuple()):
-        if len(x) > 0:
-            children = [self.grammarify(xe, parents=parents+(x,)) for xe in x]
-            children = [
-                Tree(f"NT-{x.label()}-ARG{i}", [xe])
-                    if x.label() not in self.orderless else
-                Tree(f"NT-{x.label()}-ARG", [xe])
-                for i, xe in enumerate(children)]
-            children = [x.label()] + children
-            t = Tree(f"NT-{x.label()}", children)
-            # t = Tree(f"S", [t])
-        else:
-            t = x.label()
-        return t
+    def load(self):
+        p = self._p
+
+        with open(os.path.join(p, f"train.tsv"), "r") as f:
+            trainlines = [row for row in csv.reader(f, delimiter="\t")]
+        with open(os.path.join(p, f"eval.tsv"), "r") as f:
+            validlines = [row for row in csv.reader(f, delimiter="\t")]
+        with open(os.path.join(p, f"test.tsv"), "r") as f:
+            testlines = [row for row in csv.reader(f, delimiter="\t")]
+
+        trainexamples = self.lines_to_examples(trainlines)
+        validexamples = self.lines_to_examples(validlines)
+        testexamples = self.lines_to_examples(testlines)
+
+        questions, parses = tuple(zip(*(trainexamples + validexamples + testexamples)))
+        splits = ["train"] * len(trainexamples) + ["valid"] * len(validexamples) + ["test"] * len(testexamples)
+
+        examples = list(zip(questions, parses, splits))
+        return Dataset(examples)
 
 
 class OvernightPCFGBuilder(PCFGBuilder):
     def __init__(self, **kw):
         super(OvernightPCFGBuilder, self).__init__(("op:and",), **kw)
+
+
+# endregion
 
 
 def try_tokenizer_dataset():
@@ -505,31 +723,132 @@ def try_tokenizer_dataset():
 
 
 def try_perturbed_generated_dataset():
+    torch.manual_seed(1234)
     ovd = OvernightDatasetLoader().load()
     govd = PCFGDataset(OvernightPCFGBuilder()
-                       .build(ovd[lambda x: x[2] in {"train", "valid"}]
-                              .map(lambda f: f[1])
-                              .examples))
+                       .build(ovd[(None, None, lambda x: x in {"train", "valid"})]
+                              .map(lambda f: f[1]).examples),
+                       N=10000)
+
+    print(govd[0])
+    # print(govd[lambda x: True][0])
+
+    # print(govd[:])
     # create vocab from pcfg
     vocab = build_vocab_from_pcfg(govd._pcfg)
     seqenc = SequenceEncoder(vocab=vocab, tokenizer=tree_to_lisp_tokens)
-    masker = SpanMasker(seed=12345)
+    spanmasker = SpanMasker(seed=12345667)
+    treemasker = SubtreeMasker(p=.05, seed=2345677)
 
-    perturbed_govd = govd\
-        .map(lambda x: tuple(x) + (seqenc.convert(x[1], "tokens"),))\
-        .map(lambda x: tuple(x) + (masker(x[-1]),))\
-        .map(lambda x: tuple(x) + (seqenc.convert(x[-1], "tensor"),))\
-        .deep_disable_cache()
+    perturbed_govd = govd.cache()\
+        .map(lambda x: (seqenc.convert(x, "tensor"), x)) \
+        .map(lambda x: x + (seqenc.convert(x[-1], "tokens"),)) \
+        .map(lambda x: x + (spanmasker(x[-1]),)) \
+        .map(lambda x: x + (seqenc.convert(x[-1], "tensor"),)) \
+        .map(lambda x: (x[-1], x[0]))
 
-    print(perturbed_govd[0])
+    dl = DataLoader(perturbed_govd, batch_size=10, shuffle=True, collate_fn=pad_and_default_collate)
+    batch = next(iter(dl))
+    print(batch)
+    print(vocab.tostr(batch[0][1]))
+    print(vocab.tostr(batch[1][1]))
+
+    tt = q.ticktock()
+    tt.tick("first run")
+    for i in range(10000):
+        y = perturbed_govd[i]
+        if i < 10:
+            print(f"{y[0]}\n{y[-2]}")
+    tt.tock("first run done")
+    tt.tick("second run")
+    for i in range(10000):
+        y = perturbed_govd[i]
+        if i < 10:
+            print(f"{y[0]}\n{y[-2]}")
+    tt.tock("second run done")
+
+
+def try_top_dataset():
+    ds = TOPDatasetLoader().load()
+    print(ds[(None, None, "train")][0])
+    gds = PCFGDataset(PCFGBuilder()
+                      .build(ds[lambda x: x[2] in {"train", "valid"}]
+                             .map(lambda f: f[1]).examples))
+
+    def tree_to_str(x:Tree):
+        toks = tree_to_lisp_tokens(x, brackets="[]")
+        toks = " ".join(toks)
+        toks = toks.replace("[ ", "<[").replace("]", "]>")
+        return toks
+
+    fl_tokens = {"]>",}
+    for example in ds[lambda x: x[-1] == "train"]\
+            .map(lambda x: (tree_to_str(x[1]),)).examples:
+        example_toks = example[0].split(" ")
+        for tok in example_toks:
+            if tok.startswith("<[SL:") or tok.startswith("<[IN:"):
+                fl_tokens.add(tok)
+
+    print(f"extra tokens ({len(fl_tokens)}):")
+    for fl_token in fl_tokens:
+        print(fl_token)
+
+    nl_tokenizer = BartTokenizer.from_pretrained("bart-large")
+    fl_tokenizer = BartTokenizer.from_pretrained("bart-large")
+    fl_tokenizer.add_special_tokens({"additional_special_tokens": list(fl_tokens)})
+
+    pl = Pipeline()
+    pl = pl.add(lambda x: (nl_tokenizer.tokenize(" " + x[0]),
+                            nl_tokenizer.tokenize(" " + tree_to_str(x[1])),
+                            fl_tokenizer.tokenize(" " + tree_to_str(x[1])),
+                            x[-1]))
+    # print(json.dumps(mds[0], indent=4))
+    tds = ds[lambda x: x[-1] == "test"]
+    for i in range(10):
+        x = tds.map(pl)[i]
+        print(i)
+        print(x[0])
+        print(x[1])
+        print(x[2])
+        
+    pl2 = Pipeline()
+    pl2 = pl2.add(pl)
+    pl2 = pl2.add(lambda x: (nl_tokenizer.encode(x[0], return_tensors="pt"),
+                              nl_tokenizer.encode(x[1], return_tensors="pt"),
+                              fl_tokenizer.encode(x[2], return_tensors="pt"),
+                              x[-1]))
+
+    for i in range(10):
+        x = tds.map(pl2)[i]
+        print(i)
+        print(nl_tokenizer.decode(x[0][0]))
+        print(nl_tokenizer.decode(x[1][0]))
+        print(fl_tokenizer.decode(x[2][0]))
+
+    tds = ds[(None, None, "test")]
+    xds = tds.map(pl)
+    xds2 = tds.map(pl2)
+    for i in tqdm(range(len(xds))):
+        oinp = tree_to_str(tds[i][1])
+        inp = " ".join(xds[i][2])
+        inp2 = fl_tokenizer.decode(xds2[i][2][0])
+        assert("<pad>" not in inp2)
+        assert("<unk>" not in inp2)
+        inp2 = inp2.replace("<s>", "").replace("</s>", "").strip()
+        if not oinp.lower().replace(" ", "") == inp2.lower().replace(" ", ""):
+            _inp2 = fl_tokenizer.decode(xds2[i][2][0])
+            assert(oinp.lower().replace(" ", "") == inp2.lower().replace(" ", ""))
 
 
 
+    print(nl_tokenizer.get_vocab())
+    print(gds._pcfg.productions)
 
 if __name__ == '__main__':
     # import filelock
     # try_tokenizer_dataset()
-    try_perturbed_generated_dataset()
+    # try_perturbed_generated_dataset()
+    try_top_dataset()
     # ovd = OvernightDatasetLoader().load()
     # govd = PCFGDataset(OvernightPCFGBuilder()
     #                    .build(ovd[lambda x: x[2] in {"train", "valid"}]
