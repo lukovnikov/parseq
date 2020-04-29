@@ -254,7 +254,7 @@ def run(domain="restaurants",
         out = testm(*batch)
         print(out)
 
-    losses = make_loss_array("loss", "seq_acc", "tree_acc")
+    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
     vlosses = make_loss_array("seq_acc", "tree_acc")
 
     trainable_params = trainm.named_parameters()
