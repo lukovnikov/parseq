@@ -247,7 +247,7 @@ def run(domain="restaurants",
     tt.tock("model created")
 
     # run a batch of data through the model
-    if True:
+    if False:
         batch = next(iter(tdl))
         out = trainm(*batch)
         print(out)
