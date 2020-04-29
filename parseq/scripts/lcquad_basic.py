@@ -538,7 +538,7 @@ def split_tokenizer(x):
 
 def run(lr=0.001,
         batsize=50,
-        epochs=0,
+        epochs=100,
         embdim=100,
         encdim=100,
         numlayers=1,

@@ -320,11 +320,23 @@ def build_vocab_from_pcfg(pcfg, min_freq=0, top_k=np.infty)->Vocab:
     return vocab
 
 
-def pad_and_default_collate(x):
+def autocollate(x, pad_value=0):
     y = list(zip(*x))
     for i, yi in enumerate(y):
         if isinstance(yi[0], torch.LongTensor) and yi[0].dim() == 1:
-            y[i] = q.pad_tensors(yi, 0, 0)
+            y[i] = q.pad_tensors(yi, 0, pad_value)
+    for i, yi in enumerate(y):
+        if isinstance(yi[0], torch.Tensor):
+            yi = [yij[None] for yij in yi]
+            y[i] = torch.cat(yi, 0)
+    return y
+
+
+def pad_and_default_collate(x, pad_value=0):
+    y = list(zip(*x))
+    for i, yi in enumerate(y):
+        if isinstance(yi[0], torch.LongTensor) and yi[0].dim() == 1:
+            y[i] = q.pad_tensors(yi, 0, pad_value)
     x = list(zip(*y))
     ret = default_collate(x)
     return ret
@@ -583,29 +595,29 @@ class OvernightDatasetLoader(object):
         return ret
 
     def _load_cached(self, domain):
-        train_cached = ujson.load(open(os.path.join(self._pcache, f"{domain}.train.json"), "r"))
+        train_cached = ujson.load(open(os.path.join(os.path.dirname(__file__), self._pcache, f"{domain}.train.json"), "r"))
         trainexamples = [(x, Tree.fromstring(y)) for x, y in train_cached]
-        test_cached = ujson.load(open(os.path.join(self._pcache, f"{domain}.test.json"), "r"))
+        test_cached = ujson.load(open(os.path.join(os.path.dirname(__file__), self._pcache, f"{domain}.test.json"), "r"))
         testexamples = [(x, Tree.fromstring(y)) for x, y in test_cached]
         print("loaded from cache")
         return trainexamples, testexamples
 
-    def _cache(self, trainexamples:List[Tuple[str, Tree]], testexamples:List[Tuple[str, Tree]]):
+    def _cache(self, domain:str, trainexamples:List[Tuple[str, Tree]], testexamples:List[Tuple[str, Tree]]):
         train_cached, test_cached = None, None
-        if os.path.exists(os.path.join(self._pcache, f"{self._domain}.train.json")):
+        if os.path.exists(os.path.join(os.path.dirname(__file__), self._pcache, f"{domain}.train.json")):
             try:
-                train_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.train.json"), "r"))
-                test_cached = ujson.load(open(os.path.join(self._pcache, f"{self._domain}.test.json"), "r"))
+                train_cached = ujson.load(open(os.path.join(os.path.dirname(__file__), self._pcache, f"{domain}.train.json"), "r"))
+                test_cached = ujson.load(open(os.path.join(os.path.dirname(__file__), self._pcache, f"{domain}.test.json"), "r"))
             except (IOError, ValueError) as e:
                 pass
         trainexamples = [(x, str(y)) for x, y in trainexamples]
         testexamples = [(x, str(y)) for x, y in testexamples]
 
         if train_cached != trainexamples:
-            with open(os.path.join(self._pcache, f"{self._domain}.train.json"), "w") as f:
+            with open(os.path.join(os.path.dirname(__file__), self._pcache, f"{domain}.train.json"), "w") as f:
                 ujson.dump(trainexamples, f, indent=4, sort_keys=True)
         if test_cached != testexamples:
-            with open(os.path.join(self._pcache, f"{self._domain}.test.json"), "w") as f:
+            with open(os.path.join(os.path.dirname(__file__), self._pcache, f"{domain}.test.json"), "w") as f:
                 ujson.dump(testexamples, f, indent=4, sort_keys=True)
         print("saved in cache")
 
@@ -622,15 +634,15 @@ class OvernightDatasetLoader(object):
         if trainexamples is None:
 
             trainlines = [x.strip() for x in
-                         open(os.path.join(p, f"{domain}.paraphrases.train.examples"), "r").readlines()]
+                         open(os.path.join(os.path.dirname(__file__), p, f"{domain}.paraphrases.train.examples"), "r").readlines()]
             testlines = [x.strip() for x in
-                        open(os.path.join(p, f"{domain}.paraphrases.test.examples"), "r").readlines()]
+                        open(os.path.join(os.path.dirname(__file__), p, f"{domain}.paraphrases.test.examples"), "r").readlines()]
 
             trainexamples = self.lines_to_examples(trainlines)
             testexamples = self.lines_to_examples(testlines)
 
             if self._usecache:
-                self._cache(trainexamples, testexamples)
+                self._cache(domain, trainexamples, testexamples)
 
         questions, queries = tuple(zip(*(trainexamples + testexamples)))
         trainlen = int(round((1-self.validfrac) * len(trainexamples)))
@@ -676,11 +688,11 @@ class TOPDatasetLoader(object):
     def load(self):
         p = self._p
 
-        with open(os.path.join(p, f"train.tsv"), "r") as f:
+        with open(os.path.join(os.path.dirname(__file__), p, f"train.tsv"), "r") as f:
             trainlines = [row for row in csv.reader(f, delimiter="\t")]
-        with open(os.path.join(p, f"eval.tsv"), "r") as f:
+        with open(os.path.join(os.path.dirname(__file__), p, f"eval.tsv"), "r") as f:
             validlines = [row for row in csv.reader(f, delimiter="\t")]
-        with open(os.path.join(p, f"test.tsv"), "r") as f:
+        with open(os.path.join(os.path.dirname(__file__), p, f"test.tsv"), "r") as f:
             testlines = [row for row in csv.reader(f, delimiter="\t")]
 
         trainexamples = self.lines_to_examples(trainlines)

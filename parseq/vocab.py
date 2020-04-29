@@ -175,19 +175,19 @@ class VocabBuilder(ABC):
 
     
 class SequenceEncoder(VocabBuilder):
-    endtoken = "@END@"
-    def __init__(self, tokenizer:Callable[[str], List[str]], vocab:Vocab=None, add_end_token=False, **kw):
+    def __init__(self, tokenizer:Callable[[str], List[str]], vocab:Vocab=None, add_start_token=False, add_end_token=False, **kw):
         super(SequenceEncoder, self).__init__(**kw)
         self.tokenizer = tokenizer
         self.vocab = vocab if vocab is not None else Vocab()
         self.vocab_final = False
+        self.add_start_token = add_start_token
         self.add_end_token = add_end_token
         
     def inc_build_vocab(self, x:str, seen:bool=True):
         if not self.vocab_final:
             tokens = self.tokenizer(x)
             if self.add_end_token:
-                tokens.append(self.endtoken)
+                tokens.append(self.vocab.endtoken)
             for token in tokens:
                 self.vocab.add_token(token, seen=seen)
             return tokens
@@ -208,8 +208,10 @@ class SequenceEncoder(VocabBuilder):
             tokens = x
         else:
             tokens = self.tokenizer(x)
-        if self.add_end_token and tokens[-1] != self.endtoken:
-            tokens.append(self.endtoken)
+        if self.add_start_token and tokens[0] != self.vocab.starttoken:
+            tokens.insert(0, self.vocab.starttoken)
+        if self.add_end_token and tokens[-1] != self.vocab.endtoken:
+            tokens.append(self.vocab.endtoken)
         ret = {"tokens": tokens}
 
         # returns
