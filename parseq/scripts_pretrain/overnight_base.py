@@ -353,6 +353,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5):
         "epochs": [50, 100],
         "numheads": [4, 8, 12],
         "numlayers": [3, 6, 9],
+        "dropout": [.1, .05, .2],
         "hdim": [120, 240, 480, 640, 768, 1024],
         "seed": [12345678],     # TODO: add more later
     }
@@ -373,6 +374,6 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5):
 
 
 if __name__ == '__main__':
-    ret = q.argprun(run)
-    print(ret)
-    # q.argprun(run_experiments)
+    # ret = q.argprun(run)
+    # print(ret)
+    q.argprun(run_experiments)
