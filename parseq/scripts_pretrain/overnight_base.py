@@ -217,6 +217,8 @@ def run(domain="restaurants",
         hdim=640,
         numheads=8,
         maxlen=50,
+        localtest=False,
+        printtest=False,
         ):
     localargs = locals().copy()
     print(locals())
@@ -247,7 +249,7 @@ def run(domain="restaurants",
     tt.tock("model created")
 
     # run a batch of data through the model
-    if True:
+    if localtest:
         batch = next(iter(tdl))
         out = trainm(*batch)
         print(out)
@@ -295,6 +297,22 @@ def run(domain="restaurants",
     testresults = q.test_epoch(model=testm, dataloader=xdl, losses=vlosses, device=device)
     print(testresults)
     tt.tock("tested")
+
+    predm = testm.model
+    if printtest:
+        for testbatch in iter(xdl):
+            input_ids = testbatch[0]
+            ret = predm.generate(input_ids, attention_mask=input_ids != predm.config.pad_token_id,
+                                      max_length=maxlen)
+            # print(input_ids)
+            # print(ret)
+            inp_strs = [nltok.decode(input_idse, skip_special_tokens=True, clean_up_tokenization_spaces=False) for input_idse in input_ids]
+            out_strs = flenc.vocab.tostr(ret)
+            print(inp_strs)
+            print(out_strs)
+
+        # testout = q.eval_loop(model=testm, dataloader=xdl, device=device)
+        # print(testout)
 
     print("done")
 

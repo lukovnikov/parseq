@@ -120,6 +120,11 @@ class Vocab(_Vocab):
             raise Exception("illegal argument")
 
     def tostr(self, x:Union[np.ndarray, torch.Tensor], return_tokens=False):
+        """
+        :param x:   2D LongTensor or array
+        :param return_tokens:
+        :return:
+        """
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
         x = list(np.vectorize(lambda e: self(e))(x))
