@@ -201,7 +201,7 @@ def _tensor2tree(x, D:Vocab=None):
 
 def run(domain="restaurants",
         lr=0.001,
-        enclrmul=0.1,
+        enclr=0.0001,
         cosinelr=False,
         warmup=0.,
         batsize=20,
@@ -247,7 +247,7 @@ def run(domain="restaurants",
     tt.tock("model created")
 
     # run a batch of data through the model
-    if False:
+    if True:
         batch = next(iter(tdl))
         out = trainm(*batch)
         print(out)
@@ -272,8 +272,8 @@ def run(domain="restaurants",
         otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
         if len(encparams) == 0:
             raise Exception("No encoder parameters found!")
-        paramgroups = [{"params": encparams, "lr": enclrmul},
-                       {"params": otherparams, "lr": 1.}]
+        paramgroups = [{"params": encparams, "lr": enclr},
+                       {"params": otherparams}]
 
     optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
 
