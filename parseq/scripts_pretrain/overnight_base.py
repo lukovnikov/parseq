@@ -350,6 +350,12 @@ def run_experiments(domain="restaurants"):
     rand = "".join(random.choice(string.ascii_letters) for i in range(6))
     p = __file__ + f"{domain}.{rand}.xps"
 
+    def check_config(x):
+        if x["lr"] < 0.0005 and x["enclrmul"] < .1:
+            return False
+
+
+
 
 
 
