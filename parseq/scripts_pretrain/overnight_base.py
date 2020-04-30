@@ -300,6 +300,7 @@ def run(domain="restaurants",
         tt.tock("tested")
 
     predm = testm.model
+    predm.to(device)
     if printtest:
         for testbatch in iter(xdl):
             input_ids = testbatch[0]
