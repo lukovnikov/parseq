@@ -31,7 +31,7 @@ class SelectedLoss(q.SelectedLinearLoss):
 def make_loss_array(*lossnames):
     ret = []
     for lossname in lossnames:
-        ret.append(q.LossWrapper(SelectedLoss(lossname, reduction=None)))
+        ret.append(q.LossWrapper(SelectedLoss(lossname, reduction=None), name=lossname))
     return ret
 
 

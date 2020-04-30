@@ -223,7 +223,7 @@ def run(domain="restaurants",
         localtest=False,
         printtest=False,
         ):
-    localargs = locals().copy()
+    settings = locals().copy()
     print(locals())
     random.seed(seed)
     torch.manual_seed(seed)
@@ -261,6 +261,7 @@ def run(domain="restaurants",
 
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
     vlosses = make_loss_array("seq_acc", "tree_acc")
+    xlosses = make_loss_array("seq_acc", "tree_acc")
 
     trainable_params = list(trainm.named_parameters())
     exclude_params = set()
@@ -302,15 +303,14 @@ def run(domain="restaurants",
         trainm.model = eyt.get_remembered()
         testm.model = eyt.get_remembered()
 
-    if epochs > 0:
-        tt.tick("testing")
-        testresults = q.test_epoch(model=testm, dataloader=xdl, losses=vlosses, device=device)
-        print(testresults)
-        tt.tock("tested")
+    tt.tick("testing")
+    testresults = q.test_epoch(model=testm, dataloader=xdl, losses=xlosses, device=device)
+    print(testresults)
+    tt.tock("tested")
 
-    predm = testm.model
-    predm.to(device)
     if printtest:
+        predm = testm.model
+        predm.to(device)
         c, t = 0, 0
         for testbatch in iter(xdl):
             input_ids = testbatch[0]
@@ -330,28 +330,41 @@ def run(domain="restaurants",
                 else:
                     print("NOT SAME")
                 t += 1
-            print(f"seq acc: {c/t}")
+        print(f"seq acc: {c/t}")
         # testout = q.eval_loop(model=testm, dataloader=xdl, device=device)
         # print(testout)
 
     print("done")
+    # settings.update({"train_seqacc": losses[]})
+
+    for lossarray, losssplit in zip([losses, vlosses, xlosses], ["train", "valid", "test"]):
+        for loss in lossarray:
+            settings[f"{losssplit}_{loss.loss.name}"] = loss.get_epoch_error()
+
+    return settings
 
 
 def run_experiments(domain="restaurants", gpu=-1, patience=5):
     ranges = {
         "lr": [0.001, 0.0001, 0.00001, 0.0005, 0.00005],
-        "enclrmul": [1., 0.5, 0.1, 0.01],
-        "warmup": [1, 2, 5],
-        "epochs": [50, 100, 150],
+        "enclrmul": [1., 0.1, 0.01],
+        "warmup": [2, 5],
+        "epochs": [50, 100],
         "numheads": [4, 8, 12],
         "numlayers": [3, 6, 9],
-        "hdim": [240, 480, 640, 768, 1024],
+        "hdim": [120, 240, 480, 640, 768, 1024],
         "seed": [12345678],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
     def check_config(x):
         if x["lr"] < 0.0005 and x["enclrmul"] < .1:
             return False
+        dimperhead = x["hdim"] / x["numheads"]
+        if dimperhead < 20 or dimperhead > 100:
+            return False
+
+    q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
+                      domain=domain, gpu=gpu, patience=patience)
 
 
 
@@ -359,4 +372,6 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5):
 
 
 if __name__ == '__main__':
-    q.argprun(run)
+    ret = q.argprun(run)
+    print(ret)
+    # q.argprun(run_experiments)
