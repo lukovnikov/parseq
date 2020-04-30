@@ -314,7 +314,7 @@ def run(domain="restaurants",
         c, t = 0, 0
         for testbatch in iter(xdl):
             input_ids = testbatch[0]
-            output_ids = testbatch[0]
+            output_ids = testbatch[1]
             input_ids = input_ids.to(device)
             ret = predm.generate(input_ids, attention_mask=input_ids != predm.config.pad_token_id,
                                       max_length=maxlen)
@@ -337,7 +337,7 @@ def run(domain="restaurants",
     print("done")
 
 
-def run_experiments(domain="restaurants"):
+def run_experiments(domain="restaurants", gpu=-1, patience=5):
     ranges = {
         "lr": [0.001, 0.0001, 0.00001, 0.0005, 0.00005],
         "enclrmul": [1., 0.5, 0.1, 0.01],
@@ -345,11 +345,10 @@ def run_experiments(domain="restaurants"):
         "epochs": [50, 100, 150],
         "numheads": [4, 8, 12],
         "numlayers": [3, 6, 9],
-        "hdim": [240, 480, 640, 768, 1024]
+        "hdim": [240, 480, 640, 768, 1024],
+        "seed": [12345678],     # TODO: add more later
     }
-    rand = "".join(random.choice(string.ascii_letters) for i in range(6))
-    p = __file__ + f"{domain}.{rand}.xps"
-
+    p = __file__ + f".{domain}"
     def check_config(x):
         if x["lr"] < 0.0005 and x["enclrmul"] < .1:
             return False
