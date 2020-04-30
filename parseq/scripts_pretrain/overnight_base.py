@@ -1,4 +1,6 @@
 import random
+import string
+from copy import deepcopy
 from functools import partial
 from typing import Callable, Set
 
@@ -210,6 +212,7 @@ def run(domain="restaurants",
         wreg=1e-9,
         gradnorm=3,
         smoothing=0.,
+        patience=5,
         gpu=-1,
         seed=123456789,
         encoder="bart-large",
@@ -277,6 +280,8 @@ def run(domain="restaurants",
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
+    eyt = q.EarlyStopper(vlosses[1], patience=patience, more_is_better=True, min_epochs=20, remember_f=lambda: deepcopy(trainm.model))
+
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
@@ -286,12 +291,16 @@ def run(domain="restaurants",
 
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=losses,
-                         _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
+                         _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step(), lambda: eyt.on_epoch_end()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vlosses, device=device)
 
     tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
+    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, check_stop=[lambda: eyt.check_stop()])
     tt.tock("done training")
+
+    if eyt.get_remembered() is not None:
+        trainm.model = eyt.get_remembered()
+        testm.model = eyt.get_remembered()
 
     if epochs > 0:
         tt.tick("testing")
@@ -302,8 +311,10 @@ def run(domain="restaurants",
     predm = testm.model
     predm.to(device)
     if printtest:
+        c, t = 0, 0
         for testbatch in iter(xdl):
             input_ids = testbatch[0]
+            output_ids = testbatch[0]
             input_ids = input_ids.to(device)
             ret = predm.generate(input_ids, attention_mask=input_ids != predm.config.pad_token_id,
                                       max_length=maxlen)
@@ -313,13 +324,36 @@ def run(domain="restaurants",
             # print(inp_strs)
             out_strs = [flenc.vocab.tostr(rete.to(torch.device("cpu"))) for rete in ret]
             # print(out_strs)
+            gold_strs = [flenc.vocab.tostr(output_idse.to(torch.device("cpu"))) for output_idse in output_ids]
 
-            for x, y in zip(inp_strs, out_strs):
-                print(f"'{x}'\n--> {y}")
+            for x, y, g in zip(inp_strs, out_strs, gold_strs):
+                print(" ")
+                print(f"'{x}'\n--> {y}\n <=> {g}")
+                if y == g:
+                    c += 1
+                else:
+                    print("NOT SAME")
+                t += 1
+            print(f"seq acc: {c/t}")
         # testout = q.eval_loop(model=testm, dataloader=xdl, device=device)
         # print(testout)
 
     print("done")
+
+
+def run_experiments(domain="restaurants"):
+    ranges = {
+        "lr": [0.001, 0.0001, 0.00001, 0.0005, 0.00005],
+        "enclrmul": [1., 0.5, 0.1, 0.01],
+        "warmup": [1, 2, 5],
+        "epochs": [50, 100, 150],
+        "numheads": [4, 8, 12],
+        "numlayers": [3, 6, 9],
+        "hdim": [240, 480, 640, 768, 1024]
+    }
+    rand = "".join(random.choice(string.ascii_letters) for i in range(6))
+    p = __file__ + f"{domain}.{rand}.xps"
+
 
 
 
