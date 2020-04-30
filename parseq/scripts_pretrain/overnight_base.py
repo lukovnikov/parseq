@@ -341,7 +341,7 @@ def run(domain="restaurants",
         for metric in metricarray:
             settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
 
-    print(settings)
+    # print(settings)
     return settings
 
 
