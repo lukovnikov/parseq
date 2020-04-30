@@ -293,10 +293,11 @@ def run(domain="restaurants",
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
     tt.tock("done training")
 
-    tt.tick("testing")
-    testresults = q.test_epoch(model=testm, dataloader=xdl, losses=vlosses, device=device)
-    print(testresults)
-    tt.tock("tested")
+    if epochs > 0:
+        tt.tick("testing")
+        testresults = q.test_epoch(model=testm, dataloader=xdl, losses=vlosses, device=device)
+        print(testresults)
+        tt.tock("tested")
 
     predm = testm.model
     if printtest:
@@ -308,8 +309,8 @@ def run(domain="restaurants",
             # print(input_ids)
             # print(ret)
             inp_strs = [nltok.decode(input_idse, skip_special_tokens=True, clean_up_tokenization_spaces=False) for input_idse in input_ids]
-            out_strs = flenc.vocab.tostr(ret.to(torch.device("cpu")))
             print(inp_strs)
+            out_strs = [flenc.vocab.tostr(rete.to(torch.device("cpu"))) for rete in ret]
             print(out_strs)
 
         # testout = q.eval_loop(model=testm, dataloader=xdl, device=device)
