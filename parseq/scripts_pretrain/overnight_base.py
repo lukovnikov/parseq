@@ -364,6 +364,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5):
         dimperhead = x["hdim"] / x["numheads"]
         if dimperhead < 20 or dimperhead > 100:
             return False
+        return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       domain=domain, gpu=gpu, patience=patience)
