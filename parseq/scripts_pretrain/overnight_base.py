@@ -345,7 +345,7 @@ def run(domain="restaurants",
     return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=5):
+def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
     ranges = {
         "lr": [0.001, 0.0001, 0.00001],
         "enclrmul": [1., 0.1, 0.01],
@@ -368,7 +368,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5):
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, gpu=gpu, patience=patience)
+                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 
 
