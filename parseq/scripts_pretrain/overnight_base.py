@@ -282,7 +282,7 @@ def run(domain="restaurants",
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
-        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(nsteps=t_max-warmup) >> 0.
+        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
 
