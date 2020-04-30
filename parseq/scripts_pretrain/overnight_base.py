@@ -284,7 +284,7 @@ def run(domain="restaurants",
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
-    eyt = q.EarlyStopper(vmetrics[1], patience=patience, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
+    eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
 
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
