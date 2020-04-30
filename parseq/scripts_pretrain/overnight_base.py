@@ -310,10 +310,12 @@ def run(domain="restaurants",
             # print(input_ids)
             # print(ret)
             inp_strs = [nltok.decode(input_idse, skip_special_tokens=True, clean_up_tokenization_spaces=False) for input_idse in input_ids]
-            print(inp_strs)
+            # print(inp_strs)
             out_strs = [flenc.vocab.tostr(rete.to(torch.device("cpu"))) for rete in ret]
-            print(out_strs)
+            # print(out_strs)
 
+            for x, y in zip(inp_strs, out_strs):
+                print(f"'{x}'\n--> {y}")
         # testout = q.eval_loop(model=testm, dataloader=xdl, device=device)
         # print(testout)
 
