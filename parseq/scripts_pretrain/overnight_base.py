@@ -379,6 +379,6 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
 
 
 if __name__ == '__main__':
-    ret = q.argprun(run)
+    # ret = q.argprun(run)
     # print(ret)
     q.argprun(run_experiments)
