@@ -318,12 +318,8 @@ def run(domain="restaurants",
             input_ids = input_ids.to(device)
             ret = predm.generate(input_ids, attention_mask=input_ids != predm.config.pad_token_id,
                                       max_length=maxlen)
-            # print(input_ids)
-            # print(ret)
             inp_strs = [nltok.decode(input_idse, skip_special_tokens=True, clean_up_tokenization_spaces=False) for input_idse in input_ids]
-            # print(inp_strs)
             out_strs = [flenc.vocab.tostr(rete.to(torch.device("cpu"))) for rete in ret]
-            # print(out_strs)
             gold_strs = [flenc.vocab.tostr(output_idse.to(torch.device("cpu"))) for output_idse in output_ids]
 
             for x, y, g in zip(inp_strs, out_strs, gold_strs):
