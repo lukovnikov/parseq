@@ -354,7 +354,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
         "numheads": [4, 8, 12],
         "numlayers": [3, 6, 9],
         "dropout": [.1, .05, .2],
-        "hdim": [120, 240, 480, 600, 900],
+        "hdim": [120, 240, 480, 600, 960],
         "seed": [12345678],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
