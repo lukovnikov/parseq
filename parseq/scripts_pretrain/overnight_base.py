@@ -264,8 +264,10 @@ def run(domain="restaurants",
         trainable_params = [(k, v) for k, v in trainable_params if k not in exclude_params]
 
     if lr == enclr:
+        tt.msg("using same paramgroup")
         paramgroups = [{"params": trainable_params}]
     else:
+        tt.msg("different param groups")
         encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
         otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
         if len(encparams) == 0:
