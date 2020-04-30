@@ -257,7 +257,7 @@ def run(domain="restaurants",
     losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
     vlosses = make_loss_array("seq_acc", "tree_acc")
 
-    trainable_params = trainm.named_parameters()
+    trainable_params = list(trainm.named_parameters())
     exclude_params = set()
     # exclude_params.add("model.model.inp_emb.emb.weight")  # don't train input embeddings if doing glove
     if len(exclude_params) > 0:
