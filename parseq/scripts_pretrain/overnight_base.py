@@ -308,7 +308,7 @@ def run(domain="restaurants",
             # print(input_ids)
             # print(ret)
             inp_strs = [nltok.decode(input_idse, skip_special_tokens=True, clean_up_tokenization_spaces=False) for input_idse in input_ids]
-            out_strs = flenc.vocab.tostr(ret)
+            out_strs = flenc.vocab.tostr(ret.to(torch.device("cpu")))
             print(inp_strs)
             print(out_strs)
 
