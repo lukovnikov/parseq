@@ -302,6 +302,7 @@ def run(domain="restaurants",
     if printtest:
         for testbatch in iter(xdl):
             input_ids = testbatch[0]
+            input_ids = input_ids.to(device)
             ret = predm.generate(input_ids, attention_mask=input_ids != predm.config.pad_token_id,
                                       max_length=maxlen)
             # print(input_ids)
