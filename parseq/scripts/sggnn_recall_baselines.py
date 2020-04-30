@@ -274,8 +274,8 @@ def run(lr=0.001,
     acc = ClassificationAccuracy()
 
     optim = torch.optim.Adam(m.parameters(), lr=lr)
-    losses = [q.LossWrapper(loss, "CE"), q.LossWrapper(acc, "acc")]
-    vlosses = [q.LossWrapper(loss, "CE"), q.LossWrapper(acc, "acc")]
+    losses = [q.MetricWrapper(loss, "CE"), q.MetricWrapper(acc, "acc")]
+    vlosses = [q.MetricWrapper(loss, "CE"), q.MetricWrapper(acc, "acc")]
 
     trainepoch = partial(q.train_epoch, model=m, dataloader=ds.dataloader("train", batsize=batsize, shuffle=True), optim=optim, losses=losses, device=device)
     validepoch = partial(q.test_epoch, model=m, dataloader=ds.dataloader("valid", batsize=batsize, shuffle=False), losses=vlosses, device=device)
@@ -331,8 +331,8 @@ def run_gru(lr=0.001,
     acc = ClassificationAccuracy()
 
     optim = torch.optim.Adam(m.parameters(), lr=lr)
-    losses = [q.LossWrapper(loss, "CE"), q.LossWrapper(acc, "acc")]
-    vlosses = [q.LossWrapper(loss, "CE"), q.LossWrapper(acc, "acc")]
+    losses = [q.MetricWrapper(loss, "CE"), q.MetricWrapper(acc, "acc")]
+    vlosses = [q.MetricWrapper(loss, "CE"), q.MetricWrapper(acc, "acc")]
 
     trainepoch = partial(q.train_epoch, model=m, dataloader=ds.dataloader("train", batsize=batsize, shuffle=True), optim=optim, losses=losses, device=device)
     validepoch = partial(q.test_epoch, model=m, dataloader=ds.dataloader("valid", batsize=batsize, shuffle=False), losses=vlosses, device=device)

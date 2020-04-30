@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, BeamDecoder
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy, BeamSeqAccuracies
+from parseq.eval import CELoss, SeqAccuracies, make_array_of_metrics, DerivedAccuracy, TreeAccuracy, BeamSeqAccuracies
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, prolog_to_tree
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, GRUEncoder, LSTMEncoder
 from parseq.states import DecodableState, BasicDecoderState, State, batchstack, TreeDecoderState
@@ -505,19 +505,19 @@ def run(lr=0.001,
                            eval=[CELoss(ignore_index=0, mode="logprobs"),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
 
-    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
+    losses = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
     # beamdecoder = BeamActionSeqDecoder(tfdecoder.model, beamsize=beamsize, maxsteps=50)
     if beamsize == 1:
         freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
                                  eval=[SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
 
-        vlosses = make_loss_array("seq_acc", "tree_acc")
+        vlosses = make_array_of_metrics("seq_acc", "tree_acc")
     else:
         print("Doing beam search!")
         freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=60,
                                   eval=[SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab))])
 
-        vlosses = make_loss_array("seq_acc", "tree_acc")
+        vlosses = make_array_of_metrics("seq_acc", "tree_acc")
     # # test
     # tt.tick("doing one epoch")
     # for batch in iter(train_dl):

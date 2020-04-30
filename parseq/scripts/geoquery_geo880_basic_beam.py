@@ -10,7 +10,7 @@ import qelos as q
 from nltk import PorterStemmer
 
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, BeamDecoder, BeamTransition
-from parseq.eval import CELoss, SeqAccuracies, BeamSeqAccuracies, make_loss_array
+from parseq.eval import CELoss, SeqAccuracies, BeamSeqAccuracies, make_array_of_metrics
 from parseq.scripts.geoquery_geo880_basic import GeoQueryDatasetSub as GeoQueryDataset, do_rare_stats, create_model
 from parseq.vocab import SequenceEncoder
 
@@ -64,8 +64,8 @@ def run(lr=0.01,
     freedecoder = BeamDecoder(model, beamsize=beamsize, maxtime=60,
                               eval_beam=[BeamSeqAccuracies()])
 
-    losses = make_loss_array("loss", "elem_acc", "seq_acc")
-    vlosses = make_loss_array(*([f"beam_seq_recall_at{i}" for i in range(1, min(beamsize, 5))] + ["beam_recall"]))
+    losses = make_array_of_metrics("loss", "elem_acc", "seq_acc")
+    vlosses = make_array_of_metrics(*([f"beam_seq_recall_at{i}" for i in range(1, min(beamsize, 5))] + ["beam_recall"]))
 
     # 4. define optim
     optim = torch.optim.RMSprop(tfdecoder.parameters(), lr=lr, weight_decay=wreg)

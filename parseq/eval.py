@@ -28,10 +28,10 @@ class SelectedLoss(q.SelectedLinearLoss):
         return ret
 
 
-def make_loss_array(*lossnames):
+def make_array_of_metrics(*lossnames):
     ret = []
     for lossname in lossnames:
-        ret.append(q.LossWrapper(SelectedLoss(lossname, reduction=None), name=lossname))
+        ret.append(q.MetricWrapper(SelectedLoss(lossname, reduction=None), name=lossname))
     return ret
 
 

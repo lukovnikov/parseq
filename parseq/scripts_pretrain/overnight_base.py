@@ -4,14 +4,14 @@ from copy import deepcopy
 from functools import partial
 from typing import Callable, Set
 
-import qelos as q
+import qelos as q   # branch v3
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
 from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate
 from parseq.decoding import merge_metric_dicts
-from parseq.eval import SeqAccuracies, TreeAccuracy, make_loss_array, CELoss
+from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
 from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration
@@ -259,9 +259,9 @@ def run(domain="restaurants",
         out = testm(*batch)
         print(out)
 
-    losses = make_loss_array("loss", "elem_acc", "seq_acc", "tree_acc")
-    vlosses = make_loss_array("seq_acc", "tree_acc")
-    xlosses = make_loss_array("seq_acc", "tree_acc")
+    metrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
+    vmetrics = make_array_of_metrics("seq_acc", "tree_acc")
+    xmetrics = make_array_of_metrics("seq_acc", "tree_acc")
 
     trainable_params = list(trainm.named_parameters())
     exclude_params = set()
@@ -281,7 +281,7 @@ def run(domain="restaurants",
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
-    eyt = q.EarlyStopper(vlosses[1], patience=patience, more_is_better=True, min_epochs=20, remember_f=lambda: deepcopy(trainm.model))
+    eyt = q.EarlyStopper(vmetrics[1], patience=patience, more_is_better=True, min_epochs=20, remember_f=lambda: deepcopy(trainm.model))
 
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
@@ -291,9 +291,9 @@ def run(domain="restaurants",
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
 
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=losses,
+    trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step(), lambda: eyt.on_epoch_end()])
-    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vlosses, device=device)
+    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device)
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, check_stop=[lambda: eyt.check_stop()])
@@ -304,7 +304,7 @@ def run(domain="restaurants",
         testm.model = eyt.get_remembered()
 
     tt.tick("testing")
-    testresults = q.test_epoch(model=testm, dataloader=xdl, losses=xlosses, device=device)
+    testresults = q.test_epoch(model=testm, dataloader=xdl, losses=xmetrics, device=device)
     print(testresults)
     tt.tock("tested")
 
@@ -337,10 +337,11 @@ def run(domain="restaurants",
     print("done")
     # settings.update({"train_seqacc": losses[]})
 
-    for lossarray, losssplit in zip([losses, vlosses, xlosses], ["train", "valid", "test"]):
-        for loss in lossarray:
-            settings[f"{losssplit}_{loss.loss.name}"] = loss.get_epoch_error()
+    for metricarray, datasplit in zip([metrics, vmetrics, xmetrics], ["train", "valid", "test"]):
+        for metric in metricarray:
+            settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
 
+    print(settings)
     return settings
 
 

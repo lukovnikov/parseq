@@ -26,7 +26,7 @@ from torch.utils.data import DataLoader
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, BeamDecoder, BeamTransition
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy, StatePenalty
+from parseq.eval import CELoss, SeqAccuracies, make_array_of_metrics, DerivedAccuracy, TreeAccuracy, StatePenalty
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree, are_equal_trees
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings, GRUEncoder, \
@@ -656,19 +656,19 @@ def run(lr=0.001,
                                  StatePenalty(lambda x: x.mstate.kld, weight=beta_),
                             SeqAccuracies(), TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                           orderless={"and", "or"})])
-    losses = make_loss_array("loss", "penalty", "elem_acc", "seq_acc", "tree_acc")
+    losses = make_array_of_metrics("loss", "penalty", "elem_acc", "seq_acc", "tree_acc")
 
     freedecoder = SeqDecoder(model, maxtime=100, tf_ratio=0.,
                              eval=[SeqAccuracies(),
                                    TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                 orderless={"and", "or"})])
-    vlosses = make_loss_array("seq_acc", "tree_acc")
+    vlosses = make_array_of_metrics("seq_acc", "tree_acc")
 
     beamdecoder = BeamDecoder(model, maxtime=100, beamsize=beamsize, copy_deep=True,
                               eval=[SeqAccuracies()],
                               eval_beam=[TreeAccuracy(tensor2tree=partial(tensor2tree, D=ds.query_encoder.vocab),
                                                 orderless={"and", "or"})])
-    beamlosses = make_loss_array("seq_acc", "tree_acc", "tree_acc_at_last")
+    beamlosses = make_array_of_metrics("seq_acc", "tree_acc", "tree_acc_at_last")
 
     # 4. define optim
     # optim = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wreg)

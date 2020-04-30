@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, TFTransition, FreerunningTransition, merge_metric_dicts
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy
+from parseq.eval import CELoss, SeqAccuracies, make_array_of_metrics, DerivedAccuracy
 from parseq.grammar import prolog_to_pas
 from parseq.nn import TokenEmb, BasicGenOutput
 from parseq.states import DecodableState, BasicDecoderState, State
@@ -353,8 +353,8 @@ def run(lr=0.001,
     model._metrics = [CELoss(ignore_index=0, mode="logprobs"),
                       SeqAccuracies()]
 
-    losses = make_loss_array("loss", "elem_acc", "seq_acc")
-    vlosses = make_loss_array("loss", "seq_acc")
+    losses = make_array_of_metrics("loss", "elem_acc", "seq_acc")
+    vlosses = make_array_of_metrics("loss", "seq_acc")
 
     # 4. define optim
     optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wreg)

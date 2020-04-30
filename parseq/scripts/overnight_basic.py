@@ -25,7 +25,7 @@ from torch.utils.data import DataLoader
 # from funcparse.vocab import VocabBuilder, SentenceEncoder, FuncQueryEncoder
 # from funcparse.nn import TokenEmb, PtrGenOutput, SumPtrGenOutput, BasicGenOutput
 from parseq.decoding import SeqDecoder, BeamDecoder, BeamTransition
-from parseq.eval import CELoss, SeqAccuracies, make_loss_array, DerivedAccuracy, TreeAccuracy
+from parseq.eval import CELoss, SeqAccuracies, make_array_of_metrics, DerivedAccuracy, TreeAccuracy
 from parseq.grammar import prolog_to_pas, lisp_to_pas, pas_to_prolog, pas_to_tree, tree_size, tree_to_prolog, \
     tree_to_lisp, lisp_to_tree
 from parseq.nn import TokenEmb, BasicGenOutput, PtrGenOutput, PtrGenOutput2, load_pretrained_embeddings
@@ -724,8 +724,8 @@ def run(lr=0.001,
 
     # print(dict(tfdecoder.named_parameters()).keys())
 
-    losses = make_loss_array("loss", "seq_acc", "tree_acc")
-    vlosses = make_loss_array("tree_acc", "tree_acc_at3", "tree_acc_at_last")
+    losses = make_array_of_metrics("loss", "seq_acc", "tree_acc")
+    vlosses = make_array_of_metrics("tree_acc", "tree_acc_at3", "tree_acc_at_last")
 
     trainable_params = tfdecoder.named_parameters()
     exclude_params = set()
@@ -994,8 +994,8 @@ def run_rerank(lr=0.001,
 
     # print(dict(tfdecoder.named_parameters()).keys())
 
-    losses = make_loss_array("loss", "seq_acc", "tree_acc")
-    vlosses = make_loss_array("tree_acc", "tree_acc_at3", "tree_acc_at_last")
+    losses = make_array_of_metrics("loss", "seq_acc", "tree_acc")
+    vlosses = make_array_of_metrics("tree_acc", "tree_acc_at3", "tree_acc_at_last")
 
     trainable_params = tfdecoder.named_parameters()
     exclude_params = {"model.model.inp_emb.emb.weight"}   # don't train input embeddings if doing glove
