@@ -126,7 +126,6 @@ class BartGeneratorTest(BartGeneratorTrain):
 def create_model(encoder_name="bart-large",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
                  maxlen=20, smoothing=0., tensor2tree=None):
-    layerdrop = 0
     if encoder_name != "bart-large":
         raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -149,10 +148,14 @@ def create_model(encoder_name="bart-large",
     decoder_config = BartConfig(d_model=dec_dim,
                                 pad_token_id=1,
                                 vocab_size=dec_vocabsize,
-                                decoder_attention_heads=dec_heads,
+                                decoder_attention_heads=dec_heads//2,
                                 decoder_layers=dec_layers,
                                 dropout=dropout,
-                                decoder_layerdrop=layerdrop)
+                                decoder_ffn_dim=dec_dim*4,
+                                encoder_attention_heads=dec_heads,
+                                encoder_layers=dec_layers,
+                                encoder_ffn_dim=dec_dim*4,
+                                )
     model = BartGenerator(decoder_config)
     model.model.encoder = encoder
 
@@ -217,7 +220,7 @@ def run(domain="restaurants",
         seed=123456789,
         encoder="bart-large",
         numlayers=6,
-        hdim=640,
+        hdim=600,
         numheads=8,
         maxlen=50,
         localtest=False,
@@ -351,10 +354,10 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
         "enclrmul": [1., 0.1, 0.01],
         "warmup": [2],
         "epochs": [50, 100],
-        "numheads": [4, 8, 12],
+        "numheads": [8, 12, 16],
         "numlayers": [3, 6, 9],
         "dropout": [.1, .05, .2],
-        "hdim": [120, 240, 480, 600, 960],
+        "hdim": [168, 336, 672, 924],
         "seed": [12345678],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
@@ -376,6 +379,6 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     q.argprun(run_experiments)
