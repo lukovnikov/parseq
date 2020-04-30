@@ -134,7 +134,7 @@ class SeqAccuracies(Metric):
     def forward(self, probs, predactions, golds, x:State=None):   # must be BasicStates
         # TODO: GOLD MUST CONTAIN END TOKEN !!!!!
         # golds = x.get_gold()
-        mask = golds != 0
+        mask = golds != self.padid
         if predactions.size(1) < golds.size(1):
             extension = torch.zeros(predactions.size(0), golds.size(1) - predactions.size(1), dtype=predactions.dtype, device=predactions.device)
             predactions = torch.cat([predactions, extension], 1)

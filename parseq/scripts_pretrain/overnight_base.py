@@ -116,7 +116,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 
     def forward(self, input_ids, output_ids, *args, **kwargs):
         ret = self.model.generate(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, max_length=self.maxlen, num_beams=self.numbeam)
-        outputs = [metric(None, ret, output_ids) for metric in self.metrics]
+        outputs = [metric(None, ret[:, 1:], output_ids[:, 1:]) for metric in self.metrics]
         outputs = merge_metric_dicts(*outputs)
         return outputs, ret
 
