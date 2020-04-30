@@ -265,7 +265,7 @@ def run(domain="restaurants",
 
     if lr == enclr:
         tt.msg("using same paramgroup")
-        paramgroups = [{"params": trainable_params}]
+        paramgroups = [{"params": [v for k, v in trainable_params]}]
     else:
         tt.msg("different param groups")
         encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
