@@ -263,12 +263,15 @@ def run(domain="restaurants",
     if len(exclude_params) > 0:
         trainable_params = [(k, v) for k, v in trainable_params if k not in exclude_params]
 
-    encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
-    otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
-    if len(encparams) == 0:
-        raise Exception("No encoder parameters found!")
-    paramgroups = [{"params": encparams, "lr": enclr},
-                   {"params": otherparams, "lr": lr}]
+    if lr == enclr:
+        paramgroups = [{"params": trainable_params}]
+    else:
+        encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
+        otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
+        if len(encparams) == 0:
+            raise Exception("No encoder parameters found!")
+        paramgroups = [{"params": encparams, "lr": enclr},
+                       {"params": otherparams, "lr": lr}]
 
     optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
 
