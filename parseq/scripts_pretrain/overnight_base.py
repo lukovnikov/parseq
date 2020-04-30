@@ -347,19 +347,20 @@ def run(domain="restaurants",
 
 def run_experiments(domain="restaurants", gpu=-1, patience=5):
     ranges = {
-        "lr": [0.001, 0.0001, 0.00001, 0.0005, 0.00005],
+        "lr": [0.001, 0.0001, 0.00001],
         "enclrmul": [1., 0.1, 0.01],
-        "warmup": [2, 5],
+        "warmup": [2],
         "epochs": [50, 100],
         "numheads": [4, 8, 12],
         "numlayers": [3, 6, 9],
         "dropout": [.1, .05, .2],
-        "hdim": [120, 240, 480, 640, 768, 1024],
+        "hdim": [120, 240, 480, 600, 900],
         "seed": [12345678],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
     def check_config(x):
-        if x["lr"] < 0.0005 and x["enclrmul"] < .1:
+        effectiveenclr = x["enclrmul"] * x["lr"]
+        if effectiveenclr < 0.00001:
             return False
         dimperhead = x["hdim"] / x["numheads"]
         if dimperhead < 20 or dimperhead > 100:
