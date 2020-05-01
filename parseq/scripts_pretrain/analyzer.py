@@ -13,6 +13,7 @@ def analyze(p="",
             seed_field=SEED_FIELD,
             numseeds_field=NUMSEEDS_FIELD,
             outcome_fields=OUTCOME_FIELDS,
+            _do_embed=False,
             ):
     import numpy as np
     import pandas as pd
@@ -85,8 +86,18 @@ def analyze(p="",
         groupbys = [col for col in groupbys if col != by]
         ret = _df.groupby(by=groupbys, as_index=False)
         return ret
+
+    if _do_embed:
+        embed()
+
+
+def embedded_analyze(p="",
+                     seed_field=SEED_FIELD,
+                     numseeds_field=NUMSEEDS_FIELD,
+                     outcome_fields=OUTCOME_FIELDS,
+                     ):
+    analyze(p=p, seed_field=seed_field, numseeds_field=numseeds_field, outcome_fields=outcome_fields, _do_embed=True)
     embed()
 
-
 if __name__ == '__main__':
-    fire.Fire(analyze)
+    fire.Fire(embedded_analyze)
