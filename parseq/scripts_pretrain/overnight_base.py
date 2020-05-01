@@ -312,11 +312,14 @@ def run(domain="restaurants",
     tt.tock("done training")
 
     if eyt.get_remembered() is not None:
+        tt.msg("reloaded")
         trainm.model = eyt.get_remembered()
         testm.model = eyt.get_remembered()
 
     tt.tick("testing")
+    validresults = q.test_epoch(model=testm, dataloader=vdl, losses=vmetrics, device=device)
     testresults = q.test_epoch(model=testm, dataloader=xdl, losses=xmetrics, device=device)
+    print(validresults)
     print(testresults)
     tt.tock("tested")
 
@@ -367,7 +370,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
         "numlayers": [3, 6, 9],
         "dropout": [.1, .05, .2],
         "hdim": [192, 384, 768, 960],
-        "seed": [12345678],     # TODO: add more later
+        "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
     def check_config(x):

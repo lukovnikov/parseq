@@ -167,13 +167,17 @@ def create_model(encoder_name="bart-large",
                                 encoder_layers=dec_layers,
                                 encoder_ffn_dim=dec_dim*4,
                                 )
-    model = BartGenerator(decoder_config)
-    model.model.encoder = encoder
+    autoencoder = BartGenerator(decoder_config)
+    translator = BartGenerator(decoder_config)
+    translator.model.encoder = encoder
+    translator.model.decoder = autoencoder.model.decoder
+    translator.outlin = autoencoder.outlin
 
     orderless = {"op:and", "SW:concat"}
 
-    trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
-    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=None, tensor2tree=tensor2tree, orderless=orderless)
+    trainmodel = BartGeneratorTrain(translator, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
+    testmodel = BartGeneratorTest(translator, maxlen=maxlen, numbeam=None, tensor2tree=tensor2tree, orderless=orderless)
+    trainautoencoder = BartGeneratorTrain(autoencoder, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
     return trainmodel, testmodel
 
 
