@@ -374,6 +374,30 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
                       domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 
+def run_experiments_seed(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
+    ranges = {
+        "lr": [0.0001],
+        "enclrmul": [0.1],
+        "warmup": [2],
+        "epochs": [50],
+        "numheads": [16],
+        "numlayers": [6],
+        "dropout": [.1],
+        "hdim": [768],
+        "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
+    }
+    p = __file__ + f".{domain}"
+    def check_config(x):
+        effectiveenclr = x["enclrmul"] * x["lr"]
+        if effectiveenclr < 0.00001:
+            return False
+        dimperhead = x["hdim"] / x["numheads"]
+        if dimperhead < 20 or dimperhead > 100:
+            return False
+        return True
+
+    q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
+                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 
 
