@@ -1,9 +1,11 @@
 # encoding: utf-8
 """
-A script for running the following experiments:
+A script to run the following experiments:
 * dataset: Overnight
-* model: BART encoder + vanilla Transformer decoder for LF
-* training: normal (CE on teacher forced target)
+* model: BART encoder + separately pretrained Transformer decoder for LF
+* training:
+    1. pretrain decoder as part of LF-specific encoder-decoder similar to BART pretraining
+    2. finetune normally, using pretrained decoder
 """
 
 
@@ -357,7 +359,7 @@ def run(domain="restaurants",
     return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
+def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
     ranges = {
         "lr": [0.001, 0.0001, 0.00001],
         "enclrmul": [1., 0.1, 0.01],
@@ -383,15 +385,15 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
                       domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 
-def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
+def run_experiments_seed(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
     ranges = {
-        "lr": [0.0001], #[0.00001],
-        "enclrmul": [0.1], #[1.],
+        "lr": [0.00001],
+        "enclrmul": [1.],
         "warmup": [2],
-        "epochs": [75],
+        "epochs": [50],
         "numheads": [16],
         "numlayers": [6],
-        "dropout": [.1], #[.05],
+        "dropout": [.05],
         "hdim": [768],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
