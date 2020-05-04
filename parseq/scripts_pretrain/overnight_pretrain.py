@@ -20,7 +20,8 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate
+from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate, OvernightPCFGBuilder, \
+    PCFGBuilder
 from parseq.decoding import merge_metric_dicts
 from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
@@ -178,7 +179,7 @@ def create_model(encoder_name="bart-large",
     trainmodel = BartGeneratorTrain(translator, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
     testmodel = BartGeneratorTest(translator, maxlen=maxlen, numbeam=None, tensor2tree=tensor2tree, orderless=orderless)
     trainautoencoder = BartGeneratorTrain(autoencoder, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
-    return trainmodel, testmodel
+    return trainmodel, testmodel, trainautoencoder
 
 
 def _tensor2tree(x, D:Vocab=None):
@@ -219,6 +220,15 @@ def _tensor2tree(x, D:Vocab=None):
     return tree
 
 
+def build_grammar(*dss):
+    overnightpcfg = PCFGBuilder(orderless={"op:and, SW:concat"})
+    allexamples = []
+    for ds in dss:
+        allexamples += ds.rootds.map(lambda f: f[1]).examples
+    pcfg = overnightpcfg.build(allexamples)
+    return pcfg
+
+
 def run(domain="restaurants",
         lr=0.001,
         enclrmul=0.1,
@@ -255,6 +265,10 @@ def run(domain="restaurants",
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=1))
     xdl = DataLoader(xds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=1))
     tt.tock("data loaded")
+
+    tt.tick("creating grammar dataset generator")
+    pcfg = build_grammar(tds, vds)
+    tt.tock("created dataset generator")
 
     tt.tick("creating model")
     trainm, testm = create_model(encoder_name=encoder,

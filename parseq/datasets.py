@@ -38,6 +38,10 @@ class Dataset(object):
         ret = [self[i] for i in range(len(self))]
         return ret
 
+    @property
+    def rootds(self):
+        return self
+
     def __len__(self):
         return len(self._examples)
 
@@ -143,6 +147,10 @@ class MappedDataset(Dataset, CachedDataset):
     def examples(self):
         ret = [self[i] for i in range(len(self))]
         return ret
+
+    @property
+    def rootds(self):
+        return self.baseds.rootds
 
     def filter(self, f):
         newbase = self.baseds.filter(lambda x: f(self.f(x)))
@@ -282,6 +290,10 @@ class PCFGBuilder(object):
         self.orderless = set(orderless)
 
     def build(self, examples=tuple()):
+        """
+        :param examples:    tuple or list of nltk Trees
+        :return: 
+        """
         allproductions = []
         for example in examples:
             q = example
