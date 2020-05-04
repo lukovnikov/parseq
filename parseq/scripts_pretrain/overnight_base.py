@@ -304,8 +304,8 @@ def run(domain="restaurants",
 
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
-                         _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step(), lambda: eyt.on_epoch_end()])
-    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device)
+                         _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
+    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, check_stop=[lambda: eyt.check_stop()])
