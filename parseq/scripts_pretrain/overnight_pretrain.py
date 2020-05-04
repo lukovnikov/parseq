@@ -405,14 +405,14 @@ def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
     ranges = {
-        "lr": [0.00001],
-        "enclrmul": [1.],
-        "warmup": [2],
+        "lr": [0.0001],
+        "enclrmul": [0.1],
+        "warmup": [0],
         "epochs": [50],
         "numheads": [16],
         "numlayers": [6],
         "dropout": [.05],
-        "hdim": [768],
+        "hdim": [960],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
