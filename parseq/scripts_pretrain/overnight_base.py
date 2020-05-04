@@ -362,15 +362,15 @@ def run(domain="restaurants",
 
 def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
     ranges = {
-        "lr": [0.001, 0.0001, 0.00001],
-        "enclrmul": [1., 0.1, 0.01],
+        "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
+        "enclrmul": [1., 0.1], #[1., 0.1, 0.01],
         "warmup": [0, 2],
-        "epochs": [50, 100],
+        "epochs": [100], #[50, 100],
         "numheads": [8, 12, 16],
         "numlayers": [3, 6, 9],
         "dropout": [.1, .05, .2],
-        "hdim": [192, 384, 768, 960],
-        "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
+        "hdim": [768, 960], #[192, 384, 768, 960],
+        "seed": [12345678, 65748390], #, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
     def check_config(x):
