@@ -281,7 +281,7 @@ def run(domain="restaurants",
 
     tt.tick("creating grammar dataset generator")
     pcfg = build_grammar(tds, vds)
-    ptds = PCFGDataset(pcfg, N=ptN, seed=seed, temperature=datatemp)
+    ptds = PCFGDataset(pcfg, N=ptN, seed=seed, temperature=datatemp, maxlen=50)
     tt.tock("created dataset generator")
 
     tt.tick("creating model")
@@ -504,7 +504,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
         "ptwarmup": [5],
         "epochs": [100],
         "ptepochs": [100],
-        "ptbatsize": [50],
+        "ptbatsize": [20],
         "numheads": [16, 8],
         "numlayers": [3, 6],
         "dropout": [.1, .2],

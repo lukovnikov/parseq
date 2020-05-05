@@ -5,7 +5,7 @@ import random
 import timeit
 from abc import abstractmethod
 from copy import copy
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Union
 
 import nltk
 import torch
@@ -175,10 +175,11 @@ class MappedDataset(Dataset, CachedDataset):
 
 
 class GeneratedDataset(Dataset, CachedDataset):
-    def __init__(self, N=int(9e9), seed=12345678, use_cache=False, **kw):
+    def __init__(self, N=int(9e9), seed=12345678, use_cache=False, maxlen=int(9e9), **kw):
         super(GeneratedDataset, self).__init__(use_cache=use_cache, **kw)
         self.seed = seed
         self.N = N
+        self.maxlen = maxlen
 
     def advance_seed(self):
         rng = np.random.RandomState(self.seed)
@@ -290,7 +291,27 @@ class PCFGDataset(GeneratedDataset):
             assert(len(ret) == 1)
             assert(isinstance(ret[0], Tree))
             ret = ret[0]
-        return ret
+
+        # check size
+        ret_size = tree_length(ret, count_brackets=True)
+        if ret_size < self.maxlen:
+            return ret
+        else:
+            # generate another one
+            rng = np.random.RandomState(rng.randint(10000000, 99999999))
+            return self.generate(start=start, rng=rng)
+
+
+def tree_length(x:Union[Tree, str], count_brackets=False):
+    if isinstance(x, str):
+        return 1
+    elif isinstance(x, Tree):
+        if len(x) == 0:
+            return 1
+        else:
+            return 1 + sum([tree_length(xe, count_brackets=count_brackets) for xe in x]) + (2 if count_brackets else 0)
+    else:
+        raise Exception()
 
 
 class PCFGBuilder(object):
@@ -591,8 +612,8 @@ class OvernightDatasetLoader(object):
             if z is not None:
                 print(f"Example {j}:")
                 ztree = pas_to_tree(z[1][2][1][0])
-                maxsize_before = max(maxsize_before, tree_size(ztree))
-                avgsize_before.append(tree_size(ztree))
+                maxsize_before = max(maxsize_before, tree_length(ztree))
+                avgsize_before.append(tree_length(ztree))
                 lf = simplify_tree(ztree)
                 lf = simplify_further(lf)
                 lf = simplify_furthermore(lf)
@@ -603,8 +624,8 @@ class OvernightDatasetLoader(object):
                 print(ret[-1][0])
                 print(ret[-1][1])
                 ltp = None
-                maxsize_after = max(maxsize_after, tree_size(lf))
-                avgsize_after.append(tree_size(lf))
+                maxsize_after = max(maxsize_after, tree_length(lf))
+                avgsize_after.append(tree_length(lf))
 
                 print(pas_to_tree(z[1][2][1][0]))
                 print()
