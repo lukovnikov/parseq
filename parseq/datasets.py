@@ -479,10 +479,14 @@ class OvernightDatasetLoader(object):
             elif t.label() == "SW:singleton":
                 assert(len(t) == 1)
                 assert(len(t[0]) == 0)
+                # t[0].set_label(f"singleton:{t[0].label()}")
                 return t[0]
             elif t.label() == "SW:ensureNumericProperty":
                 assert(len(t) == 1)
-                return simplify_tree(t[0])
+                # assert(len(t[0]) == 1)
+                # t[0][0].set_label(f"numeric:{t[0][0].label()}")
+                ret = simplify_tree(t[0])
+                return ret
             elif t.label() == "SW:ensureNumericEntity":
                 assert(len(t) == 1)
                 return simplify_tree(t[0])

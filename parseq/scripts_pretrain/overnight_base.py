@@ -390,7 +390,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
     ranges = {
         "lr": [0.0001],
         "enclrmul": [0.1],
-        "warmup": [0],
+        "warmup": [1],
         "epochs": [50],
         "numheads": [16],
         "numlayers": [3],

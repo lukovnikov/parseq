@@ -232,11 +232,15 @@ def build_grammar(*dss):
 
 def run(domain="restaurants",
         lr=0.001,
+        ptlr=0.0001,
         enclrmul=0.1,
         cosinelr=False,
+        ptcosinelr=False,
         warmup=0.,
+        ptwarmup=0.,
         batsize=20,
         epochs=100,
+        ptepochs=100,
         dropout=0.1,
         wreg=1e-9,
         gradnorm=3,
@@ -246,7 +250,7 @@ def run(domain="restaurants",
         seed=123456789,
         dataseed=12345678,
         datatemp=0.33,
-        pretrainN=2000,
+        ptN=3000,
         tokenmaskp=0.,
         spanmaskp=0.,
         spanmasklamda=2.2,
@@ -276,7 +280,7 @@ def run(domain="restaurants",
 
     tt.tick("creating grammar dataset generator")
     pcfg = build_grammar(tds, vds)
-    ptds = PCFGDataset(pcfg, N=pretrainN, seed=seed, temperature=datatemp)
+    ptds = PCFGDataset(pcfg, N=ptN, seed=seed, temperature=datatemp)
     tt.tock("created dataset generator")
 
     tt.tick("creating model")
@@ -321,10 +325,35 @@ def run(domain="restaurants",
     spanmasker = SpanMasker(p=spanmaskp, lamda=spanmasklamda, seed=dataseed) if spanmaskp > 0 else lambda x: x
     treemasker = SubtreeMasker(p=treemaskp, seed=dataseed) if treemaskp > 0 else lambda x: x
     # TODO finish
+    perturbed_ptds = ptds\
+        .map(lambda x: (x, treemasker(x)))\
+        .map(lambda x: (flenc.convert(x[0], "tokens"),
+                        flenc.convert(x[1], "tokens")))\
+        .map(lambda x: (x[0], spanmasker(tokenmasker(x[1]))))\
+        .map(lambda x: (flenc.convert(x[0], "tensor"),
+                        flenc.convert(x[1], "tensor")))
 
-
+    ptdl = DataLoader(perturbed_ptds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=1))
     ptmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
 
+    ptparams = pretrainm.parameters()
+    ptoptim = torch.optim.Adam(ptparams, lr=ptlr, weight_decay=wreg)
+    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
+    t_max = ptepochs
+    print(f"Total number of pretraining updates: {t_max} .")
+    if ptcosinelr:
+        lr_schedule = q.sched.Linear(steps=ptwarmup) >> q.sched.Cosine(steps=t_max-ptwarmup) >> 0.
+    else:
+        lr_schedule = q.sched.Linear(steps=ptwarmup) >> 1.
+
+    pttrainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
+    pttrainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=ptoptim, losses=ptmetrics,
+                         _train_batch=pttrainbatch, device=device, on_end=[lambda: lr_schedule.step(),
+                                                                           lambda: ptds.advance_seed()])
+
+    tt.tick("pretraining")
+    q.run_training(run_train_epoch=pttrainepoch, max_epochs=ptepochs)
+    tt.tock("done pretraining")
 
     # endregion
 
@@ -416,12 +445,38 @@ def run(domain="restaurants",
     # endregion
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
+def _run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
     ranges = {
         "lr": [0.001, 0.0001, 0.00001],
         "enclrmul": [1., 0.1, 0.01],
         "warmup": [0, 2],
         "epochs": [50, 100],
+        "numheads": [8, 12, 16],
+        "numlayers": [3, 6, 9],
+        "dropout": [.1, .05, .2],
+        "hdim": [192, 384, 768, 960],
+        "seed": [12345678],     # TODO: add more later
+    }
+    p = __file__ + f".{domain}"
+    def check_config(x):
+        effectiveenclr = x["enclrmul"] * x["lr"]
+        if effectiveenclr < 0.00001:
+            return False
+        dimperhead = x["hdim"] / x["numheads"]
+        if dimperhead < 20 or dimperhead > 100:
+            return False
+        return True
+
+    q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
+                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
+
+
+def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
+    ranges = {
+        "lr": [0.0001],
+        "enclrmul": [0.1],
+        "warmup": [1],
+        "epochs": [50],
         "numheads": [8, 12, 16],
         "numlayers": [3, 6, 9],
         "dropout": [.1, .05, .2],
