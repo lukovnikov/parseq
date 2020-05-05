@@ -14,6 +14,7 @@ from nltk import Tree, Nonterminal
 import numpy as np
 import qelos as q
 from nltk.parse.generate import generate
+from scipy.special import softmax
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from tqdm import tqdm
@@ -179,6 +180,11 @@ class GeneratedDataset(Dataset, CachedDataset):
         self.seed = seed
         self.N = N
 
+    def advance_seed(self):
+        rng = np.random.RandomState(self.seed)
+        newseed = rng.randint(10000000, 99999999)
+        self.seed = newseed
+
     def __len__(self):
         return self.N
 
@@ -258,15 +264,18 @@ class Pipeline(object):
 
 
 class PCFGDataset(GeneratedDataset):
-    def __init__(self, pcfg, N=int(1e6), seed=12345678, **kw):
+    def __init__(self, pcfg, N=int(1e6), seed=12345678, temperature=1., **kw):
         super(PCFGDataset, self).__init__(N=N, seed=seed, **kw)
         self._pcfg = pcfg
+        self.temperature = temperature
 
     def generate(self, start=None, rng=None):
         rng = np.random.RandomState(self.seed) if rng is None else rng
         start = self._pcfg.start() if start is None else start
         productions = self._pcfg.productions(start)
         productions, probs = zip(*[(prod, prod.prob()) for prod in productions])
+        if self.temperature != 1.:
+            probs = softmax(np.log(probs) * self.temperature)
         chosen_prod = rng.choice(productions, p=probs)
         ret = []
         for rhse in chosen_prod.rhs():
@@ -872,8 +881,8 @@ if __name__ == '__main__':
     # import filelock
     # try_tokenizer_dataset()
     # try_perturbed_generated_dataset()
-    try_top_dataset()
-    # ovd = OvernightDatasetLoader().load()
+    # try_top_dataset()
+    ovd = OvernightDatasetLoader(usecache=False).load()
     # govd = PCFGDataset(OvernightPCFGBuilder()
     #                    .build(ovd[lambda x: x[2] in {"train", "valid"}]
     #                           .map(lambda f: f[1])

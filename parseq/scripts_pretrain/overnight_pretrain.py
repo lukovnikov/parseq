@@ -19,9 +19,10 @@ import qelos as q   # branch v3
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate, OvernightPCFGBuilder, \
-    PCFGBuilder
+    PCFGBuilder, PCFGDataset, TokenMasker, SpanMasker, SubtreeMasker
 from parseq.decoding import merge_metric_dicts
 from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
@@ -243,6 +244,13 @@ def run(domain="restaurants",
         patience=5,
         gpu=-1,
         seed=123456789,
+        dataseed=12345678,
+        datatemp=0.33,
+        pretrainN=2000,
+        tokenmaskp=0.,
+        spanmaskp=0.,
+        spanmasklamda=2.2,
+        treemaskp=0.,
         encoder="bart-large",
         numlayers=6,
         hdim=600,
@@ -268,10 +276,11 @@ def run(domain="restaurants",
 
     tt.tick("creating grammar dataset generator")
     pcfg = build_grammar(tds, vds)
+    ptds = PCFGDataset(pcfg, N=pretrainN, seed=seed, temperature=datatemp)
     tt.tock("created dataset generator")
 
     tt.tick("creating model")
-    trainm, testm = create_model(encoder_name=encoder,
+    trainm, testm, pretrainm = create_model(encoder_name=encoder,
                                  dec_vocabsize=flenc.vocab.number_of_ids(),
                                  dec_layers=numlayers,
                                  dec_dim=hdim,
@@ -285,12 +294,41 @@ def run(domain="restaurants",
 
     # run a batch of data through the model
     if localtest:
+        print("generated dataset")
+        print(ptds[0])
+        print(ptds[0])
+        allexamples = []
+        for i in tqdm(range(len(ptds))):
+            allexamples.append(ptds[i])
+        uniqueexamples = set([str(x) for x in allexamples])
+        print(f"{100*len(uniqueexamples)/len(allexamples)}% unique examples ({len(uniqueexamples)}/{len(allexamples)})")
+        ptds.advance_seed()
+        print(ptds[0])
+        allexamples = list(ptds.examples)
+        uniqueexamples2 = set([str(x) for x in allexamples])
+        print(f"{100*len(uniqueexamples2)/len(allexamples)}% unique examples ({len(uniqueexamples2)}/{len(allexamples)})")
+        print(f"{len(uniqueexamples & uniqueexamples2)}/{len(uniqueexamples | uniqueexamples2)} overlap")
+        print("---")
         batch = next(iter(tdl))
         out = trainm(*batch)
         print(out)
         out = testm(*batch)
         print(out)
 
+    # region pretraining
+    # setup data perturbation
+    tokenmasker = TokenMasker(p=tokenmaskp, seed=dataseed) if tokenmaskp > 0 else lambda x: x
+    spanmasker = SpanMasker(p=spanmaskp, lamda=spanmasklamda, seed=dataseed) if spanmaskp > 0 else lambda x: x
+    treemasker = SubtreeMasker(p=treemaskp, seed=dataseed) if treemaskp > 0 else lambda x: x
+    # TODO finish
+
+
+    ptmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
+
+
+    # endregion
+
+    # region finetuning
     metrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
     vmetrics = make_array_of_metrics("seq_acc", "tree_acc")
     xmetrics = make_array_of_metrics("seq_acc", "tree_acc")
@@ -375,6 +413,7 @@ def run(domain="restaurants",
 
     # print(settings)
     return settings
+    # endregion
 
 
 def run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
@@ -432,7 +471,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=5, cosinelr=Fals
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
-    q.argprun(run_experiments_seed)
+    # q.argprun(run_experiments_seed)
