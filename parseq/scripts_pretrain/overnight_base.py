@@ -388,13 +388,13 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
     ranges = {
-        "lr": [0.0001],
-        "enclrmul": [0.1],
-        "warmup": [1],
+        "lr": [0.00001],
+        "enclrmul": [1],
+        "warmup": [2],
         "epochs": [75],
         "numheads": [16],
         "numlayers": [3],
-        "dropout": [.1],
+        "dropout": [.05],
         "hdim": [960],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
