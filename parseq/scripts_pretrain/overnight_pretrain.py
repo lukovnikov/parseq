@@ -485,9 +485,9 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
         "numlayers": [3],
         "dropout": [.1],
         "hdim": [960],
-        "tokenmaskp": [0., .2],
-        "spanmaskp": [0., .2],
-        "treemaskp": [0., .2],
+        "tokenmaskp": [0., .1, .2],
+        "spanmaskp": [0., .1, .2],
+        "treemaskp": [0., .1, .2],
         "seed": [12345678, 65748390],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
@@ -499,6 +499,8 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
         if dimperhead < 20 or dimperhead > 100:
             return False
         if x["tokenmaskp"] == 0 and x["spanmaskp"] == 0 and x["treemaskp"] == 0:
+            return False
+        if x["tokenmaskp"] + x["spanmaskp"] + x["treemaskp"] > .3:
             return False
         return True
 
