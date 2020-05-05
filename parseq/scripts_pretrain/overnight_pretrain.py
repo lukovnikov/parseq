@@ -474,14 +474,20 @@ def _run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
 def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
     ranges = {
         "lr": [0.0001],
+        "ptlr": [0.0001, 0.00001, 0.001],
         "enclrmul": [0.1],
         "warmup": [1],
-        "epochs": [50],
-        "numheads": [8, 12, 16],
-        "numlayers": [3, 6, 9],
-        "dropout": [.1, .05, .2],
-        "hdim": [192, 384, 768, 960],
-        "seed": [12345678],     # TODO: add more later
+        "ptwarmup": [1, 5],
+        "epochs": [75],
+        "ptepochs": [100],
+        "numheads": [16],
+        "numlayers": [3],
+        "dropout": [.1],
+        "hdim": [960],
+        "tokenmaskp": [0., .1],
+        "spanmaskp": [0., .1],
+        "treemaskp": [0., .1],
+        "seed": [12345678, 65748390],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
     def check_config(x):
@@ -501,11 +507,11 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=5, cosinelr=Fals
     ranges = {
         "lr": [0.0001],
         "enclrmul": [0.1],
-        "warmup": [0],
-        "epochs": [50],
+        "warmup": [1],
+        "epochs": [75],
         "numheads": [16],
-        "numlayers": [6],
-        "dropout": [.05],
+        "numlayers": [3],
+        "dropout": [.1],
         "hdim": [960],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
