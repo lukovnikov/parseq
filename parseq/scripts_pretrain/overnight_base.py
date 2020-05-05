@@ -16,7 +16,6 @@ from typing import Callable, Set
 import qelos as q   # branch v3
 import numpy as np
 import torch
-from sched import LRSchedule
 from torch.utils.data import DataLoader
 
 from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate
@@ -302,7 +301,7 @@ def run(domain="restaurants",
         lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
-    lr_schedule = LRSchedule(optim, lr_schedule)
+    lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
