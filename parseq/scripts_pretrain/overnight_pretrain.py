@@ -281,7 +281,7 @@ def run(domain="restaurants",
 
     tt.tick("creating grammar dataset generator")
     pcfg = build_grammar(tds, vds)
-    ptds = PCFGDataset(pcfg, N=ptN, seed=seed, temperature=datatemp, maxlen=50)
+    ptds = PCFGDataset(pcfg, N=ptN, seed=seed, temperature=datatemp, maxlen=100)
     tt.tock("created dataset generator")
 
     tt.tick("creating model")
