@@ -239,6 +239,7 @@ def run(domain="restaurants",
         warmup=0.,
         ptwarmup=0.,
         batsize=20,
+        ptbatsize=50,
         epochs=100,
         ptepochs=100,
         dropout=0.1,
@@ -324,16 +325,36 @@ def run(domain="restaurants",
     tokenmasker = TokenMasker(p=tokenmaskp, seed=dataseed) if tokenmaskp > 0 else lambda x: x
     spanmasker = SpanMasker(p=spanmaskp, lamda=spanmasklamda, seed=dataseed) if spanmaskp > 0 else lambda x: x
     treemasker = SubtreeMasker(p=treemaskp, seed=dataseed) if treemaskp > 0 else lambda x: x
-    # TODO finish
+
     perturbed_ptds = ptds\
         .map(lambda x: (x, treemasker(x)))\
         .map(lambda x: (flenc.convert(x[0], "tokens"),
                         flenc.convert(x[1], "tokens")))\
-        .map(lambda x: (x[0], spanmasker(tokenmasker(x[1]))))\
+        .map(lambda x: (x[0], spanmasker(tokenmasker(x[1]))))
+    perturbed_ptds_tokens = perturbed_ptds
+    perturbed_ptds = perturbed_ptds\
         .map(lambda x: (flenc.convert(x[0], "tensor"),
                         flenc.convert(x[1], "tensor")))
 
-    ptdl = DataLoader(perturbed_ptds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=1))
+    if localtest:
+        allex = []
+        allperturbedex = []
+        _nepo = 10
+        print(f"checking {_nepo}, each {ptN} generated examples")
+        for _e in range(_nepo):
+            for i in range(len(perturbed_ptds_tokens)):
+                ex = str(ptds[i])
+                perturbed_ex = perturbed_ptds_tokens[i]
+                perturbed_ex = f"{' '.join(perturbed_ex[0])}->{' '.join(perturbed_ex[1])}"
+                allex.append(ex)
+                allperturbedex.append(perturbed_ex)
+            ptds.advance_seed()
+        uniqueex = set(allex)
+        uniqueperturbedex = set(allperturbedex)
+        print(f"{len(uniqueex)}/{len(allex)} unique examples")
+        print(f"{len(uniqueperturbedex)}/{len(allperturbedex)} unique perturbed examples")
+
+    ptdl = DataLoader(perturbed_ptds, batch_size=ptbatsize, shuffle=True, collate_fn=partial(autocollate, pad_value=1))
     ptmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
 
     ptparams = pretrainm.parameters()
@@ -474,17 +495,18 @@ def _run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
 def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
                     ptN=3000, datatemp=.33):
     ranges = {
-        "lr": [0.0001],
+        "lr": [0.00001],
         "ptlr": [0.0001, 0.00001],
-        "enclrmul": [0.1],
+        "enclrmul": [1.],
         "warmup": [1],
         "ptwarmup": [1, 5],
-        "epochs": [75],
+        "epochs": [100],
         "ptepochs": [100],
-        "numheads": [16],
-        "numlayers": [3],
-        "dropout": [.1],
-        "hdim": [960],
+        "ptbatsize": [50],
+        "numheads": [16, 8],
+        "numlayers": [3, 6],
+        "dropout": [.1, .2],
+        "hdim": [960, 768, 384],
         "tokenmaskp": [0., .1, .2],
         "spanmaskp": [0., .1, .2],
         "treemaskp": [0., .1, .2],
