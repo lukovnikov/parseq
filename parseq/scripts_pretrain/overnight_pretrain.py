@@ -18,6 +18,7 @@ from typing import Callable, Set
 import qelos as q   # branch v3
 import numpy as np
 import torch
+from sched import LRSchedule
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -327,10 +328,10 @@ def run(domain="restaurants",
     treemasker = SubtreeMasker(p=treemaskp, seed=dataseed) if treemaskp > 0 else lambda x: x
 
     perturbed_ptds = ptds\
-        .map(lambda x: (x, treemasker(x)))\
+        .map(lambda x: (treemasker(x), x))\
         .map(lambda x: (flenc.convert(x[0], "tokens"),
                         flenc.convert(x[1], "tokens")))\
-        .map(lambda x: (x[0], spanmasker(tokenmasker(x[1]))))
+        .map(lambda x: (spanmasker(tokenmasker(x[0])), x[1]))
     perturbed_ptds_tokens = perturbed_ptds
     perturbed_ptds = perturbed_ptds\
         .map(lambda x: (flenc.convert(x[0], "tensor"),
@@ -339,9 +340,9 @@ def run(domain="restaurants",
     if localtest:
         allex = []
         allperturbedex = []
-        _nepo = 10
+        _nepo = 100
         print(f"checking {_nepo}, each {ptN} generated examples")
-        for _e in range(_nepo):
+        for _e in tqdm(range(_nepo)):
             for i in range(len(perturbed_ptds_tokens)):
                 ex = str(ptds[i])
                 perturbed_ex = perturbed_ptds_tokens[i]
@@ -366,9 +367,10 @@ def run(domain="restaurants",
         lr_schedule = q.sched.Linear(steps=ptwarmup) >> q.sched.Cosine(steps=t_max-ptwarmup) >> 0.
     else:
         lr_schedule = q.sched.Linear(steps=ptwarmup) >> 1.
+    lr_schedule = LRSchedule(ptoptim, lr_schedule)
 
     pttrainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    pttrainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=ptoptim, losses=ptmetrics,
+    pttrainepoch = partial(q.train_epoch, model=trainm, dataloader=ptdl, optim=ptoptim, losses=ptmetrics,
                          _train_batch=pttrainbatch, device=device, on_end=[lambda: lr_schedule.step(),
                                                                            lambda: ptds.advance_seed()])
 
@@ -409,6 +411,7 @@ def run(domain="restaurants",
         lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
+    lr_schedule = LRSchedule(optim, lr_schedule)
 
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
@@ -560,7 +563,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=5, cosinelr=Fals
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
-    q.argprun(run_experiments)
+    # q.argprun(run_experiments)
     # q.argprun(run_experiments_seed)
