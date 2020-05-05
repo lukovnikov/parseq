@@ -391,7 +391,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         "lr": [0.00001],
         "enclrmul": [1],
         "warmup": [2],
-        "epochs": [75],
+        "epochs": [100],
         "numheads": [16],
         "numlayers": [3],
         "dropout": [.05],
