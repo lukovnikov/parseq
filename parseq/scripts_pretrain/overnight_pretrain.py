@@ -471,7 +471,8 @@ def _run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
                       domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
+def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
+                    ptN=3000, datatemp=.33):
     ranges = {
         "lr": [0.0001],
         "ptlr": [0.0001, 0.00001],
@@ -502,7 +503,8 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
+                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr,
+                      ptN=ptN, datatemp=datatemp)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
