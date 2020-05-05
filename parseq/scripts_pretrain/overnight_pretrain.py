@@ -497,6 +497,8 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
         dimperhead = x["hdim"] / x["numheads"]
         if dimperhead < 20 or dimperhead > 100:
             return False
+        if x["tokenmaskp"] == 0 and x["spanmaskp"] == 0 and x["treemaskp"] == 0:
+            return False
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
