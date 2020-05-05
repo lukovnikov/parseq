@@ -369,7 +369,7 @@ def run(domain="restaurants",
     lr_schedule = q.sched.LRSchedule(ptoptim, lr_schedule)
 
     pttrainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    pttrainepoch = partial(q.train_epoch, model=trainm, dataloader=ptdl, optim=ptoptim, losses=ptmetrics,
+    pttrainepoch = partial(q.train_epoch, model=pretrainm, dataloader=ptdl, optim=ptoptim, losses=ptmetrics,
                          _train_batch=pttrainbatch, device=device, on_end=[lambda: lr_schedule.step(),
                                                                            lambda: ptds.advance_seed()])
 
@@ -562,7 +562,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=5, cosinelr=Fals
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
-    q.argprun(run_experiments)
+    # q.argprun(run_experiments)
     # q.argprun(run_experiments_seed)
