@@ -496,10 +496,10 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
                     ptN=3000, datatemp=.33):
     ranges = {
         "lr": [0.00001],
-        "ptlr": [0.0001, 0.00001],
+        "ptlr": [0.0001],
         "enclrmul": [1.],
         "warmup": [1],
-        "ptwarmup": [1, 5],
+        "ptwarmup": [5],
         "epochs": [100],
         "ptepochs": [100],
         "ptbatsize": [50],
