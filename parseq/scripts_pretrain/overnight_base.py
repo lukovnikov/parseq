@@ -30,7 +30,7 @@ UNKID = 3
 
 
 def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bart-large"):
-    ds = OvernightDatasetLoader().load(domain=domain)
+    ds = OvernightDatasetLoader(simplify_mode="light").load(domain=domain)
 
     seqenc_vocab = Vocab(padid=1, startid=0, endid=2, unkid=UNKID)
     seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=tree_to_lisp_tokens,

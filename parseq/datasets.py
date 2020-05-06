@@ -457,13 +457,19 @@ class OvernightDatasetLoader(object):
                  p="../datasets/overnightData/",
                  pcache="../datasets/overnightCache/",
                  usecache=True,
-                 validfrac=.2, **kw):
+                 validfrac=.2,
+                 simplify_mode="full", **kw):
         super(OvernightDatasetLoader, self).__init__(**kw)
         self._simplify_filters = True        # if True, filter expressions are converted to orderless and-expressions
         self._pcache = pcache if usecache else None
         self._usecache = usecache
         self.validfrac = validfrac
         self._p = p
+        self.simplify_mode = simplify_mode      # "full" or "light"
+
+    @property
+    def full_simplify(self):
+        return self.simplify_mode == "full"
 
     def load(self, domain:str="restaurants"):
         examples = self._initialize(self._p, domain)
@@ -477,14 +483,14 @@ class OvernightDatasetLoader(object):
         afterstring = set()
 
         def simplify_tree(t:Tree):
-            if t.label() == "call":
+            if t.label() == "call":     # remove call, make first arg of it the parent of the other args
                 assert(len(t[0]) == 0)
                 # if not t[0].label().startswith("SW."):
                 #     print(t)
                 # assert(t[0].label().startswith("SW."))
                 t.set_label(t[0].label())
                 del t[0]
-            elif t.label() == "string":
+            elif t.label() == "string": # remove, annotate
                 afterstring.update(set([tc.label() for tc in t]))
                 assert(len(t) == 1)
                 assert(len(t[0]) == 0)
@@ -494,23 +500,38 @@ class OvernightDatasetLoader(object):
                 t.set_label("SW:" + t.label()[len("edu.stanford.nlp.sempre.overnight.SimpleWorld."):])
             if t.label() == "SW:getProperty":
                 assert(len(t) == 2)
-                ret = simplify_tree(t[1])
-                ret.append(simplify_tree(t[0]))
+                if self.full_simplify:
+                    ret = simplify_tree(t[1])
+                    ret.append(simplify_tree(t[0]))
+                else:
+                    children = [simplify_tree(te) for te in t]
+                    ret = t
+                    ret[:] = children
                 return ret
             elif t.label() == "SW:singleton":
                 assert(len(t) == 1)
                 assert(len(t[0]) == 0)
-                # t[0].set_label(f"singleton:{t[0].label()}")
-                return t[0]
+                if not self.full_simplify:
+                    t[0].set_label(f"singleton:{t[0].label()}")
+                return simplify_tree(t[0])
             elif t.label() == "SW:ensureNumericProperty":
                 assert(len(t) == 1)
                 # assert(len(t[0]) == 1)
                 # t[0][0].set_label(f"numeric:{t[0][0].label()}")
-                ret = simplify_tree(t[0])
+                if self.full_simplify:
+                    ret = simplify_tree(t[0])
+                else:
+                    ret = t
+                    ret[:] = [simplify_tree(te) for te in ret]
                 return ret
             elif t.label() == "SW:ensureNumericEntity":
                 assert(len(t) == 1)
-                return simplify_tree(t[0])
+                if self.full_simplify:
+                    ret = simplify_tree(t[0])
+                else:
+                    ret = t
+                    ret[:] = [simplify_tree(te) for te in ret]
+                return ret
             elif t.label() == "SW:aggregate":
                 assert(len(t) == 2)
                 ret = simplify_tree(t[0])
@@ -585,16 +606,19 @@ class OvernightDatasetLoader(object):
                 assert(len(t) == 2)
                 head = t[0]
                 head = simplify_furthermore(head)
-                assert(head.label().startswith("arg:"))
-                assert(len(head) == 0)
-                headlabel = f"arg:~{head.label()[4:]}"
-                headlabel = headlabel.replace("~~", "")
-                head.set_label(headlabel)
-                body = simplify_furthermore(t[1])
-                if t.label()[len("cond:arg:"):] != "=":
-                    body = Tree(t.label()[5:], [body])
-                head.append(body)
-                return head
+                if self.full_simplify:
+                    assert(head.label().startswith("arg:"))
+                    assert(len(head) == 0)
+                    headlabel = f"arg:~{head.label()[4:]}"
+                    headlabel = headlabel.replace("~~", "")
+                    head.set_label(headlabel)
+                    body = simplify_furthermore(t[1])
+                    if t.label()[len("cond:arg:"):] != "=":
+                        body = Tree(t.label()[5:], [body])
+                    head.append(body)
+                    return head
+                else:
+                    return t
             else:
                 t[:] = [simplify_furthermore(tc) for tc in t]
                 return t
@@ -614,10 +638,12 @@ class OvernightDatasetLoader(object):
                 ztree = pas_to_tree(z[1][2][1][0])
                 maxsize_before = max(maxsize_before, tree_length(ztree))
                 avgsize_before.append(tree_length(ztree))
-                lf = simplify_tree(ztree)
-                lf = simplify_further(lf)
-                lf = simplify_furthermore(lf)
-                lf = simplify_final(lf)
+                lf = ztree
+                if self.simplify_mode != "none":
+                    lf = simplify_tree(lf)
+                    lf = simplify_further(lf)
+                    lf = simplify_furthermore(lf)
+                    lf = simplify_final(lf)
                 question = z[1][0][1][0]
                 assert(question[0] == '"' and question[-1] == '"')
                 ret.append((question[1:-1], lf))
@@ -907,7 +933,7 @@ if __name__ == '__main__':
     # try_tokenizer_dataset()
     # try_perturbed_generated_dataset()
     # try_top_dataset()
-    ovd = OvernightDatasetLoader(usecache=False).load()
+    ovd = OvernightDatasetLoader(usecache=False, simplify_mode="light").load()
     # govd = PCFGDataset(OvernightPCFGBuilder()
     #                    .build(ovd[lambda x: x[2] in {"train", "valid"}]
     #                           .map(lambda f: f[1])
