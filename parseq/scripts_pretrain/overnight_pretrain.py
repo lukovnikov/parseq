@@ -497,7 +497,7 @@ def _run_experiments(domain="restaurants", gpu=-1, patience=5, cosinelr=False,):
 def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
                     ptN=3000, datatemp=.33):
     ranges = {
-        "lr": [0.00001],
+        "lr": [0.0001],
         "ptlr": [0.0001],
         "enclrmul": [1.],
         "warmup": [1],
