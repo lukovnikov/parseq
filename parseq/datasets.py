@@ -660,7 +660,7 @@ class OvernightDatasetLoader(object):
         avgsize_before = sum(avgsize_before) / len(avgsize_before)
         avgsize_after = sum(avgsize_after) / len(avgsize_after)
 
-        print("Simplification results ({j} examples):")
+        print(f"Simplification results ({j} examples):")
         print(f"\t Max, Avg size before: {maxsize_before}, {avgsize_before}")
         print(f"\t Max, Avg size after: {maxsize_after}, {avgsize_after}")
 
