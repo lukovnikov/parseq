@@ -522,7 +522,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
         dimperhead = x["hdim"] / x["numheads"]
         if dimperhead < 20 or dimperhead > 100:
             return False
-        if x["tokenmaskp"] + x["spanmaskp"] + x["treemaskp"] >= .2:
+        if x["tokenmaskp"] + x["spanmaskp"] + x["treemaskp"] > .2:
             return False
         if x["tokenmaskp"] + x["spanmaskp"] + x["treemaskp"] == .0:
             return False
