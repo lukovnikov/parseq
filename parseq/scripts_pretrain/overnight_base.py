@@ -395,7 +395,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         "epochs": [100],
         "numheads": [16],
         "numlayers": [3],
-        "dropout": [.05],
+        "dropout": [.1],
         "hdim": [960],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
