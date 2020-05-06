@@ -505,14 +505,14 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
         "epochs": [100],
         "ptepochs": [100],
         "ptbatsize": [20],
-        "numheads": [16, 8],
-        "numlayers": [3, 6],
-        "dropout": [.1, .2],
-        "hdim": [960, 768, 384],
-        "tokenmaskp": [0., .1, .2],
-        "spanmaskp": [0., .1, .2],
-        "treemaskp": [0., .1, .2],
-        "seed": [12345678, 65748390],     # TODO: add more later
+        "numheads": [16],
+        "numlayers": [3],
+        "dropout": [.2],
+        "hdim": [960, 768],
+        "tokenmaskp": [0., .2],
+        "spanmaskp": [0., .2],
+        "treemaskp": [0., .2],
+        "seed": [12345678],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
     def check_config(x):
@@ -522,9 +522,9 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,
         dimperhead = x["hdim"] / x["numheads"]
         if dimperhead < 20 or dimperhead > 100:
             return False
-        if x["tokenmaskp"] == 0 and x["spanmaskp"] == 0 and x["treemaskp"] == 0:
+        if x["tokenmaskp"] + x["spanmaskp"] + x["treemaskp"] >= .2:
             return False
-        if x["tokenmaskp"] + x["spanmaskp"] + x["treemaskp"] > .3:
+        if x["tokenmaskp"] + x["spanmaskp"] + x["treemaskp"] == .0:
             return False
         return True
 
