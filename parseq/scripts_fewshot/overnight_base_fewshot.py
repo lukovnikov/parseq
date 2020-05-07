@@ -539,8 +539,9 @@ def run(traindomains="restaurants,blocks,calendar,housing,publications,calendarp
 def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
     ranges = {
         "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
+        "ftlr": [0.0001],
         "enclrmul": [1., 0.1], #[1., 0.1, 0.01],
-        "warmup": [0, 2],
+        "warmup": [2],
         "epochs": [100], #[50, 100],
         "numheads": [8, 12, 16],
         "numlayers": [3, 6, 9],
@@ -591,7 +592,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 
 
 if __name__ == '__main__':
-    ret = q.argprun(run)
+    # ret = q.argprun(run)
     # print(ret)
-    # q.argprun(run_experiments)
+    q.argprun(run_experiments)
     # q.argprun(run_experiments_seed)
