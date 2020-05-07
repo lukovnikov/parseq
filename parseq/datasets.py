@@ -618,6 +618,7 @@ class OvernightDatasetLoader(object):
                     head.append(body)
                     return head
                 else:
+                    t[:] = [simplify_furthermore(tc) for tc in t]
                     return t
             else:
                 t[:] = [simplify_furthermore(tc) for tc in t]

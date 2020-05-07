@@ -165,6 +165,7 @@ class DerivedAccuracy(Metric):
 
 
 class TreeAccuracy(Metric):
+    unktoken = "@UNK@"
     def __init__(self, name:str="tree_acc", tensor2tree:Callable[[torch.Tensor], nltk.Tree]=None, orderless=set(), **kw):
         super(TreeAccuracy, self).__init__(**kw)
         self.name = name
@@ -174,7 +175,7 @@ class TreeAccuracy(Metric):
     def forward(self, probs, predactions, golds, x:State=None):
         def compare(_gold_trees, _predactions):
             pred_trees = [self.tensor2tree(predactionse) for predactionse in _predactions]
-            ret = [float(are_equal_trees(gold_tree, pred_tree, orderless=self.orderless))
+            ret = [float(are_equal_trees(gold_tree, pred_tree, orderless=self.orderless, unktoken=self.unktoken))
                    for gold_tree, pred_tree in zip(_gold_trees, pred_trees)]
             return ret
         if predactions.dim() == 3:      # beam states
