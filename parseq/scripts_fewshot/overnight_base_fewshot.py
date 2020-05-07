@@ -547,7 +547,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
         "numlayers": [3, 6, 9],
         "dropout": [.1],
         "hdim": [768, 960], #[192, 384, 768, 960],
-        "seed": [12345678, 65748390], #, 98387670, 23655798, 66453829],     # TODO: add more later
+        "seed": [12345678], #, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
     def check_config(x):
