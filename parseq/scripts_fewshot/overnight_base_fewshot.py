@@ -342,15 +342,15 @@ def _tensor2tree(x, D:Vocab=None):
     return tree
 
 
-def run(traindomains="restaurants,blocks,calendar,housing,publications,calendarplus",
-        testdomain="recipes",
+def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus",
+        testdomain="restaurants",
         mincoverage=2,
         lr=0.001,
         enclrmul=0.1,
         ftlr=0.0001,
         cosinelr=False,
         warmup=0.,
-        batsize=20,
+        batsize=30,
         epochs=100,
         dropout=0.1,
         wreg=1e-9,
@@ -559,8 +559,12 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
             return False
         return True
 
+    alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
+    traindomains = ",".join(alldomains - {domain})
+
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
+                      traindomains=traindomains, testdomain=domain,
+                      gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
@@ -585,9 +589,12 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
             return False
         return True
 
-    q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
+    alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
+    traindomains = ",".join(alldomains - {domain})
 
+    q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
+                      traindomains=traindomains, testdomain=domain,
+                      gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 
 
