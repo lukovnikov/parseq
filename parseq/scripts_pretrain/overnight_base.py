@@ -427,7 +427,7 @@ def run_experiments_seed(domain="restaurants", hdim=-1, dropout=-1., numlayers=-
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       domain=domain, gpu=gpu,
-                      trainonvalid=True)
+                      trainonvalid=False)
 
 
 
