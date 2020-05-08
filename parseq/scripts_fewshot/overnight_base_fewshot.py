@@ -103,7 +103,7 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
             break
 
     out = [examples[i] for i in outorder]
-    print(f"{len(out)} examples loaded from domain")
+    print(f"{len(out)}/{len(examples)} examples loaded from domain")
     return out
 
 
