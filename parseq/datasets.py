@@ -471,8 +471,19 @@ class OvernightDatasetLoader(object):
     def full_simplify(self):
         return self.simplify_mode == "full"
 
-    def load(self, domain:str="restaurants"):
+    def load(self, domain:str="restaurants", trainonvalid=False):
         examples = self._initialize(self._p, domain)
+        if trainonvalid:
+            _examples = examples
+            examples = []
+            for example in _examples:
+                if example[2] == "train":
+                    examples.append(example)
+                elif example[2] == "valid":
+                    examples.append((example[0], example[1], "train"))
+                elif example[2] == "test":
+                    examples.append((example[0], example[1], "valid"))
+                    examples.append(example)
         return Dataset(examples)
 
     def lines_to_examples(self, lines:List[str]):

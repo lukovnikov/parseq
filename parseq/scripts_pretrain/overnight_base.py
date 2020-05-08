@@ -29,8 +29,8 @@ from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartFo
 UNKID = 3
 
 
-def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bart-large"):
-    ds = OvernightDatasetLoader(simplify_mode="light").load(domain=domain)
+def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bart-large", trainonvalid=False):
+    ds = OvernightDatasetLoader(simplify_mode="light").load(domain=domain, trainonvalid=trainonvalid)
 
     seqenc_vocab = Vocab(padid=1, startid=0, endid=2, unkid=UNKID)
     seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=tree_to_lisp_tokens,
@@ -234,6 +234,7 @@ def run(domain="restaurants",
         maxlen=50,
         localtest=False,
         printtest=False,
+        trainonvalid=False,
         ):
     settings = locals().copy()
     print(locals())
@@ -244,7 +245,7 @@ def run(domain="restaurants",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     tt.tick("loading data")
-    tds, vds, xds, nltok, flenc = load_ds(domain=domain, nl_mode=encoder)
+    tds, vds, xds, nltok, flenc = load_ds(domain=domain, nl_mode=encoder, trainonvalid=trainonvalid)
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=1))
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=1))
     xdl = DataLoader(xds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=1))
@@ -410,7 +411,8 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
+                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr,
+                      trainonvalid=True)
 
 
 
@@ -418,5 +420,5 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 if __name__ == '__main__':
     # ret = q.argprun(run)
     # print(ret)
-    q.argprun(run_experiments)
-    # q.argprun(run_experiments_seed)
+    # q.argprun(run_experiments)
+    q.argprun(run_experiments_seed)
