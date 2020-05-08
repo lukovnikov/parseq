@@ -164,7 +164,7 @@ def load_ds(traindomains="restaurants",
                              add_start_token=True, add_end_token=True)
     for example in ds.examples:
         query = example[1]
-        seqenc.inc_build_vocab(query, seen=example[2] in ("train", "finetune"))
+        seqenc.inc_build_vocab(query, seen=example[2] in ("train", "fttrain"))
     seqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
 
     nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
