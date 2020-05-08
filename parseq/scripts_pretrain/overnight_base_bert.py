@@ -423,8 +423,8 @@ def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1
     p = __file__ + f".{domain}"
     def check_config(x):
         effectiveenclr = x["enclrmul"] * x["lr"]
-        if effectiveenclr < 0.000005:
-            return False
+        # if effectiveenclr < 0.000005:
+        #     return False
         dimperhead = x["hdim"] / x["numheads"]
         if dimperhead < 20 or dimperhead > 100:
             return False
