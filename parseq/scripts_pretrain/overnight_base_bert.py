@@ -396,7 +396,8 @@ def run_experiments(domain="restaurants", gpu=-1):
                       domain=domain, gpu=gpu)
 
 
-def run_experiments_seed(domain="restaurants", hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1):
+def run_experiments_seed(domain="restaurants", hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1,
+                         smoothing=0.1):
     ranges = {
         "lr": [0.0001],
         "enclrmul": [0.1],
@@ -428,7 +429,7 @@ def run_experiments_seed(domain="restaurants", hdim=-1, dropout=-1., numlayers=-
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, gpu=gpu,
+                      domain=domain, gpu=gpu, smoothing=smoothing,
                       trainonvalid=False)
 
 
