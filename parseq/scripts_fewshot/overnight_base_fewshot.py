@@ -38,38 +38,6 @@ def get_labels_from_tree(x:Tree):
     return ret
 
 
-overnightlexicon = {
-    "": ""
-}
-
-
-def get_shared_tokens(domains="restaurants,housing,blocks,calendar,calendarplus,publications,recipes"):
-    ret = {'agg:arg:sum', 'SW:CNT-arg:<=', 'cond:arg:>=', 'agg:arg:avg', 'SW:CNT-arg:max', 'cond:arg:<', 'cond:arg:<=', 'number', 'SW:ensureNumericProperty', 'cond:arg:>', 'cond:has', 'SW:concat', 'SW:getProperty', 'cond:arg:=', 'date', 'SW:CNT-arg:>', 'op:and', 'arg:~type', 'SW:CNT-arg:=', 'cond:arg:!=', 'SW:CNT-arg:>=', 'SW:ensureNumericEntity', 'arg:min', 'SW:superlative', 'SW:CNT-arg:<', 'arg:max', 'SW:CNT-arg:min'}
-    # return ret
-    domains = domains.split(",")
-    tokendomaincounts = {}
-    alltokens = set()
-    for domain in domains:
-        domaintokens = set()
-        ds = OvernightDatasetLoader(simplify_mode="light").load(domain)
-        for example in ds.examples:
-            example_tokens = get_labels_from_tree(example[1])
-            if "SW:reverse" in example_tokens:
-                print(example)
-            domaintokens |= set(example_tokens)
-        for domaintoken in domaintokens:
-            if domaintoken not in tokendomaincounts:
-                tokendomaincounts[domaintoken] = 0
-            tokendomaincounts[domaintoken] += 1
-        alltokens |= domaintokens
-    sharedtokens = set([k for k, v in tokendomaincounts.items() if v > 1])
-    print("tokens needing lexicon")
-    for token in alltokens:
-        if token not in ret:
-            print(token)
-    return ret
-
-
 def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     """
     Sort given examples by the degree they span their vocabulary.
@@ -151,7 +119,7 @@ def load_ds(traindomains="restaurants",
         allex += ds[(None, None, lambda x: x in ("train", "valid"))].map(lambda x: (x[0], x[1], x[2], traindomain)).examples       # don't use test examples
 
     testds = OvernightDatasetLoader(simplify_mode="light").load(domain=testdomain)
-    sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples, mincoverage=mincoverage, loadedex=allex)
+    sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples, mincoverage=mincoverage, loadedex=None)
 
     allex += testds[(None, None, "ftvalid")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
     allex += testds[(None, None, "test")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
