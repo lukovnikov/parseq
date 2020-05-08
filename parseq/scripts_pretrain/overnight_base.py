@@ -294,8 +294,6 @@ def run(domain="restaurants",
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
-    eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
-
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
@@ -307,16 +305,11 @@ def run(domain="restaurants",
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
-    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])
+    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device)
 
     tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, check_stop=[lambda: eyt.check_stop()])
+    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
     tt.tock("done training")
-
-    if eyt.get_remembered() is not None:
-        tt.msg("reloaded")
-        trainm.model = eyt.get_remembered()
-        testm.model = eyt.get_remembered()
 
     tt.tick("testing")
     validresults = q.test_epoch(model=testm, dataloader=vdl, losses=vmetrics, device=device)
@@ -362,7 +355,7 @@ def run(domain="restaurants",
     return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
+def run_experiments(domain="restaurants", gpu=-1):
     ranges = {
         "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
         "enclrmul": [1., 0.1], #[1., 0.1, 0.01],
@@ -373,6 +366,19 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
         "dropout": [.1, .2],
         "hdim": [384, 768, 960], #[192, 384, 768, 960],
         "seed": [12345678], #, 98387670, 23655798, 66453829],     # TODO: add more later
+        "cosinelr": [True],
+    }
+    ranges = {
+        "lr": [0.0001],
+        "enclrmul": [0.1],
+        "warmup": [0],
+        "epochs": [50, 100, 75],
+        "numheads": [16],
+        "numlayers": [3],
+        "dropout": [.1],
+        "hdim": [960],
+        "cosinelr": [True],
+        "seed": [12345678],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
     def check_config(x):
@@ -385,19 +391,20 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr)
+                      domain=domain, gpu=gpu)
 
 
-def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
+def run_experiments_seed(domain="restaurants", gpu=-1):
     ranges = {
         "lr": [0.0001],
         "enclrmul": [0.1],
         "warmup": [0],
-        "epochs": [100],
+        "epochs": [50],
         "numheads": [16],
         "numlayers": [3],
         "dropout": [.1],
         "hdim": [960],
+        "cosinelr": [True],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
@@ -411,7 +418,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, gpu=gpu, patience=patience, cosinelr=cosinelr,
+                      domain=domain, gpu=gpu,
                       trainonvalid=True)
 
 
@@ -420,5 +427,5 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 if __name__ == '__main__':
     # ret = q.argprun(run)
     # print(ret)
-    # q.argprun(run_experiments)
-    q.argprun(run_experiments_seed)
+    q.argprun(run_experiments)
+    # q.argprun(run_experiments_seed)
