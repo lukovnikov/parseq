@@ -513,7 +513,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
         "enclrmul": [1., 0.1], #[1., 0.1, 0.01],
         "warmup": [2],
         "epochs": [100], #[50, 100],
-        "pretrainepochs": [0],
+        "pretrainepochs": [1],
         "numheads": [8, 12, 16],
         "numlayers": [3, 6, 9],
         "dropout": [.1],
