@@ -122,7 +122,7 @@ def load_ds(traindomains="restaurants",
     testds = OvernightDatasetLoader(simplify_mode="light").load(domain=testdomain)
     sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples, mincoverage=mincoverage, loadedex=None)
 
-    allex += testds[(None, None, "ftvalid")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
+    allex += testds[(None, None, "valid")].map(lambda x: (x[0], x[1], "ftvalid", testdomain)).examples
     allex += testds[(None, None, "test")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
     allex += [(ex[0], ex[1], "fttrain", testdomain) for ex in sortedexamples]
 
