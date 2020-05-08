@@ -433,7 +433,7 @@ def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus"
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
-    eyt = q.EarlyStopper(ftvmetrics[1], patience=patience, min_epochs=10, more_is_better=True,
+    eyt = q.EarlyStopper(ftvmetrics[1], patience=1000, min_epochs=10, more_is_better=True,
                          remember_f=lambda: deepcopy(trainm.model))
 
     t_max = epochs
