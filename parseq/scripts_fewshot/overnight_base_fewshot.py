@@ -414,7 +414,7 @@ def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus"
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])
 
     tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, check_stop=[lambda: eyt.check_stop()])
+    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=pretrainepochs, check_stop=[lambda: eyt.check_stop()])
     tt.tock("done training")
 
     if eyt.get_remembered() is not None:
