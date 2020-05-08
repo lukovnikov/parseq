@@ -375,7 +375,7 @@ def run_experiments(domain="restaurants", gpu=-1):
         "enclrmul": [0.1],
         "warmup": [0],
         "epochs": [50, 100, 75],
-        "numheads": [16],
+        "numheads": [12],
         "numlayers": [3],
         "dropout": [.1],
         "hdim": [768],
@@ -402,10 +402,10 @@ def run_experiments_seed(domain="restaurants", hdim=-1, dropout=-1., numlayers=-
         "enclrmul": [0.1],
         "warmup": [0],
         "epochs": [50],
-        "numheads": [16],
+        "numheads": [12],
         "numlayers": [3],
         "dropout": [.1],
-        "hdim": [960],
+        "hdim": [768],
         "cosinelr": [True],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
