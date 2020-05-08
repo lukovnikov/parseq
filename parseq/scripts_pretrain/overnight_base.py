@@ -394,7 +394,7 @@ def run_experiments(domain="restaurants", gpu=-1):
                       domain=domain, gpu=gpu)
 
 
-def run_experiments_seed(domain="restaurants", gpu=-1):
+def run_experiments_seed(domain="restaurants", hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1):
     ranges = {
         "lr": [0.0001],
         "enclrmul": [0.1],
@@ -407,6 +407,14 @@ def run_experiments_seed(domain="restaurants", gpu=-1):
         "cosinelr": [True],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
+    if hdim > 0:
+        ranges["hdim"] = [hdim]
+    if dropout > 0:
+        ranges["dropout"] = [dropout]
+    if numlayers > 0:
+        ranges["numlayers"] = [numlayers]
+    if numheads > 0:
+        ranges["numheads"] = [numheads]
     p = __file__ + f".{domain}"
     def check_config(x):
         effectiveenclr = x["enclrmul"] * x["lr"]
