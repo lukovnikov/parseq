@@ -396,7 +396,7 @@ def run_experiments(domain="restaurants", gpu=-1):
                       domain=domain, gpu=gpu)
 
 
-def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1,
+def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
                          smoothing=0.1):
     ranges = {
         "lr": [0.0001],
@@ -420,6 +420,8 @@ def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1
         ranges["numheads"] = [numheads]
     if enclrmul >= 0:
         ranges["enclrmul"] = [enclrmul]
+    if epochs >= 0:
+        ranges["epochs"] = [epochs]
     p = __file__ + f".{domain}"
     def check_config(x):
         effectiveenclr = x["enclrmul"] * x["lr"]
