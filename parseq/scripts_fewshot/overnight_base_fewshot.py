@@ -103,6 +103,7 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
             break
 
     out = [examples[i] for i in outorder]
+    print(f"{len(out)} examples loaded from domain")
     return out
 
 
@@ -320,6 +321,7 @@ def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus"
         warmup=0.,
         batsize=30,
         epochs=100,
+        pretrainepochs=100,
         dropout=0.1,
         wreg=1e-9,
         gradnorm=3,
@@ -504,13 +506,14 @@ def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus"
     return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
+def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=5):
     ranges = {
         "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
         "ftlr": [0.0001],
         "enclrmul": [1., 0.1], #[1., 0.1, 0.01],
         "warmup": [2],
         "epochs": [100], #[50, 100],
+        "pretrainepochs": [0],
         "numheads": [8, 12, 16],
         "numlayers": [3, 6, 9],
         "dropout": [.1],
@@ -532,7 +535,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       traindomains=traindomains, testdomain=domain,
-                      gpu=gpu, patience=patience, cosinelr=cosinelr)
+                      gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
