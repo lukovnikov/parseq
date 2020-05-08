@@ -120,7 +120,8 @@ def load_ds(traindomains="restaurants",
         allex += ds[(None, None, lambda x: x in ("train", "valid"))].map(lambda x: (x[0], x[1], x[2], traindomain)).examples       # don't use test examples
 
     testds = OvernightDatasetLoader(simplify_mode="light").load(domain=testdomain)
-    sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples, mincoverage=mincoverage, loadedex=None)
+    sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples,
+                                                   mincoverage=mincoverage, loadedex=[e for e in allex if e[2] == "train"])
 
     allex += testds[(None, None, "valid")].map(lambda x: (x[0], x[1], "ftvalid", testdomain)).examples
     allex += testds[(None, None, "test")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
@@ -506,14 +507,14 @@ def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus"
     return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=5):
+def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2):
     ranges = {
         "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
-        "ftlr": [0.0001],
+        "ftlr": [0.00003],
         "enclrmul": [1., 0.1], #[1., 0.1, 0.01],
         "warmup": [2],
         "epochs": [100], #[50, 100],
-        "pretrainepochs": [1],
+        "pretrainepochs": [100],
         "numheads": [8, 12, 16],
         "numlayers": [3, 6, 9],
         "dropout": [.1],
