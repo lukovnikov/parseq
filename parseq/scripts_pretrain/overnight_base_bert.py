@@ -111,7 +111,7 @@ class BartGeneratorTrain(torch.nn.Module):
 
 
 class BartGeneratorTest(BartGeneratorTrain):
-    def __init__(self, model:BartGenerator, maxlen:int=5, numbeam:int=None,
+    def __init__(self, model:BartGenerator, maxlen:int=5, numbeam:int=1,
                  tensor2tree:Callable=None, orderless:Set[str]=set(), **kw):
         super(BartGeneratorTest, self).__init__(model, **kw)
         self.maxlen, self.numbeam = maxlen, numbeam
@@ -134,7 +134,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
-                 maxlen=20, smoothing=0., tensor2tree=None):
+                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
     if encoder_name != "bert-base-uncased":
         raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -173,7 +173,7 @@ def create_model(encoder_name="bert-base-uncased",
     orderless = {"op:and", "SW:concat"}
 
     trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
-    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=None, tensor2tree=tensor2tree, orderless=orderless)
+    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
     return trainmodel, testmodel
 
 
@@ -218,6 +218,7 @@ def _tensor2tree(x, D:Vocab=None):
 def run(domain="restaurants",
         lr=0.001,
         enclrmul=0.1,
+        numbeam=1,
         cosinelr=False,
         warmup=0.,
         batsize=20,
@@ -262,6 +263,7 @@ def run(domain="restaurants",
                                  dropout=dropout,
                                  smoothing=smoothing,
                                  maxlen=maxlen,
+                                 numbeam=numbeam,
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab)
                                  )
     tt.tock("model created")
