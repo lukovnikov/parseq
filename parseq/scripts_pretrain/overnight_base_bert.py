@@ -30,7 +30,7 @@ UNKID = 3
 
 
 def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bart-large", trainonvalid=False):
-    ds = OvernightDatasetLoader(simplify_mode="light").load(domain=domain, trainonvalid=trainonvalid)
+    ds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True).load(domain=domain, trainonvalid=trainonvalid)
 
     seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
     seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=tree_to_lisp_tokens,
@@ -38,6 +38,8 @@ def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bart-larg
     for example in ds.examples:
         query = example[1]
         seqenc.inc_build_vocab(query, seen=example[2] == "train")
+        if example[2] == "test":
+            _ = example[2]
     seqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
 
     nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
@@ -249,6 +251,7 @@ def run(domain="restaurants",
 
     tt.tick("loading data")
     tds, vds, xds, nltok, flenc = load_ds(domain=domain, nl_mode=encoder, trainonvalid=trainonvalid)
+    tt.msg(f"{len(tds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(vds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(xds)/(len(tds) + len(vds) + len(xds)):.2f} ({len(tds)}/{len(vds)}/{len(xds)}) train/valid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
     xdl = DataLoader(xds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
@@ -442,7 +445,7 @@ def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     q.argprun(run_experiments_seed)

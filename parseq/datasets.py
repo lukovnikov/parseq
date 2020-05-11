@@ -458,7 +458,9 @@ class OvernightDatasetLoader(object):
                  pcache="../datasets/overnightCache/",
                  usecache=True,
                  validfrac=.2,
-                 simplify_mode="full", **kw):
+                 simplify_mode="full",
+                 simplify_blocks=False,
+                 **kw):
         super(OvernightDatasetLoader, self).__init__(**kw)
         self._simplify_filters = True        # if True, filter expressions are converted to orderless and-expressions
         self._pcache = pcache if usecache else None
@@ -466,6 +468,7 @@ class OvernightDatasetLoader(object):
         self.validfrac = validfrac
         self._p = p
         self.simplify_mode = simplify_mode      # "full" or "light"
+        self.simplify_blocks = simplify_blocks
 
     @property
     def full_simplify(self):
@@ -640,6 +643,18 @@ class OvernightDatasetLoader(object):
             assert(len(t) == 1)
             return t[0]
 
+        def remap_reverse_labels_blocks(t:Tree):
+            mapd = {
+                "arg:~left": "arg:right",
+                "arg:~right": "arg:left",
+                "arg:~below": "arg:above",
+                "arg:~above": "arg:below"
+            }
+            if t.label() in mapd:
+                t.set_label(mapd[t.label()])
+            [remap_reverse_labels_blocks(te) for te in t]
+            return t
+
         ret = []
         ltp = None
         j = 0
@@ -656,6 +671,8 @@ class OvernightDatasetLoader(object):
                     lf = simplify_further(lf)
                     lf = simplify_furthermore(lf)
                     lf = simplify_final(lf)
+                if self.simplify_blocks:
+                    lf = remap_reverse_labels_blocks(lf)
                 question = z[1][0][1][0]
                 assert(question[0] == '"' and question[-1] == '"')
                 ret.append((question[1:-1], lf))
