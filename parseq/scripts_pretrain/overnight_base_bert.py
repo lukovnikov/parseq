@@ -5,8 +5,7 @@ A script for running the following experiments:
 * model: BART encoder + vanilla Transformer decoder for LF
 * training: normal (CE on teacher forced target)
 """
-
-
+import json
 import random
 import string
 from copy import deepcopy
@@ -29,7 +28,7 @@ from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartFo
 UNKID = 3
 
 
-def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bart-large", trainonvalid=False):
+def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bert-base-uncased", trainonvalid=False):
     ds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True, restore_reverse=True).load(domain=domain, trainonvalid=trainonvalid)
 
     seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
@@ -245,7 +244,7 @@ def run(domain="restaurants",
         trainonvalid=False,
         ):
     settings = locals().copy()
-    print(locals())
+    print(json.dumps(settings, indent=4))
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)

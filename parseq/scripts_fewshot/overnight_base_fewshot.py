@@ -6,8 +6,7 @@ A script for running the following zero-shot domain transfer experiments:
     * lexical token representations are computed based on lexicon
 * training: normal (CE on teacher forced target)
 """
-
-
+import json
 import random
 import string
 from copy import deepcopy
@@ -107,19 +106,20 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     return out
 
 
-def load_ds(traindomains="restaurants",
+def load_ds(traindomains=("restaurants",),
             testdomain="housing",
             min_freq=1,
             mincoverage=1,
             top_k=np.infty,
-            nl_mode="bart-large"):
-    traindomains = traindomains.split(",")
+            nl_mode="bert-base-uncased"):
     allex = []
     for traindomain in traindomains:
-        ds = OvernightDatasetLoader(simplify_mode="light").load(domain=traindomain)
+        ds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True, restore_reverse=True)\
+            .load(domain=traindomain)
         allex += ds[(None, None, lambda x: x in ("train", "valid"))].map(lambda x: (x[0], x[1], x[2], traindomain)).examples       # don't use test examples
 
-    testds = OvernightDatasetLoader(simplify_mode="light").load(domain=testdomain)
+    testds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True, restore_reverse=True)\
+        .load(domain=testdomain)
     sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples,
                                                    mincoverage=mincoverage, loadedex=[e for e in allex if e[2] == "train"])
 
@@ -231,34 +231,39 @@ class BartGeneratorTest(BartGeneratorTrain):
         return outputs, ret
 
 
-def create_model(encoder_name="bart-large",
+def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
-                 maxlen=20, smoothing=0., tensor2tree=None):
-    if encoder_name != "bart-large":
+                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
+    if encoder_name != "bert-base-uncased":
         raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
-    encoder = pretrained.encoder
+    encoder = pretrained
 
-    if pretrained.config.d_model != dec_dim:
-        class BartEncoderWrapper(torch.nn.Module):
-            def __init__(self, model, **kw):
-                super(BartEncoderWrapper, self).__init__(**kw)
-                self.model = model
-                self.proj = torch.nn.Linear(pretrained.config.d_model, dec_dim, bias=False)
+    class BertEncoderWrapper(torch.nn.Module):
+        def __init__(self, model, dropout=0., **kw):
+            super(BertEncoderWrapper, self).__init__(**kw)
+            self.model = model
+            self.proj = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False)
+            self.dropout = torch.nn.Dropout(dropout)
 
-            def forward(self, input_ids, attention_mask=None):
-                ret = self.model(input_ids, attention_mask=attention_mask)
-                ret = (self.proj(ret[0]), ret[1], ret[2])
-                return ret
+        def forward(self, input_ids, attention_mask=None):
+            ret, _ = self.model(input_ids, attention_mask=attention_mask)
+            if pretrained.config.hidden_size != dec_dim:
+                ret = self.proj(ret)
+            ret = self.dropout(ret)
+            ret = (ret, None, None)
+            return ret
 
-        encoder = BartEncoderWrapper(encoder)
+    encoder = BertEncoderWrapper(encoder, dropout=dropout)
 
     decoder_config = BartConfig(d_model=dec_dim,
-                                pad_token_id=1,
+                                pad_token_id=0,
+                                bos_token_id=1,
                                 vocab_size=dec_vocabsize,
                                 decoder_attention_heads=dec_heads//2,
                                 decoder_layers=dec_layers,
                                 dropout=dropout,
+                                attention_dropout=min(0.1, dropout/2),
                                 decoder_ffn_dim=dec_dim*4,
                                 encoder_attention_heads=dec_heads,
                                 encoder_layers=dec_layers,
@@ -270,7 +275,7 @@ def create_model(encoder_name="bart-large",
     orderless = {"op:and", "SW:concat"}
 
     trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
-    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=None, tensor2tree=tensor2tree, orderless=orderless)
+    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
     return trainmodel, testmodel
 
 
@@ -312,11 +317,12 @@ def _tensor2tree(x, D:Vocab=None):
     return tree
 
 
-def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus",
-        testdomain="restaurants",
+def run(traindomains="ALL",
+        testdomain="recipes",
         mincoverage=2,
         lr=0.001,
         enclrmul=0.1,
+        numbeam=1,
         ftlr=0.0001,
         cosinelr=False,
         warmup=0.,
@@ -334,12 +340,15 @@ def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus"
         numlayers=6,
         hdim=600,
         numheads=8,
-        maxlen=50,
+        maxlen=30,
         localtest=False,
         printtest=False,
         ):
     settings = locals().copy()
-    print(locals())
+    print(json.dumps(settings, indent=4))
+    if traindomains == "ALL":
+        alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
+        traindomains = alldomains - {testdomain}
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -348,6 +357,8 @@ def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus"
 
     tt.tick("loading data")
     tds, ftds, vds, fvds, xds, nltok, flenc = load_ds(traindomains=traindomains, testdomain=testdomain, nl_mode=encoder, mincoverage=mincoverage)
+    tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
+    tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=1))
     ftdl = DataLoader(ftds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=1))
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=1))
@@ -364,6 +375,7 @@ def run(traindomains="recipes,blocks,calendar,housing,publications,calendarplus"
                                  dropout=dropout,
                                  smoothing=smoothing,
                                  maxlen=maxlen,
+                                 numbeam=numbeam,
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab)
                                  )
     tt.tock("model created")
