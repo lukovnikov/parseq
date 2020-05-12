@@ -460,6 +460,7 @@ class OvernightDatasetLoader(object):
                  validfrac=.2,
                  simplify_mode="full",
                  simplify_blocks=False,
+                 restore_reverse=False,
                  **kw):
         super(OvernightDatasetLoader, self).__init__(**kw)
         self._simplify_filters = True        # if True, filter expressions are converted to orderless and-expressions
@@ -469,6 +470,7 @@ class OvernightDatasetLoader(object):
         self._p = p
         self.simplify_mode = simplify_mode      # "full" or "light"
         self.simplify_blocks = simplify_blocks
+        self._restore_reverse = restore_reverse
 
     @property
     def full_simplify(self):
@@ -655,6 +657,16 @@ class OvernightDatasetLoader(object):
             [remap_reverse_labels_blocks(te) for te in t]
             return t
 
+        def restore_reverse(t:Tree)->Tree:
+            tchildren = [restore_reverse(te) for te in t]
+            t[:] = tchildren
+            if t.label().startswith("arg:~") and not t.label() == "arg:~type":
+                newt = Tree("SW:reverse", [t])
+                t.set_label(f"arg:{t.label()[len('arg:~'):]}")
+                return newt
+            else:
+                return t
+
         ret = []
         ltp = None
         j = 0
@@ -673,6 +685,8 @@ class OvernightDatasetLoader(object):
                     lf = simplify_final(lf)
                 if self.simplify_blocks:
                     lf = remap_reverse_labels_blocks(lf)
+                if self._restore_reverse:
+                    lf = restore_reverse(lf)
                 question = z[1][0][1][0]
                 assert(question[0] == '"' and question[-1] == '"')
                 ret.append((question[1:-1], lf))
