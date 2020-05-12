@@ -348,7 +348,7 @@ def run(traindomains="ALL",
     print(json.dumps(settings, indent=4))
     if traindomains == "ALL":
         alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
-        traindomains = alldomains - {testdomain}
+        traindomains = alldomains - {testdomain,}
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -543,11 +543,8 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
             return False
         return True
 
-    alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
-    traindomains = ",".join(alldomains - {domain})
-
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      traindomains=traindomains, testdomain=domain,
+                      testdomain=domain,
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
@@ -573,11 +570,8 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
             return False
         return True
 
-    alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
-    traindomains = ",".join(alldomains - {domain})
-
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      traindomains=traindomains, testdomain=domain,
+                      testdomain=domain,
                       gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 
