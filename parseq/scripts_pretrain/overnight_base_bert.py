@@ -28,8 +28,8 @@ from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartFo
 UNKID = 3
 
 
-def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bert-base-uncased", trainonvalid=False):
-    ds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True, restore_reverse=True).load(domain=domain, trainonvalid=trainonvalid)
+def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bert-base-uncased", trainonvalid=False, fullsimplify=False):
+    ds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=True).load(domain=domain, trainonvalid=trainonvalid)
 
     seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
     seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=tree_to_lisp_tokens,
@@ -242,6 +242,7 @@ def run(domain="restaurants",
         localtest=False,
         printtest=False,
         trainonvalid=False,
+        fullsimplify=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -252,7 +253,7 @@ def run(domain="restaurants",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     tt.tick("loading data")
-    tds, vds, xds, nltok, flenc = load_ds(domain=domain, nl_mode=encoder, trainonvalid=trainonvalid)
+    tds, vds, xds, nltok, flenc = load_ds(domain=domain, nl_mode=encoder, trainonvalid=trainonvalid, fullsimplify=fullsimplify)
     tt.msg(f"{len(tds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(vds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(xds)/(len(tds) + len(vds) + len(xds)):.2f} ({len(tds)}/{len(vds)}/{len(xds)}) train/valid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=autocollate)

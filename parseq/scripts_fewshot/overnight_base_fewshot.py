@@ -114,7 +114,7 @@ def load_ds(traindomains=("restaurants",),
             nl_mode="bert-base-uncased"):
     allex = []
     for traindomain in traindomains:
-        ds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True, restore_reverse=True)\
+        ds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True, restore_reverse=True, validfrac=.10)\
             .load(domain=traindomain)
         allex += ds[(None, None, lambda x: x in ("train", "valid"))].map(lambda x: (x[0], x[1], x[2], traindomain)).examples       # don't use test examples
 
@@ -235,7 +235,7 @@ def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
     if encoder_name != "bert-base-uncased":
-        raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
+        raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
     encoder = pretrained
 
@@ -336,7 +336,7 @@ def run(traindomains="ALL",
         patience=5,
         gpu=-1,
         seed=123456789,
-        encoder="bart-large",
+        encoder="bert-base-uncased",
         numlayers=6,
         hdim=600,
         numheads=8,
