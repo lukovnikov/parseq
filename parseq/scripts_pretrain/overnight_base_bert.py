@@ -143,19 +143,21 @@ def create_model(encoder_name="bert-base-uncased",
     encoder = pretrained
 
     class BertEncoderWrapper(torch.nn.Module):
-        def __init__(self, model, **kw):
+        def __init__(self, model, dropout=0., **kw):
             super(BertEncoderWrapper, self).__init__(**kw)
             self.model = model
             self.proj = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False)
+            self.dropout = torch.nn.Dropout(dropout)
 
         def forward(self, input_ids, attention_mask=None):
             ret, _ = self.model(input_ids, attention_mask=attention_mask)
             if pretrained.config.hidden_size != dec_dim:
                 ret = self.proj(ret)
+            ret = self.dropout(ret)
             ret = (ret, None, None)
             return ret
 
-    encoder = BertEncoderWrapper(encoder)
+    encoder = BertEncoderWrapper(encoder, dropout=dropout)
 
     decoder_config = BartConfig(d_model=dec_dim,
                                 pad_token_id=0,
@@ -164,6 +166,7 @@ def create_model(encoder_name="bert-base-uncased",
                                 decoder_attention_heads=dec_heads//2,
                                 decoder_layers=dec_layers,
                                 dropout=dropout,
+                                attention_dropout=min(0.1, dropout/2),
                                 decoder_ffn_dim=dec_dim*4,
                                 encoder_attention_heads=dec_heads,
                                 encoder_layers=dec_layers,
@@ -445,7 +448,7 @@ def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     q.argprun(run_experiments_seed)
