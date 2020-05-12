@@ -402,7 +402,7 @@ def run_experiments(domain="restaurants", gpu=-1):
 
 
 def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
-                         smoothing=0., numbeam=1, trainonvalid=False, cosinelr=False):
+                         smoothing=0.2, numbeam=1, trainonvalid=False, cosinelr=False):
     ranges = {
         "lr": [0.0001],
         "enclrmul": [0.1],
