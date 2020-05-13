@@ -111,14 +111,23 @@ def load_ds(traindomains=("restaurants",),
             min_freq=1,
             mincoverage=1,
             top_k=np.infty,
-            nl_mode="bert-base-uncased"):
+            nl_mode="bert-base-uncased",
+            fullsimplify=False,
+            add_domain_start=True):
+
+    def tokenize_and_add_start(t, _domain):
+        tokens = tree_to_lisp_tokens(t)
+        starttok = f"@START/{_domain}@" if add_domain_start else "@START@"
+        tokens = [starttok] + tokens
+        return tokens
+
     allex = []
     for traindomain in traindomains:
-        ds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True, restore_reverse=True, validfrac=.10)\
+        ds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=True, validfrac=.10)\
             .load(domain=traindomain)
         allex += ds[(None, None, lambda x: x in ("train", "valid"))].map(lambda x: (x[0], x[1], x[2], traindomain)).examples       # don't use test examples
 
-    testds = OvernightDatasetLoader(simplify_mode="light", simplify_blocks=True, restore_reverse=True)\
+    testds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=True)\
         .load(domain=testdomain)
     sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples,
                                                    mincoverage=mincoverage, loadedex=[e for e in allex if e[2] == "train"])
@@ -127,11 +136,12 @@ def load_ds(traindomains=("restaurants",),
     allex += testds[(None, None, "test")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
     allex += [(ex[0], ex[1], "fttrain", testdomain) for ex in sortedexamples]
 
-    ds = Dataset(allex)
+    _ds = Dataset(allex)
+    ds = _ds.map(lambda x: (x[0], tokenize_and_add_start(x[1], x[3]), x[2], x[3]))
 
-    seqenc_vocab = Vocab(padid=1, startid=0, endid=2, unkid=UNKID)
-    seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=tree_to_lisp_tokens,
-                             add_start_token=True, add_end_token=True)
+    seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
+    seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=lambda x: x,
+                             add_start_token=False, add_end_token=True)
     for example in ds.examples:
         query = example[1]
         seqenc.inc_build_vocab(query, seen=example[2] in ("train", "fttrain"))
@@ -343,6 +353,7 @@ def run(traindomains="ALL",
         maxlen=30,
         localtest=False,
         printtest=False,
+        fullsimplify=True,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -356,7 +367,7 @@ def run(traindomains="ALL",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     tt.tick("loading data")
-    tds, ftds, vds, fvds, xds, nltok, flenc = load_ds(traindomains=traindomains, testdomain=testdomain, nl_mode=encoder, mincoverage=mincoverage)
+    tds, ftds, vds, fvds, xds, nltok, flenc = load_ds(traindomains=traindomains, testdomain=testdomain, nl_mode=encoder, mincoverage=mincoverage, fullsimplify=fullsimplify)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
     tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=1))
@@ -519,7 +530,7 @@ def run(traindomains="ALL",
     return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2):
+def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2, fullsimplify=True):
     ranges = {
         "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
         "ftlr": [0.00003],
@@ -544,11 +555,11 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      testdomain=domain,
+                      testdomain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
-def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False,):
+def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True):
     ranges = {
         "lr": [0.0001],
         "enclrmul": [0.1],
@@ -571,7 +582,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      testdomain=domain,
+                      testdomain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr)
 
 

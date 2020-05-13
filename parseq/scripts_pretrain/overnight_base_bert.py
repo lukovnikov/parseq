@@ -28,12 +28,19 @@ from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartFo
 UNKID = 3
 
 
-def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bert-base-uncased", trainonvalid=False, fullsimplify=False):
+def load_ds(domain="restaurants", min_freq=0, top_k=np.infty, nl_mode="bert-base-uncased", trainonvalid=False, fullsimplify=False, add_domain_start=True):
     ds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=True).load(domain=domain, trainonvalid=trainonvalid)
 
+    def tokenize_and_add_start(t, _domain):
+        tokens = tree_to_lisp_tokens(t)
+        starttok = f"@START/{_domain}@" if add_domain_start else "@START@"
+        tokens = [starttok] + tokens
+        return tokens
+
     seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
-    seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=tree_to_lisp_tokens,
-                             add_start_token=True, add_end_token=True)
+    seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=partial(tokenize_and_add_start, _domain=domain),
+                             add_start_token=False, add_end_token=True)
+
     for example in ds.examples:
         query = example[1]
         seqenc.inc_build_vocab(query, seen=example[2] == "train")
@@ -127,7 +134,11 @@ class BartGeneratorTest(BartGeneratorTrain):
         self.metrics = [self.accs, self.treeacc]
 
     def forward(self, input_ids, output_ids, *args, **kwargs):
-        ret = self.model.generate(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, max_length=self.maxlen, num_beams=self.numbeam)
+        ret = self.model.generate(input_ids,
+                                  decoder_input_ids=output_ids[:, 0:1],
+                                  attention_mask=input_ids!=self.model.config.pad_token_id,
+                                  max_length=self.maxlen,
+                                  num_beams=self.numbeam)
         outputs = [metric(None, ret[:, 1:], output_ids[:, 1:]) for metric in self.metrics]
         outputs = merge_metric_dicts(*outputs)
         return outputs, ret
@@ -238,7 +249,7 @@ def run(domain="restaurants",
         numlayers=6,
         hdim=600,
         numheads=8,
-        maxlen=50,
+        maxlen=30,
         localtest=False,
         printtest=False,
         trainonvalid=False,
@@ -448,7 +459,7 @@ def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     q.argprun(run_experiments_seed)
