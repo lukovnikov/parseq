@@ -583,7 +583,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
-                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768):
+                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, nodomainstart=False):
     ranges = {
         "lr": [0.0001],
         "ftlr": [0.0001],
@@ -610,12 +610,13 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       testdomain=domain, fullsimplify=fullsimplify,
-                      gpu=gpu, patience=patience, cosinelr=cosinelr)
+                      gpu=gpu, patience=patience, cosinelr=cosinelr,
+                      nodomainstart=nodomainstart, useall=useall)
 
 
 
 if __name__ == '__main__':
-    ret = q.argprun(run)
+    # ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     q.argprun(run_experiments_seed)
