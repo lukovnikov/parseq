@@ -1,7 +1,7 @@
 # encoding: utf-8
 """
 A script to run the following experiments:
-* dataset: Overnight
+* dataset:  Overnight
 * model: BART encoder + separately pretrained Transformer decoder for LF
 * training:
     1. pretrain decoder as part of LF-specific encoder-decoder similar to BART pretraining
