@@ -240,7 +240,11 @@ class BartGeneratorTest(BartGeneratorTrain):
         self.metrics = [self.accs, self.treeacc]
 
     def forward(self, input_ids, output_ids, *args, **kwargs):
-        ret = self.model.generate(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, max_length=self.maxlen, num_beams=self.numbeam)
+        ret = self.model.generate(input_ids,
+                                  decoder_input_ids=output_ids[:, 0:1],
+                                  attention_mask=input_ids!=self.model.config.pad_token_id,
+                                  max_length=self.maxlen,
+                                  num_beams=self.numbeam)
         outputs = [metric(None, ret[:, 1:], output_ids[:, 1:]) for metric in self.metrics]
         outputs = merge_metric_dicts(*outputs)
         return outputs, ret
@@ -616,7 +620,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     q.argprun(run_experiments_seed)
