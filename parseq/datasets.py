@@ -46,9 +46,9 @@ class Dataset(object):
     def __len__(self):
         return len(self._examples)
 
-    def _filter_inner(self, ex, f, ret):
+    def _example_fits_filter(self, ex, f):
         if isinstance(f, Callable) and f(ex):
-            ret.append(ex)
+            return True
         elif isinstance(f, tuple):
             assert (isinstance(ex, (tuple, list)))
             assert (len(f) == len(ex))
@@ -60,7 +60,7 @@ class Dataset(object):
                     else:
                         keep = keep and (fe == exe)
             if keep:
-                ret.append(ex)
+                return True
         elif isinstance(f, dict):
             assert (isinstance(ex, dict))
             keep = True
@@ -71,13 +71,14 @@ class Dataset(object):
                 else:
                     keep = keep and (f[k] == ex[k])
             if keep:
-                ret.append(ex)
-        return ret
+                True
+        return False
 
     def filter(self, f):
         ret = []
         for ex in self._examples:
-            ret = self._filter_inner(ex, f, ret)
+            if self._example_fits_filter(ex, f):
+                ret.append(ex)
         ret = Dataset(ret)
         return ret
 
@@ -154,7 +155,7 @@ class MappedDataset(Dataset, CachedDataset):
         return self.baseds.rootds
 
     def filter(self, f):
-        newbase = self.baseds.filter(lambda x: f(self.f(x)))
+        newbase = self.baseds.filter(lambda ex: self._example_fits_filter(self.f(ex), f))
         ret = newbase.map(self.f)
         return ret
 
@@ -195,7 +196,8 @@ class GeneratedDataset(Dataset, CachedDataset):
         ret = []
         for i in tqdm(range(self.N), disable=False):
             ex = self[i]
-            ret = self._filter_inner(ex, f, ret)
+            if self._example_fits_filter(ex, f):
+                ret.append(ex)
         ret = Dataset(ret)
         return ret
 

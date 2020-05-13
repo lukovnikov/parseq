@@ -113,7 +113,8 @@ def load_ds(traindomains=("restaurants",),
             top_k=np.infty,
             nl_mode="bert-base-uncased",
             fullsimplify=False,
-            add_domain_start=True):
+            add_domain_start=True,
+            useall=False):
 
     def tokenize_and_add_start(t, _domain):
         tokens = tree_to_lisp_tokens(t)
@@ -129,8 +130,12 @@ def load_ds(traindomains=("restaurants",),
 
     testds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=True)\
         .load(domain=testdomain)
-    sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples,
-                                                   mincoverage=mincoverage, loadedex=[e for e in allex if e[2] == "train"])
+    if useall:
+        print("using all training examples")
+        sortedexamples = testds[(None, None, "train")].examples
+    else:
+        sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples,
+                                                       mincoverage=mincoverage, loadedex=[e for e in allex if e[2] == "train"])
 
     allex += testds[(None, None, "valid")].map(lambda x: (x[0], x[1], "ftvalid", testdomain)).examples
     allex += testds[(None, None, "test")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
@@ -354,6 +359,8 @@ def run(traindomains="ALL",
         localtest=False,
         printtest=False,
         fullsimplify=True,
+        nodomainstart=False,
+        useall=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -367,7 +374,9 @@ def run(traindomains="ALL",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     tt.tick("loading data")
-    tds, ftds, vds, fvds, xds, nltok, flenc = load_ds(traindomains=traindomains, testdomain=testdomain, nl_mode=encoder, mincoverage=mincoverage, fullsimplify=fullsimplify)
+    tds, ftds, vds, fvds, xds, nltok, flenc = load_ds(traindomains=traindomains, testdomain=testdomain, nl_mode=encoder,
+                                                      mincoverage=mincoverage, fullsimplify=fullsimplify,
+                                                      add_domain_start=not nodomainstart, useall=useall)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
     tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=1))
@@ -453,7 +462,21 @@ def run(traindomains="ALL",
     ftvmetrics = make_array_of_metrics("seq_acc", "tree_acc")
     ftxmetrics = make_array_of_metrics("seq_acc", "tree_acc")
 
-    ftoptim = torch.optim.Adam(trainm.parameters(), lr=ftlr, weight_decay=wreg)
+    trainable_params = list(trainm.named_parameters())
+    exclude_params = set()
+    # exclude_params.add("model.model.inp_emb.emb.weight")  # don't train input embeddings if doing glove
+    if len(exclude_params) > 0:
+        trainable_params = [(k, v) for k, v in trainable_params if k not in exclude_params]
+
+    tt.msg("different param groups")
+    encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
+    otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
+    if len(encparams) == 0:
+        raise Exception("No encoder parameters found!")
+    paramgroups = [{"params": encparams, "lr": ftlr * enclrmul},
+                   {"params": otherparams}]
+
+    ftoptim = torch.optim.Adam(paramgroups, lr=ftlr, weight_decay=wreg)
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
@@ -559,16 +582,20 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
-def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True):
+def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
+                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768):
     ranges = {
         "lr": [0.0001],
+        "ftlr": [0.0001],
         "enclrmul": [0.1],
-        "warmup": [0],
+        "warmup": [2],
         "epochs": [100],
-        "numheads": [16],
-        "numlayers": [3],
-        "dropout": [.1],
-        "hdim": [960],
+        "pretrainepochs": [100],
+        "numheads": [numheads],
+        "numlayers": [numlayers],
+        "dropout": [dropout],
+        "smoothing": [smoothing],
+        "hdim": [hdim],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
@@ -588,7 +615,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
-    q.argprun(run_experiments)
-    # q.argprun(run_experiments_seed)
+    # q.argprun(run_experiments)
+    q.argprun(run_experiments_seed)
