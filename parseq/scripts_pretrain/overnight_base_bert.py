@@ -456,8 +456,6 @@ def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1
                       trainonvalid=trainonvalid, fullsimplify=fullsimplify)
 
 
-
-
 if __name__ == '__main__':
     # ret = q.argprun(run)
     # print(ret)
