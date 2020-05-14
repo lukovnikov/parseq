@@ -624,7 +624,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, domainstart=False,
-                         nopretrain=False):
+                         nopretrain=False, numbeam=1):
     ranges = {
         "lr": [0.0001],
         "ftlr": [0.0001],
@@ -637,6 +637,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         "dropout": [dropout],
         "smoothing": [smoothing],
         "hdim": [hdim],
+        "numbeam": [numbeam],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
