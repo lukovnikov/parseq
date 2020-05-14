@@ -26,8 +26,9 @@ from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
 from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration
 
-
 UNKID = 3
+
+DATA_RESTORE_REVERSE = False
 
 
 def get_labels_from_tree(x:Tree):
@@ -124,11 +125,11 @@ def load_ds(traindomains=("restaurants",),
 
     allex = []
     for traindomain in traindomains:
-        ds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=True, validfrac=.10)\
+        ds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=DATA_RESTORE_REVERSE, validfrac=.10)\
             .load(domain=traindomain)
         allex += ds[(None, None, lambda x: x in ("train", "valid"))].map(lambda x: (x[0], x[1], x[2], traindomain)).examples       # don't use test examples
 
-    testds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=True)\
+    testds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=DATA_RESTORE_REVERSE)\
         .load(domain=testdomain)
     if useall:
         print("using all training examples")
@@ -337,7 +338,7 @@ def _tensor2tree(x, D:Vocab=None):
 
 
 def run(traindomains="ALL",
-        testdomain="recipes",
+        domain="recipes",
         mincoverage=2,
         lr=0.001,
         enclrmul=0.1,
@@ -371,7 +372,7 @@ def run(traindomains="ALL",
     print(json.dumps(settings, indent=4))
     if traindomains == "ALL":
         alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
-        traindomains = alldomains - {testdomain,}
+        traindomains = alldomains - {domain, }
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -379,7 +380,7 @@ def run(traindomains="ALL",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     tt.tick("loading data")
-    tds, ftds, vds, fvds, xds, nltok, flenc = load_ds(traindomains=traindomains, testdomain=testdomain, nl_mode=encoder,
+    tds, ftds, vds, fvds, xds, nltok, flenc = load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder,
                                                       mincoverage=mincoverage, fullsimplify=fullsimplify,
                                                       add_domain_start=not nodomainstart, useall=useall)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
@@ -516,8 +517,8 @@ def run(traindomains="ALL",
     # endregion
 
     tt.tick("testing")
-    validresults = q.test_epoch(model=testm, dataloader=fvdl, losses=vmetrics, device=device)
-    testresults = q.test_epoch(model=testm, dataloader=xdl, losses=xmetrics, device=device)
+    validresults = q.test_epoch(model=testm, dataloader=fvdl, losses=ftvmetrics, device=device)
+    testresults = q.test_epoch(model=testm, dataloader=xdl, losses=ftxmetrics, device=device)
     print(validresults)
     print(testresults)
     tt.tock("tested")
