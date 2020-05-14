@@ -364,7 +364,7 @@ def run(traindomains="ALL",
         localtest=False,
         printtest=False,
         fullsimplify=True,
-        nodomainstart=False,
+        domainstart=False,
         useall=False,
         nopretrain=False,
         ):
@@ -382,7 +382,7 @@ def run(traindomains="ALL",
     tt.tick("loading data")
     tds, ftds, vds, fvds, xds, nltok, flenc = load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder,
                                                       mincoverage=mincoverage, fullsimplify=fullsimplify,
-                                                      add_domain_start=not nodomainstart, useall=useall)
+                                                      add_domain_start=domainstart, useall=useall)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
     tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
@@ -585,12 +585,12 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      testdomain=domain, fullsimplify=fullsimplify,
+                      domain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
-                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, nodomainstart=False,
+                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, domainstart=False,
                          nopretrain=False):
     ranges = {
         "lr": [0.0001],
@@ -617,9 +617,9 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      testdomain=domain, fullsimplify=fullsimplify,
+                      domain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
-                      nodomainstart=nodomainstart, useall=useall,
+                      domainstart=domainstart, useall=useall,
                       nopretrain=nopretrain)
 
 
