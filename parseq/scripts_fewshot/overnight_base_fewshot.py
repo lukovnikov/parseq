@@ -365,6 +365,7 @@ def run(traindomains="ALL",
         fullsimplify=True,
         nodomainstart=False,
         useall=False,
+        nopretrain=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -450,9 +451,10 @@ def run(traindomains="ALL",
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])
 
-    tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=pretrainepochs, check_stop=[lambda: eyt.check_stop()])
-    tt.tock("done training")
+    if not nopretrain:
+        tt.tick("pretraining")
+        q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=pretrainepochs, check_stop=[lambda: eyt.check_stop()])
+        tt.tock("done pretraining")
 
     if eyt.get_remembered() is not None:
         tt.msg("reloaded")
@@ -587,7 +589,8 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
-                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, nodomainstart=False):
+                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, nodomainstart=False,
+                         nopretrain=False):
     ranges = {
         "lr": [0.0001],
         "ftlr": [0.0001],
@@ -615,7 +618,8 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       testdomain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
-                      nodomainstart=nodomainstart, useall=useall)
+                      nodomainstart=nodomainstart, useall=useall,
+                      nopretrain=nopretrain)
 
 
 
