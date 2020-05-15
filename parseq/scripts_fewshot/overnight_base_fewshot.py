@@ -107,6 +107,36 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     return out
 
 
+def get_lf_abstract_transform(examples):
+    """
+    Receives examples from different domains in the format (_, out_tokens, split, domain).
+    Returns a function that transforms a sequence of domain-specific output tokens
+        into a sequence of domain-independent tokens, abstracting domain-specific tokens/subtrees.
+    :param examples:
+    :return:
+    """
+    # get shared vocabulary
+    domainspertoken = {}
+    domains = set()
+    for i, example in enumerate(examples):
+        if "train" in example[2]:
+            exampletokens = set(example[1])
+            for token in exampletokens:
+                if token not in domainspertoken:
+                    domainspertoken[token] = set()
+                domainspertoken[token].add(example[3])
+            domains.add(example[3])
+
+    sharedtokens = set([k for k, v in domainspertoken.items() if len(v) == len(domains)])
+    replacement = "@ABS@"
+
+    def example_transform(x):
+        abslf = [xe if xe in sharedtokens else replacement for xe in x]
+        return abslf
+
+    return example_transform
+
+
 def load_ds(traindomains=("restaurants",),
             testdomain="housing",
             min_freq=1,
@@ -115,7 +145,9 @@ def load_ds(traindomains=("restaurants",),
             nl_mode="bert-base-uncased",
             fullsimplify=False,
             add_domain_start=True,
-            useall=False):
+            useall=False,
+            onlyabstract=False,
+            ):
 
     def tokenize_and_add_start(t, _domain):
         tokens = tree_to_lisp_tokens(t)
@@ -144,6 +176,10 @@ def load_ds(traindomains=("restaurants",),
 
     _ds = Dataset(allex)
     ds = _ds.map(lambda x: (x[0], tokenize_and_add_start(x[1], x[3]), x[2], x[3]))
+
+    if onlyabstract:
+        et = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples)
+        ds = ds.map(lambda x: (x[0], et(x[1]), x[2], x[3]))
 
     seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
     seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=lambda x: x,
@@ -367,6 +403,7 @@ def run(traindomains="ALL",
         domainstart=False,
         useall=False,
         nopretrain=False,
+        onlyabstract=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -382,7 +419,7 @@ def run(traindomains="ALL",
     tt.tick("loading data")
     tds, ftds, vds, fvds, xds, nltok, flenc = \
         load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
-                fullsimplify=fullsimplify, add_domain_start=domainstart, useall=useall)
+                fullsimplify=fullsimplify, add_domain_start=domainstart, useall=useall, onlyabstract=onlyabstract)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
     tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
@@ -591,7 +628,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, domainstart=False,
-                         nopretrain=False, numbeam=1):
+                         nopretrain=False, numbeam=1, onlyabstract=False):
     ranges = {
         "lr": [0.0001],
         "ftlr": [0.0001],
@@ -621,7 +658,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
                       domain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
                       domainstart=domainstart, useall=useall,
-                      nopretrain=nopretrain)
+                      nopretrain=nopretrain, onlyabstract=onlyabstract)
 
 
 
