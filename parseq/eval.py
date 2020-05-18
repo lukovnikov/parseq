@@ -45,6 +45,10 @@ class Metric(ABC):
 
 
 class Loss(torch.nn.Module, ABC):
+    def __init__(self, contrib=1., **kw):
+        super(Loss, self).__init__(**kw)
+        self.contrib = contrib
+
     @abstractmethod
     def forward(self, probs, predactions, gold, x:State=None)->Dict:
         pass
@@ -62,8 +66,67 @@ class BCELoss(Loss):
     def forward(self, probs, predactions, gold, x:State=None) ->Dict:
         if self.smoothing > 0:
             gold = gold.clamp(self.smoothing, 1-self.smoothing)
-        ret = self.bce(probs, gold)
+        ret = self.bce(probs, gold) * self.contrib
         return {"loss": ret, "ce": ret}
+
+
+class EntropyLoss(Loss):
+    def __init__(self, weight=None, reduction="mean", ignore_index=-100, mode="logits", maximize=True, **kw):
+        super(EntropyLoss, self).__init__(**kw)
+        self.reduction = reduction
+        self.ignore_index = ignore_index
+        self.mode = mode
+        self.sm = torch.nn.Softmax(-1)
+        self.logsm = torch.nn.LogSoftmax(-1)
+        self.mult = -1 if maximize else 1
+
+    def forward(self, probs, predactions, golds, mask=None, x:State=None) ->Dict:
+        if probs.size(1) < golds.size(1):
+            extension = torch.ones(probs.size(0), golds.size(1) - probs.size(1), probs.size(2), dtype=probs.dtype, device=probs.device)
+            extension /= extension.size(2)  # makes uniform dist
+            probs = torch.cat([probs, extension], 1)
+        else:
+            probs = probs[:, :golds.size(1)]
+
+        if self.mode == "logits":
+            probs = self.sm(probs)
+            logprobs = self.logsm(probs).clamp_min(-1e9)
+        elif self.mode == "probs":
+            logprobs = torch.log(probs).clamp_min(-1e9)
+        elif self.mode == "logprobs":
+            logprobs = probs.clamp_min(-1e9)
+            probs = torch.exp(probs)
+        else:
+            raise Exception(f"mode '{self.mode}' unknown. ")
+
+        entropy = -(probs * logprobs)
+        if mask is not None and mask.dim() == 3:
+            entropy = entropy * mask
+
+        entropy = entropy.sum(-1)        # (batsize, seqlen)
+
+        gold_mask = mask if mask.dim() == 2 else None
+        if self.ignore_index >= 0:
+            if gold_mask is None:
+                gold_mask = golds != self.ignore_index
+            else:
+                gold_mask = gold_mask & (golds != self.ignore_index)
+
+        if gold_mask is not None:
+            entropy = entropy * gold_mask.float()
+
+        if self.reduction == "mean":
+            ret = entropy.sum() / gold_mask.float().sum()
+        elif self.reduction == "sum":
+            ret = entropy.sum()
+        elif self.reduction == "none" or self.reduction is None:
+            ret = entropy
+        else:
+            raise Exception(f"Unknown reduction '{self.reduction}'")
+
+        ret = ret * self.contrib * self.mult
+
+        return {"entropy": ret, "loss": ret}
 
 
 class CELoss(Loss):
@@ -91,6 +154,7 @@ class CELoss(Loss):
             print("gold id could not be generated")
 
         loss = self.ce(probs, golds)
+        loss = loss * self.contrib
         return {"loss": loss, "ce": loss}
 
 
@@ -125,6 +189,7 @@ class StatePenalty(Loss):
         else:
             raise Exception(f"unknown reduction mode: {self.reduction}")
         ret = penalty * q.v(self.weight)
+        ret = ret * self.contrib
         return {"loss": ret, self._name: ret}
 
 
