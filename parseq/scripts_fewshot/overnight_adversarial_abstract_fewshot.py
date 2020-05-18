@@ -562,7 +562,7 @@ def run(traindomains="ALL",
     # endregion
 
     # region finetune
-    ftmetrics = make_array_of_metrics("loss", "elem_acc", "tree_acc", "abs_tree_acc")
+    ftmetrics = make_array_of_metrics("loss", "ce", "elem_acc", "tree_acc")
     ftvmetrics = make_array_of_metrics("seq_acc", "tree_acc")
     ftxmetrics = make_array_of_metrics("seq_acc", "tree_acc")
 
