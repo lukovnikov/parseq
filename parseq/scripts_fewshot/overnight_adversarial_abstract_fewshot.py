@@ -327,7 +327,7 @@ class BartGeneratorTest(torch.nn.Module):
 def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, abs_dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None, abstensor2tree=None,
-                 abs_id=-100):
+                 abs_id=-100, entropycontrib=1.):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -385,7 +385,7 @@ def create_model(encoder_name="bert-base-uncased",
 
     orderless = {"op:and", "SW:concat"}
 
-    trainmodel = GeneratorTrain(model, advmodel, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless, abs_id=abs_id)
+    trainmodel = GeneratorTrain(model, advmodel, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless, abs_id=abs_id, entropycontrib=entropycontrib)
     advtrainmodel = AdversaryTrain(advmodel, smoothing=smoothing, tensor2tree=abstensor2tree, orderless=orderless)
     testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
     return trainmodel, testmodel
@@ -459,6 +459,7 @@ def run(traindomains="ALL",
         domainstart=False,
         useall=False,
         nopretrain=False,
+        entropycontrib=1.,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -498,6 +499,7 @@ def run(traindomains="ALL",
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  abstensor2tree=partial(_tensor2tree, D=absflenc.vocab),
                                  abs_id=absflenc.vocab["@ABS@"],
+                                 entropycontrib=entropycontrib,
                                  )
     tt.tock("model created")
 
