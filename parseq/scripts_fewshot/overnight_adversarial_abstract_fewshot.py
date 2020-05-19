@@ -816,7 +816,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         "hdim": [hdim],
         "numbeam": [numbeam],
         "advsteps": [advsteps],
-        "entropycontrib": [entropycontrib]
+        "entropycontrib": [entropycontrib],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
