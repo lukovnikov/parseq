@@ -615,7 +615,7 @@ def run(traindomains="ALL",
 
     # region pretrain on all domains
     metrics = make_array_of_metrics("loss", "ce", "elem_acc", "tree_acc")
-    advmetrics = make_array_of_metrics("adv_loss", "adv_ce", "adv_elem_acc", "adv_tree_acc")
+    advmetrics = make_array_of_metrics("adv_loss", "adv_elem_acc", "adv_tree_acc")
     vmetrics = make_array_of_metrics("seq_acc", "tree_acc")
     xmetrics = make_array_of_metrics("seq_acc", "tree_acc")
 
