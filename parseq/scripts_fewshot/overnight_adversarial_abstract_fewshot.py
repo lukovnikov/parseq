@@ -282,12 +282,108 @@ class GeneratorTrain(torch.nn.Module):
         return outputs, ret + advret
 
 
+def adv_train_epoch(model=None, dataloader=None, optim=None, losses=None,
+                    advmodel=None, advdataloader=None, advoptim=None, advlosses=None,
+                    device=torch.device("cpu"), tt=q.ticktock(" -"),
+                    current_epoch=0, max_epochs=0,
+                    _train_batch=q.train_batch, _adv_train_batch=q.train_batch,
+                    on_start=tuple(), on_end=tuple(), print_every_batch=False,
+                    advsteps=1):
+    """
+    Performs an epoch of adversarial training on given model, with data from given dataloader, using given optimizer,
+    with loss computed based on given losses.
+    :param model:
+    :param dataloader:
+    :param optim:
+    :param losses:  list of loss wrappers
+    :param device:  device to put batches on
+    :param tt:
+    :param current_epoch:
+    :param max_epochs:
+    :param _train_batch:    train batch function, default is train_batch
+    :param on_start:
+    :param on_end:
+    :return:
+    """
+    for loss in losses+advlosses:
+        loss.push_epoch_to_history(epoch=current_epoch-1)
+        loss.reset_agg()
+        loss.loss.to(device)
+
+    model.to(device)
+    advmodel.to(device)
+
+    [e() for e in on_start]
+
+    q.epoch_reset(model)
+    q.epoch_reset(advmodel)
+
+    for i, _batch in enumerate(dataloader):
+        adviter = iter(advdataloader)
+        for j in range(advsteps):
+            try:
+                _advbatch = next(adviter)
+            except StopIteration as e:
+                adviter = iter(advdataloader)
+                _advbatch = next(adviter)
+            ttmsg = _adv_train_batch(batch=_advbatch, model=advmodel, optim=advoptim, losses=advlosses,
+                                     device=device, batch_number=j, max_batches=0, current_epoch=current_epoch,
+                                     max_epochs=0)
+            ttmsg = f"adv:  {ttmsg}"
+            if print_every_batch:
+                tt.msg(ttmsg)
+            else:
+                tt.live(ttmsg)
+        ttmsg = _train_batch(batch=_batch, model=model, optim=optim, losses=losses, device=device,
+                             batch_number=i, max_batches=len(dataloader), current_epoch=current_epoch,
+                             max_epochs=max_epochs)
+        ttmsg = f"main: {ttmsg}"
+        if print_every_batch:
+            tt.msg(ttmsg)
+        else:
+            tt.live(ttmsg)
+
+    tt.stoplive()
+    [e() for e in on_end]
+    ttmsg = q.pp_epoch_losses(*losses)
+    advttmsg = q.pp_epoch_losses(*advlosses)
+    ttmsg = f"\n main: {ttmsg}\n adv:  {advttmsg}"
+    return ttmsg
+
+
 class AdversaryTrain(torch.nn.Module):
     def __init__(self, advmodel:BartGenerator,
                  smoothing=0., tensor2tree:Callable=None, abstensor2tree:Callable=None,
                  orderless:Set[str]=set(), **kw):
         super(AdversaryTrain, self).__init__(**kw)
+        self.model = advmodel
+        # CE loss
+        self.ce = CELoss(ignore_index=self.model.config.pad_token_id, smoothing=smoothing)
 
+        # accuracies
+        self.accs = SeqAccuracies()
+        self.accs.padid = self.model.config.pad_token_id
+        self.accs.unkid = UNKID
+
+        self.treeacc = TreeAccuracy(tensor2tree=tensor2tree,
+                                    orderless=orderless)
+
+        self.metrics = [self.ce, self.accs, self.treeacc]
+
+    def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.nn.Parameter]]:
+        for k, v in super(AdversaryTrain, self).named_parameters(prefix=prefix, recurse=recurse):
+            if not k.startswith("model.model.encoder"):
+                yield k, v
+
+    def forward(self, input_ids, output_ids, adv_output_ids, *args, **kwargs):
+        ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=adv_output_ids)
+        probs = ret[0]
+        _, predactions = probs.max(-1)
+
+        outputs = [metric(probs, predactions, adv_output_ids[:, 1:]) for metric in self.metrics]
+        outputs = merge_metric_dicts(*outputs)
+        outputs = {"adv_"+k: v for k, v in outputs.items()}
+        return outputs, ret
 
 
 class BartGeneratorTest(torch.nn.Module):
@@ -388,7 +484,7 @@ def create_model(encoder_name="bert-base-uncased",
     trainmodel = GeneratorTrain(model, advmodel, smoothing=smoothing, tensor2tree=abstensor2tree, orderless=orderless, abs_id=abs_id, entropycontrib=entropycontrib)
     advtrainmodel = AdversaryTrain(advmodel, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
     testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=abstensor2tree, orderless=orderless)
-    return trainmodel, testmodel
+    return trainmodel, advtrainmodel, testmodel
 
 
 def _tensor2tree(x, D:Vocab=None):
@@ -433,6 +529,7 @@ def run(traindomains="ALL",
         domain="recipes",
         mincoverage=2,
         lr=0.001,
+        advlr=-1,
         enclrmul=0.1,
         numbeam=1,
         ftlr=0.0001,
@@ -460,9 +557,12 @@ def run(traindomains="ALL",
         useall=False,
         nopretrain=False,
         entropycontrib=1.,
+        advsteps=5,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
+    if advlr < 0:
+        advlr = lr
     if traindomains == "ALL":
         alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
         traindomains = alldomains - {domain, }
@@ -476,9 +576,11 @@ def run(traindomains="ALL",
     tds, ftds, vds, fvds, xds, nltok, flenc, absflenc = \
         load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
                 fullsimplify=fullsimplify, add_domain_start=domainstart, useall=useall)
+    advds = Dataset(tds.examples)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
     tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
+    advdl = DataLoader(advds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
     ftdl = DataLoader(ftds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0))
     fvdl = DataLoader(fvds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0))
@@ -486,7 +588,7 @@ def run(traindomains="ALL",
     tt.tock("data loaded")
 
     tt.tick("creating model")
-    trainm, testm = create_model(encoder_name=encoder,
+    trainm, advtrainm, testm = create_model(encoder_name=encoder,
                                  dec_vocabsize=flenc.vocab.number_of_ids(),
                                  abs_dec_vocabsize=absflenc.vocab.number_of_ids(),
                                  dec_layers=numlayers,
@@ -513,6 +615,7 @@ def run(traindomains="ALL",
 
     # region pretrain on all domains
     metrics = make_array_of_metrics("loss", "ce", "elem_acc", "tree_acc")
+    advmetrics = make_array_of_metrics("adv_loss", "adv_ce", "adv_elem_acc", "adv_tree_acc")
     vmetrics = make_array_of_metrics("seq_acc", "tree_acc")
     xmetrics = make_array_of_metrics("seq_acc", "tree_acc")
 
@@ -532,7 +635,10 @@ def run(traindomains="ALL",
 
     optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
 
+    advoptim = torch.optim.Adam(advtrainm.parameters(), lr=advlr, weight_decay=wreg)
+
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
+    advclipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(advtrainm.parameters(), gradnorm)
 
     eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
 
@@ -540,13 +646,20 @@ def run(traindomains="ALL",
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
         lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
+        advlr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
+        advlr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
+    advlr_schedule = q.sched.LRSchedule(advoptim, advlr_schedule)
 
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
-                         _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
+    advtrainbatch = partial(q.train_batch, on_before_optim_step=[advclipgradnorm])
+    trainepoch = partial(adv_train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
+                         advmodel=advtrainm, advdataloader=advdl, advoptim=advoptim, advlosses=advmetrics,
+                         _train_batch=trainbatch, _adv_train_batch=advtrainbatch,
+                         device=device, on_end=[lambda: lr_schedule.step(), lambda: advlr_schedule.step()],
+                         advsteps=advsteps)
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])
 
     if not nopretrain:
@@ -723,7 +836,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     q.argprun(run_experiments_seed)
