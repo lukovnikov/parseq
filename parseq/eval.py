@@ -70,6 +70,64 @@ class BCELoss(Loss):
         return {"loss": ret, "ce": ret}
 
 
+class KLLoss(Loss):
+    def __init__(self, weight=None, reduction="mean", mode="logits", goldmode="logits", maximize=False, **kw):
+        super(KLLoss, self).__init__(**kw)
+        self.reduction = reduction
+        self.mode = mode
+        self.goldmode = goldmode
+        self.sm = torch.nn.Softmax(-1)
+        self.logsm = torch.nn.LogSoftmax(-1)
+        self.mult = -1 if maximize else 1
+        self.kldiv = torch.nn.KLDivLoss(reduction="none")
+
+    def forward(self, probs, predactions, golds, mask=None, x:State=None) ->Dict:
+        if probs.size(1) < golds.size(1):
+            extension = torch.ones(probs.size(0), golds.size(1) - probs.size(1), probs.size(2), dtype=probs.dtype, device=probs.device)
+            extension /= extension.size(2)  # makes uniform dist
+            probs = torch.cat([probs, extension], 1)
+        else:
+            probs = probs[:, :golds.size(1)]
+
+        if self.mode == "logits":
+            logprobs = self.logsm(probs)
+        elif self.mode == "probs":
+            logprobs = torch.log(probs).clamp_min(-1e9)
+        elif self.mode == "logprobs":
+            logprobs = probs.clamp_min(-1e9)
+        else:
+            raise Exception(f"mode '{self.mode}' unknown. ")
+
+        if self.goldmode == "logits":
+            goldprobs = self.sm(golds)
+        elif self.goldmode == "probs":
+            goldprobs = golds
+        elif self.goldmode == "logprobs":
+            goldprobs = torch.exp(golds)
+        else:
+            raise Exception(f"goldmode '{self.goldmode}' unknown. ")
+
+        kl = self.kldiv(logprobs, goldprobs)    # (batsize, seqlen, vocabsize)
+        kl = kl.sum(-1)
+
+        if mask is not None:
+            assert mask.dim() == 2, f"mask dim must be 2"
+            kl = kl * mask.float()
+
+        if self.reduction == "mean":
+            ret = kl.sum() / mask.float().sum()
+        elif self.reduction == "sum":
+            ret = kl.sum()
+        elif self.reduction == "none" or self.reduction is None:
+            ret = kl
+        else:
+            raise Exception(f"Unknown reduction '{self.reduction}'")
+
+        ret = ret * self.contrib * self.mult
+
+        return {"kl": ret, "loss": ret}
+
+
 class EntropyLoss(Loss):
     def __init__(self, weight=None, reduction="mean", ignore_index=-100, mode="logits", maximize=True, **kw):
         super(EntropyLoss, self).__init__(**kw)

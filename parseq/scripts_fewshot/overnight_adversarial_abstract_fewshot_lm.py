@@ -20,11 +20,11 @@ from torch.utils.data import DataLoader
 
 from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate, Dataset
 from parseq.decoding import merge_metric_dicts
-from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss, EntropyLoss
+from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss, EntropyLoss, KLLoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
-from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration
-
+from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration, OpenAIGPTConfig, \
+    OpenAIGPTLMHeadModel
 
 UNKID = 3
 
@@ -239,18 +239,19 @@ class BartGenerator(BartForConditionalGeneration):
 class GeneratorTrain(torch.nn.Module):
     # decrease CE of abstract
     # increase entropy of specific
-    def __init__(self, model:BartGenerator, advmodel:BartGenerator,
+    def __init__(self, model:BartGenerator, advmodel:BartGenerator, lm_model:BartGenerator,
                  smoothing=0., tensor2tree:Callable=None, abstensor2tree:Callable=None,
                  orderless:Set[str]=set(), entropycontrib=1., abs_id=-100, **kw):
         super(GeneratorTrain, self).__init__(**kw)
         self.model = model
         self.advmodel = advmodel
+        self.lm_model = lm_model
 
         self.absid = abs_id
 
         # CE loss
         self.ce = CELoss(ignore_index=model.config.pad_token_id, smoothing=smoothing)
-        self.entropy = EntropyLoss(contrib=entropycontrib, ignore_index=model.config.pad_token_id, maximize=True)
+        self.kl = KLLoss(contrib=entropycontrib, maximize=False)
 
         # accuracies
         self.accs = SeqAccuracies()
@@ -272,11 +273,13 @@ class GeneratorTrain(torch.nn.Module):
         probs = ret[0]
         advret = self.advmodel(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=adv_output_ids)
         advprobs = advret[0]
+        lmret = self.lm_model(input_ids, decoder_input_ids=adv_output_ids)
+        lmprobs = lmret[0]
         _, predactions = probs.max(-1)
 
         outputs = [metric(probs, predactions, output_ids[:, 1:]) for metric in self.metrics]
         mask = (output_ids == self.absid)[:, 1:]
-        entropy = self.entropy(advprobs, predactions, adv_output_ids[:, 1:], mask)
+        entropy = self.kl(advprobs, _, lmprobs, mask)
         outputs.append(entropy)
         outputs = merge_metric_dicts(*outputs)
         return outputs, ret + advret
@@ -352,11 +355,12 @@ def adv_train_epoch(model=None, dataloader=None, optim=None, losses=None,
 
 
 class AdversaryTrain(torch.nn.Module):
-    def __init__(self, advmodel:BartGenerator,
+    def __init__(self, advmodel:BartGenerator, lm_model=None,
                  smoothing=0., tensor2tree:Callable=None, abstensor2tree:Callable=None,
                  orderless:Set[str]=set(), **kw):
         super(AdversaryTrain, self).__init__(**kw)
         self.model = advmodel
+        self.lm_model = lm_model
         # CE loss
         self.ce = CELoss(ignore_index=self.model.config.pad_token_id, smoothing=smoothing)
 
@@ -444,6 +448,14 @@ def create_model(encoder_name="bert-base-uncased",
             ret = (ret, None, None)
             return ret
 
+    class DummyEncoder(torch.nn.Module):
+        def __init__(self, dim, **kw):
+            super(DummyEncoder, self).__init__(**kw)
+            self.dim = dim
+
+        def forward(self, input_ids, attention_mask=None):
+            return torch.zeros(input_ids.size(0), 1, self.dim, device=input_ids.device)
+
     encoder = BertEncoderWrapper(encoder, dropout=dropout)
 
     decoder_config = BartConfig(d_model=dec_dim,
@@ -473,16 +485,33 @@ def create_model(encoder_name="bert-base-uncased",
                                 encoder_ffn_dim=dec_dim * 4,
                                 )
 
+    decoder_lm_config = BartConfig(d_model=dec_dim,
+                                    pad_token_id=0,
+                                    bos_token_id=1,
+                                    vocab_size=dec_vocabsize,
+                                    decoder_attention_heads=dec_heads // 2,
+                                    decoder_layers=dec_layers,
+                                    dropout=dropout,
+                                    attention_dropout=min(0.1, dropout / 2),
+                                    decoder_ffn_dim=dec_dim * 4,
+                                    encoder_attention_heads=dec_heads,
+                                    encoder_layers=dec_layers,
+                                    encoder_ffn_dim=dec_dim * 4,
+                                    )
+
     model = BartGenerator(decoder_config)
     model.model.encoder = encoder
 
     advmodel = BartGenerator(adv_decoder_config)
     advmodel.model.encoder = encoder
 
+    decoder_lm = BartGenerator(decoder_lm_config)
+    decoder_lm.model.encoder = DummyEncoder(dec_dim)
+
     orderless = {"op:and", "SW:concat"}
 
     trainmodel = GeneratorTrain(model, advmodel, smoothing=smoothing, tensor2tree=abstensor2tree, orderless=orderless, abs_id=abs_id, entropycontrib=entropycontrib)
-    advtrainmodel = AdversaryTrain(advmodel, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
+    advtrainmodel = AdversaryTrain(advmodel, decoder_lm, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
     testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=abstensor2tree, orderless=orderless)
     return trainmodel, advtrainmodel, testmodel
 
@@ -838,7 +867,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     q.argprun(run_experiments_seed)
