@@ -501,7 +501,8 @@ def run(traindomains="ALL",
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
-    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])
+    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device,
+                         on_end=[lambda: eyt.on_epoch_end(), lambda: wandb_logger()])
 
     if not nopretrain:
         tt.tick("pretraining")
@@ -541,7 +542,7 @@ def run(traindomains="ALL",
     eyt = q.EarlyStopper(ftvmetrics[1], patience=1000, min_epochs=10, more_is_better=True,
                          remember_f=lambda: deepcopy(trainm.model))
 
-    def wandb_logger():
+    def wandb_logger_ft():
         d = {}
         for name, loss in zip(["loss", "elem_acc", "tree_acc"], ftmetrics):
             d["train_" + name] = loss.get_epoch_error()
@@ -561,7 +562,7 @@ def run(traindomains="ALL",
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=ftdl, optim=ftoptim, losses=ftmetrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=fvdl, losses=ftvmetrics, device=device,
-                         on_end=[lambda: eyt.on_epoch_end()])
+                         on_end=[lambda: eyt.on_epoch_end(), lambda: wandb_logger()])
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs,
