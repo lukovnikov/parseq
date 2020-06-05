@@ -649,7 +649,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
-def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
+def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, domainstart=False,
                          nopretrain=False, numbeam=1, onlyabstract=False, uselexicon=False):
     ranges = {
@@ -665,6 +665,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         "smoothing": [smoothing],
         "hdim": [hdim],
         "numbeam": [numbeam],
+        "batsize": [batsize],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
