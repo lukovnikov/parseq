@@ -485,9 +485,9 @@ def run(traindomains="ALL",
     eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
     def wandb_logger():
         d = {}
-        for name, loss in zip(["loss", "elem_acc", "tree_acc"], metrics):
+        for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], vmetrics):
+        for name, loss in zip(["seq_acc", "tree_acc"], vmetrics):
             d["valid_"+name] = loss.get_epoch_error()
         wandb.log(d)
     t_max = epochs
@@ -544,9 +544,9 @@ def run(traindomains="ALL",
 
     def wandb_logger_ft():
         d = {}
-        for name, loss in zip(["loss", "elem_acc", "tree_acc"], ftmetrics):
+        for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], ftmetrics):
             d["train_" + name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], ftvmetrics):
+        for name, loss in zip(["seq_acc", "tree_acc"], ftvmetrics):
             d["valid_" + name] = loss.get_epoch_error()
         wandb.log(d)
 
