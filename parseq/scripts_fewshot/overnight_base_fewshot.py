@@ -562,7 +562,7 @@ def run(traindomains="ALL",
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=ftdl, optim=ftoptim, losses=ftmetrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=fvdl, losses=ftvmetrics, device=device,
-                         on_end=[lambda: eyt.on_epoch_end(), lambda: wandb_logger()])
+                         on_end=[lambda: eyt.on_epoch_end(), lambda: wandb_logger_ft()])
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs,
