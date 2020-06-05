@@ -1,19 +1,16 @@
 # encoding: utf-8
 """
-A script for running the following zero-shot domain transfer experiments:
+A script for running the following few-shot domain transfer experiments:
 * dataset: Overnight
-* model: BART encoder + vanilla Transformer decoder for LF
-    * lexical token representations are computed based on lexicon
-* training: normal (CE on teacher forced target)
+* model: BERT encoder + vanilla Transformer decoder for abstract LF + vanilla decoder for full LF
+* training: normal (CE on teacher forced target) + adversarial on full decoder
 """
 import json
 import random
 import string
 from copy import deepcopy
 from functools import partial
-from typing import Callable, Set
-
-import wandb
+from typing import Callable, Set, Tuple, Iterator
 
 import qelos as q   # branch v3
 import numpy as np
@@ -23,10 +20,11 @@ from torch.utils.data import DataLoader
 
 from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate, Dataset
 from parseq.decoding import merge_metric_dicts
-from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss
+from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss, EntropyLoss, KLLoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
-from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration
+from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration, OpenAIGPTConfig, \
+    OpenAIGPTLMHeadModel
 
 UNKID = 3
 
@@ -147,10 +145,7 @@ def load_ds(traindomains=("restaurants",),
             nl_mode="bert-base-uncased",
             fullsimplify=False,
             add_domain_start=True,
-            useall=False,
-            onlyabstract=False,
-            uselexicon=False,
-            ):
+            useall=False):
 
     def tokenize_and_add_start(t, _domain):
         tokens = tree_to_lisp_tokens(t)
@@ -165,15 +160,13 @@ def load_ds(traindomains=("restaurants",),
         allex += ds[(None, None, lambda x: x in ("train", "valid"))].map(lambda x: (x[0], x[1], x[2], traindomain)).examples       # don't use test examples
 
     testds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=DATA_RESTORE_REVERSE)\
-        .load(domain=testdomain, trainonlexicon=uselexicon)
-
-    if useall or uselexicon:
+        .load(domain=testdomain)
+    if useall:
         print("using all training examples")
         sortedexamples = testds[(None, None, "train")].examples
     else:
         sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples,
-                                                       mincoverage=mincoverage,
-                                                       loadedex=[e for e in allex if e[2] == "train"])
+                                                       mincoverage=mincoverage, loadedex=[e for e in allex if e[2] == "train"])
 
     allex += testds[(None, None, "valid")].map(lambda x: (x[0], x[1], "ftvalid", testdomain)).examples
     allex += testds[(None, None, "test")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
@@ -182,31 +175,35 @@ def load_ds(traindomains=("restaurants",),
     _ds = Dataset(allex)
     ds = _ds.map(lambda x: (x[0], tokenize_and_add_start(x[1], x[3]), x[2], x[3]))
 
-    if onlyabstract:
-        et = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples)
-        ds = ds.map(lambda x: (x[0], et(x[1]), x[2], x[3]))
+    et = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples)
+    ds = ds.map(lambda x: (x[0], et(x[1]), x[1], x[2], x[3]))
 
     seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
-    seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=lambda x: x,
+    absseqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
+    absseqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=lambda x: x,
+                             add_start_token=False, add_end_token=True)
+    fullseqenc = SequenceEncoder(vocab=absseqenc_vocab, tokenizer=lambda x: x,
                              add_start_token=False, add_end_token=True)
     for example in ds.examples:
-        query = example[1]
-        seqenc.inc_build_vocab(query, seen=example[2] in ("train", "fttrain"))
-    seqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
+        absseqenc.inc_build_vocab(example[1], seen=example[3] in ("train", "fttrain"))
+        fullseqenc.inc_build_vocab(example[2], seen=example[3] in ("train", "fttrain"))
+    absseqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
+    fullseqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
 
     nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
     def tokenize(x):
         ret = (nl_tokenizer.encode(x[0], return_tensors="pt")[0],
-               seqenc.convert(x[1], return_what="tensor"),
-               x[2],
-               x[0], x[1], x[3])
+               absseqenc.convert(x[1], return_what="tensor"),
+               fullseqenc.convert(x[2], return_what="tensor"),
+               x[3],
+               x[0], x[1], x[4])
         return ret
-    tds, ftds, vds, fvds, xds = ds[(None, None, "train", None)].map(tokenize), \
-                          ds[(None, None, "fttrain", None)].map(tokenize), \
-                          ds[(None, None, "valid", None)].map(tokenize), \
-                          ds[(None, None, "ftvalid", None)].map(tokenize), \
-                          ds[(None, None, "test", None)].map(tokenize)
-    return tds, ftds, vds, fvds, xds, nl_tokenizer, seqenc
+    tds, ftds, vds, fvds, xds = ds[(None, None, None, "train", None)].map(tokenize), \
+                          ds[(None, None, None, "fttrain", None)].map(tokenize), \
+                          ds[(None, None, None, "valid", None)].map(tokenize), \
+                          ds[(None, None, None, "ftvalid", None)].map(tokenize), \
+                          ds[(None, None, None, "test", None)].map(tokenize)
+    return tds, ftds, vds, fvds, xds, nl_tokenizer, fullseqenc, absseqenc
 
 
 class BartGenerator(BartForConditionalGeneration):
@@ -239,13 +236,22 @@ class BartGenerator(BartForConditionalGeneration):
         return outputs
 
 
-class BartGeneratorTrain(torch.nn.Module):
-    def __init__(self, model:BartGenerator, smoothing=0., tensor2tree:Callable=None, orderless:Set[str]=set(), **kw):
-        super(BartGeneratorTrain, self).__init__(**kw)
+class GeneratorTrain(torch.nn.Module):
+    # decrease CE of abstract
+    # increase entropy of specific
+    def __init__(self, model:BartGenerator, advmodel:BartGenerator, lm_model:BartGenerator,
+                 smoothing=0., tensor2tree:Callable=None, abstensor2tree:Callable=None,
+                 orderless:Set[str]=set(), entropycontrib=1., abs_id=-100, **kw):
+        super(GeneratorTrain, self).__init__(**kw)
         self.model = model
+        self.advmodel = advmodel
+        self.lm_model = lm_model
+
+        self.absid = abs_id
 
         # CE loss
         self.ce = CELoss(ignore_index=model.config.pad_token_id, smoothing=smoothing)
+        self.kl = KLLoss(contrib=entropycontrib, maximize=False)
 
         # accuracies
         self.accs = SeqAccuracies()
@@ -257,31 +263,157 @@ class BartGeneratorTrain(torch.nn.Module):
 
         self.metrics = [self.ce, self.accs, self.treeacc]
 
-    def forward(self, input_ids, output_ids, *args, **kwargs):
+    def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.nn.Parameter]]:
+        for k, v in super(GeneratorTrain, self).named_parameters(prefix=prefix, recurse=recurse):
+            if not k.startswith("advmodel"):
+                yield k, v
+
+    def forward(self, input_ids, output_ids, adv_output_ids, *args, **kwargs):
         ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=output_ids)
         probs = ret[0]
+        advret = self.advmodel(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=adv_output_ids)
+        advprobs = advret[0]
+        lmret = self.lm_model(input_ids, decoder_input_ids=adv_output_ids)
+        lmprobs = lmret[0]
         _, predactions = probs.max(-1)
+
         outputs = [metric(probs, predactions, output_ids[:, 1:]) for metric in self.metrics]
+        mask = (output_ids == self.absid)[:, 1:]
+        entropy = self.kl(advprobs, _, lmprobs, mask)
+        outputs.append(entropy)
         outputs = merge_metric_dicts(*outputs)
-        return outputs, ret
+        return outputs, ret + advret
 
 
-class BartGeneratorTest(BartGeneratorTrain):
-    def __init__(self, model:BartGenerator, maxlen:int=5, numbeam:int=None,
-                 tensor2tree:Callable=None, orderless:Set[str]=set(), **kw):
-        super(BartGeneratorTest, self).__init__(model, **kw)
-        self.maxlen, self.numbeam = maxlen, numbeam
+def adv_train_epoch(model=None, dataloader=None, optim=None, losses=None,
+                    advmodel=None, advdataloader=None, advoptim=None, advlosses=None,
+                    device=torch.device("cpu"), tt=q.ticktock(" -"),
+                    current_epoch=0, max_epochs=0,
+                    _train_batch=q.train_batch, _adv_train_batch=q.train_batch,
+                    on_start=tuple(), on_end=tuple(), print_every_batch=False,
+                    advsteps=1):
+    """
+    Performs an epoch of adversarial training on given model, with data from given dataloader, using given optimizer,
+    with loss computed based on given losses.
+    :param model:
+    :param dataloader:
+    :param optim:
+    :param losses:  list of loss wrappers
+    :param device:  device to put batches on
+    :param tt:
+    :param current_epoch:
+    :param max_epochs:
+    :param _train_batch:    train batch function, default is train_batch
+    :param on_start:
+    :param on_end:
+    :return:
+    """
+    for loss in losses+advlosses:
+        loss.push_epoch_to_history(epoch=current_epoch-1)
+        loss.reset_agg()
+        loss.loss.to(device)
+
+    model.to(device)
+    advmodel.to(device)
+
+    [e() for e in on_start]
+
+    q.epoch_reset(model)
+    q.epoch_reset(advmodel)
+
+    for i, _batch in enumerate(dataloader):
+        adviter = iter(advdataloader)
+        for j in range(advsteps):
+            try:
+                _advbatch = next(adviter)
+            except StopIteration as e:
+                adviter = iter(advdataloader)
+                _advbatch = next(adviter)
+            ttmsg = _adv_train_batch(batch=_advbatch, model=advmodel, optim=advoptim, losses=advlosses,
+                                     device=device, batch_number=j, max_batches=0, current_epoch=current_epoch,
+                                     max_epochs=0)
+            ttmsg = f"adv:  {ttmsg}"
+            if print_every_batch:
+                tt.msg(ttmsg)
+            else:
+                tt.live(ttmsg)
+        ttmsg = _train_batch(batch=_batch, model=model, optim=optim, losses=losses, device=device,
+                             batch_number=i, max_batches=len(dataloader), current_epoch=current_epoch,
+                             max_epochs=max_epochs)
+        ttmsg = f"main: {ttmsg}"
+        if print_every_batch:
+            tt.msg(ttmsg)
+        else:
+            tt.live(ttmsg)
+
+    tt.stoplive()
+    [e() for e in on_end]
+    ttmsg = q.pp_epoch_losses(*losses)
+    advttmsg = q.pp_epoch_losses(*advlosses)
+    ttmsg = f"\n main: {ttmsg}\n adv:  {advttmsg}"
+    return ttmsg
+
+
+class AdversaryTrain(torch.nn.Module):
+    def __init__(self, advmodel:BartGenerator, lm_model=None,
+                 smoothing=0., tensor2tree:Callable=None, abstensor2tree:Callable=None,
+                 orderless:Set[str]=set(), **kw):
+        super(AdversaryTrain, self).__init__(**kw)
+        self.model = advmodel
+        self.lm_model = lm_model
+        # CE loss
+        self.ce = CELoss(ignore_index=self.model.config.pad_token_id, smoothing=smoothing)
+
         # accuracies
         self.accs = SeqAccuracies()
-        self.accs.padid = model.config.pad_token_id
+        self.accs.padid = self.model.config.pad_token_id
         self.accs.unkid = UNKID
 
         self.treeacc = TreeAccuracy(tensor2tree=tensor2tree,
                                     orderless=orderless)
 
-        self.metrics = [self.accs, self.treeacc]
+        self.metrics = [self.ce, self.accs, self.treeacc]
 
-    def forward(self, input_ids, output_ids, *args, **kwargs):
+    def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.nn.Parameter]]:
+        for k, v in super(AdversaryTrain, self).named_parameters(prefix=prefix, recurse=recurse):
+            if not k.startswith("model.model.encoder"):
+                yield k, v
+
+    def forward(self, input_ids, output_ids, adv_output_ids, *args, **kwargs):
+        ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=adv_output_ids)
+        probs = ret[0]
+        _, predactions = probs.max(-1)
+
+        outputs = [metric(probs, predactions, adv_output_ids[:, 1:]) for metric in self.metrics]
+        outputs = merge_metric_dicts(*outputs)
+        outputs = {"adv_"+k: v for k, v in outputs.items()}
+        return outputs, ret
+
+
+class BartGeneratorTest(torch.nn.Module):
+    def __init__(self, model:BartGenerator, maxlen:int=5, numbeam:int=None,
+                 tensor2tree:Callable=None, abstensor2tree:Callable=None, orderless:Set[str]=set(), **kw):
+        super(BartGeneratorTest, self).__init__(**kw)
+        self.model = model
+        self.maxlen, self.numbeam = maxlen, numbeam
+
+        # accuracies
+        self.accs = SeqAccuracies()
+        self.absaccs = SeqAccuracies()
+        self.accs.padid = model.config.pad_token_id
+        self.absaccs.padid = model.config.pad_token_id
+        self.accs.unkid = UNKID
+        self.absaccs.unkid = UNKID
+
+        self.treeacc = TreeAccuracy(tensor2tree=tensor2tree,
+                                    orderless=orderless)
+        self.abstreeacc = TreeAccuracy(tensor2tree=abstensor2tree,
+                                    orderless=orderless)
+
+        self.metrics = [self.accs, self.treeacc]
+        self.absmetrics = [self.absaccs, self.abstreeacc]
+
+    def forward(self, input_ids, output_ids, abs_output_ids, *args, **kwargs):
         ret = self.model.generate(input_ids,
                                   decoder_input_ids=output_ids[:, 0:1],
                                   attention_mask=input_ids!=self.model.config.pad_token_id,
@@ -293,8 +425,9 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 
 def create_model(encoder_name="bert-base-uncased",
-                 dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
-                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
+                 dec_vocabsize=None, abs_dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
+                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None, abstensor2tree=None,
+                 abs_id=-100, entropycontrib=1.):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -315,12 +448,20 @@ def create_model(encoder_name="bert-base-uncased",
             ret = (ret, None, None)
             return ret
 
+    class DummyEncoder(torch.nn.Module):
+        def __init__(self, dim, **kw):
+            super(DummyEncoder, self).__init__(**kw)
+            self.dim = dim
+
+        def forward(self, input_ids, attention_mask=None):
+            return torch.zeros(input_ids.size(0), 1, self.dim, device=input_ids.device)
+
     encoder = BertEncoderWrapper(encoder, dropout=dropout)
 
     decoder_config = BartConfig(d_model=dec_dim,
                                 pad_token_id=0,
                                 bos_token_id=1,
-                                vocab_size=dec_vocabsize,
+                                vocab_size=abs_dec_vocabsize,
                                 decoder_attention_heads=dec_heads//2,
                                 decoder_layers=dec_layers,
                                 dropout=dropout,
@@ -330,14 +471,49 @@ def create_model(encoder_name="bert-base-uncased",
                                 encoder_layers=dec_layers,
                                 encoder_ffn_dim=dec_dim*4,
                                 )
+    adv_decoder_config = BartConfig(d_model=dec_dim,
+                                pad_token_id=0,
+                                bos_token_id=1,
+                                vocab_size=dec_vocabsize,
+                                decoder_attention_heads=dec_heads // 2,
+                                decoder_layers=dec_layers,
+                                dropout=dropout,
+                                attention_dropout=min(0.1, dropout / 2),
+                                decoder_ffn_dim=dec_dim * 4,
+                                encoder_attention_heads=dec_heads,
+                                encoder_layers=dec_layers,
+                                encoder_ffn_dim=dec_dim * 4,
+                                )
+
+    decoder_lm_config = BartConfig(d_model=dec_dim,
+                                    pad_token_id=0,
+                                    bos_token_id=1,
+                                    vocab_size=dec_vocabsize,
+                                    decoder_attention_heads=dec_heads // 2,
+                                    decoder_layers=dec_layers,
+                                    dropout=dropout,
+                                    attention_dropout=min(0.1, dropout / 2),
+                                    decoder_ffn_dim=dec_dim * 4,
+                                    encoder_attention_heads=dec_heads,
+                                    encoder_layers=dec_layers,
+                                    encoder_ffn_dim=dec_dim * 4,
+                                    )
+
     model = BartGenerator(decoder_config)
     model.model.encoder = encoder
 
+    advmodel = BartGenerator(adv_decoder_config)
+    advmodel.model.encoder = encoder
+
+    decoder_lm = BartGenerator(decoder_lm_config)
+    decoder_lm.model.encoder = DummyEncoder(dec_dim)
+
     orderless = {"op:and", "SW:concat"}
 
-    trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
-    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
-    return trainmodel, testmodel
+    trainmodel = GeneratorTrain(model, advmodel, smoothing=smoothing, tensor2tree=abstensor2tree, orderless=orderless, abs_id=abs_id, entropycontrib=entropycontrib)
+    advtrainmodel = AdversaryTrain(advmodel, decoder_lm, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
+    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=abstensor2tree, orderless=orderless)
+    return trainmodel, advtrainmodel, testmodel
 
 
 def _tensor2tree(x, D:Vocab=None):
@@ -382,6 +558,7 @@ def run(traindomains="ALL",
         domain="recipes",
         mincoverage=2,
         lr=0.001,
+        advlr=-1,
         enclrmul=0.1,
         numbeam=1,
         ftlr=0.0001,
@@ -408,12 +585,13 @@ def run(traindomains="ALL",
         domainstart=False,
         useall=False,
         nopretrain=False,
-        onlyabstract=False,
-        uselexicon=False,
+        entropycontrib=1.,
+        advsteps=5,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
-    wandb.init(project="overnight_base_fewshot", reinit=True, config=settings)
+    if advlr < 0:
+        advlr = lr
     if traindomains == "ALL":
         alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
         traindomains = alldomains - {domain, }
@@ -424,13 +602,14 @@ def run(traindomains="ALL",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     tt.tick("loading data")
-    tds, ftds, vds, fvds, xds, nltok, flenc = \
+    tds, ftds, vds, fvds, xds, nltok, flenc, absflenc = \
         load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
-                fullsimplify=fullsimplify, add_domain_start=domainstart, useall=useall, onlyabstract=onlyabstract,
-                uselexicon=uselexicon)
+                fullsimplify=fullsimplify, add_domain_start=domainstart, useall=useall)
+    advds = Dataset(tds.examples)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
     tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
+    advdl = DataLoader(advds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
     ftdl = DataLoader(ftds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0))
     fvdl = DataLoader(fvds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0))
@@ -438,8 +617,9 @@ def run(traindomains="ALL",
     tt.tock("data loaded")
 
     tt.tick("creating model")
-    trainm, testm = create_model(encoder_name=encoder,
+    trainm, advtrainm, testm = create_model(encoder_name=encoder,
                                  dec_vocabsize=flenc.vocab.number_of_ids(),
+                                 abs_dec_vocabsize=absflenc.vocab.number_of_ids(),
                                  dec_layers=numlayers,
                                  dec_dim=hdim,
                                  dec_heads=numheads,
@@ -447,7 +627,10 @@ def run(traindomains="ALL",
                                  smoothing=smoothing,
                                  maxlen=maxlen,
                                  numbeam=numbeam,
-                                 tensor2tree=partial(_tensor2tree, D=flenc.vocab)
+                                 tensor2tree=partial(_tensor2tree, D=flenc.vocab),
+                                 abstensor2tree=partial(_tensor2tree, D=absflenc.vocab),
+                                 abs_id=absflenc.vocab["@ABS@"],
+                                 entropycontrib=entropycontrib,
                                  )
     tt.tock("model created")
 
@@ -460,7 +643,8 @@ def run(traindomains="ALL",
         print(out)
 
     # region pretrain on all domains
-    metrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
+    metrics = make_array_of_metrics("loss", "ce", "elem_acc", "tree_acc")
+    advmetrics = make_array_of_metrics("adv_loss", "adv_elem_acc", "adv_tree_acc")
     vmetrics = make_array_of_metrics("seq_acc", "tree_acc")
     xmetrics = make_array_of_metrics("seq_acc", "tree_acc")
 
@@ -480,27 +664,31 @@ def run(traindomains="ALL",
 
     optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
 
+    advoptim = torch.optim.Adam(advtrainm.parameters(), lr=advlr, weight_decay=wreg)
+
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
+    advclipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(advtrainm.parameters(), gradnorm)
 
     eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
-    def wandb_logger():
-        d = {}
-        for name, loss in zip(["loss", "elem_acc", "tree_acc"], metrics):
-            d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], vmetrics):
-            d["valid_"+name] = loss.get_epoch_error()
-        wandb.log(d)
+
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
         lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
+        advlr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
+        advlr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
+    advlr_schedule = q.sched.LRSchedule(advoptim, advlr_schedule)
 
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
-                         _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
+    advtrainbatch = partial(q.train_batch, on_before_optim_step=[advclipgradnorm])
+    trainepoch = partial(adv_train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
+                         advmodel=advtrainm, advdataloader=advdl, advoptim=advoptim, advlosses=advmetrics,
+                         _train_batch=trainbatch, _adv_train_batch=advtrainbatch,
+                         device=device, on_end=[lambda: lr_schedule.step(), lambda: advlr_schedule.step()],
+                         advsteps=advsteps)
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])
 
     if not nopretrain:
@@ -516,7 +704,7 @@ def run(traindomains="ALL",
     # endregion
 
     # region finetune
-    ftmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
+    ftmetrics = make_array_of_metrics("loss", "ce", "elem_acc", "tree_acc")
     ftvmetrics = make_array_of_metrics("seq_acc", "tree_acc")
     ftxmetrics = make_array_of_metrics("seq_acc", "tree_acc")
 
@@ -538,16 +726,8 @@ def run(traindomains="ALL",
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
-    eyt = q.EarlyStopper(ftvmetrics[1], patience=1000, min_epochs=10, more_is_better=True,
+    eyt = q.EarlyStopper(ftvmetrics[1], patience=patience, min_epochs=10, more_is_better=True,
                          remember_f=lambda: deepcopy(trainm.model))
-
-    def wandb_logger():
-        d = {}
-        for name, loss in zip(["loss", "elem_acc", "tree_acc"], ftmetrics):
-            d["train_" + name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], ftvmetrics):
-            d["valid_" + name] = loss.get_epoch_error()
-        wandb.log(d)
 
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
@@ -615,12 +795,11 @@ def run(traindomains="ALL",
         for metric in metricarray:
             settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
 
-    wandb.config.update(settings)
     # print(settings)
     return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2, fullsimplify=True, uselexicon=False):
+def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2, fullsimplify=True):
     ranges = {
         "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
         "ftlr": [0.00003],
@@ -645,13 +824,13 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, fullsimplify=fullsimplify, uselexicon=uselexicon,
+                      domain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, domainstart=False,
-                         nopretrain=False, numbeam=1, onlyabstract=False, uselexicon=False):
+                         nopretrain=False, numbeam=1, advsteps=5, entropycontrib=1.):
     ranges = {
         "lr": [0.0001],
         "ftlr": [0.0001],
@@ -665,6 +844,8 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         "smoothing": [smoothing],
         "hdim": [hdim],
         "numbeam": [numbeam],
+        "advsteps": [advsteps],
+        "entropycontrib": [entropycontrib],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
@@ -680,8 +861,8 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       domain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
-                      domainstart=domainstart, useall=useall, uselexicon=uselexicon,
-                      nopretrain=nopretrain, onlyabstract=onlyabstract)
+                      domainstart=domainstart, useall=useall,
+                      nopretrain=nopretrain)
 
 
 

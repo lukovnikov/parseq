@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from tqdm import tqdm
 
-from parseq.grammar import lisp_to_pas, pas_to_tree, tree_size, tree_to_lisp, tree_to_lisp_tokens
+from parseq.grammar import lisp_to_pas, pas_to_tree, tree_size, tree_to_lisp, tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
 from transformers import BartTokenizer
 
@@ -457,8 +457,9 @@ class SubtreeMasker(TokenMasker):
 class OvernightDatasetLoader(object):
     def __init__(self,
                  p="../datasets/overnightData/",
+                 mp="../datasets/overnight/",
                  pcache="../datasets/overnightCache/",
-                 usecache=True,
+                 usecache=False,
                  validfrac=.2,
                  simplify_mode="full",
                  simplify_blocks=False,
@@ -470,6 +471,7 @@ class OvernightDatasetLoader(object):
         self._usecache = usecache
         self.validfrac = validfrac
         self._p = p
+        self._mp = mp
         self.simplify_mode = simplify_mode      # "full" or "light"
         self.simplify_blocks = simplify_blocks
         self._restore_reverse = restore_reverse
@@ -478,9 +480,13 @@ class OvernightDatasetLoader(object):
     def full_simplify(self):
         return self.simplify_mode == "full"
 
-    def load(self, domain:str="restaurants", trainonvalid=False):
-        examples = self._initialize(self._p, domain)
-        if trainonvalid:
+    def load(self, domain:str="restaurants", trainonvalid=False, trainonlexicon=False):
+        examples, lexicon = self._initialize(self._p, self._mp, domain)
+        if trainonlexicon:
+            _examples = examples
+            examples = [example for example in _examples if example[2] != "train"]
+            examples += [(nl, lf, "train") for nl, lf in lexicon]
+        elif trainonvalid:
             _examples = examples
             examples = []
             for example in _examples:
@@ -493,13 +499,8 @@ class OvernightDatasetLoader(object):
                     examples.append(example)
         return Dataset(examples)
 
-    def lines_to_examples(self, lines:List[str]):
-        maxsize_before = 0
-        avgsize_before = []
-        maxsize_after = 0
-        avgsize_after = []
+    def _ztree_to_lf(self, ztree):
         afterstring = set()
-
         def simplify_tree(t:Tree):
             if t.label() == "call":     # remove call, make first arg of it the parent of the other args
                 assert(len(t[0]) == 0)
@@ -585,7 +586,7 @@ class OvernightDatasetLoader(object):
                     j = i + 1
                     while j < len(conditions):
                         if conditions[i] == conditions[j]:
-                            print(f"SAME!: {conditions[i]}, {conditions[j]}")
+                            # print(f"SAME!: {conditions[i]}, {conditions[j]}")
                             del conditions[j]
                             j -= 1
                         j += 1
@@ -643,9 +644,13 @@ class OvernightDatasetLoader(object):
                 return t
 
         def simplify_final(t):
-            assert(t.label() == "SW:listValue")
-            assert(len(t) == 1)
-            return t[0]
+            if t.label() == "SW:listValue":
+                return t[0]
+            else:
+                return t
+            # assert(t.label() == "SW:listValue")
+            # assert(len(t) == 1)
+            # return t[0]
 
         def remap_reverse_labels_blocks(t:Tree):
             mapd = {
@@ -669,37 +674,69 @@ class OvernightDatasetLoader(object):
             else:
                 return t
 
+        lf = ztree
+        if self.simplify_mode != "none":
+            lf = simplify_tree(lf)
+            lf = simplify_further(lf)
+            lf = simplify_furthermore(lf)
+            lf = simplify_final(lf)
+        if self.simplify_blocks:
+            lf = remap_reverse_labels_blocks(lf)
+        if self._restore_reverse:
+            lf = restore_reverse(lf)
+        return lf
+
+    def grammarlines_to_lexicon(self, lines:List[str]):
+        ret = []
+        ltp = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("#"):
+                continue
+            z, ltp = lisp_to_tree(line.strip(), ltp)
+            if z is not None:
+                if z.label() == "rule":
+                    if z[0].label() not in {"$TypeNP", "$RelNP", "$EntityNP1", "$EntityNP2", "$VP/NP", "$VP", "$Value"}:
+                        assert(False)       # unexpected lexical entry type
+                    assert(z[2].label() == "ConstantFn")
+                    assert(len(z[2]) == 1)
+                    # print(z)
+                    lf = self._ztree_to_lf(z[2][0])
+                    nl = z[1]
+                    nl = [nl.label()] + [nle.label() for nle in nl]
+                    ret.append((" ".join(nl), lf))
+                ltp = None
+        return ret
+
+    def lines_to_examples(self, lines:List[str]):
+        maxsize_before = 0
+        avgsize_before = []
+        maxsize_after = 0
+        avgsize_after = []
+
         ret = []
         ltp = None
         j = 0
         for i, line in enumerate(lines):
             z, ltp = lisp_to_pas(line, ltp)
             if z is not None:
-                print(f"Example {j}:")
+                # print(f"Example {j}:")
+                question = z[1][0][1][0][1:-1]
                 ztree = pas_to_tree(z[1][2][1][0])
+
                 maxsize_before = max(maxsize_before, tree_length(ztree))
                 avgsize_before.append(tree_length(ztree))
-                lf = ztree
-                if self.simplify_mode != "none":
-                    lf = simplify_tree(lf)
-                    lf = simplify_further(lf)
-                    lf = simplify_furthermore(lf)
-                    lf = simplify_final(lf)
-                if self.simplify_blocks:
-                    lf = remap_reverse_labels_blocks(lf)
-                if self._restore_reverse:
-                    lf = restore_reverse(lf)
-                question = z[1][0][1][0]
-                assert(question[0] == '"' and question[-1] == '"')
-                ret.append((question[1:-1], lf))
-                print(ret[-1][0])
-                print(ret[-1][1])
+
+                lf = self._ztree_to_lf(ztree)
+
+                ret.append((question, lf))
+                # print(ret[-1][0])
+                # print(ret[-1][1])
                 ltp = None
                 maxsize_after = max(maxsize_after, tree_length(lf))
                 avgsize_after.append(tree_length(lf))
 
-                print(pas_to_tree(z[1][2][1][0]))
-                print()
+                # print(pas_to_tree(z[1][2][1][0]))
+                # print()
                 j += 1
 
         avgsize_before = sum(avgsize_before) / len(avgsize_before)
@@ -738,7 +775,7 @@ class OvernightDatasetLoader(object):
                 ujson.dump(testexamples, f, indent=4, sort_keys=True)
         print("saved in cache")
 
-    def _initialize(self, p, domain):
+    def _initialize(self, p, mp, domain):
         self.data = {}
 
         trainexamples, testexamples = None, None
@@ -755,8 +792,11 @@ class OvernightDatasetLoader(object):
             testlines = [x.strip() for x in
                         open(os.path.join(os.path.dirname(__file__), p, f"{domain}.paraphrases.test.examples"), "r").readlines()]
 
+            grammarlines = [x.strip() for x in open(os.path.join(os.path.dirname(__file__), mp, f"{domain}.grammar"), "r").readlines()]
+
             trainexamples = self.lines_to_examples(trainlines)
             testexamples = self.lines_to_examples(testlines)
+            lexicon = self.grammarlines_to_lexicon(grammarlines)
 
             if self._usecache:
                 self._cache(domain, trainexamples, testexamples)
@@ -771,7 +811,7 @@ class OvernightDatasetLoader(object):
         splits = splits + ["test"] * len(testexamples)
 
         examples = list(zip(questions, queries, splits))
-        return examples
+        return examples, lexicon
 
 
 class TOPDatasetLoader(object):

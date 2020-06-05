@@ -13,8 +13,6 @@ from copy import deepcopy
 from functools import partial
 from typing import Callable, Set
 
-import wandb
-
 import qelos as q   # branch v3
 import numpy as np
 import torch
@@ -149,7 +147,6 @@ def load_ds(traindomains=("restaurants",),
             add_domain_start=True,
             useall=False,
             onlyabstract=False,
-            uselexicon=False,
             ):
 
     def tokenize_and_add_start(t, _domain):
@@ -165,15 +162,13 @@ def load_ds(traindomains=("restaurants",),
         allex += ds[(None, None, lambda x: x in ("train", "valid"))].map(lambda x: (x[0], x[1], x[2], traindomain)).examples       # don't use test examples
 
     testds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True, restore_reverse=DATA_RESTORE_REVERSE)\
-        .load(domain=testdomain, trainonlexicon=uselexicon)
-
-    if useall or uselexicon:
+        .load(domain=testdomain)
+    if useall:
         print("using all training examples")
         sortedexamples = testds[(None, None, "train")].examples
     else:
         sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples,
-                                                       mincoverage=mincoverage,
-                                                       loadedex=[e for e in allex if e[2] == "train"])
+                                                       mincoverage=mincoverage, loadedex=[e for e in allex if e[2] == "train"])
 
     allex += testds[(None, None, "valid")].map(lambda x: (x[0], x[1], "ftvalid", testdomain)).examples
     allex += testds[(None, None, "test")].map(lambda x: (x[0], x[1], x[2], testdomain)).examples
@@ -409,11 +404,9 @@ def run(traindomains="ALL",
         useall=False,
         nopretrain=False,
         onlyabstract=False,
-        uselexicon=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
-    wandb.init(project="overnight_base_fewshot", reinit=True, config=settings)
     if traindomains == "ALL":
         alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
         traindomains = alldomains - {domain, }
@@ -426,8 +419,7 @@ def run(traindomains="ALL",
     tt.tick("loading data")
     tds, ftds, vds, fvds, xds, nltok, flenc = \
         load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
-                fullsimplify=fullsimplify, add_domain_start=domainstart, useall=useall, onlyabstract=onlyabstract,
-                uselexicon=uselexicon)
+                fullsimplify=fullsimplify, add_domain_start=domainstart, useall=useall, onlyabstract=onlyabstract)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
     tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
@@ -483,13 +475,7 @@ def run(traindomains="ALL",
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
     eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
-    def wandb_logger():
-        d = {}
-        for name, loss in zip(["loss", "elem_acc", "tree_acc"], metrics):
-            d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], vmetrics):
-            d["valid_"+name] = loss.get_epoch_error()
-        wandb.log(d)
+
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
@@ -540,14 +526,6 @@ def run(traindomains="ALL",
 
     eyt = q.EarlyStopper(ftvmetrics[1], patience=1000, min_epochs=10, more_is_better=True,
                          remember_f=lambda: deepcopy(trainm.model))
-
-    def wandb_logger():
-        d = {}
-        for name, loss in zip(["loss", "elem_acc", "tree_acc"], ftmetrics):
-            d["train_" + name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], ftvmetrics):
-            d["valid_" + name] = loss.get_epoch_error()
-        wandb.log(d)
 
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
@@ -615,12 +593,11 @@ def run(traindomains="ALL",
         for metric in metricarray:
             settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
 
-    wandb.config.update(settings)
     # print(settings)
     return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2, fullsimplify=True, uselexicon=False):
+def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2, fullsimplify=True):
     ranges = {
         "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
         "ftlr": [0.00003],
@@ -645,13 +622,13 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, fullsimplify=fullsimplify, uselexicon=uselexicon,
+                      domain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, useall=False, domainstart=False,
-                         nopretrain=False, numbeam=1, onlyabstract=False, uselexicon=False):
+                         nopretrain=False, numbeam=1, onlyabstract=False):
     ranges = {
         "lr": [0.0001],
         "ftlr": [0.0001],
@@ -680,13 +657,13 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       domain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
-                      domainstart=domainstart, useall=useall, uselexicon=uselexicon,
+                      domainstart=domainstart, useall=useall,
                       nopretrain=nopretrain, onlyabstract=onlyabstract)
 
 
 
 if __name__ == '__main__':
-    ret = q.argprun(run)
+    # ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     q.argprun(run_experiments_seed)
