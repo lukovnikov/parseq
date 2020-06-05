@@ -168,8 +168,8 @@ def load_ds(traindomains=("restaurants",),
         .load(domain=testdomain, trainonlexicon=uselexicon)
 
     if useall or uselexicon:
-        print("using all training examples")
         sortedexamples = testds[(None, None, "train")].examples
+        print(f"using all training examples ({len(sortedexamples)})")
     else:
         sortedexamples = get_maximum_spanning_examples(testds[(None, None, "train")].examples,
                                                        mincoverage=mincoverage,
