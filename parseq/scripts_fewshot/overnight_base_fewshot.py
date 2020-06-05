@@ -545,9 +545,9 @@ def run(traindomains="ALL",
     def wandb_logger_ft():
         d = {}
         for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], ftmetrics):
-            d["train_" + name] = loss.get_epoch_error()
+            d["ft_train_" + name] = loss.get_epoch_error()
         for name, loss in zip(["seq_acc", "tree_acc"], ftvmetrics):
-            d["valid_" + name] = loss.get_epoch_error()
+            d["ft_valid_" + name] = loss.get_epoch_error()
         wandb.log(d)
 
     t_max = epochs
