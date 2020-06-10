@@ -262,7 +262,7 @@ def run(domain="restaurants",
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
-    wandb.init(project=f"overnight_pretrain_bert:{domain}",
+    wandb.init(project=f"overnight_pretrain_bert/{domain}",
                reinit=True, config=settings)
     random.seed(seed)
     torch.manual_seed(seed)
