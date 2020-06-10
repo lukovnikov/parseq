@@ -430,7 +430,7 @@ def run_experiments(domain="restaurants", gpu=-1):
                       domain=domain, gpu=gpu)
 
 
-def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
+def run_experiments_seed(domain="restaurants", lr=-1., enclrmul=-1., hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
                          smoothing=0.2, numbeam=1, trainonvalid=False, cosinelr=False, fullsimplify=True):
     ranges = {
         "lr": [0.0001],
@@ -444,6 +444,8 @@ def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1
         "cosinelr": [cosinelr],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
+    if lr >= 0:
+        ranges["lr"] = [lr]
     if hdim >= 0:
         ranges["hdim"] = [hdim]
     if dropout >= 0:
