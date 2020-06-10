@@ -13,7 +13,7 @@ from functools import partial
 from typing import Callable, Set
 
 import fire
-import wandb
+# import wandb
 
 import qelos as q   # branch v3
 import numpy as np
@@ -263,8 +263,8 @@ def run(domain="restaurants",
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
-    wandb.init(project=f"overnight_pretrain_bert-{domain}",
-               reinit=True, config=settings)
+    # wandb.init(project=f"overnight_pretrain_bert-{domain}",
+    #            reinit=True, config=settings)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -322,13 +322,13 @@ def run(domain="restaurants",
     optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
-    def wandb_logger():
-        d = {}
-        for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
-            d["_train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["seq_acc", "tree_acc"], vmetrics):
-            d["_valid_"+name] = loss.get_epoch_error()
-        wandb.log(d)
+    # def wandb_logger():
+    #     d = {}
+    #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
+    #         d["_train_"+name] = loss.get_epoch_error()
+    #     for name, loss in zip(["seq_acc", "tree_acc"], vmetrics):
+    #         d["_valid_"+name] = loss.get_epoch_error()
+    #     wandb.log(d)
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
@@ -340,7 +340,7 @@ def run(domain="restaurants",
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
-    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: wandb_logger()])
+    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device)#, on_end=[lambda: wandb_logger()])
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
@@ -386,7 +386,7 @@ def run(domain="restaurants",
         for metric in metricarray:
             settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
 
-    wandb.config.update(settings)
+    # wandb.config.update(settings)
     # print(settings)
     return settings
 
