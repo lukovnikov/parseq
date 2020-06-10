@@ -451,7 +451,7 @@ def run(traindomains="ALL",
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
-    wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}/{domain}",
+    wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
                reinit=True, config=settings)
     if traindomains == "ALL":
         alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
