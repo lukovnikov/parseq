@@ -6,6 +6,7 @@ A script for running the following zero-shot domain transfer experiments:
     * lexical token representations are computed based on lexicon
 * training: normal (CE on teacher forced target)
 """
+import faulthandler
 import json
 import random
 import string
