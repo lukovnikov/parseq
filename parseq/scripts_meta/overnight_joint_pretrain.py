@@ -451,8 +451,8 @@ def run(traindomains="ALL",
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
-    wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
-               reinit=True, config=settings)
+    # wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
+    #            reinit=True, config=settings)
     if traindomains == "ALL":
         alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
         traindomains = alldomains - {domain, }
@@ -522,13 +522,13 @@ def run(traindomains="ALL",
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
     eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
-    def wandb_logger():
-        d = {}
-        for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
-            d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["seq_acc", "tree_acc"], vmetrics):
-            d["valid_"+name] = loss.get_epoch_error()
-        wandb.log(d)
+    # def wandb_logger():
+    #     d = {}
+    #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
+    #         d["train_"+name] = loss.get_epoch_error()
+    #     for name, loss in zip(["seq_acc", "tree_acc"], vmetrics):
+    #         d["valid_"+name] = loss.get_epoch_error()
+    #     wandb.log(d)
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
@@ -541,7 +541,7 @@ def run(traindomains="ALL",
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device,
-                         on_end=[lambda: eyt.on_epoch_end(), lambda: wandb_logger()])
+                         on_end=[lambda: eyt.on_epoch_end()]) #, lambda: wandb_logger()])
 
     if not nopretrain:
         tt.tick("pretraining")
@@ -581,13 +581,13 @@ def run(traindomains="ALL",
     eyt = q.EarlyStopper(ftvmetrics[1], patience=1000, min_epochs=10, more_is_better=True,
                          remember_f=lambda: deepcopy(trainm.model))
 
-    def wandb_logger_ft():
-        d = {}
-        for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], ftmetrics):
-            d["ft_train_" + name] = loss.get_epoch_error()
-        for name, loss in zip(["seq_acc", "tree_acc"], ftvmetrics):
-            d["ft_valid_" + name] = loss.get_epoch_error()
-        wandb.log(d)
+    # def wandb_logger_ft():
+    #     d = {}
+    #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], ftmetrics):
+    #         d["ft_train_" + name] = loss.get_epoch_error()
+    #     for name, loss in zip(["seq_acc", "tree_acc"], ftvmetrics):
+    #         d["ft_valid_" + name] = loss.get_epoch_error()
+    #     wandb.log(d)
 
     t_max = epochs
     print(f"Total number of updates: {t_max} .")
@@ -601,7 +601,7 @@ def run(traindomains="ALL",
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=ftdl, optim=ftoptim, losses=ftmetrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=fvdl, losses=ftvmetrics, device=device,
-                         on_end=[lambda: eyt.on_epoch_end(), lambda: wandb_logger_ft()])
+                         on_end=[lambda: eyt.on_epoch_end()]) #, lambda: wandb_logger_ft()])
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs,
@@ -655,7 +655,7 @@ def run(traindomains="ALL",
         for metric in metricarray:
             settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
 
-    wandb.config.update(settings)
+    # wandb.config.update(settings)
     # print(settings)
     return settings
 
