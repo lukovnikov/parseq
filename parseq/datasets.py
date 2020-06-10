@@ -480,13 +480,14 @@ class OvernightDatasetLoader(object):
     def full_simplify(self):
         return self.simplify_mode == "full"
 
-    def load(self, domain:str="restaurants", trainonvalid=False, trainonlexicon=False):
+    def load(self, domain:str="restaurants", trainonvalid=False):
         examples, lexicon = self._initialize(self._p, self._mp, domain)
-        if trainonlexicon:
-            _examples = examples
-            examples = [example for example in _examples if example[2] != "train"]
-            examples += [(nl, lf, "train") for nl, lf in lexicon]
-        elif trainonvalid:
+
+        # _examples = examples
+        # examples = [example for example in _examples if example[2] != "train"]
+        examples += [(nl, lf, "lexicon") for nl, lf in lexicon]
+
+        if trainonvalid:
             _examples = examples
             examples = []
             for example in _examples:
