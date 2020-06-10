@@ -471,7 +471,7 @@ def run_experiments_seed(domain="restaurants", enclrmul=-1., hdim=-1, dropout=-1
 
 
 if __name__ == '__main__':
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
-    q.argprun(run_experiments_seed)
+    # q.argprun(run_experiments_seed)
