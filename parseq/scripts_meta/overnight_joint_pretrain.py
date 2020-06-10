@@ -13,6 +13,7 @@ from copy import deepcopy
 from functools import partial
 from typing import Callable, Set
 
+import fire
 import wandb
 
 import qelos as q   # branch v3
