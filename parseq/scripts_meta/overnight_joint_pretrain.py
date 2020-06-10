@@ -729,6 +729,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 
 
 if __name__ == '__main__':
+    faulthandler.enable()
     # ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
