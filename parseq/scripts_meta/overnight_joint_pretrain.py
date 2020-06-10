@@ -428,6 +428,7 @@ def run(traindomains="ALL",
         cosinelr=False,
         warmup=0.,
         batsize=30,
+        pretrainbatsize=100,
         epochs=100,
         pretrainepochs=100,
         dropout=0.1,
@@ -692,7 +693,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
-                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False,
+                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, pretrainbatsize=100,
                          nopretrain=False, numbeam=1, onlyabstract=False, pretrainsetting="all+lex", finetunesetting="lex"):
     ranges = {
         "lr": [0.0001],
@@ -723,14 +724,14 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       domain=domain, fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
-                      domainstart=domainstart,
+                      domainstart=domainstart, pretrainbatsize=pretrainbatsize,
                       pretrainsetting=pretrainsetting, finetunesetting=finetunesetting,
                       nopretrain=nopretrain, onlyabstract=onlyabstract)
 
 
 
 if __name__ == '__main__':
-    # faulthandler.enable()
+    faulthandler.enable()
     # ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
