@@ -866,6 +866,7 @@ def run(traindomains="blocks+recipes", #"ALL",
         domainstart=False,
         supportsetting="lex",   # "lex" or "min"
         dometarare=True,
+        abscontrib=1.,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -972,7 +973,7 @@ def run(traindomains="blocks+recipes", #"ALL",
                          device=device,
                          on_end=[lambda: lr_schedule.step()],
                          gradacc=gradacc,
-                         abstract_contrib=1.,)
+                         abstract_contrib=abscontrib,)
 
     bestfinetunesteps = q.hyperparam(-1)
     testepoch = partial(meta_test_epoch,
@@ -1154,7 +1155,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
                       domainstart=domainstart, pretrainbatsize=pretrainbatsize,
                       supportsetting=supportsetting,
                       maxfinetunesteps=30, evalinterval=5,
-                      nopretrain=nopretrain, onlyabstract=onlyabstract)
+                      nopretrain=nopretrain)
 
 
 
