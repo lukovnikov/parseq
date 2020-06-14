@@ -994,7 +994,7 @@ def run(traindomains="blocks+recipes", #"ALL",
                         device=device,
                         print_every_batch=False)
 
-    # print(testepoch())
+    print(testepoch())
 
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=testepoch,
