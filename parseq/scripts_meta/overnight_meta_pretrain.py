@@ -855,7 +855,7 @@ def run(traindomains="blocks+recipes", #"ALL",
         gradnorm=3,
         gradacc=1,
         smoothing=0.,
-        patience=5,
+        patience=20,
         gpu=-1,
         seed=123456789,
         encoder="bert-base-uncased",
@@ -939,7 +939,7 @@ def run(traindomains="blocks+recipes", #"ALL",
     def clipgradnorm(_m, _norm):
         torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
 
-    eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
+    eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
     # def wandb_logger():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
@@ -993,7 +993,8 @@ def run(traindomains="blocks+recipes", #"ALL",
                         evalinterval=evalinterval,
                         clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
                         device=device,
-                        print_every_batch=False)
+                        print_every_batch=False,
+                        on_outer_end=[eyt.on_epoch_end()])
 
     # print(testepoch())
 
@@ -1162,7 +1163,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
 
 if __name__ == '__main__':
     faulthandler.enable()
-    ret = q.argprun(run)
+    # ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     fire.Fire(run_experiments_seed)
