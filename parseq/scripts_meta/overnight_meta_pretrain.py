@@ -705,7 +705,7 @@ def meta_train_epoch(model=None,
         #   1. obtain gradient on inner-updated model using outerbatch,
         #   2. apply gradient on main model weights
         ttmsg = q.train_batch(batch=outerbatch, model=ftmodel, optim=None, losses=losses, device=device,
-                             batch_number=outerstep_i, max_batches=0, current_epoch=current_epoch,
+                             batch_number=outerstep_i, max_batches=totalnumtrainbats, current_epoch=current_epoch,
                              max_epochs=max_epochs, gradient_accumulation_steps=gradacc)
                             # , on_before_optim_step=[
                             #     partial(clipgradnorm, _m=model),
@@ -715,7 +715,7 @@ def meta_train_epoch(model=None,
 
         # do abstract prediction
         abs_ttmsg = q.train_batch(batch=outerbatch, model=absmodel, optim=None, losses=abslosses, device=device,
-                                  batch_number=outerstep_i, max_batches=0, current_epoch=current_epoch,
+                                  batch_number=outerstep_i, max_batches=totalnumtrainbats, current_epoch=current_epoch,
                                   max_epochs=max_epochs, gradient_accumulation_steps=gradacc,
                                   loss_scale=abstract_contrib)
 
