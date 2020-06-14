@@ -994,7 +994,7 @@ def run(traindomains="ALL",
                         clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
                         device=device,
                         print_every_batch=False,
-                        on_outer_end=[eyt.on_epoch_end()])
+                        on_outer_end=[lambda: eyt.on_epoch_end()])
 
     # print(testepoch())
 
