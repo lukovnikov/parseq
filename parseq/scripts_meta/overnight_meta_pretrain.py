@@ -8,6 +8,7 @@ A script for running the following zero-shot domain transfer experiments:
 """
 import faulthandler
 import json
+import math
 import random
 import string
 from copy import deepcopy
@@ -315,7 +316,8 @@ class BartGenerator(BartForConditionalGeneration):
 
 
 class BartGeneratorTrain(torch.nn.Module):
-    def __init__(self, model:BartGenerator, smoothing=0., tensor2tree:Callable=None, orderless:Set[str]=set(), **kw):
+    def __init__(self, model:BartGenerator, smoothing=0., tensor2tree:Callable=None, orderless:Set[str]=set(),
+                 maxlen:int=100, numbeam:int=1, **kw):
         super(BartGeneratorTrain, self).__init__(**kw)
         self.model = model
 
@@ -327,6 +329,9 @@ class BartGeneratorTrain(torch.nn.Module):
         self.accs.padid = model.config.pad_token_id
         self.accs.unkid = UNKID
 
+        self.tensor2tree = tensor2tree
+        self.orderless = orderless
+        self.maxlen, self.numbeam = maxlen, numbeam
         self.treeacc = TreeAccuracy(tensor2tree=tensor2tree,
                                     orderless=orderless)
 
@@ -339,6 +344,13 @@ class BartGeneratorTrain(torch.nn.Module):
         outputs = [metric(probs, predactions, output_ids[:, 1:]) for metric in self.metrics]
         outputs = merge_metric_dicts(*outputs)
         return outputs, ret
+
+    def get_test_model(self, maxlen:int=None, numbeam:int=None):
+        maxlen = self.maxlen if maxlen is None else maxlen
+        numbeam = self.numbeam if numbeam is None else numbeam
+        ret = BartGeneratorTest(self.model, maxlen=maxlen, numbeam=numbeam,
+                                tensor2tree=self.tensor2tree, orderless=self.orderless)
+        return ret
 
 
 class AbstractBartGeneratorTrain(torch.nn.Module):
@@ -509,11 +521,12 @@ def create_model(encoder_name="bert-base-uncased",
 
     orderless = {"op:and", "SW:concat"}
 
-    trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
+    trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless,
+                                    maxlen=maxlen, numbeam=numbeam)
     abstracttrainmodel = AbstractBartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless,
                                                     tokenmask=isabstracttokenmask)
-    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
-    return trainmodel, abstracttrainmodel, testmodel
+    # testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
+    return trainmodel, abstracttrainmodel
 
 
 def _tensor2tree(x, D:Vocab=None):
@@ -665,6 +678,12 @@ def meta_train_epoch(model=None,
 
         oldemb = ftmodel.model.model.decoder.embed_tokens.weight + 0
         oldlin = ftmodel.model.outlin.weight + 0
+
+        for loss in ftlosses:
+            loss.push_epoch_to_history(epoch=str(current_epoch - 1)+"."+chosendomain)
+            loss.reset_agg()
+            loss.loss.to(device)
+
         for innerstep_i in range(finetunesteps):
             innerbatch = next(inneriter)
             ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
@@ -716,12 +735,104 @@ def meta_train_epoch(model=None,
     return ttmsg
 
 
-def meta_test_epoch():
-    pass    # TODO
+
+def meta_test_epoch(model=None,
+                    data=None,
+                     get_ft_model=None,
+                     get_ft_optim=None,
+                    losses=None,
+                    ftlosses=None,
+                    finetunesteps=1,
+                    bestfinetunestepsvar=None,
+                    bestfinetunestepswhichmetric=None,
+                    bestfinetunelowerisbetter=False,
+                    evalinterval=-1,
+                    device=torch.device("cpu"),
+                    clipgradnorm=None,
+            current_epoch=0, max_epochs=0, print_every_batch=False,
+            on_start=tuple(), on_start_batch=tuple(), on_end_batch=tuple(), on_end=tuple(),
+                    on_outer_start=tuple(), on_outer_end=tuple()):
+    """
+    Performs a test epoch. If run=True, runs, otherwise returns partially filled function.
+    :param model:
+    :param dataloader:
+    :param losses:
+    :param device:
+    :param current_epoch:
+    :param max_epochs:
+    :param on_start:
+    :param on_start_batch:
+    :param on_end_batch:
+    :param on_end:
+    :return:
+    """
+    tt = q.ticktock(" -")
+    model.to(device)
+    q.epoch_reset(model)
+    [e() for e in on_outer_start]
+
+    lossesperdomain = {}
+
+    for domain in data:
+        lossesperdomain[domain] = []
+        # doing one domain
+        domaindata = data[domain]
+        # perform fine-tuning (with early stopping if valid is given
+        ftmodel = get_ft_model(model)
+        ftoptim = get_ft_optim(ftmodel)
+        ftmodel.train()
+        inneriter = infiter(domaindata["finetune"])
+
+        for loss in ftlosses:
+            loss.push_epoch_to_history(epoch=str(current_epoch - 1)+"."+domain)
+            loss.reset_agg()
+            loss.loss.to(device)
+
+        for innerstep_i in range(finetunesteps):
+            innerbatch = next(inneriter)
+            ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
+                                  batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch, max_epochs=max_epochs,
+                                  on_before_optim_step=[partial(clipgradnorm, _m=ftmodel),
+                                                        partial(reset_special_grads_inner, _m=ftmodel)])
+            if print_every_batch:
+                tt.msg(ttmsg)
+            else:
+                tt.live(ttmsg)
+
+            if (evalinterval >= 0 and (innerstep_i+1) % evalinterval == 0) or \
+               (evalinterval < 0 and innerstep_i+1 == finetunesteps):
+                _losses = deepcopy(losses)
+                q.test_epoch(ftmodel, dataloader=domaindata["valid"], losses=_losses, device=device,
+                             current_epoch=current_epoch, max_epochs=max_epochs, print_every_batch=print_every_batch,
+                             on_start=on_start, on_end=on_end, on_start_batch=on_start_batch, on_end_batch=on_end_batch)
+                lossesperdomain[domain].append(_losses)
+
+    # find best number of steps
+    if evalinterval >= 0:
+        metricsmatrix = np.zeros((len(lossesperdomain), math.ceil(finetunesteps / evalinterval), len(losses)))
+        for i, domain in enumerate(sorted(lossesperdomain.keys())):
+            for j, steplosses in enumerate(lossesperdomain[domain]):
+                for k, lossval in enumerate(steplosses):
+                    metricsmatrix[i, j, k] = lossval.get_epoch_error()
+        metricsmatrix = metricsmatrix.mean(0)   # (numevals, numlosses)
+        critvals = metricsmatrix[:, bestfinetunestepswhichmetric]   # (numevals)
+        critvals = critvals * (1 if bestfinetunelowerisbetter is False else -1)
+        bestfinetunestepsvar.v = np.argmax(critvals)
+        k = q.v(bestfinetunestepsvar)
+    else:
+        k = 0
+
+    for loss, _loss in zip(losses, metricsmatrix[k, :]):
+        loss.epoch_agg_values.append(_loss)
+        loss.epoch_agg_sizes.append(1)
+    tt.stoplive()
+    [e() for e in on_outer_end]
+    ttmsg = q.pp_epoch_losses(*losses) + f" [@{1 + (k * evalinterval if evalinterval >= 0 else finetunesteps)}]"
+    return ttmsg
 
 
-def run(traindomains="ALL",
-        domain="recipes",
+def run(traindomains="blocks+recipes", #"ALL",
+        domain="restaurants",
         mincoverage=2,
         lr=0.0001,
         enclrmul=0.1,
@@ -732,6 +843,8 @@ def run(traindomains="ALL",
         batsize=30,
         epochs=100,
         finetunesteps=5,
+        maxfinetunesteps=4,
+        evalinterval=2,
         pretrainepochs=100,
         dropout=0.1,
         wreg=1e-9,
@@ -758,6 +871,8 @@ def run(traindomains="ALL",
     if traindomains == "ALL":
         alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
         traindomains = alldomains - {domain, }
+    else:
+        traindomains = set(traindomains.split("+"))
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -772,7 +887,7 @@ def run(traindomains="ALL",
     tt.tock("data loaded")
 
     tt.tick("creating model")
-    trainm, abstrainm, testm = create_model(encoder_name=encoder,
+    trainm, abstrainm = create_model(encoder_name=encoder,
                                  dec_vocabsize=flenc.vocab.number_of_ids(),
                                  dec_layers=numlayers,
                                  dec_dim=hdim,
@@ -854,10 +969,32 @@ def run(traindomains="ALL",
                          device=device,
                          on_end=[lambda: lr_schedule.step()],
                          gradacc=gradacc,
-                         abstract_contrib=1.)
+                         abstract_contrib=1.,)
 
-    q.run_training(run_train_epoch=trainepoch, max_epochs=pretrainepochs)
+    bestfinetunesteps = q.hyperparam(-1)
+    testepoch = partial(meta_test_epoch,
+                        model=trainm,
+                        data=sourcedss,
+                        get_ft_model=lambda x: deepcopy(x),
+                        get_ft_optim=partial(get_optim,
+                                             _lr=ftlr,
+                                             _enclrmul=enclrmul,
+                                             _wreg=wreg),
+                        bestfinetunestepsvar=bestfinetunesteps,
+                        bestfinetunestepswhichmetric=1,
+                        losses=vmetrics,
+                        ftlosses=vftmetrics,
+                        finetunesteps=maxfinetunesteps,
+                        evalinterval=evalinterval,
+                        clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
+                        device=device,
+                        print_every_batch=True)
 
+    print(testepoch())
+
+    q.run_training(run_train_epoch=trainepoch,
+                   run_valid_epoch=testepoch,
+                   max_epochs=pretrainepochs)
 
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device,
                          on_end=[lambda: eyt.on_epoch_end()])#, lambda: wandb_logger()])
@@ -870,7 +1007,6 @@ def run(traindomains="ALL",
     if eyt.get_remembered() is not None:
         tt.msg("reloaded")
         trainm.model = eyt.get_remembered()
-        testm.model = eyt.get_remembered()
 
     # endregion
 
@@ -1014,6 +1150,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
                       domainstart=domainstart, pretrainbatsize=pretrainbatsize,
                       supportsetting=supportsetting,
+                      maxfinetunesteps=30, evalinterval=5,
                       nopretrain=nopretrain, onlyabstract=onlyabstract)
 
 
