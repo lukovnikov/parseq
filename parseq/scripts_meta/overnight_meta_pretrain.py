@@ -414,7 +414,8 @@ class SpecialEmbedding(torch.nn.Embedding):
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None,
                  metarare_source=None, metarare_targets=None):
         super(SpecialEmbedding, self).__init__(num_embeddings, embedding_dim, padding_idx=padding_idx)
-        self.metarare_source, self.metarare_targets = metarare_source, metarare_targets
+        self.metarare_source = metarare_source
+        self.register_buffer("metarare_targets", metarare_targets)
         # self.metarare = self.weight[self.metarare_source, :]
         # self.base_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
         self.extra_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
@@ -435,7 +436,8 @@ class SpecialEmbedding(torch.nn.Embedding):
 class SpecialOutlin(torch.nn.Linear):
     def __init__(self, dim, vocsize, metarare_source=None, metarare_targets=None, bias=True):
         super(SpecialOutlin, self).__init__(dim, vocsize, bias=bias)
-        self.metarare_source, self.metarare_targets = metarare_source, metarare_targets
+        self.metarare_source = metarare_source
+        self.register_buffer("metarare_targets", metarare_targets)
         # self.metarare = self.weight[self.metarare_source, :]
         # self.base_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
         self.extra_lin = torch.nn.Linear(dim, vocsize, bias=bias)
