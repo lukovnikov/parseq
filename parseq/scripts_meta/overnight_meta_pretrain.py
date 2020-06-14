@@ -656,7 +656,7 @@ def meta_train_epoch(model=None,
 
     # iter-ize training dataloaders in data
     for k, v in data.items():
-        v["train"] = iter(v["train"])
+        v["_train"] = iter(v["train"])
 
     outerstep_i = 0
     while True:
@@ -666,7 +666,7 @@ def meta_train_epoch(model=None,
             ks, vs = zip(*probbatsperdomain.items())
             chosendomain = np.random.choice(ks, p=vs)
             try:
-                outerbatch = next(data[chosendomain]["train"])
+                outerbatch = next(data[chosendomain]["_train"])
             except StopIteration as e:
                 print(f"stopping iteration - outerstep_i: {outerstep_i}")
                 exhausted_domains.add(chosendomain)
@@ -995,7 +995,7 @@ def run(traindomains="blocks+recipes", #"ALL",
                         device=device,
                         print_every_batch=False)
 
-    print(testepoch())
+    # print(testepoch())
 
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=testepoch,
