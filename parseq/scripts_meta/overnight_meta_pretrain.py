@@ -426,6 +426,7 @@ class SpecialEmbedding(torch.nn.Embedding):
         metarare_emb = super(SpecialEmbedding, self).forward(torch.ones_like(input) * self.metarare_source)
         extra_emb = self.extra_emb(input)
         switch = self.metarare_targets[input]
+        print(f"switch.device: {switch.device} \n extra_emb.device: {extra_emb.device} \n metarare_emb.device: {metarare_emb.device} \n baseemb_device: {base_emb.device}")
         emb = switch[:, :, None] * (extra_emb + metarare_emb) \
               + (1 - switch[:, :, None]) * base_emb
         return emb
