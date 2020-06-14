@@ -649,25 +649,25 @@ def meta_train_epoch(model=None,
 
     q.epoch_reset(model)
     optim.zero_grad()
-    data = list(data.items())
-    numbatsperdomain = [len(v["train"]) for k, v in data]
-    totalnumtrainbats = sum(numbatsperdomain)
-    probbatsperdomain = [x / totalnumtrainbats for x in numbatsperdomain]
+    numbatsperdomain = {k: len(data[k]["train"]) for k in data}
+    totalnumtrainbats = sum(numbatsperdomain.values())
+    probbatsperdomain = {k: numbatsperdomain[k] / totalnumtrainbats for k in numbatsperdomain}
 
     # iter-ize training dataloaders in data
-    for k, v in data:
+    for k, v in data.items():
         v["train"] = iter(v["train"])
 
     outerstep_i = 0
     while True:
         outerbatch = None
-        fails = 0
-        while outerbatch is None and fails < len(data):
-            chosendomain = np.random.choice(range(len(data)), p=probbatsperdomain)
+        exhausted_domains = set()
+        while outerbatch is None and len(exhausted_domains) < len(data):
+            ks, vs = zip(*probbatsperdomain.items())
+            chosendomain = np.random.choice(ks, p=vs)
             try:
-                outerbatch = next(data[chosendomain][1]["train"])
+                outerbatch = next(data[chosendomain]["train"])
             except StopIteration as e:
-                fails += 1
+                exhausted_domains.add(chosendomain)
                 outerbatch = None
 
         if outerbatch is None:
@@ -676,7 +676,7 @@ def meta_train_epoch(model=None,
         # perform K number of inner steps
         ftmodel = get_ft_model(model)
         ftoptim = get_ft_optim(ftmodel)
-        inneriter = infiter(data[chosendomain][1]["finetune"])
+        inneriter = infiter(data[chosendomain]["finetune"])
 
         oldemb = ftmodel.model.model.decoder.embed_tokens.weight + 0
         oldlin = ftmodel.model.outlin.weight + 0
@@ -992,7 +992,7 @@ def run(traindomains="blocks+recipes", #"ALL",
                         device=device,
                         print_every_batch=False)
 
-    print(testepoch())
+    # print(testepoch())
 
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=testepoch,
