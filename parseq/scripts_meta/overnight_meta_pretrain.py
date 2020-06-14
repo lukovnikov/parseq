@@ -644,6 +644,7 @@ def meta_train_epoch(model=None,
         loss.loss.to(device)
 
     model.to(device)
+    absmodel.to(device)
 
     [e() for e in on_start]
 
@@ -689,7 +690,7 @@ def meta_train_epoch(model=None,
         for innerstep_i in range(finetunesteps):
             innerbatch = next(inneriter)
             ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
-                                  batch_number=innerstep_i, max_batches=0, current_epoch=current_epoch,
+                                  batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch,
                                   max_epochs=max_epochs,
                                   on_before_optim_step=[
                                       partial(clipgradnorm, _m=ftmodel),
