@@ -835,7 +835,7 @@ def meta_test_epoch(model=None,
     return ttmsg
 
 
-def run(traindomains="blocks+recipes", #"ALL",
+def run(traindomains="ALL",
         domain="restaurants",
         mincoverage=2,
         lr=0.0001,
