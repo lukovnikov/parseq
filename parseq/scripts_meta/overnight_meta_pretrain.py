@@ -919,7 +919,7 @@ def run(traindomains="blocks+recipes", #"ALL",
     def get_parameters(m, _lr, _enclrmul):
         trainable_params = list(m.named_parameters())
 
-        tt.msg("different param groups")
+        # tt.msg("different param groups")
         encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
         otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
         if len(encparams) == 0:
