@@ -998,15 +998,10 @@ def run(traindomains="ALL",
 
     # print(testepoch())
 
+    tt.tick("pretraining")
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=testepoch,
-                   max_epochs=pretrainepochs)
-
-    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device,
-                         on_end=[lambda: eyt.on_epoch_end()])#, lambda: wandb_logger()])
-
-    tt.tick("pretraining")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=pretrainepochs,
+                   max_epochs=pretrainepochs,
                    check_stop=[lambda: eyt.check_stop()])
     tt.tock("done pretraining")
 
