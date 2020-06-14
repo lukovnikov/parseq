@@ -990,7 +990,7 @@ def run(traindomains="blocks+recipes", #"ALL",
                         evalinterval=evalinterval,
                         clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
                         device=device,
-                        print_every_batch=True)
+                        print_every_batch=False)
 
     print(testepoch())
 
