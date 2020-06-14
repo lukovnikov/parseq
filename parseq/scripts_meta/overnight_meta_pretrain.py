@@ -668,6 +668,7 @@ def meta_train_epoch(model=None,
             try:
                 outerbatch = next(data[chosendomain]["train"])
             except StopIteration as e:
+                print(f"stopping iteration - outerstep_i: {outerstep_i}")
                 exhausted_domains.add(chosendomain)
                 outerbatch = None
 
