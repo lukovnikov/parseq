@@ -464,7 +464,7 @@ def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None,
                  abstract_token_ids=set(), abs_id=None,
-                 dometarare=True):
+                 nometarare=False):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -506,7 +506,7 @@ def create_model(encoder_name="bert-base-uncased",
         isabstracttokenmask[abstract_token_id] = 1
 
     # create special embeddings and output layer
-    if dometarare:
+    if not nometarare:
         emb = SpecialEmbedding(decoder_config.vocab_size,
                                decoder_config.d_model,
                                decoder_config.pad_token_id,
@@ -874,7 +874,7 @@ def run(traindomains="ALL",
         fullsimplify=True,
         domainstart=False,
         supportsetting="lex",   # "lex" or "min"
-        dometarare=True,
+        nometarare=False,
         abscontrib=1.,
         finetunetokensonly=False,
         ):
@@ -913,7 +913,7 @@ def run(traindomains="ALL",
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  abstract_token_ids=abstract_token_ids,
                                  abs_id=flenc.vocab["@METARARE@"],
-                                 dometarare=dometarare,
+                                 nometarare=nometarare,
                                  )
     tt.tock("model created")
 
@@ -1129,7 +1129,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=3,
-                         numbeam=1, supportsetting="lex", abscontrib=.1, dometarare=True, finetunesteps=1, finetunetokensonly=False):
+                         numbeam=1, supportsetting="lex", abscontrib=.1, nometarare=False, finetunesteps=1, finetunetokensonly=False):
     ranges = {
         "lr": [lr],
         "ftlr": [ftlr],
