@@ -1127,12 +1127,12 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
-def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
+def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False,
                          numbeam=1, supportsetting="lex", abscontrib=.1, dometarare=True, finetunesteps=1,):
     ranges = {
-        "lr": [0.0001],
-        "ftlr": [0.0001],
+        "lr": [lr],
+        "ftlr": [ftlr],
         "enclrmul": [0.1],
         "warmup": [2],
         "epochs": [100],
