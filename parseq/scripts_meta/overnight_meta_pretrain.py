@@ -703,7 +703,7 @@ def meta_train_epoch(model=None,
                                   max_epochs=max_epochs,
                                   on_before_optim_step=[
                                       partial(clipgradnorm, _m=ftmodel),
-                                      partial(reset_special_grads_inner, _m=ftmodel)])
+                                      partial(reset_special_grads_inner, _m=ftmodel, finetunetokensonly=finetunetokensonly)])
             if print_every_batch:
                 tt.msg(ttmsg)
             else:
