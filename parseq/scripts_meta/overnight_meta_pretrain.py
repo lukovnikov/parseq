@@ -144,7 +144,7 @@ def get_lf_abstract_transform(examples):
 
     def example_transform(x):
         abslf = [xe if xe in sharedtokens else replacement for xe in x]
-        abslf = ["@ABSSTART"] + abslf[1:]
+        abslf = ["@ABSSTART@"] + abslf[1:]
         return abslf
 
     return example_transform
@@ -229,13 +229,14 @@ def load_ds(traindomains=("restaurants",),
     ds = ds.map(lambda x: (x[0], x[1], et(x[1]), x[2], x[3]))
 
     abstracttokens = set()
-    abstracttokens.add("@META@")
+    # abstracttokens.add("@META@")
     abstracttokens.add("@START@")
     abstracttokens.add("@END@")
     abstracttokens.add("@UNK@")
     abstracttokens.add("@PAD@")
     abstracttokens.add("@ABS@")
     abstracttokens.add("@ABSSTART@")
+    abstracttokens.add("@METARARE@")
     seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
     seqenc_vocab.add_token("@ABS@", seen=np.infty)
     seqenc_vocab.add_token("@ABSSTART@", seen=np.infty)
@@ -580,12 +581,18 @@ def move_grad(source=None, target=None):
     source.zero_grad()
 
 
-def reset_special_grads_inner(_m):
-    if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
-        _m.model.model.decoder.embed_tokens.weight.grad = None
-    if isinstance(_m.model.outlin, SpecialOutlin):
-        _m.model.outlin.weight.grad = None
-        _m.model.outlin.bias.grad = None
+def reset_special_grads_inner(_m, finetunetokensonly=False):
+    if finetunetokensonly:  # disable gradients for all except domain specific token vectors
+        for paramname, param in _m.named_parameters():
+            if paramname not in ["model.model.decoder.embed_tokens.extra_emb.weight",
+                                 "model.outlin.extra_lin.weight", "model.outlin.extra_lin.weight"]:
+                param.grad = None
+    else:
+        if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
+            _m.model.model.decoder.embed_tokens.weight.grad = None
+        if isinstance(_m.model.outlin, SpecialOutlin):
+            _m.model.outlin.weight.grad = None
+            _m.model.outlin.bias.grad = None
 
 
 def reset_special_grads_outer(_m):
@@ -616,6 +623,7 @@ def meta_train_epoch(model=None,
                 current_epoch=0,
                      max_epochs=0,
                      finetunesteps=1,
+                     finetunetokensonly=False,
                      on_start=tuple(),
                      on_end=tuple(),
                 print_every_batch=False,
@@ -868,6 +876,7 @@ def run(traindomains="ALL",
         supportsetting="lex",   # "lex" or "min"
         dometarare=True,
         abscontrib=1.,
+        finetunetokensonly=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -966,6 +975,7 @@ def run(traindomains="ALL",
                                               _lr=ftlr,
                                               _enclrmul=enclrmul,
                                               _wreg=wreg),
+                         finetunetokensonly=finetunetokensonly,
                          losses=metrics,
                          abslosses=absmetrics,
                          ftlosses=ftmetrics,
