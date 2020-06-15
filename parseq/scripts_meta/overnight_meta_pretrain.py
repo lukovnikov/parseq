@@ -1134,7 +1134,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, p
         "lr": [lr],
         "ftlr": [ftlr],
         "enclrmul": [0.1],
-        "warmup": [2],
+        "warmup": [0],
         "epochs": [100],
         "pretrainepochs": [100],
         "numheads": [numheads],
