@@ -1166,7 +1166,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, p
                       finetunesteps=finetunesteps,
                       finetunetokensonly=finetunetokensonly,
                       gradacc=gradacc,
-                      dometarare=dometarare)
+                      nometarare=nometarare)
 
 
 
