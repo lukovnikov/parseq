@@ -879,10 +879,12 @@ def meta_test_epoch(model=None,
             else:
                 tt.live(ttmsg)
 
+            test_ftmodel = ftmodel.get_test_model()
+
             if (mode == "valid" and (innerstep_i+1) % evalinterval == 0) \
                     or (innerstep_i+1 == finetunesteps):
                 _losses = deepcopy(losses)
-                q.test_epoch(ftmodel, dataloader=domaindata["valid"], losses=_losses, device=device,
+                q.test_epoch(test_ftmodel, dataloader=domaindata["valid"], losses=_losses, device=device,
                              current_epoch=current_epoch, max_epochs=max_epochs, print_every_batch=print_every_batch,
                              on_start=on_start, on_end=on_end, on_start_batch=on_start_batch, on_end_batch=on_end_batch)
                 lossesperdomain[domain].append(_losses)
@@ -1103,15 +1105,19 @@ def run(traindomains="ALL",
                         bestfinetunestepswhichmetric=1,
                         losses=vmetrics,
                         ftlosses=vftmetrics,
-                        finetunesteps=q.v(bestfinetunesteps),
                         mode="test",
                         clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
                         device=device,
                         print_every_batch=False,
                         on_outer_end=[lambda: eyt.on_epoch_end()])
 
-    tt.tick("testing")
-    testmsg = testepoch()
+    tt.tick(f"testing with {q.v(bestfinetunesteps)} steps")
+    testmsg = testepoch(finetunesteps=q.v(bestfinetunesteps))
+    tt.tock("tested")
+    tt.msg(testmsg)
+
+    tt.tick(f"testing with {q.v(maxfinetunesteps)} steps")
+    testmsg = testepoch(finetunesteps=maxfinetunesteps)
     tt.tock("tested")
     tt.msg(testmsg)
     # endregion
