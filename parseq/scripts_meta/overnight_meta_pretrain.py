@@ -1115,82 +1115,82 @@ def run(traindomains="ALL",
     tt.tock("tested")
     tt.msg(testmsg)
     # endregion
-
-    # region finetune
-    ftmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
-    ftvmetrics = make_array_of_metrics("seq_acc", "tree_acc")
-    ftxmetrics = make_array_of_metrics("seq_acc", "tree_acc")
-
-    trainable_params = list(trainm.named_parameters())
-    exclude_params = set()
-    # exclude_params.add("model.model.inp_emb.emb.weight")  # don't train input embeddings if doing glove
-    if len(exclude_params) > 0:
-        trainable_params = [(k, v) for k, v in trainable_params if k not in exclude_params]
-
-    tt.msg("different param groups")
-    encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
-    otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
-    if len(encparams) == 0:
-        raise Exception("No encoder parameters found!")
-    paramgroups = [{"params": encparams, "lr": ftlr * enclrmul},
-                   {"params": otherparams}]
-
-    ftoptim = torch.optim.Adam(paramgroups, lr=ftlr, weight_decay=wreg)
-
-    clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
-
-    eyt = q.EarlyStopper(ftvmetrics[1], patience=1000, min_epochs=10, more_is_better=True,
-                         remember_f=lambda: deepcopy(trainm.model))
-
-    # def wandb_logger_ft():
-    #     d = {}
-    #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], ftmetrics):
-    #         d["ft_train_" + name] = loss.get_epoch_error()
-    #     for name, loss in zip(["seq_acc", "tree_acc"], ftvmetrics):
-    #         d["ft_valid_" + name] = loss.get_epoch_error()
-    #     wandb.log(d)
-
-    t_max = epochs
-    print(f"Total number of updates: {t_max} .")
-    if cosinelr:
-        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max - warmup) >> 0.
-    else:
-        lr_schedule = q.sched.Linear(steps=warmup) >> 1.
-    lr_schedule = q.sched.LRSchedule(ftoptim, lr_schedule)
-
-    trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
-    trainepoch = partial(q.train_epoch, model=trainm, dataloader=ftdl, optim=ftoptim, losses=ftmetrics,
-                         _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
-    validepoch = partial(q.test_epoch, model=testm, dataloader=fvdl, losses=ftvmetrics, device=device,
-                         on_end=[lambda: eyt.on_epoch_end()])#, lambda: wandb_logger_ft()])
-
-    tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs,
-                   check_stop=[lambda: eyt.check_stop()])
-    tt.tock("done training")
-
-    if eyt.get_remembered() is not None:
-        tt.msg("reloaded")
-        trainm.model = eyt.get_remembered()
-        testm.model = eyt.get_remembered()
-
-    # endregion
-
-    tt.tick("testing")
-    validresults = q.test_epoch(model=testm, dataloader=fvdl, losses=ftvmetrics, device=device)
-    testresults = q.test_epoch(model=testm, dataloader=xdl, losses=ftxmetrics, device=device)
-    print(validresults)
-    print(testresults)
-    tt.tock("tested")
-    # settings.update({"train_seqacc": losses[]})
-
-    for metricarray, datasplit in zip([ftmetrics, ftvmetrics, ftxmetrics], ["train", "valid", "test"]):
-        for metric in metricarray:
-            settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
-
-    # wandb.config.update(settings)
-    # print(settings)
-    return settings
+    #
+    # # region finetune
+    # ftmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
+    # ftvmetrics = make_array_of_metrics("seq_acc", "tree_acc")
+    # ftxmetrics = make_array_of_metrics("seq_acc", "tree_acc")
+    #
+    # trainable_params = list(trainm.named_parameters())
+    # exclude_params = set()
+    # # exclude_params.add("model.model.inp_emb.emb.weight")  # don't train input embeddings if doing glove
+    # if len(exclude_params) > 0:
+    #     trainable_params = [(k, v) for k, v in trainable_params if k not in exclude_params]
+    #
+    # tt.msg("different param groups")
+    # encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
+    # otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
+    # if len(encparams) == 0:
+    #     raise Exception("No encoder parameters found!")
+    # paramgroups = [{"params": encparams, "lr": ftlr * enclrmul},
+    #                {"params": otherparams}]
+    #
+    # ftoptim = torch.optim.Adam(paramgroups, lr=ftlr, weight_decay=wreg)
+    #
+    # clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
+    #
+    # eyt = q.EarlyStopper(ftvmetrics[1], patience=1000, min_epochs=10, more_is_better=True,
+    #                      remember_f=lambda: deepcopy(trainm.model))
+    #
+    # # def wandb_logger_ft():
+    # #     d = {}
+    # #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], ftmetrics):
+    # #         d["ft_train_" + name] = loss.get_epoch_error()
+    # #     for name, loss in zip(["seq_acc", "tree_acc"], ftvmetrics):
+    # #         d["ft_valid_" + name] = loss.get_epoch_error()
+    # #     wandb.log(d)
+    #
+    # t_max = epochs
+    # print(f"Total number of updates: {t_max} .")
+    # if cosinelr:
+    #     lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max - warmup) >> 0.
+    # else:
+    #     lr_schedule = q.sched.Linear(steps=warmup) >> 1.
+    # lr_schedule = q.sched.LRSchedule(ftoptim, lr_schedule)
+    #
+    # trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
+    # trainepoch = partial(q.train_epoch, model=trainm, dataloader=ftdl, optim=ftoptim, losses=ftmetrics,
+    #                      _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
+    # validepoch = partial(q.test_epoch, model=testm, dataloader=fvdl, losses=ftvmetrics, device=device,
+    #                      on_end=[lambda: eyt.on_epoch_end()])#, lambda: wandb_logger_ft()])
+    #
+    # tt.tick("training")
+    # q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs,
+    #                check_stop=[lambda: eyt.check_stop()])
+    # tt.tock("done training")
+    #
+    # if eyt.get_remembered() is not None:
+    #     tt.msg("reloaded")
+    #     trainm.model = eyt.get_remembered()
+    #     testm.model = eyt.get_remembered()
+    #
+    # # endregion
+    #
+    # tt.tick("testing")
+    # validresults = q.test_epoch(model=testm, dataloader=fvdl, losses=ftvmetrics, device=device)
+    # testresults = q.test_epoch(model=testm, dataloader=xdl, losses=ftxmetrics, device=device)
+    # print(validresults)
+    # print(testresults)
+    # tt.tock("tested")
+    # # settings.update({"train_seqacc": losses[]})
+    #
+    # for metricarray, datasplit in zip([ftmetrics, ftvmetrics, ftxmetrics], ["train", "valid", "test"]):
+    #     for metric in metricarray:
+    #         settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
+    #
+    # # wandb.config.update(settings)
+    # # print(settings)
+    # return settings
 
 
 def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2, fullsimplify=True, uselexicon=False):
