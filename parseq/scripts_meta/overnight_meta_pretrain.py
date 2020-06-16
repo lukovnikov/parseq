@@ -640,12 +640,21 @@ def move_grad(source=None, target=None):
     source.zero_grad()
 
 
-def reset_special_grads_inner(_m, finetunetokensonly=False):
-    if finetunetokensonly:  # disable gradients for all except domain specific token vectors
+def reset_special_grads_inner(_m, mode="none"):
+    if mode=="specifictokens":  # disable gradients for all except domain specific token vectors
         for paramname, param in _m.named_parameters():
             if paramname not in ["model.model.decoder.embed_tokens.extra_emb.weight",
                                  "model.outlin.extra_lin.weight", "model.outlin.extra_lin.weight"]:
                 param.grad = None
+    elif mode == "split":   # train only embeddings and output layer
+        for paramname, param in _m.named_parameters():
+            dotrain = False
+            for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
+                if paramname.startswith(e):
+                    dotrain = dotrain or True
+            if not dotrain:
+                param.grad = None
+
     # else:
     #     if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
     #         _m.model.model.decoder.embed_tokens.weight.grad = None
@@ -658,12 +667,18 @@ def reset_special_grads_inner(_m, finetunetokensonly=False):
     #             _m.model.outlin.metarare_lin.bias.grad = None
 
 
-def reset_special_grads_outer(_m):
-    if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
-        _m.model.model.decoder.embed_tokens.extra_emb.weight.grad = None
-    if isinstance(_m.model.outlin, SpecialOutlin):
-        _m.model.outlin.extra_lin.weight.grad = None
-        _m.model.outlin.extra_lin.bias.grad = None
+def reset_special_grads_outer(_m, mode="none"):
+    if mode == "specifictokens":
+        if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
+            _m.model.model.decoder.embed_tokens.extra_emb.weight.grad = None
+        if isinstance(_m.model.outlin, SpecialOutlin):
+            _m.model.outlin.extra_lin.weight.grad = None
+            _m.model.outlin.extra_lin.bias.grad = None
+    elif mode == "split":   # don't train any embeddings/output layer
+        for paramname, param in _m.named_parameters():
+            for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
+                if paramname.startswith(e):
+                    param.grad = None
 
 
 def infiter(a):
@@ -686,7 +701,7 @@ def meta_train_epoch(model=None,
                 current_epoch=0,
                      max_epochs=0,
                      finetunesteps=1,
-                     finetunetokensonly=False,
+                     gradmode="none",   # "none", "metarare", ...
                      on_start=tuple(),
                      on_end=tuple(),
                 print_every_batch=False,
@@ -766,7 +781,7 @@ def meta_train_epoch(model=None,
                                   max_epochs=max_epochs,
                                   on_before_optim_step=[
                                       partial(clipgradnorm, _m=ftmodel),
-                                      partial(reset_special_grads_inner, _m=ftmodel, finetunetokensonly=finetunetokensonly)])
+                                      partial(reset_special_grads_inner, _m=ftmodel, mode=gradmode)])
             if print_every_batch:
                 tt.msg(ttmsg)
             else:
@@ -783,7 +798,7 @@ def meta_train_epoch(model=None,
                             #     partial(clipgradnorm, _m=model),
                             #     partial(copy_grad, source=ftmodel, target=model)])
         move_grad(ftmodel, model)
-        # reset_special_grads_outer(model)
+        reset_special_grads_outer(model, mode=gradmode)
 
         # do abstract prediction
         abs_ttmsg = q.train_batch(batch=outerbatch, model=absmodel, optim=None, losses=abslosses, device=device,
@@ -815,6 +830,7 @@ def meta_test_epoch(model=None,
                     data=None,
                      get_ft_model=None,
                      get_ft_optim=None,
+                    gradmode="none",
                     losses=None,
                     ftlosses=None,
                     finetunesteps=1,
@@ -873,7 +889,7 @@ def meta_test_epoch(model=None,
             ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
                                   batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch, max_epochs=max_epochs,
                                   on_before_optim_step=[partial(clipgradnorm, _m=ftmodel),
-                                                        partial(reset_special_grads_inner, _m=ftmodel)])
+                                                        partial(reset_special_grads_inner, _m=ftmodel, mode=gradmode)])
             if print_every_batch:
                 tt.msg(ttmsg)
             else:
@@ -953,7 +969,7 @@ def run(traindomains="ALL",
         supportsetting="lex",   # "lex" or "min"
         nometarare=False,
         abscontrib=1.,
-        finetunetokensonly=False,
+        gradmode="none",    # "none", "metarare", "metarareonly", "split"
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -1051,7 +1067,7 @@ def run(traindomains="ALL",
                                               _lr=ftlr,
                                               _enclrmul=enclrmul,
                                               _wreg=wreg),
-                         finetunetokensonly=finetunetokensonly,
+                         gradmode=gradmode,
                          losses=metrics,
                          abslosses=absmetrics,
                          ftlosses=ftmetrics,
@@ -1071,6 +1087,7 @@ def run(traindomains="ALL",
                                              _lr=ftlr,
                                              _enclrmul=enclrmul,
                                              _wreg=wreg),
+                        gradmode=gradmode,
                         bestfinetunestepsvar=bestfinetunesteps,
                         bestfinetunestepswhichmetric=1,
                         losses=vmetrics,
@@ -1105,6 +1122,7 @@ def run(traindomains="ALL",
                                              _lr=ftlr,
                                              _enclrmul=enclrmul,
                                              _wreg=wreg),
+                        gradmode=gradmode,
                         bestfinetunestepsvar=bestfinetunesteps,
                         bestfinetunestepswhichmetric=1,
                         losses=xmetrics,
@@ -1230,7 +1248,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=3,
-                         numbeam=1, supportsetting="lex", abscontrib=.1, nometarare=False, finetunesteps=1, finetunetokensonly=False,
+                         numbeam=1, supportsetting="lex", abscontrib=.1, nometarare=False, finetunesteps=1, gradmode="none",
                          maxfinetunesteps=30, evalinterval=5, epochs=100, pretrainepochs=100):
     ranges = {
         "lr": [lr],
@@ -1265,7 +1283,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, p
                       supportsetting=supportsetting,
                       abscontrib=abscontrib,
                       finetunesteps=finetunesteps,
-                      finetunetokensonly=finetunetokensonly,
+                      gradmode=gradmode,
                       gradacc=gradacc,
                       nometarare=nometarare,
                       maxfinetunesteps=maxfinetunesteps,
