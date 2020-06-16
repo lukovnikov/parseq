@@ -882,9 +882,10 @@ def meta_test_epoch(model=None,
             test_ftmodel = ftmodel.get_test_model()
 
             if (mode == "valid" and (innerstep_i+1) % evalinterval == 0) \
-                    or (innerstep_i+1 == finetunesteps):
+                    or (mode == "test"): #"(innerstep_i+1 == finetunesteps):
                 _losses = deepcopy(losses)
-                q.test_epoch(test_ftmodel, dataloader=domaindata["valid"], losses=_losses, device=device,
+                dataname = "valid" if mode == "valid" else "test"
+                q.test_epoch(test_ftmodel, dataloader=domaindata[dataname], losses=_losses, device=device,
                              current_epoch=current_epoch, max_epochs=max_epochs, print_every_batch=print_every_batch,
                              on_start=on_start, on_end=on_end, on_start_batch=on_start_batch, on_end_batch=on_end_batch)
                 lossesperdomain[domain].append(_losses)
@@ -904,8 +905,10 @@ def meta_test_epoch(model=None,
         evalstep = stepperevals[0][k]
         bestfinetunestepsvar.v = evalstep
     else:
-        evalstep = finetunesteps
-        k = 0
+        print("metricsmatrix:")
+        print(metricsmatrix)
+        evalstep = q.v(bestfinetunestepsvar)
+        k = q.v(bestfinetunestepsvar)
 
     for loss, _loss in zip(losses, metricsmatrix[k, :]):
         loss.epoch_agg_values.append(_loss)
@@ -1059,7 +1062,7 @@ def run(traindomains="ALL",
                          gradacc=gradacc,
                          abstract_contrib=abscontrib,)
 
-    bestfinetunesteps = q.hyperparam(-1)
+    bestfinetunesteps = q.hyperparam(0)
     validepoch = partial(meta_test_epoch,
                         model=trainm,
                         data=sourcedss,
@@ -1073,6 +1076,7 @@ def run(traindomains="ALL",
                         losses=vmetrics,
                         ftlosses=vftmetrics,
                         finetunesteps=maxfinetunesteps,
+                        mode="valid",
                         evalinterval=evalinterval,
                         clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
                         device=device,
@@ -1103,8 +1107,9 @@ def run(traindomains="ALL",
                                              _wreg=wreg),
                         bestfinetunestepsvar=bestfinetunesteps,
                         bestfinetunestepswhichmetric=1,
-                        losses=vmetrics,
-                        ftlosses=vftmetrics,
+                        losses=xmetrics,
+                        ftlosses=xftmetrics,
+                        finetunesteps=maxfinetunesteps,
                         mode="test",
                         clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
                         device=device,
