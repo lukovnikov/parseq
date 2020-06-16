@@ -1105,6 +1105,11 @@ def run(traindomains="ALL",
                         device=device,
                         print_every_batch=False,
                         on_outer_end=[lambda: eyt.on_epoch_end()])
+
+    tt.tick("testing")
+    testmsg = testepoch()
+    tt.tock("tested")
+    tt.msg(testmsg)
     # endregion
 
     # region finetune
