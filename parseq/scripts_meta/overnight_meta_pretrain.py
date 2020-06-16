@@ -413,19 +413,19 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 class SpecialEmbedding(torch.nn.Embedding):
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None,
-                 metarare_source=None, metarare_targets=None):
+                 metarare_targets=None):
         super(SpecialEmbedding, self).__init__(num_embeddings, embedding_dim, padding_idx=padding_idx)
-        self.metarare_source = metarare_source
         self.register_buffer("metarare_targets", metarare_targets)
         # self.metarare = self.weight[self.metarare_source, :]
         # self.base_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
         self.extra_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
+        self.metarare_emb = torch.nn.Embedding(1, embedding_dim)
         self.extra_emb.weight.data.fill_(0)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # metarare_targets are 1 for domain-specific tokens
         base_emb = super(SpecialEmbedding, self).forward(input)
-        metarare_emb = super(SpecialEmbedding, self).forward(torch.ones_like(input) * self.metarare_source)
+        metarare_emb = self.metarare_emb(torch.zeros_like(input))
         extra_emb = self.extra_emb(input)
         switch = self.metarare_targets[input]
         emb = switch[:, :, None] * (extra_emb + metarare_emb) \
@@ -434,36 +434,30 @@ class SpecialEmbedding(torch.nn.Embedding):
 
 
 class SpecialOutlin(torch.nn.Linear):
-    def __init__(self, dim, vocsize, metarare_source=None, metarare_targets=None, bias=True):
+    def __init__(self, dim, vocsize, metarare_targets=None, bias=True):
         super(SpecialOutlin, self).__init__(dim, vocsize, bias=bias)
-        self.metarare_source = metarare_source
         self.register_buffer("metarare_targets", metarare_targets)
         # self.metarare = self.weight[self.metarare_source, :]
         # self.base_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
         self.extra_lin = torch.nn.Linear(dim, vocsize, bias=bias)
+        self.metarare_lin = torch.nn.Linear(dim, 1, bias=bias)
         self.extra_lin.weight.data.fill_(0)
         self.extra_lin.bias.data.fill_(0)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         base_logits = super(SpecialOutlin, self).forward(input)
         extra_logits = self.extra_lin(input)
-        metarare_vector = self.weight[self.metarare_source, :]
-        metarare_bias = self.bias[self.metarare_source]
-        if input.dim() == 2:
-            switch = self.metarare_targets[None, :]
-            metarare_logits = torch.einsum("bd,d->b", input, metarare_vector) + metarare_bias
-        else:
-            switch = self.metarare_targets[None, None, :]
-            metarare_logits = torch.einsum("bsd,d->bs", input, metarare_vector) + metarare_bias
+        metarare_logits = self.metarare_lin(input)
+        switch = self.metarare_targets.expand_as(base_logits)
 
-        logits = switch * (extra_logits + metarare_logits[:, :, None]) + (1 - switch) * base_logits
+        logits = switch * (extra_logits + metarare_logits) + (1 - switch) * base_logits
         return logits
 
 
 def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None,
-                 abstract_token_ids=set(), abs_id=None,
+                 abstract_token_ids=set(),
                  nometarare=False):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
@@ -510,11 +504,9 @@ def create_model(encoder_name="bert-base-uncased",
         emb = SpecialEmbedding(decoder_config.vocab_size,
                                decoder_config.d_model,
                                decoder_config.pad_token_id,
-                               metarare_source=abs_id,
                                metarare_targets=1-isabstracttokenmask)
         outlin = SpecialOutlin(decoder_config.d_model,
                                decoder_config.vocab_size,
-                               metarare_source=abs_id,
                                metarare_targets=1-isabstracttokenmask)
     else:
         emb, outlin = None, None
@@ -587,12 +579,16 @@ def reset_special_grads_inner(_m, finetunetokensonly=False):
             if paramname not in ["model.model.decoder.embed_tokens.extra_emb.weight",
                                  "model.outlin.extra_lin.weight", "model.outlin.extra_lin.weight"]:
                 param.grad = None
-    else:
-        if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
-            _m.model.model.decoder.embed_tokens.weight.grad = None
-        if isinstance(_m.model.outlin, SpecialOutlin):
-            _m.model.outlin.weight.grad = None
-            _m.model.outlin.bias.grad = None
+    # else:
+    #     if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
+    #         _m.model.model.decoder.embed_tokens.weight.grad = None
+    #         _m.model.model.decoder.metarare_emb.weight.grad = None
+    #     if isinstance(_m.model.outlin, SpecialOutlin):
+    #         _m.model.outlin.weight.grad = None
+    #         _m.model.outlin.metarare_lin.weight.grad = None
+    #         if _m.model.outlin.bias is not None:
+    #             _m.model.outlin.bias.grad = None
+    #             _m.model.outlin.metarare_lin.bias.grad = None
 
 
 def reset_special_grads_outer(_m):
@@ -917,7 +913,6 @@ def run(traindomains="ALL",
                                  numbeam=numbeam,
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  abstract_token_ids=abstract_token_ids,
-                                 abs_id=flenc.vocab["@METARARE@"],
                                  nometarare=nometarare,
                                  )
     tt.tock("model created")
