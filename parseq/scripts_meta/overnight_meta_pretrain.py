@@ -501,10 +501,11 @@ def create_model(encoder_name="bert-base-uncased",
 
     # create special embeddings and output layer
     if not nometarare:
-        emb = SpecialEmbedding(decoder_config.vocab_size,
-                               decoder_config.d_model,
-                               decoder_config.pad_token_id,
-                               metarare_targets=1-isabstracttokenmask)
+        emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
+        # emb = SpecialEmbedding(decoder_config.vocab_size,
+        #                        decoder_config.d_model,
+        #                        decoder_config.pad_token_id,
+        #                        metarare_targets=1-isabstracttokenmask)
         outlin = SpecialOutlin(decoder_config.d_model,
                                decoder_config.vocab_size,
                                metarare_targets=1-isabstracttokenmask)
