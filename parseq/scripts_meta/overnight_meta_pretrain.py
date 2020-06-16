@@ -848,9 +848,10 @@ def meta_test_epoch(model=None,
     [e() for e in on_outer_start]
 
     lossesperdomain = {}
-    steppereval = []
+    stepperevals = []
 
     for domain in data:
+        stepperevals.append([])
         lossesperdomain[domain] = []
         # doing one domain
         domaindata = data[domain]
@@ -883,23 +884,24 @@ def meta_test_epoch(model=None,
                              current_epoch=current_epoch, max_epochs=max_epochs, print_every_batch=print_every_batch,
                              on_start=on_start, on_end=on_end, on_start_batch=on_start_batch, on_end_batch=on_end_batch)
                 lossesperdomain[domain].append(_losses)
-                steppereval.append(innerstep_i)
+                stepperevals[-1].append(innerstep_i)
 
     # find best number of steps
+    metricsmatrix = np.zeros((len(lossesperdomain), math.ceil(finetunesteps / evalinterval), len(losses)))
+    for i, domain in enumerate(sorted(lossesperdomain.keys())):
+        for j, steplosses in enumerate(lossesperdomain[domain]):
+            for k, lossval in enumerate(steplosses):
+                metricsmatrix[i, j, k] = lossval.get_epoch_error()
+    metricsmatrix = metricsmatrix.mean(0)   # (numevals, numlosses)
     if mode == "valid":
-        metricsmatrix = np.zeros((len(lossesperdomain), math.ceil(finetunesteps / evalinterval), len(losses)))
-        for i, domain in enumerate(sorted(lossesperdomain.keys())):
-            for j, steplosses in enumerate(lossesperdomain[domain]):
-                for k, lossval in enumerate(steplosses):
-                    metricsmatrix[i, j, k] = lossval.get_epoch_error()
-        metricsmatrix = metricsmatrix.mean(0)   # (numevals, numlosses)
         critvals = metricsmatrix[:, bestfinetunestepswhichmetric]   # (numevals)
         critvals = critvals * (1 if bestfinetunelowerisbetter is False else -1)
         k = np.argmax(critvals)
-        evalstep = steppereval[k]
+        evalstep = stepperevals[0][k]
         bestfinetunestepsvar.v = evalstep
     else:
         evalstep = finetunesteps
+        k = 0
 
     for loss, _loss in zip(losses, metricsmatrix[k, :]):
         loss.epoch_agg_values.append(_loss)
