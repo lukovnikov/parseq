@@ -1116,15 +1116,10 @@ def run(traindomains="ALL",
                         print_every_batch=False,
                         on_outer_end=[lambda: eyt.on_epoch_end()])
 
-    tt.tick(f"testing with {q.v(bestfinetunesteps)} steps")
-    testmsg = testepoch(finetunesteps=q.v(bestfinetunesteps))
-    tt.tock("tested")
-    tt.msg(testmsg)
-
-    tt.tick(f"testing with {q.v(maxfinetunesteps)} steps")
+    tt.tick(f"testing with @{q.v(bestfinetunesteps)} (out of {q.v(maxfinetunesteps)}) steps")
     testmsg = testepoch(finetunesteps=maxfinetunesteps)
-    tt.tock("tested")
     tt.msg(testmsg)
+    tt.tock("tested")
     # endregion
     #
     # # region finetune
