@@ -829,17 +829,17 @@ def meta_test_epoch(model=None,
         metricsmatrix = metricsmatrix.mean(0)   # (numevals, numlosses)
         critvals = metricsmatrix[:, bestfinetunestepswhichmetric]   # (numevals)
         critvals = critvals * (1 if bestfinetunelowerisbetter is False else -1)
-        bestfinetunestepsvar.v = np.argmax(critvals)
+        bestfinetunestepsvar.v = (np.argmax(critvals) + 1) * evalinterval
         k = q.v(bestfinetunestepsvar)
     else:
-        k = 0
+        k = finetunesteps
 
     for loss, _loss in zip(losses, metricsmatrix[k, :]):
         loss.epoch_agg_values.append(_loss)
         loss.epoch_agg_sizes.append(1)
     tt.stoplive()
     [e() for e in on_outer_end]
-    ttmsg = q.pp_epoch_losses(*losses) + f" [@{1 + (k * evalinterval if evalinterval >= 0 else finetunesteps)}]"
+    ttmsg = q.pp_epoch_losses(*losses) + f" [@{k}]"
     return ttmsg
 
 
