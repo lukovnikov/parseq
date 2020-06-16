@@ -646,6 +646,8 @@ def reset_special_grads_inner(_m, mode="none"):
             if paramname not in ["model.model.decoder.embed_tokens.extra_emb.weight",
                                  "model.outlin.extra_lin.weight", "model.outlin.extra_lin.weight"]:
                 param.grad = None
+    elif mode == "metarare":    # train everything
+        pass
     elif mode == "split":   # train only embeddings and output layer
         for paramname, param in _m.named_parameters():
             dotrain = False
@@ -669,6 +671,12 @@ def reset_special_grads_inner(_m, mode="none"):
 
 def reset_special_grads_outer(_m, mode="none"):
     if mode == "specifictokens":
+        if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
+            _m.model.model.decoder.embed_tokens.extra_emb.weight.grad = None
+        if isinstance(_m.model.outlin, SpecialOutlin):
+            _m.model.outlin.extra_lin.weight.grad = None
+            _m.model.outlin.extra_lin.bias.grad = None
+    elif mode == "metarare":    # train everything except Special layers's, extra vectors
         if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
             _m.model.model.decoder.embed_tokens.extra_emb.weight.grad = None
         if isinstance(_m.model.outlin, SpecialOutlin):
