@@ -759,6 +759,7 @@ def meta_test_epoch(model=None,
                     bestfinetunestepswhichmetric=None,
                     bestfinetunelowerisbetter=False,
                     evalinterval=-1,
+                    mode="valid", # "valid" or "test"
                     device=torch.device("cpu"),
                     clipgradnorm=None,
             current_epoch=0, max_epochs=0, print_every_batch=False,
@@ -784,6 +785,7 @@ def meta_test_epoch(model=None,
     [e() for e in on_outer_start]
 
     lossesperdomain = {}
+    steppereval = []
 
     for domain in data:
         lossesperdomain[domain] = []
@@ -811,16 +813,17 @@ def meta_test_epoch(model=None,
             else:
                 tt.live(ttmsg)
 
-            if (evalinterval >= 0 and (innerstep_i+1) % evalinterval == 0) or \
-               (evalinterval < 0 and innerstep_i+1 == finetunesteps):
+            if (mode == "valid" and (innerstep_i+1) % evalinterval == 0) \
+                    or (innerstep_i+1 == finetunesteps):
                 _losses = deepcopy(losses)
                 q.test_epoch(ftmodel, dataloader=domaindata["valid"], losses=_losses, device=device,
                              current_epoch=current_epoch, max_epochs=max_epochs, print_every_batch=print_every_batch,
                              on_start=on_start, on_end=on_end, on_start_batch=on_start_batch, on_end_batch=on_end_batch)
                 lossesperdomain[domain].append(_losses)
+                steppereval.append(innerstep_i)
 
     # find best number of steps
-    if evalinterval >= 0:
+    if mode == "valid":
         metricsmatrix = np.zeros((len(lossesperdomain), math.ceil(finetunesteps / evalinterval), len(losses)))
         for i, domain in enumerate(sorted(lossesperdomain.keys())):
             for j, steplosses in enumerate(lossesperdomain[domain]):
@@ -829,17 +832,19 @@ def meta_test_epoch(model=None,
         metricsmatrix = metricsmatrix.mean(0)   # (numevals, numlosses)
         critvals = metricsmatrix[:, bestfinetunestepswhichmetric]   # (numevals)
         critvals = critvals * (1 if bestfinetunelowerisbetter is False else -1)
-        bestfinetunestepsvar.v = (np.argmax(critvals) + 1) * evalinterval
-        k = q.v(bestfinetunestepsvar)
+        k = np.argmax(critvals)
+        evalstep = steppereval[k]
+        bestfinetunestepsvar.v = evalstep
     else:
-        k = finetunesteps
+        evalstep = finetunesteps
 
     for loss, _loss in zip(losses, metricsmatrix[k, :]):
         loss.epoch_agg_values.append(_loss)
         loss.epoch_agg_sizes.append(1)
+
     tt.stoplive()
     [e() for e in on_outer_end]
-    ttmsg = q.pp_epoch_losses(*losses) + f" [@{k}]"
+    ttmsg = q.pp_epoch_losses(*losses) + f" [@{evalstep}]"
     return ttmsg
 
 
@@ -987,7 +992,7 @@ def run(traindomains="ALL",
                          abstract_contrib=abscontrib,)
 
     bestfinetunesteps = q.hyperparam(-1)
-    testepoch = partial(meta_test_epoch,
+    validepoch = partial(meta_test_epoch,
                         model=trainm,
                         data=sourcedss,
                         get_ft_model=lambda x: deepcopy(x),
@@ -1010,15 +1015,34 @@ def run(traindomains="ALL",
 
     tt.tick("pretraining")
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=testepoch,
+                   run_valid_epoch=validepoch,
                    max_epochs=pretrainepochs,
                    check_stop=[lambda: eyt.check_stop()])
     tt.tock("done pretraining")
 
+    tt.msg(f"best finetune steps: {q.v(bestfinetunesteps)}")
     if eyt.get_remembered() is not None:
         tt.msg("reloaded")
         trainm.model = eyt.get_remembered()
 
+    testepoch = partial(meta_test_epoch,
+                        model=trainm,
+                        data=sourcedss,
+                        get_ft_model=lambda x: deepcopy(x),
+                        get_ft_optim=partial(get_optim,
+                                             _lr=ftlr,
+                                             _enclrmul=enclrmul,
+                                             _wreg=wreg),
+                        bestfinetunestepsvar=bestfinetunesteps,
+                        bestfinetunestepswhichmetric=1,
+                        losses=vmetrics,
+                        ftlosses=vftmetrics,
+                        finetunesteps=q.v(bestfinetunesteps),
+                        mode="test",
+                        clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
+                        device=device,
+                        print_every_batch=False,
+                        on_outer_end=[lambda: eyt.on_epoch_end()])
     # endregion
 
     # region finetune
