@@ -565,14 +565,14 @@ def _tensor2tree(x, D:Vocab=None):
     return tree
 
 
-def move_grad(source=None, target=None):
+def move_grad(source=None, target=None, gradacc=1):
     source_params = {k: v for k, v in source.named_parameters()}
     for k, v in target.named_parameters():
         assert(v.size() == source_params[k].size())
         if v.grad is None:
-            v.grad = source_params[k].grad
+            v.grad = source_params[k].grad * (1/gradacc)
         else:
-            v.grad += source_params[k].grad
+            v.grad += source_params[k].grad * (1/gradacc)
     source.zero_grad()
 
 
@@ -718,7 +718,7 @@ def meta_train_epoch(model=None,
                             # , on_before_optim_step=[
                             #     partial(clipgradnorm, _m=model),
                             #     partial(copy_grad, source=ftmodel, target=model)])
-        move_grad(ftmodel, model)
+        move_grad(ftmodel, model, gradacc=gradacc)
         reset_special_grads_outer(model)
 
         # do abstract prediction
