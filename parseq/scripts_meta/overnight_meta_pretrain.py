@@ -719,7 +719,7 @@ def meta_train_epoch(model=None,
                             #     partial(clipgradnorm, _m=model),
                             #     partial(copy_grad, source=ftmodel, target=model)])
         move_grad(ftmodel, model)
-        # reset_special_grads_outer(model)
+        reset_special_grads_outer(model)
 
         # do abstract prediction
         abs_ttmsg = q.train_batch(batch=outerbatch, model=absmodel, optim=None, losses=abslosses, device=device,
