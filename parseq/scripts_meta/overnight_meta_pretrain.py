@@ -569,10 +569,11 @@ def move_grad(source=None, target=None, gradacc=1):
     source_params = {k: v for k, v in source.named_parameters()}
     for k, v in target.named_parameters():
         assert(v.size() == source_params[k].size())
-        if v.grad is None:
-            v.grad = source_params[k].grad * (1/gradacc)
-        else:
-            v.grad += source_params[k].grad * (1/gradacc)
+        if source_params[k].grad is not None:
+            if v.grad is None:
+                v.grad = source_params[k].grad * (1/gradacc)
+            else:
+                v.grad += source_params[k].grad * (1/gradacc)
     source.zero_grad()
 
 
