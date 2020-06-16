@@ -829,7 +829,7 @@ def meta_test_epoch(model=None,
             on_start=tuple(), on_start_batch=tuple(), on_end_batch=tuple(), on_end=tuple(),
                     on_outer_start=tuple(), on_outer_end=tuple()):
     if evalinterval < 0:
-        evalinterval = finetunesteps
+        evalinterval = 1
     """
     Performs a test epoch. If run=True, runs, otherwise returns partially filled function.
     :param model:
@@ -916,7 +916,7 @@ def meta_test_epoch(model=None,
 
     tt.stoplive()
     [e() for e in on_outer_end]
-    ttmsg = q.pp_epoch_losses(*losses) + f" [@{evalstep}]"
+    ttmsg = q.pp_epoch_losses(*losses) + f" [@{evalstep+1}]"
     return ttmsg
 
 
@@ -1092,7 +1092,7 @@ def run(traindomains="ALL",
                    check_stop=[lambda: eyt.check_stop()])
     tt.tock("done pretraining")
 
-    tt.msg(f"best finetune steps: {q.v(bestfinetunesteps)}")
+    tt.msg(f"best finetune steps: {q.v(bestfinetunesteps)+1}")
     if eyt.get_remembered() is not None:
         tt.msg("reloaded")
         trainm.model = eyt.get_remembered()
@@ -1116,7 +1116,7 @@ def run(traindomains="ALL",
                         print_every_batch=False,
                         on_outer_end=[lambda: eyt.on_epoch_end()])
 
-    tt.tick(f"testing with @{q.v(bestfinetunesteps)} (out of {q.v(maxfinetunesteps)}) steps")
+    tt.tick(f"testing with @{q.v(bestfinetunesteps)+1} (out of {q.v(maxfinetunesteps)}) steps")
     testmsg = testepoch(finetunesteps=maxfinetunesteps)
     tt.msg(testmsg)
     tt.tock("tested")
