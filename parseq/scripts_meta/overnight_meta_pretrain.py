@@ -7,6 +7,7 @@ A script for running the following zero-shot domain transfer experiments:
 * training: normal (CE on teacher forced target)
 """
 import faulthandler
+import itertools
 import json
 import math
 import random
@@ -278,7 +279,19 @@ def load_ds(traindomains=("restaurants",),
             "valid": DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0)),
             "test": DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0))
         }
-    return sourceret, targetret, nl_tokenizer, seqenc, abstracttokenids
+
+    # populate the "all" domain
+    allsourceret = {
+        "finetune": DataLoader(ds[lambda x: x[3] == "finetune" and x[4] in traindomains].map(tokenize),
+                               batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
+        "train": DataLoader(ds[lambda x: x[3] == "train" and x[4] in traindomains].map(tokenize),
+                            batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
+        "valid": DataLoader(ds[lambda x: x[3] == "valid" and x[4] in traindomains].map(tokenize),
+                            batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0)),
+        "test": DataLoader(ds[lambda x: x[3] == "test" and x[4] in traindomains].map(tokenize),
+                           batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0)),
+    }
+    return sourceret, targetret, allsourceret, nl_tokenizer, seqenc, abstracttokenids
 
 
 class BartGenerator(BartForConditionalGeneration):
@@ -641,14 +654,13 @@ def move_grad(source=None, target=None):
 
 
 def reset_special_grads_inner(_m, mode="none"):
-    if mode=="specifictokens":  # disable gradients for all except domain specific token vectors
-        for paramname, param in _m.named_parameters():
-            if paramname not in ["model.model.decoder.embed_tokens.extra_emb.weight",
-                                 "model.outlin.extra_lin.weight", "model.outlin.extra_lin.weight"]:
-                param.grad = None
-    elif mode == "metarare":    # train everything
+        # for paramname, param in _m.named_parameters():
+        #     if paramname not in ["model.model.decoder.embed_tokens.extra_emb.weight",
+        #                          "model.outlin.extra_lin.weight", "model.outlin.extra_lin.weight"]:
+        #         param.grad = None
+    if mode == "metarare":    # train everything
         pass
-    elif mode == "split":   # train only embeddings and output layer
+    elif mode == "split" or mode == "metararetokensonly":   # train only embeddings and output layer
         for paramname, param in _m.named_parameters():
             dotrain = False
             for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
@@ -670,13 +682,13 @@ def reset_special_grads_inner(_m, mode="none"):
 
 
 def reset_special_grads_outer(_m, mode="none"):
-    if mode == "specifictokens":
-        if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
-            _m.model.model.decoder.embed_tokens.extra_emb.weight.grad = None
-        if isinstance(_m.model.outlin, SpecialOutlin):
-            _m.model.outlin.extra_lin.weight.grad = None
-            _m.model.outlin.extra_lin.bias.grad = None
-    elif mode == "metarare":    # train everything except Special layers's, extra vectors
+    # if mode == "metararetokensonly":
+    #     if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
+    #         _m.model.model.decoder.embed_tokens.extra_emb.weight.grad = None
+    #     if isinstance(_m.model.outlin, SpecialOutlin):
+    #         _m.model.outlin.extra_lin.weight.grad = None
+    #         _m.model.outlin.extra_lin.bias.grad = None
+    if mode == "metarare" or mode == "metararetokensonly":    # train everything except Special layers's, extra vectors
         if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
             _m.model.model.decoder.embed_tokens.extra_emb.weight.grad = None
         if isinstance(_m.model.outlin, SpecialOutlin):
@@ -695,9 +707,27 @@ def infiter(a):
             yield ae
 
 
+def cat_batches(*x, pad_value=0):
+    y = list(zip(*x))
+    for i, yi in enumerate(y):
+        if isinstance(yi[0], torch.Tensor):
+            y[i] = q.pad_tensors(yi, 1, pad_value)
+    for i, yi in enumerate(y):
+        if isinstance(yi[0], torch.Tensor):
+            y[i] = torch.cat(yi, 0)
+        elif isinstance(yi, tuple):
+            _yi = yi[0]
+            for yij in yi[1:]:
+                _yi = _yi + yij
+            y[i] = _yi
+    return y
+
+
 def meta_train_epoch(model=None,
                      absmodel=None,
                      data=None,
+                         allsourcedata=None,
+                         injecttraindata=False,
                      optim=None,
                      get_ft_model=None,
                      get_ft_optim=None,
@@ -773,6 +803,7 @@ def meta_train_epoch(model=None,
         ftmodel = get_ft_model(model)
         ftoptim = get_ft_optim(ftmodel)
         inneriter = infiter(data[chosendomain]["finetune"])
+        extra_inneriter = infiter(allsourcedata["train"])
 
         oldemb = ftmodel.model.model.decoder.embed_tokens.weight + 0
         oldlin = ftmodel.model.outlin.weight + 0
@@ -784,6 +815,9 @@ def meta_train_epoch(model=None,
 
         for innerstep_i in range(finetunesteps):
             innerbatch = next(inneriter)
+            if injecttraindata:
+                extra_innerbatch = next(extra_inneriter)
+                innerbatch = cat_batches(innerbatch, extra_innerbatch)
             ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
                                   batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch,
                                   max_epochs=max_epochs,
@@ -833,9 +867,10 @@ def meta_train_epoch(model=None,
     return ttmsg
 
 
-
 def meta_test_epoch(model=None,
                     data=None,
+                         allsourcedata=None,
+                         injecttraindata=False,
                      get_ft_model=None,
                      get_ft_optim=None,
                     gradmode="none",
@@ -886,6 +921,7 @@ def meta_test_epoch(model=None,
         ftoptim = get_ft_optim(ftmodel)
         ftmodel.train()
         inneriter = infiter(domaindata["finetune"])
+        extra_inneriter = infiter(allsourcedata["train"])
 
         for loss in ftlosses:
             loss.push_epoch_to_history(epoch=str(current_epoch - 1)+"."+domain)
@@ -894,6 +930,9 @@ def meta_test_epoch(model=None,
 
         for innerstep_i in range(finetunesteps):
             innerbatch = next(inneriter)
+            if injecttraindata:
+                extra_innerbatch = next(extra_inneriter)
+                innerbatch = cat_batches(innerbatch, extra_innerbatch)
             ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
                                   batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch, max_epochs=max_epochs,
                                   on_before_optim_step=[partial(clipgradnorm, _m=ftmodel),
@@ -978,6 +1017,7 @@ def run(traindomains="ALL",
         nometarare=False,
         abscontrib=1.,
         gradmode="none",    # "none", "metarare", "metarareonly", "split"
+        injecttraindata=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -994,8 +1034,13 @@ def run(traindomains="ALL",
     tt = q.ticktock("script")
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
+    if gradmode == "split" and injecttraindata == False:
+        tt.msg("probably makes sense to inject training data (-injecttraindata) when gradmode is \"split\"")
+    if injecttraindata:
+        tt.msg("injecting some training examples from all observed domains during finetuning!")
+
     tt.tick("loading data")
-    sourcedss, targetdss, nltok, flenc, abstract_token_ids = \
+    sourcedss, targetdss, allsourceds, nltok, flenc, abstract_token_ids = \
         load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
                 fullsimplify=fullsimplify, add_domain_start=domainstart, batsize=batsize,
                 supportsetting=supportsetting)
@@ -1069,6 +1114,8 @@ def run(traindomains="ALL",
                          model=trainm,
                          absmodel=abstrainm,
                          data=sourcedss,
+                         allsourcedata=allsourceds,
+                         injecttraindata=injecttraindata,
                          optim=optim,
                          get_ft_model=lambda x: deepcopy(x),
                          get_ft_optim=partial(get_optim,
@@ -1090,6 +1137,8 @@ def run(traindomains="ALL",
     validepoch = partial(meta_test_epoch,
                         model=trainm,
                         data=sourcedss,
+                         allsourcedata=allsourceds,
+                         injecttraindata=injecttraindata,
                         get_ft_model=lambda x: deepcopy(x),
                         get_ft_optim=partial(get_optim,
                                              _lr=ftlr,
@@ -1125,6 +1174,8 @@ def run(traindomains="ALL",
     testepoch = partial(meta_test_epoch,
                         model=trainm,
                         data=targetdss,
+                         allsourcedata=allsourceds,
+                         injecttraindata=injecttraindata,
                         get_ft_model=lambda x: deepcopy(x),
                         get_ft_optim=partial(get_optim,
                                              _lr=ftlr,
@@ -1257,7 +1308,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=3,
                          numbeam=1, supportsetting="lex", abscontrib=.1, nometarare=False, finetunesteps=1, gradmode="none",
-                         maxfinetunesteps=30, evalinterval=5, epochs=100, pretrainepochs=100):
+                         maxfinetunesteps=30, evalinterval=5, epochs=100, pretrainepochs=100, injecttraindata=False):
     ranges = {
         "lr": [lr],
         "ftlr": [ftlr],
@@ -1295,7 +1346,8 @@ def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, p
                       gradacc=gradacc,
                       nometarare=nometarare,
                       maxfinetunesteps=maxfinetunesteps,
-                      evalinterval=evalinterval)
+                      evalinterval=evalinterval,
+                      injecttraindata=injecttraindata)
 
 
 
