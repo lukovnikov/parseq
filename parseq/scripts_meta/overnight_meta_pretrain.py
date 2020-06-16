@@ -1162,14 +1162,13 @@ def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, p
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
                       domainstart=domainstart,
                       supportsetting=supportsetting,
-                      maxfinetunesteps=30, evalinterval=5,
                       abscontrib=abscontrib,
                       finetunesteps=finetunesteps,
                       finetunetokensonly=finetunetokensonly,
                       gradacc=gradacc,
+                      nometarare=nometarare,
                       maxfinetunesteps=maxfinetunesteps,
-                      evalinterval=evalinterval,
-                      nometarare=nometarare)
+                      evalinterval=evalinterval)
 
 
 
