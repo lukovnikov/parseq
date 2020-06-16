@@ -516,7 +516,7 @@ def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None,
                  abstract_token_ids=set(),
-                 nometarare=False):
+                 metarare="no"):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -558,16 +558,24 @@ def create_model(encoder_name="bert-base-uncased",
         isabstracttokenmask[abstract_token_id] = 1
 
     # create special embeddings and output layer
-    if not nometarare:
-        # emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
-        emb = SpecialEmbedding(decoder_config.vocab_size,
-                               decoder_config.d_model,
-                               decoder_config.pad_token_id,
-                               metarare_targets=1-isabstracttokenmask)
-        # outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
-        outlin = SpecialOutlin(decoder_config.d_model,
-                               decoder_config.vocab_size,
-                               metarare_targets=1-isabstracttokenmask)
+    if metarare == "no":
+        emb, outlin = None, None
+    else:
+        if "emb" in metarare.split("+"):
+            # emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
+            emb = SpecialEmbedding(decoder_config.vocab_size,
+                                   decoder_config.d_model,
+                                   decoder_config.pad_token_id,
+                                   metarare_targets=1-isabstracttokenmask)
+        else:
+            emb = None
+        if "outlin" in metarare.split("+"):
+            # outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
+            outlin = SpecialOutlin(decoder_config.d_model,
+                                   decoder_config.vocab_size,
+                                   metarare_targets=1-isabstracttokenmask)
+        else:
+            outlin = None
         #
         # def _init_weights(module):
         #     std = 0.02
@@ -583,12 +591,12 @@ def create_model(encoder_name="bert-base-uncased",
         #             module.weight.data[module.padding_idx].zero_()
         # emb.apply(_init_weights)
         # outlin.apply(_init_weights)
-        print("using special embs and linouts")
-    else:
-        emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
-        outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
-        emb = None
-        outlin = None
+    #     print("using special embs and linouts")
+    # else:
+    #     emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
+    #     outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
+    #     emb = None
+    #     outlin = None
 
     model = BartGenerator(decoder_config, emb, outlin)
     model.model.encoder = encoder
@@ -660,7 +668,8 @@ def reset_special_grads_inner(_m, mode="none"):
         #         param.grad = None
     if mode == "metarare":    # train everything
         pass
-    elif mode == "split" or mode == "metararetokensonly":   # train only embeddings and output layer
+    elif mode == "split" or mode == "metararetokensonly" \
+            or "inner:onlyemb" in mode.split("+"):   # train only embeddings and output layer
         for paramname, param in _m.named_parameters():
             dotrain = False
             for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
@@ -668,6 +677,8 @@ def reset_special_grads_inner(_m, mode="none"):
                     dotrain = dotrain or True
             if not dotrain:
                 param.grad = None
+    elif "inner:all" in mode.split("+"):
+        pass
 
     # else:
     #     if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
@@ -694,11 +705,13 @@ def reset_special_grads_outer(_m, mode="none"):
         if isinstance(_m.model.outlin, SpecialOutlin):
             _m.model.outlin.extra_lin.weight.grad = None
             _m.model.outlin.extra_lin.bias.grad = None
-    elif mode == "split":   # don't train any embeddings/output layer
+    elif mode == "split" or "outer:noemb" in mode.split("+"):   # don't train any embeddings/output layer
         for paramname, param in _m.named_parameters():
             for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
                 if paramname.startswith(e):
                     param.grad = None
+    elif "outer:all" in mode.split("+"):
+        pass
 
 
 def infiter(a):
@@ -997,7 +1010,6 @@ def run(traindomains="ALL",
         finetunesteps=5,
         maxfinetunesteps=4,
         evalinterval=2,
-        pretrainepochs=100,
         dropout=0.1,
         wreg=1e-9,
         gradnorm=3,
@@ -1014,7 +1026,7 @@ def run(traindomains="ALL",
         fullsimplify=True,
         domainstart=False,
         supportsetting="lex",   # "lex" or "min"
-        nometarare=False,
+        metarare="no",
         abscontrib=1.,
         gradmode="none",    # "none", "metarare", "metarareonly", "split"
         injecttraindata=False,
@@ -1058,7 +1070,7 @@ def run(traindomains="ALL",
                                  numbeam=numbeam,
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  abstract_token_ids=abstract_token_ids,
-                                 nometarare=nometarare,
+                                 metarare=metarare,
                                  )
     tt.tock("model created")
 
@@ -1162,7 +1174,7 @@ def run(traindomains="ALL",
     tt.tick("pretraining")
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=validepoch,
-                   max_epochs=pretrainepochs,
+                   max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()])
     tt.tock("done pretraining")
 
@@ -1276,46 +1288,67 @@ def run(traindomains="ALL",
     # return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, mincoverage=2, fullsimplify=True, uselexicon=False):
-    ranges = {
-        "lr": [0.0001, 0.00001], #[0.001, 0.0001, 0.00001],
-        "ftlr": [0.00003],
-        "enclrmul": [1., 0.1], #[1., 0.1, 0.01],
-        "warmup": [2],
-        "epochs": [100], #[50, 100],
-        "pretrainepochs": [100],
-        "numheads": [8, 12, 16],
-        "numlayers": [3, 6, 9],
-        "dropout": [.1],
-        "hdim": [768, 960], #[192, 384, 768, 960],
-        "seed": [12345678], #, 98387670, 23655798, 66453829],      # TODO: add more later
-    }
-    p = __file__ + f".{domain}"
-    def check_config(x):
-        effectiveenclr = x["enclrmul"] * x["lr"]
-        if effectiveenclr < 0.00001:
-            return False
-        dimperhead = x["hdim"] / x["numheads"]
-        if dimperhead < 20 or dimperhead > 100:
-            return False
-        return True
-
-    q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, fullsimplify=fullsimplify, uselexicon=uselexicon,
-                      gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
-
-
-def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
+def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=3,
-                         numbeam=1, supportsetting="lex", abscontrib=.1, nometarare=False, finetunesteps=1, gradmode="none",
-                         maxfinetunesteps=30, evalinterval=5, epochs=100, pretrainepochs=100, injecttraindata=False):
+                         numbeam=1, supportsetting="lex", abscontrib=.1, metarare="undefined", finetunesteps=1, gradmode="undefined",
+                         maxfinetunesteps=30, evalinterval=5, epochs=25, injecttraindata=False):
     ranges = {
         "lr": [lr],
         "ftlr": [ftlr],
         "enclrmul": [0.1],
         "warmup": [0],
         "epochs": [epochs],
-        "pretrainepochs": [pretrainepochs],
+        "numheads": [numheads],
+        "numlayers": [numlayers],
+        "dropout": [dropout],
+        "smoothing": [smoothing],
+        "hdim": [hdim],
+        "numbeam": [numbeam],
+        "batsize": [batsize],
+        "seed": [87646464],
+        "gradmode": ["none", "split", "inner:all+outer:noemb", "metarare"],
+        "metarare": ["no", "emb", "outlin", "emb+outlin"]
+    }
+    p = __file__ + f".{domain}"
+    if gradmode != "undefined":
+        ranges["gradmode"] = [gradmode]
+    if metarare != "undefined":
+        ranges["metarare"] = [metarare]
+
+    def check_config(x):
+        effectiveenclr = x["enclrmul"] * x["lr"]
+        if effectiveenclr < 0.000005:
+            return False
+        dimperhead = x["hdim"] / x["numheads"]
+        if dimperhead < 20 or dimperhead > 100:
+            return False
+        if x["metarare"] == "no" and x["gradmode"] == "metarare":
+            return False
+        return True
+
+    q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
+                      domain=domain, fullsimplify=fullsimplify,
+                      gpu=gpu, patience=patience, cosinelr=cosinelr,
+                      domainstart=domainstart,
+                      supportsetting=supportsetting,
+                      abscontrib=abscontrib,
+                      finetunesteps=finetunesteps,
+                      gradacc=gradacc,
+                      maxfinetunesteps=maxfinetunesteps,
+                      evalinterval=evalinterval,
+                      injecttraindata=injecttraindata)
+
+
+def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
+                         smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=3,
+                         numbeam=1, supportsetting="lex", abscontrib=.1, nometarare=False, finetunesteps=1, gradmode="none",
+                         maxfinetunesteps=30, evalinterval=5, epochs=100, injecttraindata=False):
+    ranges = {
+        "lr": [lr],
+        "ftlr": [ftlr],
+        "enclrmul": [0.1],
+        "warmup": [0],
+        "epochs": [epochs],
         "numheads": [numheads],
         "numlayers": [numlayers],
         "dropout": [dropout],
@@ -1356,4 +1389,4 @@ if __name__ == '__main__':
     # ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
-    fire.Fire(run_experiments_seed)
+    fire.Fire(run_experiments)
