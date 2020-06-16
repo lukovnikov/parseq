@@ -546,30 +546,31 @@ def create_model(encoder_name="bert-base-uncased",
 
     # create special embeddings and output layer
     if not nometarare:
-        emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
-        # emb = SpecialEmbedding(decoder_config.vocab_size,
-        #                        decoder_config.d_model,
-        #                        decoder_config.pad_token_id,
-        #                        metarare_targets=1-isabstracttokenmask)
-        outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
-        # outlin = SpecialOutlin(decoder_config.d_model,
-        #                        decoder_config.vocab_size,
-        #                        metarare_targets=1-isabstracttokenmask)
-
-        def _init_weights(module):
-            std = 0.02
-            if isinstance(module, torch.nn.Linear):
-                module.weight.data.normal_(mean=0.0, std=std)
-                if module.bias is not None:
-                    module.bias.data.zero_()
-            elif isinstance(module, SinusoidalPositionalEmbedding):
-                pass
-            elif isinstance(module, torch.nn.Embedding):
-                module.weight.data.normal_(mean=0.0, std=std)
-                if module.padding_idx is not None:
-                    module.weight.data[module.padding_idx].zero_()
-        emb.apply(_init_weights)
-        outlin.apply(_init_weights)
+        # emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
+        emb = SpecialEmbedding(decoder_config.vocab_size,
+                               decoder_config.d_model,
+                               decoder_config.pad_token_id,
+                               metarare_targets=1-isabstracttokenmask)
+        # outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
+        outlin = SpecialOutlin(decoder_config.d_model,
+                               decoder_config.vocab_size,
+                               metarare_targets=1-isabstracttokenmask)
+        #
+        # def _init_weights(module):
+        #     std = 0.02
+        #     if isinstance(module, torch.nn.Linear):
+        #         module.weight.data.normal_(mean=0.0, std=std)
+        #         if module.bias is not None:
+        #             module.bias.data.zero_()
+        #     elif isinstance(module, SinusoidalPositionalEmbedding):
+        #         pass
+        #     elif isinstance(module, torch.nn.Embedding):
+        #         module.weight.data.normal_(mean=0.0, std=std)
+        #         if module.padding_idx is not None:
+        #             module.weight.data[module.padding_idx].zero_()
+        # emb.apply(_init_weights)
+        # outlin.apply(_init_weights)
+        print("using special embs and linouts")
     else:
         emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
         outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
