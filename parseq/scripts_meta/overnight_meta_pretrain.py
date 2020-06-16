@@ -828,6 +828,8 @@ def meta_test_epoch(model=None,
             current_epoch=0, max_epochs=0, print_every_batch=False,
             on_start=tuple(), on_start_batch=tuple(), on_end_batch=tuple(), on_end=tuple(),
                     on_outer_start=tuple(), on_outer_end=tuple()):
+    if evalinterval < 0:
+        evalinterval = finetunesteps
     """
     Performs a test epoch. If run=True, runs, otherwise returns partially filled function.
     :param model:
