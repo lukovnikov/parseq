@@ -1152,14 +1152,14 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=3,
                          numbeam=1, supportsetting="lex", abscontrib=.1, nometarare=False, finetunesteps=1, finetunetokensonly=False,
-                         maxfinetunesteps=30, evalinterval=5):
+                         maxfinetunesteps=30, evalinterval=5, epochs=100, pretrainepochs=100):
     ranges = {
         "lr": [lr],
         "ftlr": [ftlr],
         "enclrmul": [0.1],
         "warmup": [0],
-        "epochs": [100],
-        "pretrainepochs": [100],
+        "epochs": [epochs],
+        "pretrainepochs": [pretrainepochs],
         "numheads": [numheads],
         "numlayers": [numlayers],
         "dropout": [dropout],
