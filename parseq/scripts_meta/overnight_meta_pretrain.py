@@ -1093,7 +1093,7 @@ def run(traindomains="ALL",
 
     testepoch = partial(meta_test_epoch,
                         model=trainm,
-                        data=sourcedss,
+                        data=targetdss,
                         get_ft_model=lambda x: deepcopy(x),
                         get_ft_optim=partial(get_optim,
                                              _lr=ftlr,
