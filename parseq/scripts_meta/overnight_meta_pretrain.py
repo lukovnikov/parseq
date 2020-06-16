@@ -30,6 +30,7 @@ from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELo
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
 from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration
+from transformers.modeling_bart import SinusoidalPositionalEmbedding
 
 UNKID = 3
 
@@ -290,6 +291,20 @@ class BartGenerator(BartForConditionalGeneration):
             self.outlin = outlin
         else:
             self.outlin = torch.nn.Linear(config.d_model, config.vocab_size)
+            self.outlin.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        std = self.config.init_std
+        if isinstance(module, torch.nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, SinusoidalPositionalEmbedding):
+            pass
+        elif isinstance(module, torch.nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
 
     def forward(
         self,
@@ -413,14 +428,29 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 class SpecialEmbedding(torch.nn.Embedding):
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None,
-                 metarare_targets=None):
+                 metarare_targets=None, init_std=0.02):
         super(SpecialEmbedding, self).__init__(num_embeddings, embedding_dim, padding_idx=padding_idx)
         self.register_buffer("metarare_targets", metarare_targets)
         # self.metarare = self.weight[self.metarare_source, :]
         # self.base_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
         self.extra_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
         self.metarare_emb = torch.nn.Embedding(1, embedding_dim)
+        self.init_std = init_std
+        self.apply(self._init_weights)
         self.extra_emb.weight.data.fill_(0)
+
+    def _init_weights(self, module):
+        std = self.init_std
+        if isinstance(module, torch.nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, SinusoidalPositionalEmbedding):
+            pass
+        elif isinstance(module, torch.nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # metarare_targets are 1 for domain-specific tokens
@@ -434,15 +464,30 @@ class SpecialEmbedding(torch.nn.Embedding):
 
 
 class SpecialOutlin(torch.nn.Linear):
-    def __init__(self, dim, vocsize, metarare_targets=None, bias=True):
+    def __init__(self, dim, vocsize, metarare_targets=None, bias=True, init_std=0.02):
         super(SpecialOutlin, self).__init__(dim, vocsize, bias=bias)
         self.register_buffer("metarare_targets", metarare_targets)
         # self.metarare = self.weight[self.metarare_source, :]
         # self.base_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
         self.extra_lin = torch.nn.Linear(dim, vocsize, bias=bias)
         self.metarare_lin = torch.nn.Linear(dim, 1, bias=bias)
+        self.init_std = init_std
+        self.apply(self._init_weights)
         self.extra_lin.weight.data.fill_(0)
         self.extra_lin.bias.data.fill_(0)
+
+    def _init_weights(self, module):
+        std = self.init_std
+        if isinstance(module, torch.nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, SinusoidalPositionalEmbedding):
+            pass
+        elif isinstance(module, torch.nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         base_logits = super(SpecialOutlin, self).forward(input)
@@ -501,11 +546,11 @@ def create_model(encoder_name="bert-base-uncased",
 
     # create special embeddings and output layer
     if not nometarare:
-        emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
-        # emb = SpecialEmbedding(decoder_config.vocab_size,
-        #                        decoder_config.d_model,
-        #                        decoder_config.pad_token_id,
-        #                        metarare_targets=1-isabstracttokenmask)
+        # emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
+        emb = SpecialEmbedding(decoder_config.vocab_size,
+                               decoder_config.d_model,
+                               decoder_config.pad_token_id,
+                               metarare_targets=1-isabstracttokenmask)
         # outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
         outlin = SpecialOutlin(decoder_config.d_model,
                                decoder_config.vocab_size,
