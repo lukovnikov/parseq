@@ -509,7 +509,8 @@ def create_model(encoder_name="bert-base-uncased",
                                decoder_config.vocab_size,
                                metarare_targets=1-isabstracttokenmask)
     else:
-        emb, outlin = None, None
+        emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
+        outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
 
     model = BartGenerator(decoder_config, emb, outlin)
     model.model.encoder = encoder
