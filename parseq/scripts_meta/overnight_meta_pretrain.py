@@ -321,11 +321,32 @@ class TransformerLayerAdapter(torch.nn.Module):
         return x
 
 
+class GatedTransformerLayerAdapter(torch.nn.Module):
+    def __init__(self, dim, hdim, biasoffset=-3, **kw):
+        super(GatedTransformerLayerAdapter, self).__init__(**kw)
+        self.fc1 = torch.nn.Linear(dim, hdim)
+        self.fc2 = torch.nn.Linear(hdim, dim)
+        self.fc3 = torch.nn.Linear(hdim, dim)
+        self.biasoffset = biasoffset
+        self.layernorm = torch.nn.LayerNorm(dim)
+
+    def forward(self, x):
+        innerresidual = x
+        h = self.fc1(x)
+        h = torch.relu(h)
+        x = self.fc2(h)
+        z = self.fc3(h)
+        z = torch.sigmoid(z + self.biasoffset)
+        x = x * z + innerresidual * (1 - z)
+        x = self.layernorm(x)
+        return x
+
+
 class AdaptedBartDecoderLayer(torch.nn.Module):
     def __init__(self, decoderlayer:DecoderLayer=None, compression=2, ):
         super().__init__()
         self.core = decoderlayer
-        self.adapter = TransformerLayerAdapter(self.core.embed_dim, self.core.embed_dim//compression)
+        self.adapter = GatedTransformerLayerAdapter(self.core.embed_dim, self.core.embed_dim//compression)
 
     def forward(
             self,
@@ -353,7 +374,7 @@ class AdaptedBertEncoderLayer(torch.nn.Module):
         self.core = core
         self.dim = core.output.dense.out_features
         self.hdim = self.dim // compression
-        self.adapter = TransformerLayerAdapter(self.dim, self.hdim)
+        self.adapter = GatedTransformerLayerAdapter(self.dim, self.hdim)
 
     def forward(
             self,
@@ -762,15 +783,25 @@ def reset_special_grads_inner(_m:torch.nn.Module, mode="none"):
             if not dotrain:
                 param.grad = None
     elif mode == "adapter" or mode == "adaptersplit":     # finetune only adapters and embeddings and output layers
-        def reset_grads(m, mpath=None):
-            if mpath in ["model.model.decoder.embed_tokens", "model.outlin"]:
-                pass
-            elif isinstance(m, (AdaptedBartDecoderLayer, AdaptedBertEncoderLayer)):
-                pass
+        for paramname, param in _m.named_parameters():
+            isadapterparam = False
+            m = _m
+            namesplits = paramname.split(".")
+            for namepiece in namesplits:
+                m = getattr(m, namepiece)
+                if isinstance(m, TransformerLayerAdapter):
+                    isadapterparam = True
+                    break
+
+            dotrain = False
+            if isadapterparam:
+                dotrain = dotrain or True
             else:
-                for param in m.parameters():
-                    param.grad = None
-        apply_withpath(_m, reset_grads)
+                for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
+                    if paramname.startswith(e):
+                        dotrain = dotrain or True
+            if not dotrain:
+                param.grad = None
     elif "inner:all" in mode.split("+"):
         pass
 
@@ -804,17 +835,48 @@ def reset_special_grads_outer(_m, mode="none"):
             for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
                 if paramname.startswith(e):
                     param.grad = None
+    elif mode == "adapter":         # don't train original bert weights
+        for paramname, param in _m.named_parameters():
+            isadapterparam = False
+            m = _m
+            namesplits = paramname.split(".")
+            for namepiece in namesplits:
+                m = getattr(m, namepiece)
+                if isinstance(m, TransformerLayerAdapter):
+                    isadapterparam = True
+                    break
+
+            dotrain = False
+            if paramname.startswith("model.model.encoder"):
+                if isadapterparam:
+                    dotrain = dotrain or True
+            else:
+                dotrain = dotrain or True
+            if not dotrain:
+                param.grad = None
     elif mode == "adaptersplit":     # finetune only adapters and embeddings and output layers
-        def reset_grads(m, mpath=None):
-            do_reset = False
-            if mpath in ["model.model.decoder.embed_tokens", "model.outlin"]:
-                do_reset = True
-            elif isinstance(m, (AdaptedBartDecoderLayer, AdaptedBertEncoderLayer)):
-                do_reset = True
-            if do_reset:
-                for param in m.parameters():
-                    param.grad = None
-        apply_withpath(_m, reset_grads)
+        for paramname, param in _m.named_parameters():
+            isadapterparam = False
+            m = _m
+            namesplits = paramname.split(".")
+            for namepiece in namesplits:
+                m = getattr(m, namepiece)
+                if isinstance(m, TransformerLayerAdapter):
+                    isadapterparam = True
+                    break
+
+            donttrain = False
+            if paramname.startswith("model.model.encoder"):
+                donttrain = donttrain or True    # don't train anything in encoder
+            else:
+                if isadapterparam:
+                    donttrain = donttrain or True
+                else:
+                    for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
+                        if paramname.startswith(e):
+                            donttrain = donttrain or True
+            if donttrain:
+                param.grad = None
     elif "outer:all" in mode.split("+") or mode == "adapter":
         pass
 
@@ -1258,7 +1320,7 @@ def run(traindomains="ALL",
     bestfinetunesteps = q.hyperparam(0)
     validepoch = partial(meta_test_epoch,
                         model=trainm,
-                        data=sourcedss,
+                        data=targetdss,
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
                         get_ft_model=lambda x: deepcopy(x),
