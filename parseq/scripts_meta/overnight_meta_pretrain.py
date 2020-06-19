@@ -300,7 +300,7 @@ def apply_withpath(m:torch.nn.Module, fn:Callable, mpath=None):
     """ Apply function 'fn' recursively on 'm' and its submodules, where 'fn' gets 'm' and 'mpath' as argument """
     fn(m, mpath)
     for name, child in m.named_children():
-        apply_withpath(child, f"{mpath}.{name}" if mpath is not None else f"{name}")
+        apply_withpath(child, fn, f"{mpath}.{name}" if mpath is not None else f"{name}")
 
 
 
