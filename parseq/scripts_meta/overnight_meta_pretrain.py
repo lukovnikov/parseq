@@ -300,7 +300,7 @@ def apply_withpath(m:torch.nn.Module, fn:Callable, mpath=None):
     """ Apply function 'fn' recursively on 'm' and its submodules, where 'fn' gets 'm' and 'mpath' as argument """
     fn(m, mpath)
     for name, child in m.named_children():
-        apply(child, f"{mpath}.{name}" if mpath is not None else f"{name}")
+        apply_withpath(child, f"{mpath}.{name}" if mpath is not None else f"{name}")
 
 
 
@@ -325,7 +325,7 @@ class AdaptedBartDecoderLayer(torch.nn.Module):
     def __init__(self, decoderlayer:DecoderLayer=None, compression=2, ):
         super().__init__()
         self.core = decoderlayer
-        self.adapter = TransformerLayerAdapter(self.embed_dim, self.embed_dim//compression)
+        self.adapter = TransformerLayerAdapter(self.core.embed_dim, self.core.embed_dim//compression)
 
     def forward(
             self,
