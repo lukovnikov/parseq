@@ -779,7 +779,7 @@ def reset_special_grads_inner(_m:torch.nn.Module, mode="none"):
                     dotrain = dotrain or True
             if not dotrain:
                 param.grad = None
-    elif mode == "adapter" or mode == "adaptersplit":     # finetune only adapters and embeddings and output layers
+    elif mode == "adapter" or mode == "adaptersplit" or mode == "adapterinner":     # finetune only adapters and embeddings and output layers
         for paramname, param in _m.named_parameters():
             isadapterparam = False
             m = _m
@@ -874,7 +874,7 @@ def reset_special_grads_outer(_m, mode="none"):
                             donttrain = donttrain or True
             if donttrain:
                 param.grad = None
-    elif "outer:all" in mode.split("+") or mode == "adapter":
+    elif "outer:all" in mode.split("+") or mode == "adapter" or mode == "adapterinner":
         pass
 
 
@@ -1024,6 +1024,8 @@ def meta_train_epoch(model=None,
                                   batch_number=outerstep_i, max_batches=totalnumtrainbats, current_epoch=current_epoch,
                                   max_epochs=max_epochs, gradient_accumulation_steps=gradacc,
                                   loss_scale=abstract_contrib)
+
+        clipgradnorm(_m=model)
 
         # do optim step
         _do_optim_step = ((outerstep_i+1) % gradacc) == 0
@@ -1212,7 +1214,7 @@ def run(traindomains="ALL",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     if useadapters:
-        assert(gradmode == "adapter" or gradmode == "adaptersplit")
+        assert(gradmode=="none", gradmode == "adapter" or gradmode == "adaptersplit")
 
     if gradmode == "split" and injecttraindata == False:
         tt.msg("probably makes sense to inject training data (-injecttraindata) when gradmode is \"split\"")
@@ -1271,7 +1273,7 @@ def run(traindomains="ALL",
         optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
         return optim
 
-    def clipgradnorm(_m, _norm):
+    def clipgradnorm(_m=None, _norm=None):
         torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
 
     eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
