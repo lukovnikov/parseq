@@ -1020,10 +1020,13 @@ def meta_train_epoch(model=None,
         reset_special_grads_outer(model, mode=gradmode)
 
         # do abstract prediction
-        abs_ttmsg = q.train_batch(batch=outerbatch, model=absmodel, optim=None, losses=abslosses, device=device,
-                                  batch_number=outerstep_i, max_batches=totalnumtrainbats, current_epoch=current_epoch,
-                                  max_epochs=max_epochs, gradient_accumulation_steps=gradacc,
-                                  loss_scale=abstract_contrib)
+        if abstract_contrib > 0.:
+            abs_ttmsg = q.train_batch(batch=outerbatch, model=absmodel, optim=None, losses=abslosses, device=device,
+                                      batch_number=outerstep_i, max_batches=totalnumtrainbats, current_epoch=current_epoch,
+                                      max_epochs=max_epochs, gradient_accumulation_steps=gradacc,
+                                      loss_scale=abstract_contrib)
+        else:
+            abs_ttmsg = "N/A"
 
         clipgradnorm(_m=model)
 
