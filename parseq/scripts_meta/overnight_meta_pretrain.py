@@ -30,8 +30,10 @@ from parseq.decoding import merge_metric_dicts
 from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
-from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration
-from transformers.modeling_bart import SinusoidalPositionalEmbedding
+from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration, BertLayer, \
+    BertModel
+from transformers.activations import ACT2FN
+from transformers.modeling_bart import SinusoidalPositionalEmbedding, DecoderLayer, SelfAttention, LayerNorm
 
 UNKID = 3
 
@@ -294,6 +296,81 @@ def load_ds(traindomains=("restaurants",),
     return sourceret, targetret, allsourceret, nl_tokenizer, seqenc, abstracttokenids
 
 
+def apply_withpath(m:torch.nn.Module, fn:Callable, mpath=None):
+    """ Apply function 'fn' recursively on 'm' and its submodules, where 'fn' gets 'm' and 'mpath' as argument """
+    fn(m, mpath)
+    for name, child in m.named_children():
+        apply(child, f"{mpath}.{name}" if mpath is not None else f"{name}")
+
+
+
+class TransformerLayerAdapter(torch.nn.Module):
+    def __init__(self, dim, hdim, **kw):
+        super(TransformerLayerAdapter, self).__init__(**kw)
+        self.fc1 = torch.nn.Linear(dim, hdim)
+        self.fc2 = torch.nn.Linear(hdim, dim)
+        self.layernorm = torch.nn.LayerNorm(dim)
+
+    def forward(self, x):
+        innerresidual = x
+        x = self.fc1(x)
+        x = torch.nn.ReLU(x)
+        x = self.fc2(x)
+        x = x + innerresidual
+        x = self.layernorm(x)
+        return x
+
+
+class AdaptedBartDecoderLayer(torch.nn.Module):
+    def __init__(self, decoderlayer:DecoderLayer=None, compression=2, ):
+        super().__init__()
+        self.core = decoderlayer
+        self.adapter = TransformerLayerAdapter(self.embed_dim, self.embed_dim//compression)
+
+    def forward(
+            self,
+            x,
+            encoder_hidden_states,
+            encoder_attn_mask=None,
+            layer_state=None,
+            causal_mask=None,
+            decoder_padding_mask=None,
+    ):
+        x, self_attn_weights, layer_state = self.core(x, encoder_hidden_states,
+            encoder_attn_mask=encoder_attn_mask, layer_state=layer_state, causal_mask=causal_mask,
+            decoder_padding_mask=decoder_padding_mask)
+        x = self.adapter(x)
+        return (
+            x,
+            self_attn_weights,
+            layer_state,
+        )  # just self_attn weights for now, following t5, layer_state = cache for decoding
+
+
+class AdaptedBertEncoderLayer(torch.nn.Module):
+    def __init__(self, core:BertLayer, compression=2):
+        super(AdaptedBertEncoderLayer, self).__init__()
+        self.core = core
+        self.dim = core.output.dense.out_features
+        self.hdim = self.dim // compression
+        self.adapter = TransformerLayerAdapter(self.dim, self.hdim)
+
+    def forward(
+            self,
+            hidden_states,
+            attention_mask=None,
+            head_mask=None,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+    ):
+        outputs = self.core(hidden_states, attention_mask=attention_mask, head_mask=head_mask,
+                            encoder_hidden_states=encoder_hidden_states,
+                            encoder_attention_mask=encoder_attention_mask)
+        adapted = self.adapter(outputs[0])
+        outputs = (adapted,) + outputs[1:]
+        return outputs
+
+
 class BartGenerator(BartForConditionalGeneration):
     def __init__(self, config:BartConfig, emb=None, outlin=None):
         super(BartGenerator, self).__init__(config)
@@ -516,10 +593,14 @@ def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None,
                  abstract_token_ids=set(),
-                 metarare="no"):
+                 metarare="no", useadapters=False):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
-    pretrained = AutoModel.from_pretrained(encoder_name)
+    pretrained = BertModel.from_pretrained(encoder_name)
+    # replace layers with adapted layers
+    if useadapters:
+        for i, layer in enumerate(pretrained.encoder.layer):
+            pretrained.encoder.layer[i] = AdaptedBertEncoderLayer(layer, compression=4)
     encoder = pretrained
 
     class BertEncoderWrapper(torch.nn.Module):
@@ -600,6 +681,9 @@ def create_model(encoder_name="bert-base-uncased",
 
     model = BartGenerator(decoder_config, emb, outlin)
     model.model.encoder = encoder
+    if useadapters:
+        for i, layer in enumerate(model.model.decoder.layers):
+            model.model.decoder.layers[i] = AdaptedBartDecoderLayer(layer)
 
     orderless = {"op:and", "SW:concat"}
 
@@ -661,7 +745,7 @@ def move_grad(source=None, target=None):
     source.zero_grad()
 
 
-def reset_special_grads_inner(_m, mode="none"):
+def reset_special_grads_inner(_m:torch.nn.Module, mode="none"):
         # for paramname, param in _m.named_parameters():
         #     if paramname not in ["model.model.decoder.embed_tokens.extra_emb.weight",
         #                          "model.outlin.extra_lin.weight", "model.outlin.extra_lin.weight"]:
@@ -677,6 +761,16 @@ def reset_special_grads_inner(_m, mode="none"):
                     dotrain = dotrain or True
             if not dotrain:
                 param.grad = None
+    elif mode == "adapter" or mode == "adaptersplit":     # finetune only adapters and embeddings and output layers
+        def reset_grads(m, mpath=None):
+            if mpath in ["model.model.decoder.embed_tokens", "model.outlin"]:
+                pass
+            elif isinstance(m, (AdaptedBartDecoderLayer, AdaptedBertEncoderLayer)):
+                pass
+            else:
+                for param in m.parameters():
+                    param.grad = None
+        apply_withpath(_m, reset_grads)
     elif "inner:all" in mode.split("+"):
         pass
 
@@ -710,7 +804,18 @@ def reset_special_grads_outer(_m, mode="none"):
             for e in ["model.model.decoder.embed_tokens", "model.outlin"]:
                 if paramname.startswith(e):
                     param.grad = None
-    elif "outer:all" in mode.split("+"):
+    elif mode == "adaptersplit":     # finetune only adapters and embeddings and output layers
+        def reset_grads(m, mpath=None):
+            do_reset = False
+            if mpath in ["model.model.decoder.embed_tokens", "model.outlin"]:
+                do_reset = True
+            elif isinstance(m, (AdaptedBartDecoderLayer, AdaptedBertEncoderLayer)):
+                do_reset = True
+            if do_reset:
+                for param in m.parameters():
+                    param.grad = None
+        apply_withpath(_m, reset_grads)
+    elif "outer:all" in mode.split("+") or mode == "adapter":
         pass
 
 
@@ -1030,6 +1135,7 @@ def run(traindomains="ALL",
         abscontrib=1.,
         gradmode="none",    # "none", "metarare", "metarareonly", "split"
         injecttraindata=False,
+        useadapters=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -1045,6 +1151,9 @@ def run(traindomains="ALL",
     np.random.seed(seed)
     tt = q.ticktock("script")
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
+
+    if useadapters:
+        assert(gradmode == "adapter" or gradmode == "adaptersplit")
 
     if gradmode == "split" and injecttraindata == False:
         tt.msg("probably makes sense to inject training data (-injecttraindata) when gradmode is \"split\"")
@@ -1071,6 +1180,7 @@ def run(traindomains="ALL",
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  abstract_token_ids=abstract_token_ids,
                                  metarare=metarare,
+                                 useadapters=useadapters
                                  )
     tt.tock("model created")
 
@@ -1291,7 +1401,7 @@ def run(traindomains="ALL",
 def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1,
                          numbeam=1, supportsetting="lex", abscontrib=.1, metarare="undefined", finetunesteps=1, gradmode="undefined",
-                         maxfinetunesteps=30, evalinterval=5, epochs=25, injecttraindata=False):
+                         maxfinetunesteps=30, evalinterval=5, epochs=25, injecttraindata=False, useadapters=False):
     ranges = {
         "lr": [lr],
         "ftlr": [ftlr],
@@ -1336,7 +1446,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       gradacc=gradacc,
                       maxfinetunesteps=maxfinetunesteps,
                       evalinterval=evalinterval,
-                      injecttraindata=injecttraindata)
+                      injecttraindata=injecttraindata,
+                      useadapters=useadapters)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
