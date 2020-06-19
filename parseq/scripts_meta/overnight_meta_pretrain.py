@@ -321,14 +321,11 @@ class TransformerLayerAdapter(torch.nn.Module):
         return x
 
 
-class GatedTransformerLayerAdapter(torch.nn.Module):
+class GatedTransformerLayerAdapter(TransformerLayerAdapter):
     def __init__(self, dim, hdim, biasoffset=-3, **kw):
-        super(GatedTransformerLayerAdapter, self).__init__(**kw)
-        self.fc1 = torch.nn.Linear(dim, hdim)
-        self.fc2 = torch.nn.Linear(hdim, dim)
+        super(GatedTransformerLayerAdapter, self).__init__(dim, hdim, **kw)
         self.fc3 = torch.nn.Linear(hdim, dim)
         self.biasoffset = biasoffset
-        self.layernorm = torch.nn.LayerNorm(dim)
 
     def forward(self, x):
         innerresidual = x
