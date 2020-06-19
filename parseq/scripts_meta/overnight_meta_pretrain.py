@@ -314,7 +314,7 @@ class TransformerLayerAdapter(torch.nn.Module):
     def forward(self, x):
         innerresidual = x
         x = self.fc1(x)
-        x = torch.nn.ReLU(x)
+        x = torch.nn.functional.relu(x)
         x = self.fc2(x)
         x = x + innerresidual
         x = self.layernorm(x)
