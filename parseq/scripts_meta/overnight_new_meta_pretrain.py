@@ -830,7 +830,7 @@ def reset_special_grads_inner(_m:torch.nn.Module, mode="none"):
                         dotrain = dotrain or True
             if not dotrain:
                 param.grad = None
-    elif mode == "MAS": # finetune only extra vectors, and adapters in the decoder
+    elif mode == "MAS" or mode == "MASinner": # finetune only extra vectors, and adapters in the decoder
         for paramname, param in _m.named_parameters():
             isadapterparam = False
             isspecial = False
@@ -937,7 +937,7 @@ def reset_special_grads_outer(_m, mode="none"):
                             donttrain = donttrain or True
             if donttrain:
                 param.grad = None
-    elif mode == "MAS": # finetune only extra vectors, and adapters in the decoder
+    elif mode == "MAS": # finetune only general token vectors, decoder, and adapters in encoder
         for paramname, param in _m.named_parameters():
             isadapterparam = False
             isspecial = False
@@ -959,7 +959,10 @@ def reset_special_grads_outer(_m, mode="none"):
             isoriginalbertparam = (not isadapterparam) and isbertparam
             if isdecoderadapterparam or isspecial or isoriginalbertparam:
                 param.grad = None
-    elif "outer:all" in mode.split("+") or mode == "adapter" or mode == "adapterinner":
+    elif "outer:all" in mode.split("+") \
+            or mode == "adapter" \
+            or mode == "adapterinner" \
+            or mode == "MASinner":
         pass
 
 
