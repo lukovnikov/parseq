@@ -363,7 +363,7 @@ class TransformerLayerAdapter(torch.nn.Module):
 
 
 class GatedTransformerLayerAdapter(TransformerLayerAdapter):
-    def __init__(self, dim, hdim, biasoffset=-3, **kw):
+    def __init__(self, dim, hdim, biasoffset=-3.3, **kw):
         super(GatedTransformerLayerAdapter, self).__init__(dim, hdim, **kw)
         self.fc3 = torch.nn.Linear(hdim, dim)
         self.biasoffset = biasoffset
@@ -830,6 +830,29 @@ def reset_special_grads_inner(_m:torch.nn.Module, mode="none"):
                         dotrain = dotrain or True
             if not dotrain:
                 param.grad = None
+    elif mode == "MAS": # finetune only extra vectors, and adapters in the decoder
+        for paramname, param in _m.named_parameters():
+            isadapterparam = False
+            isspecial = False
+            isbertparam = False
+            m = _m
+            namesplits = paramname.split(".")
+            for namepiece in namesplits:
+                m = getattr(m, namepiece)
+                if isinstance(m, TransformerLayerAdapter):
+                    isadapterparam = True
+                    break
+                elif isinstance(m, BertModel):
+                    isbertparam = True
+                elif isinstance(m, (SpecialEmbedding, SpecialOutlin)):
+                    isspecial = True
+                    break
+            isspecial = isspecial and "extra_emb" in namesplits or "extra_lin" in namesplits
+            isdecoderadapterparam = isadapterparam and not isbertparam
+            isoriginalbertparam = (not isadapterparam) and isbertparam
+            if not isdecoderadapterparam and not isspecial:
+                param.grad = None
+
     elif "inner:all" in mode.split("+"):
         pass
 
@@ -844,6 +867,15 @@ def reset_special_grads_inner(_m:torch.nn.Module, mode="none"):
     #             _m.model.outlin.bias.grad = None
     #             _m.model.outlin.metarare_lin.bias.grad = None
 
+def reset_special_inner(m):
+    if isinstance(m, SpecialEmbedding):
+        m.extra_emb.apply(m._init_weights)
+    elif isinstance(m, SpecialOutlin):
+        m.extra_lin.apply(m._init_weights)
+    else:
+        pass
+    for child in m.children():
+        reset_special_inner(child)
 
 def reset_special_grads_outer(_m, mode="none"):
     # if mode == "metararetokensonly":
@@ -904,6 +936,28 @@ def reset_special_grads_outer(_m, mode="none"):
                         if paramname.startswith(e):
                             donttrain = donttrain or True
             if donttrain:
+                param.grad = None
+    elif mode == "MAS": # finetune only extra vectors, and adapters in the decoder
+        for paramname, param in _m.named_parameters():
+            isadapterparam = False
+            isspecial = False
+            isbertparam = False
+            m = _m
+            namesplits = paramname.split(".")
+            for namepiece in namesplits:
+                m = getattr(m, namepiece)
+                if isinstance(m, TransformerLayerAdapter):
+                    isadapterparam = True
+                    break
+                elif isinstance(m, BertModel):
+                    isbertparam = True
+                elif isinstance(m, (SpecialEmbedding, SpecialOutlin)):
+                    isspecial = True
+                    break
+            isspecial = isspecial and "extra_emb" in namesplits or "extra_lin" in namesplits
+            isdecoderadapterparam = isadapterparam and not isbertparam
+            isoriginalbertparam = (not isadapterparam) and isbertparam
+            if isdecoderadapterparam or isspecial or isoriginalbertparam:
                 param.grad = None
     elif "outer:all" in mode.split("+") or mode == "adapter" or mode == "adapterinner":
         pass
@@ -1333,6 +1387,11 @@ def run(traindomains="ALL",
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
+    def get_ft_model(x):
+        _x = deepcopy(x)
+        reset_special_inner(_x)
+        return _x
+
     trainepoch = partial(meta_train_epoch,
                          model=trainm,
                          absmodel=abstrainm,
@@ -1340,7 +1399,7 @@ def run(traindomains="ALL",
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
                          optim=optim,
-                         get_ft_model=lambda x: deepcopy(x),
+                         get_ft_model=get_ft_model,
                          get_ft_optim=partial(get_optim,
                                               _lr=ftlr,
                                               _enclrmul=enclrmul,
@@ -1362,7 +1421,7 @@ def run(traindomains="ALL",
                         data=targetdss,
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
-                        get_ft_model=lambda x: deepcopy(x),
+                        get_ft_model=get_ft_model,
                         get_ft_optim=partial(get_optim,
                                              _lr=ftlr,
                                              _enclrmul=enclrmul,
@@ -1399,7 +1458,7 @@ def run(traindomains="ALL",
                         data=targetdss,
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
-                        get_ft_model=lambda x: deepcopy(x),
+                        get_ft_model=get_ft_model,
                         get_ft_optim=partial(get_optim,
                                              _lr=ftlr,
                                              _enclrmul=enclrmul,
