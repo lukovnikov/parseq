@@ -1106,7 +1106,6 @@ def meta_train_epoch(model=None,
                             #     partial(clipgradnorm, _m=model),
                             #     partial(copy_grad, source=ftmodel, target=model)])
         move_grad(ftmodel, model)
-        reset_special_grads_outer(model, mode=gradmode)
 
         # do abstract prediction
         if abstract_contrib > 0.:
@@ -1116,6 +1115,8 @@ def meta_train_epoch(model=None,
                                       loss_scale=abstract_contrib)
         else:
             abs_ttmsg = "N/A"
+
+        reset_special_grads_outer(model, mode=gradmode)
 
         clipgradnorm(_m=model)
 
