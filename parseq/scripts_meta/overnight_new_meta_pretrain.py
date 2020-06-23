@@ -171,12 +171,14 @@ def tokenize_and_add_start(t, _domain, meta=False, add_domain_start=False, gener
             else:
                 newtokens.append(f"{_domain}|{token}")
         tokens = newtokens
-    if not meta:
-        starttok = f"@START/{_domain}@" if add_domain_start else "@START@"
-        tokens = [starttok] + tokens
-    else:
-        starttok = f"@META/{_domain}@" if add_domain_start else "@META@"
-        tokens = [starttok] + tokens
+    starttok = f"@START/{_domain}@" if add_domain_start else "@START@"
+    tokens = [starttok] + tokens
+    # if not meta:
+    #     starttok = f"@START/{_domain}@" if add_domain_start else "@START@"
+    #     tokens = [starttok] + tokens
+    # else:
+    #     starttok = f"@META/{_domain}@" if add_domain_start else "@META@"
+    #     tokens = [starttok] + tokens
     return tokens
 
 
