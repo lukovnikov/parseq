@@ -1307,8 +1307,8 @@ def run(traindomains="ALL",
     # endregion
 
     def get_optim(_m, _lr, _enclrmul, _wreg=0):
-        paramgroups = get_parameters(_m, _lr=lr, _enclrmul=enclrmul)
-        optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
+        paramgroups = get_parameters(_m, _lr=_lr, _enclrmul=enclrmul)
+        optim = torch.optim.Adam(paramgroups, lr=_lr, weight_decay=wreg)
         return optim
 
     def clipgradnorm(_m=None, _norm=None):
