@@ -691,6 +691,7 @@ def create_model(encoder_name="bert-base-uncased",
         emb, outlin = None, None
     else:
         if "emb" in metarare.split("+"):
+            print("using metarare emb")
             # emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
             emb = SpecialEmbedding(decoder_config.vocab_size,
                                    decoder_config.d_model,
@@ -699,6 +700,7 @@ def create_model(encoder_name="bert-base-uncased",
         else:
             emb = None
         if "outlin" in metarare.split("+"):
+            print("using metarare outlin")
             # outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
             outlin = SpecialOutlin(decoder_config.d_model,
                                    decoder_config.vocab_size,
