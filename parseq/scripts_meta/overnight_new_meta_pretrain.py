@@ -579,7 +579,7 @@ class SpecialEmbedding(torch.nn.Embedding):
         self.metarare_emb = torch.nn.Embedding(1, embedding_dim)
         self.init_std = init_std
         self.apply(self._init_weights)
-        self.extra_emb.weight.data.fill_(0)
+        # self.extra_emb.weight.data.fill_(0)
 
     def _init_weights(self, module):
         std = self.init_std
@@ -615,8 +615,8 @@ class SpecialOutlin(torch.nn.Linear):
         self.metarare_lin = torch.nn.Linear(dim, 1, bias=bias)
         self.init_std = init_std
         self.apply(self._init_weights)
-        self.extra_lin.weight.data.fill_(0)
-        self.extra_lin.bias.data.fill_(0)
+        # self.extra_lin.weight.data.fill_(0)
+        # self.extra_lin.bias.data.fill_(0)
 
     def _init_weights(self, module):
         std = self.init_std
