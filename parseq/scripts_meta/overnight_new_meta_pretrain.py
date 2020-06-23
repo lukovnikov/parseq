@@ -1393,7 +1393,7 @@ def run(traindomains="ALL",
 
     def get_ft_model(x):
         _x = deepcopy(x)
-        reset_special_inner(_x)
+        # reset_special_inner(_x)
         return _x
 
     trainepoch = partial(meta_train_epoch,
