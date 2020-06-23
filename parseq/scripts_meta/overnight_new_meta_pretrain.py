@@ -244,8 +244,8 @@ def load_ds(traindomains=("restaurants",),
     if supportsetting == "min":
         for domain, domainexamples in domains.items():
             mindomainexamples = get_maximum_spanning_examples([(a, b, c) for a, b, c in domainexamples if c == "train"],
-                                          mincoverage=mincoverage,
-                                          loadedex=[a for a in alltrainex if a[3] != domain])
+                                          mincoverage=mincoverage, loadedex=None)
+                                          # loadedex=[a for a in alltrainex if a[3] != domain])
             domains[domain] = domains[domain] + [(a, b, "finetune") for a, b, c in mindomainexamples]
 
     allex = []
@@ -1393,7 +1393,7 @@ def run(traindomains="ALL",
 
     def get_ft_model(x):
         _x = deepcopy(x)
-        # reset_special_inner(_x)
+        reset_special_inner(_x)
         return _x
 
     trainepoch = partial(meta_train_epoch,
