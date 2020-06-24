@@ -1102,9 +1102,8 @@ def meta_train_epoch(model=None,
                 outerbatch = None
                 if len(exhausted_domains) == len(data):
                     break
-                else:
-                    if outerstep_i % outersteps != 0:
-                        override = True
+                if outerstep_i % outersteps != 0:
+                    override = True
 
 
         if outerbatch is None:
