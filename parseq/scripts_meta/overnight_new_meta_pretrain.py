@@ -1038,6 +1038,7 @@ def meta_train_epoch(model=None,
                 current_epoch=0,
                      max_epochs=0,
                      finetunesteps=1,
+                     outersteps=1,
                      gradmode="none",   # "none", "metarare", ...
                      on_start=tuple(),
                      on_end=tuple(),
@@ -1115,23 +1116,24 @@ def meta_train_epoch(model=None,
             loss.reset_agg()
             loss.loss.to(device)
 
-        for innerstep_i in range(finetunesteps):
-            innerbatch = next(inneriter)
-            if injecttraindata:
-                extra_innerbatch = next(extra_inneriter)
-                innerbatch = cat_batches(innerbatch, extra_innerbatch)
-            # innerbatch["tokenmask"] = chosendomain
-            ftmodel.current_tokenmask = chosendomain
-            ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
-                                  batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch,
-                                  max_epochs=max_epochs,
-                                  on_before_optim_step=[
-                                      lambda: clipgradnorm(_m=ftmodel, _norm=innergradnorm),
-                                      partial(reset_special_grads_inner, _m=ftmodel, mode=gradmode)])
-            if print_every_batch:
-                tt.msg(ttmsg)
-            else:
-                tt.live(ttmsg)
+        if outerstep_i % outersteps == 0:
+            for innerstep_i in range(finetunesteps):
+                innerbatch = next(inneriter)
+                if injecttraindata:
+                    extra_innerbatch = next(extra_inneriter)
+                    innerbatch = cat_batches(innerbatch, extra_innerbatch)
+                # innerbatch["tokenmask"] = chosendomain
+                ftmodel.current_tokenmask = chosendomain
+                ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
+                                      batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch,
+                                      max_epochs=max_epochs,
+                                      on_before_optim_step=[
+                                          lambda: clipgradnorm(_m=ftmodel, _norm=innergradnorm),
+                                          partial(reset_special_grads_inner, _m=ftmodel, mode=gradmode)])
+                if print_every_batch:
+                    tt.msg(ttmsg)
+                else:
+                    tt.live(ttmsg)
         # after K inner updates
         # perform outer update on main model weights
         # do outer update:
@@ -1309,6 +1311,7 @@ def run(traindomains="ALL",
         ftbatsize=-1,
         epochs=100,
         finetunesteps=5,
+        outersteps=1,
         maxfinetunesteps=4,
         evalinterval=2,
         dropout=0.1,
@@ -1455,6 +1458,7 @@ def run(traindomains="ALL",
                          abslosses=absmetrics,
                          ftlosses=ftmetrics,
                          finetunesteps=finetunesteps,
+                         outersteps=outersteps,
                          clipgradnorm=clipgradnorm,
                          outergradnorm=gradnorm,
                          innergradnorm=ftgradnorm,
@@ -1608,7 +1612,7 @@ def run(traindomains="ALL",
 
 def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=10, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
-                         numbeam=1, supportsetting="lex", abscontrib=.1, metarare="undefined", finetunesteps=1, gradmode="undefined",
+                         numbeam=1, supportsetting="lex", abscontrib=.1, metarare="undefined", finetunesteps=1, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=30, evalinterval=5, epochs=25, injecttraindata=False, useadapters=False,
                         seed=None, mincoverage=2, resetspecialinner=False):
     ranges = {
@@ -1624,7 +1628,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "hdim": [hdim],
         "numbeam": [numbeam],
         "batsize": [batsize],
-        "ftbatsize": [ftbatsize]
+        "ftbatsize": [ftbatsize],
         "seed": [87646464, 12345678, 98765456, 45787999, 93938367],
         "gradmode": ["none", "split", "inner:all+outer:noemb", "metarare"],
         "metarare": ["no", "emb", "outlin", "emb+outlin"]
@@ -1655,6 +1659,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       supportsetting=supportsetting,
                       abscontrib=abscontrib,
                       finetunesteps=finetunesteps,
+                      outersteps=outersteps,
                       mincoverage=mincoverage,
                       gradacc=gradacc, gradnorm=gradnorm,
                       maxfinetunesteps=maxfinetunesteps,
