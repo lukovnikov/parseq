@@ -1104,8 +1104,6 @@ def meta_train_epoch(model=None,
             break
 
         # perform K number of inner steps
-        ftmodel = get_ft_model(model)
-        ftoptim = get_ft_optim(ftmodel)
         inneriter = infiter2(data[chosendomain]["finetune"])
         extra_inneriter = infiter2(allsourcedata["train"])
 
@@ -1118,6 +1116,8 @@ def meta_train_epoch(model=None,
             loss.loss.to(device)
 
         if outerstep_i % outersteps == 0:
+            ftmodel = get_ft_model(model)
+            ftoptim = get_ft_optim(ftmodel)
             for innerstep_i in range(finetunesteps):
                 innerbatch = next(inneriter)
                 if injecttraindata:
