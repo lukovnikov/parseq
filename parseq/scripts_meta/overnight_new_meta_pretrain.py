@@ -1665,7 +1665,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, p
 
 if __name__ == '__main__':
     faulthandler.enable()
-    ret = q.argprun(run)
+    # ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
     fire.Fire(run_experiments)
