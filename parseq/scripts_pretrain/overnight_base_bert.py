@@ -151,7 +151,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 
 def create_model(encoder_name="bert-base-uncased",
-                 dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
+                 dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0., dropoutdec=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
     if encoder_name != "bert-base-uncased":
         raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
@@ -181,7 +181,7 @@ def create_model(encoder_name="bert-base-uncased",
                                 vocab_size=dec_vocabsize,
                                 decoder_attention_heads=dec_heads//2,
                                 decoder_layers=dec_layers,
-                                dropout=dropout,
+                                dropout=dropoutdec,
                                 attention_dropout=min(0.1, dropout/2),
                                 decoder_ffn_dim=dec_dim*4,
                                 encoder_attention_heads=dec_heads,
@@ -245,6 +245,7 @@ def run(domain="restaurants",
         batsize=20,
         epochs=100,
         dropout=0.1,
+        dropoutdec=0.1,
         wreg=1e-9,
         gradnorm=3,
         smoothing=0.,
@@ -286,6 +287,7 @@ def run(domain="restaurants",
                                  dec_dim=hdim,
                                  dec_heads=numheads,
                                  dropout=dropout,
+                                 dropoutdec=dropoutdec,
                                  smoothing=smoothing,
                                  maxlen=maxlen,
                                  numbeam=numbeam,
@@ -430,7 +432,7 @@ def run_experiments(domain="restaurants", gpu=-1):
                       domain=domain, gpu=gpu)
 
 
-def run_experiments_seed(domain="restaurants", lr=-1., enclrmul=-1., hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
+def run_experiments_seed(domain="restaurants", lr=-1., enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
                          smoothing=0.2, numbeam=1, trainonvalid=False, cosinelr=False, fullsimplify=True):
     ranges = {
         "lr": [0.0001],
@@ -440,6 +442,7 @@ def run_experiments_seed(domain="restaurants", lr=-1., enclrmul=-1., hdim=-1, dr
         "numheads": [12],
         "numlayers": [3],
         "dropout": [.1],
+        "dropoutdec": [.1],
         "hdim": [768],
         "cosinelr": [cosinelr],
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
@@ -450,6 +453,8 @@ def run_experiments_seed(domain="restaurants", lr=-1., enclrmul=-1., hdim=-1, dr
         ranges["hdim"] = [hdim]
     if dropout >= 0:
         ranges["dropout"] = [dropout]
+    if dropoutdec >= 0:
+        ranges["dropoutdec"] = [dropoutdec]
     if numlayers >= 0:
         ranges["numlayers"] = [numlayers]
     if numheads >= 0:
