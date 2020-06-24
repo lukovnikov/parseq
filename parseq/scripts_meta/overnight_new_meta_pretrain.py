@@ -1104,7 +1104,7 @@ def meta_train_epoch(model=None,
                 if len(exhausted_domains) == len(data):
                     break
                 else:
-                    if outerstep_i % outersteps == 0:
+                    if outerstep_i % outersteps != 0:
                         override = True
                     else:
                         raise Exception("something wrong")
