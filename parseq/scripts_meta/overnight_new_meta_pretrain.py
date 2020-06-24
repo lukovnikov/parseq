@@ -1339,7 +1339,7 @@ def run(traindomains="ALL",
         numlayers=6,
         hdim=600,
         numheads=8,
-        maxlen=30,
+        maxlen=20,
         fullsimplify=True,
         domainstart=False,
         supportsetting="lex",   # "lex" or "min"
@@ -1622,10 +1622,10 @@ def run(traindomains="ALL",
     # return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=10, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
+def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
-                         numbeam=1, supportsetting="lex", abscontrib=.1, metarare="undefined", finetunesteps=1, outersteps=1, gradmode="undefined",
-                         maxfinetunesteps=30, evalinterval=5, epochs=25, injecttraindata=False, useadapters=False,
+                         numbeam=1, supportsetting="lex", abscontrib=-1, metarare="undefined", finetunesteps=1, outersteps=1, gradmode="undefined",
+                         maxfinetunesteps=75, evalinterval=15, epochs=60, injecttraindata=False, useadapters=False,
                         seed=None, mincoverage=2, resetspecialinner=False):
     ranges = {
         "lr": [lr],
@@ -1641,6 +1641,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "numbeam": [numbeam],
         "batsize": [batsize],
         "ftbatsize": [ftbatsize],
+        "abscontrib": [0., .1],
         "seed": [87646464, 12345678, 98765456],
         "gradmode": ["none", "split", "inner:all+outer:noemb", "metarare"],
         "metarare": ["no", "emb", "outlin", "emb+outlin"]
@@ -1652,6 +1653,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         ranges["metarare"] = [metarare]
     if seed is not None:
         ranges["seed"] = [seed]
+    if abscontrib >= 0:
+        ranges["abscontrib"] = [abscontrib]
 
     def check_config(x):
         # effectiveenclr = x["enclrmul"] * x["lr"]
