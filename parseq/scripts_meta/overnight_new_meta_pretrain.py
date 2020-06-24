@@ -1681,5 +1681,5 @@ if __name__ == '__main__':
     faulthandler.enable()
     # ret = q.argprun(run)
     # print(ret)
-    # q.argprun(run_experiments)
-    fire.Fire(run_experiments)
+    q.argprun(run_experiments)
+    # fire.Fire(run_experiments)
