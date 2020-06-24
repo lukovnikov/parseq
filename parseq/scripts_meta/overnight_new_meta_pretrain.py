@@ -1088,6 +1088,7 @@ def meta_train_epoch(model=None,
     outersteps_counter = outersteps
     while True:
         outerbatch = None
+        do_inner = False
         exhausted_domains = set()
         while outerbatch is None:
             assert(outersteps_counter <= outersteps)
@@ -1095,6 +1096,7 @@ def meta_train_epoch(model=None,
                 ks, vs = zip(*probbatsperdomain.items())
                 chosendomain = np.random.choice(ks, p=vs)
                 outersteps_counter = 0
+                do_inner = True
             try:
                 outerbatch = next(data[chosendomain]["_train"])
                 outersteps_counter += 1
@@ -1124,7 +1126,7 @@ def meta_train_epoch(model=None,
             loss.reset_agg()
             loss.loss.to(device)
 
-        if outersteps_counter == outersteps:
+        if do_inner:
             ftmodel = get_ft_model(model)
             ftoptim = get_ft_optim(ftmodel)
             for innerstep_i in range(finetunesteps):
