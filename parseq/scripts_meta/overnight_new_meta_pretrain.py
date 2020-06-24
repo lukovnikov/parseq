@@ -188,6 +188,7 @@ def load_ds(traindomains=("restaurants",),
             mincoverage=1,
             top_k=np.infty,
             batsize=10,
+            ftbatsize=-1,
             nl_mode="bert-base-uncased",
             fullsimplify=False,
             add_domain_start=True,
@@ -213,6 +214,7 @@ def load_ds(traindomains=("restaurants",),
                             ! Validation is over a fraction of training data
     :return:
     """
+    ftbatsize = batsize if ftbatsize < 0 else ftbatsize
     general_tokens = {
         "(", ")", "arg:~type", "arg:type", "op:and", "SW:concat", "cond:has",
         "arg:<=", "arg:<", "arg:>=", "arg:>", "arg:!=", "arg:=", "SW:superlative",
@@ -317,7 +319,7 @@ def load_ds(traindomains=("restaurants",),
         else:
             ret = sourceret
         ret[domain] = {
-            "finetune":DataLoader(finetuneds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
+            "finetune":DataLoader(finetuneds, batch_size=ftbatsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
             "train": DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
             "valid": DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0)),
             "test": DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0))
@@ -326,7 +328,7 @@ def load_ds(traindomains=("restaurants",),
     # populate the "all" domain
     allsourceret = {
         "finetune": DataLoader(ds[lambda x: x[3] == "finetune" and x[4] in traindomains].map(tokenize),
-                               batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
+                               batch_size=ftbatsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
         "train": DataLoader(ds[lambda x: x[3] == "train" and x[4] in traindomains].map(tokenize),
                             batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
         "valid": DataLoader(ds[lambda x: x[3] == "valid" and x[4] in traindomains].map(tokenize),
@@ -1304,6 +1306,7 @@ def run(traindomains="ALL",
         cosinelr=False,
         warmup=0.,
         batsize=30,
+        ftbatsize=-1,
         epochs=100,
         finetunesteps=5,
         maxfinetunesteps=4,
@@ -1335,6 +1338,7 @@ def run(traindomains="ALL",
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
     ftgradnorm = gradnorm if ftgradnorm < 0 else ftgradnorm
+    ftbatsize = batsize if ftbatsize < 0 else ftbatsize
     # wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
     #            reinit=True, config=settings)
     if traindomains == "ALL":
@@ -1359,7 +1363,7 @@ def run(traindomains="ALL",
     tt.tick("loading data")
     sourcedss, targetdss, allsourceds, nltok, flenc, tokenmasks = \
         load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
-                fullsimplify=fullsimplify, add_domain_start=domainstart, batsize=batsize,
+                fullsimplify=fullsimplify, add_domain_start=domainstart, batsize=batsize, ftbatsize=ftbatsize,
                 supportsetting=supportsetting)
     tt.tock("data loaded")
 
@@ -1602,8 +1606,8 @@ def run(traindomains="ALL",
     # return settings
 
 
-def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
-                         smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3,
+def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=10, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
+                         smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
                          numbeam=1, supportsetting="lex", abscontrib=.1, metarare="undefined", finetunesteps=1, gradmode="undefined",
                          maxfinetunesteps=30, evalinterval=5, epochs=25, injecttraindata=False, useadapters=False,
                         seed=None, mincoverage=2, resetspecialinner=False):
@@ -1620,6 +1624,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "hdim": [hdim],
         "numbeam": [numbeam],
         "batsize": [batsize],
+        "ftbatsize": [ftbatsize]
         "seed": [87646464, 12345678, 98765456, 45787999, 93938367],
         "gradmode": ["none", "split", "inner:all+outer:noemb", "metarare"],
         "metarare": ["no", "emb", "outlin", "emb+outlin"]
@@ -1656,7 +1661,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       evalinterval=evalinterval,
                       injecttraindata=injecttraindata,
                       useadapters=useadapters,
-                      resetspecialinner=resetspecialinner)
+                      resetspecialinner=resetspecialinner,
+                      ftgradnorm=ftgradnorm)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
