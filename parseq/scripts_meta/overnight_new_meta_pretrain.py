@@ -1089,8 +1089,9 @@ def meta_train_epoch(model=None,
         outerbatch = None
         exhausted_domains = set()
         while outerbatch is None and len(exhausted_domains) < len(data):
-            ks, vs = zip(*probbatsperdomain.items())
-            chosendomain = np.random.choice(ks, p=vs)
+            if outerstep_i % outersteps == 0:   # switch domain only every 'outersteps' steps
+                ks, vs = zip(*probbatsperdomain.items())
+                chosendomain = np.random.choice(ks, p=vs)
             try:
                 outerbatch = next(data[chosendomain]["_train"])
                 # outerbatch["tokenmask"] = chosendomain
@@ -1108,8 +1109,8 @@ def meta_train_epoch(model=None,
         inneriter = infiter2(data[chosendomain]["finetune"])
         extra_inneriter = infiter2(allsourcedata["train"])
 
-        oldemb = ftmodel.model.model.decoder.embed_tokens.weight + 0
-        oldlin = ftmodel.model.outlin.weight + 0
+        # oldemb = ftmodel.model.model.decoder.embed_tokens.weight + 0
+        # oldlin = ftmodel.model.outlin.weight + 0
 
         for loss in ftlosses:
             loss.push_epoch_to_history(epoch=str(current_epoch - 1)+"."+chosendomain)
