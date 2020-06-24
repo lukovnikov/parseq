@@ -1093,7 +1093,6 @@ def meta_train_epoch(model=None,
             if outerstep_i % outersteps == 0 or override:   # switch domain only every 'outersteps' steps
                 ks, vs = zip(*probbatsperdomain.items())
                 chosendomain = np.random.choice(ks, p=vs)
-                override = False
             try:
                 outerbatch = next(data[chosendomain]["_train"])
                 # outerbatch["tokenmask"] = chosendomain
@@ -1124,7 +1123,7 @@ def meta_train_epoch(model=None,
             loss.reset_agg()
             loss.loss.to(device)
 
-        if outerstep_i % outersteps == 0:
+        if outerstep_i % outersteps == 0 or override:
             ftmodel = get_ft_model(model)
             ftoptim = get_ft_optim(ftmodel)
             for innerstep_i in range(finetunesteps):
