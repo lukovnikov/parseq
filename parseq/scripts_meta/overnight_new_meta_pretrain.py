@@ -801,6 +801,33 @@ def reset_special_grads_inner(_m:torch.nn.Module, mode="none"):
         #         param.grad = None
     if mode == "metarare":    # train everything
         pass
+    elif mode == "extrasplit":
+        for paramname, param in _m.named_parameters():
+            isadapterparam = False
+            isextraparam = False
+            isspecialparam = False
+            parent = None
+            m = _m
+            namesplits = paramname.split(".")
+            for namepiece in namesplits:
+                m = getattr(m, namepiece)
+                if isinstance(m, TransformerLayerAdapter):
+                    isadapterparam = True
+                    break
+                if isinstance(parent, (SpecialEmbedding, SpecialOutlin)):
+                    isspecialparam = True
+                    if namepiece == "extra_emb" or namepiece == "extra_lin":
+                        isextraparam = True
+                        break
+                parent = m
+
+            dotrain = False
+            if isadapterparam:
+                dotrain = dotrain or True
+            if isextraparam:
+                dotrain = dotrain or True
+            if not dotrain:
+                param.grad = None
     elif mode == "split" or mode == "metararetokensonly" \
             or "inner:onlyemb" in mode.split("+"):   # train only embeddings and output layer
         for paramname, param in _m.named_parameters():
@@ -884,10 +911,10 @@ def reset_special_grads_outer(_m, mode="none"):
     #     if isinstance(_m.model.outlin, SpecialOutlin):
     #         _m.model.outlin.extra_lin.weight.grad = None
     #         _m.model.outlin.extra_lin.bias.grad = None
-    if mode == "metarare" or mode == "metararetokensonly":    # train everything except Special layers's, extra vectors
+    if mode == "metarare" or mode == "metararetokensonly" or mode=="extrasplit":    # train everything except Special layers's, extra vectors
         if isinstance(_m.model.model.decoder.embed_tokens, SpecialEmbedding):
             _m.model.model.decoder.embed_tokens.extra_emb.weight.grad = None
-        if isinstance(_m.model.outlin, SpecialOutlin):
+        elif isinstance(_m.model.outlin, SpecialOutlin):
             _m.model.outlin.extra_lin.weight.grad = None
             _m.model.outlin.extra_lin.bias.grad = None
     elif mode == "split" or "outer:noemb" in mode.split("+"):   # don't train any embeddings/output layer
