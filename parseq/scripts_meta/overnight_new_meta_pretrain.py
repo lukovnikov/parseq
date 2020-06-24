@@ -1088,10 +1088,12 @@ def meta_train_epoch(model=None,
     while True:
         outerbatch = None
         exhausted_domains = set()
-        while outerbatch is None and len(exhausted_domains) < len(data):
-            if outerstep_i % outersteps == 0:   # switch domain only every 'outersteps' steps
+        override = False
+        while outerbatch is None:
+            if outerstep_i % outersteps == 0 or override:   # switch domain only every 'outersteps' steps
                 ks, vs = zip(*probbatsperdomain.items())
                 chosendomain = np.random.choice(ks, p=vs)
+                override = False
             try:
                 outerbatch = next(data[chosendomain]["_train"])
                 # outerbatch["tokenmask"] = chosendomain
@@ -1099,6 +1101,13 @@ def meta_train_epoch(model=None,
                 # print(f"stopping iteration - outerstep_i: {outerstep_i}")
                 exhausted_domains.add(chosendomain)
                 outerbatch = None
+                if len(exhausted_domains) == len(data):
+                    break
+                else:
+                    if outerstep_i % outersteps == 0:
+                        override = True
+                    else:
+                        raise Exception("something wrong")
 
         if outerbatch is None:
             break
