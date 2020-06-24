@@ -1624,7 +1624,7 @@ def run(traindomains="ALL",
 
 def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
-                         numbeam=1, supportsetting="lex", abscontrib=-1, metarare="undefined", finetunesteps=1, outersteps=1, gradmode="undefined",
+                         numbeam=1, supportsetting="lex", abscontrib=-1., metarare="undefined", finetunesteps=1, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=75, evalinterval=15, epochs=60, injecttraindata=False, useadapters=False,
                         seed=None, mincoverage=2, resetspecialinner=False):
     ranges = {
