@@ -1014,6 +1014,8 @@ def meta_train_epoch(model=None,
                      on_end=tuple(),
                 print_every_batch=False,
                      clipgradnorm=None,
+                     outergradnorm=3,
+                     innergradnorm=3,
                      gradacc=1,
                      abstract_contrib=0.):
     """
@@ -1095,7 +1097,7 @@ def meta_train_epoch(model=None,
                                   batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch,
                                   max_epochs=max_epochs,
                                   on_before_optim_step=[
-                                      partial(clipgradnorm, _m=ftmodel),
+                                      lambda x: clipgradnorm(_m=ftmodel, _norm=innergradnorm),
                                       partial(reset_special_grads_inner, _m=ftmodel, mode=gradmode)])
             if print_every_batch:
                 tt.msg(ttmsg)
@@ -1126,7 +1128,7 @@ def meta_train_epoch(model=None,
 
         reset_special_grads_outer(model, mode=gradmode)
 
-        clipgradnorm(_m=model)
+        clipgradnorm(_m=model, _norm=outergradnorm)
 
         # do optim step
         _do_optim_step = ((outerstep_i+1) % gradacc) == 0
@@ -1282,6 +1284,7 @@ def run(traindomains="ALL",
         dropout=0.1,
         wreg=1e-9,
         gradnorm=3,
+        ftgradnorm=-1,
         gradacc=1,
         smoothing=0.,
         patience=20,
@@ -1300,9 +1303,11 @@ def run(traindomains="ALL",
         gradmode="none",    # "none", "metarare", "metarareonly", "split"
         injecttraindata=False,
         useadapters=False,
+        resetspecialinner=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
+    ftgradnorm = gradnorm if ftgradnorm < 0 else ftgradnorm
     # wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
     #            reinit=True, config=settings)
     if traindomains == "ALL":
@@ -1398,7 +1403,8 @@ def run(traindomains="ALL",
 
     def get_ft_model(x):
         _x = deepcopy(x)
-        # reset_special_inner(_x)
+        if resetspecialinner:
+            reset_special_inner(_x)
         return _x
 
     trainepoch = partial(meta_train_epoch,
@@ -1418,7 +1424,9 @@ def run(traindomains="ALL",
                          abslosses=absmetrics,
                          ftlosses=ftmetrics,
                          finetunesteps=finetunesteps,
-                         clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
+                         clipgradnorm=clipgradnorm,
+                         outergradnorm=gradnorm,
+                         innergradnorm=ftgradnorm,
                          device=device,
                          on_end=[lambda: lr_schedule.step()],
                          gradacc=gradacc,
@@ -1443,7 +1451,7 @@ def run(traindomains="ALL",
                         finetunesteps=maxfinetunesteps,
                         mode="valid",
                         evalinterval=evalinterval,
-                        clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
+                        clipgradnorm=partial(clipgradnorm, _norm=ftgradnorm),
                         device=device,
                         print_every_batch=False,
                         on_outer_end=[lambda: eyt.on_epoch_end()])
@@ -1479,7 +1487,7 @@ def run(traindomains="ALL",
                         ftlosses=xftmetrics,
                         finetunesteps=maxfinetunesteps,
                         mode="test",
-                        clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
+                        clipgradnorm=partial(clipgradnorm, _norm=ftgradnorm),
                         device=device,
                         print_every_batch=False,
                         on_outer_end=[lambda: eyt.on_epoch_end()])
