@@ -1090,6 +1090,7 @@ def meta_train_epoch(model=None,
         outerbatch = None
         exhausted_domains = set()
         while outerbatch is None:
+            assert(outersteps_counter <= outersteps)
             if outersteps_counter == outersteps:   # switch domain only every 'outersteps' steps
                 ks, vs = zip(*probbatsperdomain.items())
                 chosendomain = np.random.choice(ks, p=vs)
