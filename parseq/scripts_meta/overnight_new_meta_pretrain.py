@@ -1105,8 +1105,7 @@ def meta_train_epoch(model=None,
                 else:
                     if outerstep_i % outersteps != 0:
                         override = True
-                    else:
-                        raise Exception("something wrong")
+
 
         if outerbatch is None:
             break
@@ -1638,7 +1637,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "numbeam": [numbeam],
         "batsize": [batsize],
         "ftbatsize": [ftbatsize],
-        "seed": [87646464, 12345678, 98765456, 45787999, 93938367],
+        "seed": [87646464, 12345678, 98765456],
         "gradmode": ["none", "split", "inner:all+outer:noemb", "metarare"],
         "metarare": ["no", "emb", "outlin", "emb+outlin"]
     }
