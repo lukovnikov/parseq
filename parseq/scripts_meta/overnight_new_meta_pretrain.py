@@ -972,6 +972,11 @@ def infiter(a):
             yield ae
 
 
+def infiter2(a):
+    while True:
+        yield next(iter(a))
+
+
 def cat_batches(*x, pad_value=0):
     y = list(zip(*x))
     for i, yi in enumerate(y):
@@ -1068,8 +1073,8 @@ def meta_train_epoch(model=None,
         # perform K number of inner steps
         ftmodel = get_ft_model(model)
         ftoptim = get_ft_optim(ftmodel)
-        inneriter = infiter(data[chosendomain]["finetune"])
-        extra_inneriter = infiter(allsourcedata["train"])
+        inneriter = infiter2(data[chosendomain]["finetune"])
+        extra_inneriter = infiter2(allsourcedata["train"])
 
         oldemb = ftmodel.model.model.decoder.embed_tokens.weight + 0
         oldlin = ftmodel.model.outlin.weight + 0
@@ -1195,8 +1200,8 @@ def meta_test_epoch(model=None,
         ftmodel = get_ft_model(model)
         ftoptim = get_ft_optim(ftmodel)
         ftmodel.train()
-        inneriter = infiter(domaindata["finetune"])
-        extra_inneriter = infiter(allsourcedata["train"])
+        inneriter = infiter2(domaindata["finetune"])
+        extra_inneriter = infiter2(allsourcedata["train"])
 
         for loss in ftlosses:
             loss.push_epoch_to_history(epoch=str(current_epoch - 1)+"."+domain)
