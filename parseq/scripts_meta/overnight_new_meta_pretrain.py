@@ -668,7 +668,7 @@ def create_model(encoder_name="bert-base-uncased",
             ret, _ = self.model(input_ids, attention_mask=attention_mask)
             if pretrained.config.hidden_size != dec_dim:
                 ret = self.proj(ret)
-            ret = self.dropout(ret)
+                ret = self.dropout(ret)
             ret = (ret, None, None)
             return ret
 
