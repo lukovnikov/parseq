@@ -1126,8 +1126,8 @@ def meta_train_epoch(model=None,
             loss.reset_agg()
             loss.loss.to(device)
 
+        ftmodel = get_ft_model(model)
         if do_inner:
-            ftmodel = get_ft_model(model)
             ftoptim = get_ft_optim(ftmodel)
             for innerstep_i in range(finetunesteps):
                 innerbatch = next(inneriter)
@@ -1464,8 +1464,11 @@ def run(traindomains="ALL",
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
                          optim=optim,
-                         get_ft_model=lambda _: None,
-                         get_ft_optim=lambda _: None,
+                         get_ft_model=get_ft_model,
+                         get_ft_optim=partial(get_optim,
+                                              _lr=ftlr,
+                                              _enclrmul=enclrmul,
+                                              _wreg=wreg),
                          gradmode="none",
                          losses=metrics,
                          abslosses=absmetrics,
