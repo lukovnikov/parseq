@@ -1349,6 +1349,7 @@ def run(traindomains="ALL",
         injecttraindata=False,
         useadapters=False,
         resetspecialinner=False,
+        validinter=1,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -1508,14 +1509,15 @@ def run(traindomains="ALL",
     tt.tick("pretraining")
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=validepoch,
+                   validinter=validinter,
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()])
     tt.tock("done pretraining")
 
-    tt.msg(f"best finetune steps: {q.v(bestfinetunesteps)+1}")
-    if eyt.get_remembered() is not None:
-        tt.msg("reloaded")
+    if eyt.get_remembered() is not None and validinter == 1:
+        tt.msg(f"best finetune steps: {q.v(bestfinetunesteps)+1}")
         trainm.model = eyt.get_remembered()
+        tt.msg("reloaded")
 
     testepoch = partial(meta_test_epoch,
                         model=trainm,
@@ -1626,7 +1628,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
                          numbeam=1, supportsetting="lex", abscontrib=-1., metarare="undefined", finetunesteps=5, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=75, evalinterval=15, epochs=60, injecttraindata=False, useadapters=False,
-                        seed=None, mincoverage=2, resetspecialinner=False):
+                        seed=None, mincoverage=2, resetspecialinner=False, validinter=1):
     ranges = {
         "lr": [lr],
         "ftlr": [ftlr],
@@ -1682,7 +1684,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       injecttraindata=injecttraindata,
                       useadapters=useadapters,
                       resetspecialinner=resetspecialinner,
-                      ftgradnorm=ftgradnorm)
+                      ftgradnorm=ftgradnorm,
+                      validinter=validinter)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
