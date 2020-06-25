@@ -1464,7 +1464,7 @@ def run(traindomains="ALL",
                          optim=optim,
                          get_ft_model=lambda: None,
                          get_ft_optim=lambda: None,
-                         gradmode=gradmode,
+                         gradmode="none",
                          losses=metrics,
                          abslosses=absmetrics,
                          ftlosses=ftmetrics,
@@ -1482,8 +1482,9 @@ def run(traindomains="ALL",
     if startmtafter > 0:
         tt.tick("pre-pretraining")
         q.run_training(run_train_epoch=pretrainepoch,
-                       validinter=5,
                        max_epochs=startmtafter)
+        if resetspecialinner:
+            reset_special_inner(trainm)
         tt.tock("done pre-pretraining")
 
 
