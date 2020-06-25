@@ -1298,7 +1298,7 @@ def meta_test_epoch(model=None,
         print("metricsmatrix:")
         print(metricsmatrix)
         evalstep = q.v(bestfinetunestepsvar)
-        k = math.ceil(q.v(bestfinetunestepsvar) / evalinterval)
+        k = math.floor(q.v(bestfinetunestepsvar) / evalinterval)
 
     for loss, _loss in zip(losses, metricsmatrix[k, :]):
         loss.epoch_agg_values.append(_loss)
