@@ -1664,10 +1664,10 @@ def run(traindomains="ALL",
 
 
 def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
-                         smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
-                         numbeam=1, supportsetting="lex", abscontrib=-1., metarare="undefined", finetunesteps=5, outersteps=1, gradmode="undefined",
+                         smoothing=0., dropout=-1., numlayers=-1, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
+                         numbeam=1, supportsetting="lex", abscontrib=-1., metarare="undefined", finetunesteps=-1, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=60, injecttraindata=False, useadapters=False,
-                        seed=None, mincoverage=2, resetspecialinner=False, validinter=1,
+                        seed=-1, mincoverage=2, resetspecialinner=False, validinter=1,
                     startmtafter=0):
     ranges = {
         "lr": [lr],
@@ -1676,10 +1676,11 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "warmup": [0],
         "epochs": [epochs],
         "numheads": [numheads],
-        "numlayers": [numlayers],
-        "dropout": [dropout],
+        "numlayers": [2, 3, 4, 5],
+        "dropout": [0.1, 0.2, 0.3, 0.5],
         "smoothing": [smoothing],
         "hdim": [hdim],
+        "finetunesteps": [3, 5, 10, 15],
         "numbeam": [numbeam],
         "batsize": [batsize],
         "ftbatsize": [ftbatsize],
@@ -1693,10 +1694,16 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         ranges["gradmode"] = [gradmode]
     if metarare != "undefined":
         ranges["metarare"] = [metarare]
-    if seed is not None:
+    if seed >= 0:
         ranges["seed"] = [seed]
     if abscontrib >= 0:
         ranges["abscontrib"] = [abscontrib]
+    if dropout >= 0:
+        ranges["dropout"] = [dropout]
+    if finetunesteps >= 0:
+        ranges["finetunesteps"] = [finetunesteps]
+    if numlayers >= 0:
+        ranges["numlayers"] = [numlayers]
 
     def check_config(x):
         # effectiveenclr = x["enclrmul"] * x["lr"]
@@ -1715,7 +1722,6 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       domainstart=domainstart,
                       supportsetting=supportsetting,
                       abscontrib=abscontrib,
-                      finetunesteps=finetunesteps,
                       outersteps=outersteps,
                       mincoverage=mincoverage,
                       gradacc=gradacc, gradnorm=gradnorm,
