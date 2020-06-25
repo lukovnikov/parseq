@@ -1047,7 +1047,8 @@ def meta_train_epoch(model=None,
                      outergradnorm=3,
                      innergradnorm=3,
                      gradacc=1,
-                     abstract_contrib=0.):
+                     abstract_contrib=0.,
+                     startmtafter=0):
     """
     Performs an epoch of training on given model, with data from given dataloader, using given optimizer,
     with loss computed based on given losses.
@@ -1350,6 +1351,7 @@ def run(traindomains="ALL",
         useadapters=False,
         resetspecialinner=False,
         validinter=1,
+        startmtafter=0,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -1454,6 +1456,38 @@ def run(traindomains="ALL",
             reset_special_inner(_x)
         return _x
 
+    pretrainepoch = partial(meta_train_epoch,
+                         model=trainm,
+                         absmodel=abstrainm,
+                         data=sourcedss,
+                         optim=optim,
+                         get_ft_model=get_ft_model,
+                         get_ft_optim=partial(get_optim,
+                                              _lr=ftlr,
+                                              _enclrmul=enclrmul,
+                                              _wreg=wreg),
+                         gradmode=gradmode,
+                         losses=metrics,
+                         abslosses=absmetrics,
+                         ftlosses=ftmetrics,
+                         finetunesteps=0,
+                         outersteps=1,
+                         clipgradnorm=clipgradnorm,
+                         outergradnorm=gradnorm,
+                         innergradnorm=ftgradnorm,
+                         device=device,
+                         on_end=[],
+                         gradacc=gradacc,
+                         abstract_contrib=0.,
+                         startmtafter=startmtafter)
+
+    if startmtafter > 0:
+        tt.tick("pre-pretraining")
+        q.run_training(run_train_epoch=pretrainepoch,
+                       validinter=5,
+                       max_epochs=startmtafter)
+        tt.tock("done pre-pretraining")
+
     trainepoch = partial(meta_train_epoch,
                          model=trainm,
                          absmodel=abstrainm,
@@ -1478,7 +1512,8 @@ def run(traindomains="ALL",
                          device=device,
                          on_end=[lambda: lr_schedule.step()],
                          gradacc=gradacc,
-                         abstract_contrib=abscontrib,)
+                         abstract_contrib=abscontrib,
+                         startmtafter=startmtafter)
 
     bestfinetunesteps = q.hyperparam(0)
     validepoch = partial(meta_test_epoch,
@@ -1510,7 +1545,7 @@ def run(traindomains="ALL",
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=validepoch,
                    validinter=validinter,
-                   max_epochs=epochs,
+                   max_epochs=epochs-startmtafter,
                    check_stop=[lambda: eyt.check_stop()])
     tt.tock("done pretraining")
 
@@ -1628,7 +1663,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
                          numbeam=1, supportsetting="lex", abscontrib=-1., metarare="undefined", finetunesteps=5, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=75, evalinterval=15, epochs=60, injecttraindata=False, useadapters=False,
-                        seed=None, mincoverage=2, resetspecialinner=False, validinter=1):
+                        seed=None, mincoverage=2, resetspecialinner=False, validinter=1,
+                    startmtafter=0):
     ranges = {
         "lr": [lr],
         "ftlr": [ftlr],
@@ -1685,7 +1721,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       useadapters=useadapters,
                       resetspecialinner=resetspecialinner,
                       ftgradnorm=ftgradnorm,
-                      validinter=validinter)
+                      validinter=validinter,
+                      startmtafter=startmtafter)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
