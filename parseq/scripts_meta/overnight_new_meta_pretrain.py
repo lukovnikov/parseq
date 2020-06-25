@@ -1433,7 +1433,7 @@ def run(traindomains="ALL",
     def clipgradnorm(_m=None, _norm=None):
         torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
 
-    eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
+    eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=15, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
     # def wandb_logger():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
