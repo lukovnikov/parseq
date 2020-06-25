@@ -1272,8 +1272,7 @@ def meta_test_epoch(model=None,
 
             test_ftmodel = ftmodel.get_test_model()
 
-            if (mode == "valid" and (innerstep_i+1) % evalinterval == 0) \
-                    or (mode == "test"): #"(innerstep_i+1 == finetunesteps):
+            if ((innerstep_i+1) % evalinterval == 0): #"(innerstep_i+1 == finetunesteps):
                 _losses = deepcopy(losses)
                 dataname = "valid" if mode == "valid" else "test"
                 q.test_epoch(test_ftmodel, dataloader=domaindata[dataname], losses=_losses, device=device,
@@ -1299,7 +1298,7 @@ def meta_test_epoch(model=None,
         print("metricsmatrix:")
         print(metricsmatrix)
         evalstep = q.v(bestfinetunestepsvar)
-        k = q.v(bestfinetunestepsvar)
+        k = math.ceil(q.v(bestfinetunestepsvar) / evalinterval)
 
     for loss, _loss in zip(losses, metricsmatrix[k, :]):
         loss.epoch_agg_values.append(_loss)
@@ -1327,6 +1326,7 @@ def run(traindomains="ALL",
         outersteps=1,
         maxfinetunesteps=4,
         evalinterval=2,
+        testevalinterval=1,
         dropout=0.1,
         wreg=1e-9,
         gradnorm=3,
@@ -1574,6 +1574,7 @@ def run(traindomains="ALL",
                         ftlosses=xftmetrics,
                         finetunesteps=maxfinetunesteps,
                         mode="test",
+                        evalinterval=testevalinterval,
                         clipgradnorm=partial(clipgradnorm, _norm=ftgradnorm),
                         device=device,
                         print_every_batch=False,
@@ -1665,7 +1666,7 @@ def run(traindomains="ALL",
 def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
                          smoothing=0., dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
                          numbeam=1, supportsetting="lex", abscontrib=-1., metarare="undefined", finetunesteps=5, outersteps=1, gradmode="undefined",
-                         maxfinetunesteps=75, evalinterval=15, epochs=60, injecttraindata=False, useadapters=False,
+                         maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=60, injecttraindata=False, useadapters=False,
                         seed=None, mincoverage=2, resetspecialinner=False, validinter=1,
                     startmtafter=0):
     ranges = {
@@ -1720,6 +1721,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       gradacc=gradacc, gradnorm=gradnorm,
                       maxfinetunesteps=maxfinetunesteps,
                       evalinterval=evalinterval,
+                      testevalinterval=testevalinterval,
                       injecttraindata=injecttraindata,
                       useadapters=useadapters,
                       resetspecialinner=resetspecialinner,
