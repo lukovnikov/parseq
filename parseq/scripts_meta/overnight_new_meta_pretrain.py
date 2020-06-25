@@ -1662,10 +1662,10 @@ def run(traindomains="ALL",
     # # print(settings)
     # return settings
 
-
+# python overnight_new_meta_pretrain.py -gpu 0 -numbeam 5 -supportsetting min -metarare emb+linout -gradmode metarare -resetspecialinner -startmtafter 15 -abscontrib 0. -numlayers 3 -seed 87646464 -dropout .2 -finetunesteps 5
 def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
                          smoothing=0., dropout=-1., numlayers=-1, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
-                         numbeam=1, supportsetting="lex", abscontrib=-1., metarare="undefined", finetunesteps=-1, outersteps=1, gradmode="undefined",
+                         numbeam=1, supportsetting="min", abscontrib=-1., metarare="undefined", finetunesteps=-1, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=60, injecttraindata=False, useadapters=False,
                         seed=-1, mincoverage=2, resetspecialinner=False, validinter=1,
                     startmtafter=0):
@@ -1684,7 +1684,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "numbeam": [numbeam],
         "batsize": [batsize],
         "ftbatsize": [ftbatsize],
-        "abscontrib": [0., .1],
+        "abscontrib": [0.],
         "seed": [87646464, 12345678, 98765456],
         "gradmode": ["none", "split", "inner:all+outer:noemb", "metarare"],
         "metarare": ["no", "emb", "outlin", "emb+outlin"]
