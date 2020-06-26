@@ -192,7 +192,7 @@ def load_ds(traindomains=("restaurants",),
             nl_mode="bert-base-uncased",
             fullsimplify=False,
             add_domain_start=True,
-            supportsetting="lex",   # "lex" or "min"
+            supportsetting="lex",   # "lex" or "min" or "train"
             ):
     """
     :param traindomains:

@@ -192,7 +192,7 @@ def load_ds(traindomains=("restaurants",),
             nl_mode="bert-base-uncased",
             fullsimplify=False,
             add_domain_start=True,
-            supportsetting="lex",   # "lex" or "min"
+            supportsetting="lex",   # "lex" or "min" or "train"
             ):
     """
     :param traindomains:
@@ -312,6 +312,8 @@ def load_ds(traindomains=("restaurants",),
     for domain in domains:
         finetuneds = ds[lambda x: x[3] == "finetune" and x[4] == domain].map(tokenize)
         trainds = ds[lambda x: x[3] == "train" and x[4] == domain].map(tokenize)
+        if supportsetting == "train":
+            finetuneds = deepcopy(trainds)
         validds = ds[lambda x: x[3] == "valid" and x[4] == domain].map(tokenize)
         testds = ds[lambda x: x[3] == "test" and x[4] == domain].map(tokenize)
         if domain == testdomain:
@@ -1694,8 +1696,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "ftbatsize": [ftbatsize],
         "abscontrib": [0.],
         "seed": [87646464, 98765456, 23655798],
-        "gradmode": ["none", "split", "inner:all+outer:noemb", "metarare"],
-        "metarare": ["no", "emb", "outlin", "emb+outlin"]
+        "gradmode": ["none", "metarare"],
+        "metarare": ["no", "yes"]
     }
     p = __file__ + f".{domain}"
     if gradmode != "undefined":
