@@ -1488,6 +1488,7 @@ def run(traindomains="ALL",
         q.run_training(run_train_epoch=pretrainepoch,
                        max_epochs=startmtafter)
         if resetspecialinner:
+            tt.msg("resetting special inner")
             reset_special_inner(trainm)
         tt.tock("done pre-pretraining")
 
@@ -1654,9 +1655,9 @@ def run(traindomains="ALL",
     # tt.tock("tested")
     # # settings.update({"train_seqacc": losses[]})
     #
-    # for metricarray, datasplit in zip([ftmetrics, ftvmetrics, ftxmetrics], ["train", "valid", "test"]):
-    #     for metric in metricarray:
-    #         settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
+    for metricarray, datasplit in zip([ftmetrics, ftvmetrics, ftxmetrics], ["train", "valid", "test"]):
+        for metric in metricarray:
+            settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
     #
     # # wandb.config.update(settings)
     # # print(settings)
