@@ -637,7 +637,7 @@ class SpecialOutlin(torch.nn.Linear):
         base_logits = super(SpecialOutlin, self).forward(input)
         extra_logits = self.extra_lin(input)
         metarare_logits = self.metarare_lin(input)
-        switch = self.metarare_targets.expand_as(base_logits).float()
+        switch = self.metarare_targets[None, None, :].float()
 
         logits = switch * (extra_logits + metarare_logits) + (1 - switch) * base_logits
         return logits
@@ -1450,9 +1450,9 @@ def run(traindomains="ALL",
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
-    def get_ft_model(x):
+    def get_ft_model(x, _resetspecialinner=False):
         _x = deepcopy(x)
-        if resetspecialinner:
+        if _resetspecialinner:
             reset_special_inner(_x)
         return _x
 
@@ -1463,7 +1463,7 @@ def run(traindomains="ALL",
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
                          optim=optim,
-                         get_ft_model=get_ft_model,
+                         get_ft_model=partial(get_ft_model, _resetspecialinner=False),
                          get_ft_optim=partial(get_optim,
                                               _lr=ftlr,
                                               _enclrmul=enclrmul,
@@ -1499,7 +1499,7 @@ def run(traindomains="ALL",
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
                          optim=optim,
-                         get_ft_model=get_ft_model,
+                         get_ft_model=partial(get_ft_model, _resetspecialinner=resetspecialinner),
                          get_ft_optim=partial(get_optim,
                                               _lr=ftlr,
                                               _enclrmul=enclrmul,
@@ -1525,7 +1525,7 @@ def run(traindomains="ALL",
                         data=targetdss,
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
-                        get_ft_model=get_ft_model,
+                        get_ft_model=partial(get_ft_model, _resetspecialinner=resetspecialinner),
                         get_ft_optim=partial(get_optim,
                                              _lr=ftlr,
                                              _enclrmul=enclrmul,
@@ -1563,7 +1563,7 @@ def run(traindomains="ALL",
                         data=targetdss,
                          allsourcedata=allsourceds,
                          injecttraindata=injecttraindata,
-                        get_ft_model=get_ft_model,
+                        get_ft_model=partial(get_ft_model, _resetspecialinner=resetspecialinner),
                         get_ft_optim=partial(get_optim,
                                              _lr=ftlr,
                                              _enclrmul=enclrmul,
