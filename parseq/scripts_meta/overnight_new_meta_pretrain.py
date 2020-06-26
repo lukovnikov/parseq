@@ -1705,6 +1705,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         ranges["gradmode"] = [gradmode]
     if metarare != "undefined":
         ranges["metarare"] = [metarare]
+    if metarare != "supportsetting":
+        ranges["supportsetting"] = [supportsetting]
     if seed >= 0:
         ranges["seed"] = [seed]
     if abscontrib >= 0:
