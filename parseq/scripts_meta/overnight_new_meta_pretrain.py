@@ -1493,6 +1493,10 @@ def run(traindomains="ALL",
             reset_special_inner(trainm)
         tt.tock("done pre-pretraining")
 
+    def doreinitspecial(_m=None, _reinit=False):
+        if _reinit:
+            reset_special_inner(_m)
+
     trainepoch = partial(meta_train_epoch,
                          model=trainm,
                          absmodel=abstrainm,
@@ -1515,6 +1519,7 @@ def run(traindomains="ALL",
                          outergradnorm=gradnorm,
                          innergradnorm=ftgradnorm,
                          device=device,
+                         on_start=[partial(doreinitspecial, _m=trainm, _reinit=reinitspecialinner)],
                          on_end=[lambda: lr_schedule.step()],
                          gradacc=gradacc,
                          abstract_contrib=abscontrib,
