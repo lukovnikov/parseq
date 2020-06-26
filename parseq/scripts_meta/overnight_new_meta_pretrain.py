@@ -1694,7 +1694,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "batsize": [batsize],
         "ftbatsize": [ftbatsize],
         "abscontrib": [0.],
-        "seed": [87646464, 12345678, 98765456],
+        "seed": [87646464, 98765456, 23655798],
         "gradmode": ["none", "split", "inner:all+outer:noemb", "metarare"],
         "metarare": ["no", "emb", "outlin", "emb+outlin"]
     }
