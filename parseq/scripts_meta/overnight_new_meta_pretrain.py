@@ -1350,6 +1350,7 @@ def run(traindomains="ALL",
         injecttraindata=False,
         useadapters=False,
         resetspecialinner=False,
+        reinitspecialinner=False,
         validinter=1,
         startmtafter=0,
         ):
@@ -1487,7 +1488,7 @@ def run(traindomains="ALL",
         tt.tick("pre-pretraining")
         q.run_training(run_train_epoch=pretrainepoch,
                        max_epochs=startmtafter)
-        if resetspecialinner:
+        if reinitspecialinner:
             tt.msg("resetting special inner")
             reset_special_inner(trainm)
         tt.tock("done pre-pretraining")
@@ -1669,7 +1670,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                          smoothing=0., dropout=-1., numlayers=-1, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
                          numbeam=1, supportsetting="min", abscontrib=-1., metarare="undefined", finetunesteps=-1, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=60, injecttraindata=False, useadapters=False,
-                        seed=-1, mincoverage=2, resetspecialinner=False, validinter=1,
+                        seed=-1, mincoverage=2, resetspecialinner=False, reinitspecialinner=False, validinter=1,
                     startmtafter=0):
     ranges = {
         "lr": [lr],
@@ -1733,6 +1734,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       injecttraindata=injecttraindata,
                       useadapters=useadapters,
                       resetspecialinner=resetspecialinner,
+                      reinitspecialinner=reinitspecialinner,
                       ftgradnorm=ftgradnorm,
                       validinter=validinter,
                       startmtafter=startmtafter)
