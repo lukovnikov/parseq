@@ -692,7 +692,7 @@ def create_model(encoder_name="bert-base-uncased",
     if metarare == "no":
         emb, outlin = None, None
     else:
-        if "emb" in metarare.split("+"):
+        if "emb" in metarare.split("+") or metarare == "yes":
             print("using metarare emb")
             # emb = torch.nn.Embedding(decoder_config.vocab_size, decoder_config.d_model, decoder_config.pad_token_id)
             emb = SpecialEmbedding(decoder_config.vocab_size,
@@ -701,7 +701,7 @@ def create_model(encoder_name="bert-base-uncased",
                                    metarare_targets=tokenmasks["_metarare"])
         else:
             emb = None
-        if "outlin" in metarare.split("+"):
+        if "outlin" in metarare.split("+") or metarare == "yes":
             print("using metarare outlin")
             # outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
             outlin = SpecialOutlin(decoder_config.d_model,
@@ -1655,13 +1655,14 @@ def run(traindomains="ALL",
     # tt.tock("tested")
     # # settings.update({"train_seqacc": losses[]})
     #
-    for metricarray, datasplit in zip([ftmetrics, ftvmetrics, ftxmetrics], ["train", "valid", "test"]):
-        for metric in metricarray:
-            settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
+    # for metricarray, datasplit in zip([ftmetrics, ftvmetrics, ftxmetrics], ["train", "valid", "test"]):
+    #     for metric in metricarray:
+    #         settings[f"{datasplit}_{metric.name}"] = metric.get_epoch_error()
     #
     # # wandb.config.update(settings)
-    # # print(settings)
-    # return settings
+    settings.update({"test_tree_accuracy": xmetrics[-1].get_epoch_error()})
+    print(settings)
+    return settings
 
 # python overnight_new_meta_pretrain.py -gpu 0 -numbeam 5 -supportsetting min -metarare emb+linout -gradmode metarare -resetspecialinner -startmtafter 15 -abscontrib 0. -numlayers 3 -seed 87646464 -dropout .2 -finetunesteps 5
 def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
