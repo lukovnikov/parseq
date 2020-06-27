@@ -1534,6 +1534,7 @@ def run(traindomains="ALL",
                 shelf[pretrainmodelsettings] = trainm.state_dict()
                 tt.tock("saved in shelf")
 
+        with shelve.open(shelfpath) as shelf:
             tt.tick("loading from shelf")
             trainmdict = shelf[pretrainmodelsettings]
             trainm.load_state_dict(trainmdict)
