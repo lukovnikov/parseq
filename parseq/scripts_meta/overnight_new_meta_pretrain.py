@@ -1541,6 +1541,7 @@ def run(traindomains="ALL",
             trainm.load_state_dict(trainmdict)
             # assert(torch.all(trainm.model.outlin.weight == abstrainm.model.outlin.weight))
             tt.tock("loaded from shelf")
+            optim = get_optim(trainm, lr, enclrmul, wreg)
 
         if reinitspecialinner:
             tt.msg("resetting special inner")
