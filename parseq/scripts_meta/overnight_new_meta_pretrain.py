@@ -1137,7 +1137,7 @@ def meta_train_epoch(model=None,
             loss.loss.to(device)
 
         ftmodel = get_ft_model(model)
-        if do_inner:
+        if do_inner and finetunesteps > 0:
             ftoptim = get_ft_optim(ftmodel)
             innerbatch = next(inneriter)
             # create a dataloader from this batch
