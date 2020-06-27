@@ -309,11 +309,10 @@ def load_ds(traindomains=("restaurants",),
 
     sourceret = {}
     targetret = {}
+    finetunekey = "train" if supportsetting == "train" else "finetune"
     for domain in domains:
-        finetuneds = ds[lambda x: x[3] == "finetune" and x[4] == domain].map(tokenize)
+        finetuneds = ds[lambda x: x[3] == finetunekey and x[4] == domain].map(tokenize)
         trainds = ds[lambda x: x[3] == "train" and x[4] == domain].map(tokenize)
-        if supportsetting == "train":
-            finetuneds = deepcopy(trainds)
         validds = ds[lambda x: x[3] == "valid" and x[4] == domain].map(tokenize)
         testds = ds[lambda x: x[3] == "test" and x[4] == domain].map(tokenize)
         if domain == testdomain:
@@ -329,7 +328,7 @@ def load_ds(traindomains=("restaurants",),
 
     # populate the "all" domain
     allsourceret = {
-        "finetune": DataLoader(ds[lambda x: x[3] == "finetune" and x[4] in traindomains].map(tokenize),
+        "finetune": DataLoader(ds[lambda x: x[3] == finetunekey and x[4] in traindomains].map(tokenize),
                                batch_size=ftbatsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
         "train": DataLoader(ds[lambda x: x[3] == "train" and x[4] in traindomains].map(tokenize),
                             batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
