@@ -606,8 +606,9 @@ class SpecialEmbedding(torch.nn.Embedding):
         metarare_emb = self.metarare_emb(torch.zeros_like(input))
         extra_emb = self.extra_emb(input)
         switch = self.metarare_targets[input].float()
-        emb = switch[:, :, None] * (extra_emb + metarare_emb) \
-              + (1 - switch[:, :, None]) * base_emb
+        # emb = switch[:, :, None] * (extra_emb + metarare_emb) \
+        #       + (1 - switch[:, :, None]) * base_emb
+        emb = switch[:, :, None] * extra_emb + (1 - switch[:, :, None]) * base_emb
         return emb
 
 
@@ -643,7 +644,8 @@ class SpecialOutlin(torch.nn.Linear):
         metarare_logits = self.metarare_lin(input)
         switch = self.metarare_targets[None, None, :].float()
 
-        logits = switch * (extra_logits + metarare_logits) + (1 - switch) * base_logits
+        # logits = switch * (extra_logits + metarare_logits) + (1 - switch) * base_logits
+        logits = switch * extra_logits + (1 - switch) * base_logits
         return logits
 
 
