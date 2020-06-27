@@ -190,7 +190,7 @@ class SequenceEncoder(VocabBuilder):
         
     def inc_build_vocab(self, x:str, seen:bool=True):
         if not self.vocab_final:
-            tokens = self.tokenizer(x)
+            tokens = self.tokenizer(x) + []
             if self.add_end_token:
                 tokens.append(self.vocab.endtoken)
             for token in tokens:
