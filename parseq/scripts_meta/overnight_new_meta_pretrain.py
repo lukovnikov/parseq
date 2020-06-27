@@ -1499,7 +1499,8 @@ def run(traindomains="ALL",
                                 f"+gradnorm:{gradnorm}" \
                                 f"+gradacc:{gradacc}"
         with shelve.open(shelfpath) as shelf:
-            if pretrainmodelsettings not in shelf:
+            if True:
+            # if pretrainmodelsettings not in shelf:
                 pretrainepoch = partial(meta_train_epoch,
                                      model=trainm,
                                      absmodel=abstrainm,
@@ -1531,17 +1532,17 @@ def run(traindomains="ALL",
                 q.run_training(run_train_epoch=pretrainepoch,
                                max_epochs=startmtafter)
                 tt.tock("done pre-pretraining")
-                tt.tick("saving in shelf")
-                shelf[pretrainmodelsettings] = trainm.state_dict()
-                tt.tock("saved in shelf")
+                # tt.tick("saving in shelf")
+                # shelf[pretrainmodelsettings] = trainm.state_dict()
+                # tt.tock("saved in shelf")
 
-        with shelve.open(shelfpath) as shelf:
-            tt.tick("loading from shelf")
-            trainmdict = shelf[pretrainmodelsettings]
-            trainm.load_state_dict(trainmdict)
-            # assert(torch.all(trainm.model.outlin.weight == abstrainm.model.outlin.weight))
-            tt.tock("loaded from shelf")
-            optim = get_optim(trainm, lr, enclrmul, wreg)
+        # with shelve.open(shelfpath) as shelf:
+        #     tt.tick("loading from shelf")
+        #     trainmdict = shelf[pretrainmodelsettings]
+        #     trainm.load_state_dict(trainmdict)
+        #     # assert(torch.all(trainm.model.outlin.weight == abstrainm.model.outlin.weight))
+        #     tt.tock("loaded from shelf")
+        #     # optim = get_optim(trainm, lr, enclrmul, wreg)
 
         if reinitspecialinner:
             tt.msg("resetting special inner")
