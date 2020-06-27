@@ -266,6 +266,13 @@ class Pipeline(object):
         return ret
 
 
+class BatchDataset(Dataset):
+    """ Dataset created by providing it a batch from a dataloader. """
+    def __init__(self, batchdata, **kw):
+        examples = zip(*batchdata)
+        super(BatchDataset, self).__init__(examples, **kw)
+
+
 class PCFGDataset(GeneratedDataset):
     def __init__(self, pcfg, N=int(1e6), seed=12345678, temperature=1., **kw):
         super(PCFGDataset, self).__init__(N=N, seed=seed, **kw)

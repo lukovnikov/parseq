@@ -28,7 +28,7 @@ import torch
 from nltk import Tree
 from torch.utils.data import DataLoader
 
-from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate, Dataset
+from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate, Dataset, BatchDataset
 from parseq.decoding import merge_metric_dicts
 from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
@@ -608,9 +608,9 @@ class SpecialEmbedding(torch.nn.Embedding):
         metarare_emb = self.metarare_emb(torch.zeros_like(input))
         extra_emb = self.extra_emb(input)
         switch = self.metarare_targets[input].float()
-        # emb = switch[:, :, None] * (extra_emb + metarare_emb) \
-        #       + (1 - switch[:, :, None]) * base_emb
-        emb = switch[:, :, None] * extra_emb + (1 - switch[:, :, None]) * base_emb
+        emb = switch[:, :, None] * (extra_emb + metarare_emb) \
+              + (1 - switch[:, :, None]) * base_emb
+        # emb = switch[:, :, None] * extra_emb + (1 - switch[:, :, None]) * base_emb
         return emb
 
 
@@ -646,8 +646,8 @@ class SpecialOutlin(torch.nn.Linear):
         metarare_logits = self.metarare_lin(input)
         switch = self.metarare_targets[None, None, :].float()
 
-        # logits = switch * (extra_logits + metarare_logits) + (1 - switch) * base_logits
-        logits = switch * extra_logits + (1 - switch) * base_logits
+        logits = switch * (extra_logits + metarare_logits) + (1 - switch) * base_logits
+        # logits = switch * extra_logits + (1 - switch) * base_logits
         return logits
 
 
@@ -1039,6 +1039,7 @@ def meta_train_epoch(model=None,
                      optim=None,
                      get_ft_model=None,
                      get_ft_optim=None,
+                         ftbatsize=None,
                      losses=None,
                      abslosses=None,
                      ftlosses=None,
@@ -1125,7 +1126,7 @@ def meta_train_epoch(model=None,
 
         # perform K number of inner steps
         inneriter = infiter2(data[chosendomain]["finetune"])
-        extra_inneriter = infiter2(allsourcedata["train"])
+        # extra_inneriter = infiter2(allsourcedata["train"])
 
         # oldemb = ftmodel.model.model.decoder.embed_tokens.weight + 0
         # oldlin = ftmodel.model.outlin.weight + 0
@@ -1138,14 +1139,20 @@ def meta_train_epoch(model=None,
         ftmodel = get_ft_model(model)
         if do_inner:
             ftoptim = get_ft_optim(ftmodel)
+            innerbatch = next(inneriter)
+            # create a dataloader from this batch
+            innerbatchdl = DataLoader(BatchDataset(innerbatch),
+                batch_size=ftbatsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
+            innerbatchiter = infiter2(innerbatchdl)
             for innerstep_i in range(finetunesteps):
-                innerbatch = next(inneriter)
+                _innerbatch = next(innerbatchiter)
                 if injecttraindata:
-                    extra_innerbatch = next(extra_inneriter)
-                    innerbatch = cat_batches(innerbatch, extra_innerbatch)
+                    assert(False)
+                    # extra_innerbatch = next(extra_inneriter)
+                    # innerbatch = cat_batches(innerbatch, extra_innerbatch)
                 # innerbatch["tokenmask"] = chosendomain
                 ftmodel.current_tokenmask = chosendomain
-                ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
+                ttmsg = q.train_batch(batch=_innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
                                       batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch,
                                       max_epochs=max_epochs,
                                       on_before_optim_step=[
@@ -1207,6 +1214,7 @@ def meta_test_epoch(model=None,
                          injecttraindata=False,
                      get_ft_model=None,
                      get_ft_optim=None,
+                    ftbatsize=None,
                     gradmode="none",
                     losses=None,
                     ftlosses=None,
@@ -1262,14 +1270,20 @@ def meta_test_epoch(model=None,
             loss.reset_agg()
             loss.loss.to(device)
 
+        innerbatch = next(inneriter)
+        # create a dataloader from this batch
+        innerbatchdl = DataLoader(BatchDataset(innerbatch),
+            batch_size=ftbatsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0))
+        innerbatchiter = infiter2(innerbatchdl)
         for innerstep_i in range(finetunesteps):
-            innerbatch = next(inneriter)
+            _innerbatch = next(innerbatchiter)
             if injecttraindata:
-                extra_innerbatch = next(extra_inneriter)
-                innerbatch = cat_batches(innerbatch, extra_innerbatch)
+                assert(False)
+                # extra_innerbatch = next(extra_inneriter)
+                # innerbatch = cat_batches(innerbatch, extra_innerbatch)
             ftmodel.current_tokenmask = domain
             # innerbatch["tokenmask"] = domain
-            ttmsg = q.train_batch(batch=innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
+            ttmsg = q.train_batch(batch=_innerbatch, model=ftmodel, optim=ftoptim, losses=ftlosses, device=device,
                                   batch_number=innerstep_i, max_batches=finetunesteps, current_epoch=current_epoch, max_epochs=max_epochs,
                                   on_before_optim_step=[partial(clipgradnorm, _m=ftmodel),
                                                         partial(reset_special_grads_inner, _m=ftmodel, mode=gradmode)])
@@ -1329,6 +1343,7 @@ def run(traindomains="ALL",
         warmup=0.,
         batsize=30,
         ftbatsize=-1,
+        supportsize=-1,
         epochs=100,
         finetunesteps=5,
         outersteps=1,
@@ -1367,6 +1382,7 @@ def run(traindomains="ALL",
     print(json.dumps(settings, indent=4))
     ftgradnorm = gradnorm if ftgradnorm < 0 else ftgradnorm
     ftbatsize = batsize if ftbatsize < 0 else ftbatsize
+    supportsize = batsize if supportsize < 0 else supportsize
     # wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
     #            reinit=True, config=settings)
     if traindomains == "ALL":
@@ -1391,7 +1407,7 @@ def run(traindomains="ALL",
     tt.tick("loading data")
     sourcedss, targetdss, allsourceds, nltok, flenc, tokenmasks = \
         load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
-                fullsimplify=fullsimplify, add_domain_start=domainstart, batsize=batsize, ftbatsize=ftbatsize,
+                fullsimplify=fullsimplify, add_domain_start=domainstart, batsize=batsize, ftbatsize=supportsize,
                 supportsetting=supportsetting)
     tt.tock("data loaded")
 
@@ -1543,6 +1559,7 @@ def run(traindomains="ALL",
                                               _lr=ftlr,
                                               _enclrmul=enclrmul,
                                               _wreg=wreg),
+                         ftbatsize=ftbatsize,
                          gradmode=gradmode,
                          losses=metrics,
                          abslosses=absmetrics,
@@ -1569,6 +1586,7 @@ def run(traindomains="ALL",
                                              _lr=ftlr,
                                              _enclrmul=enclrmul,
                                              _wreg=wreg),
+                         ftbatsize=ftbatsize,
                         gradmode=gradmode,
                         bestfinetunestepsvar=bestfinetunesteps,
                         bestfinetunestepswhichmetric=1,
@@ -1607,6 +1625,7 @@ def run(traindomains="ALL",
                                              _lr=ftlr,
                                              _enclrmul=enclrmul,
                                              _wreg=wreg),
+                         ftbatsize=ftbatsize,
                         gradmode=gradmode,
                         bestfinetunestepsvar=maxfinetunesteps-1,
                         losses=xmetrics,
