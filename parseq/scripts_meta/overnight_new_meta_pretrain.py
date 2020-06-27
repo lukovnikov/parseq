@@ -1484,7 +1484,8 @@ def run(traindomains="ALL",
 
     if startmtafter > 0:
         shelfpath = "metapretrain.shelf"
-        pretrainmodelsettings = f"traindomains:{traindomains}" \
+        tdomains = ",".join([str(x) for x in sorted(traindomains)])
+        pretrainmodelsettings = f"traindomains:{tdomains}" \
                                 f"+testdomain:{domain}" \
                                 f"+dropout:{dropout}" \
                                 f"+numlayers:{numlayers}" \
