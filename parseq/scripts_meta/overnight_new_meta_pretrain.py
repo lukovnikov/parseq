@@ -243,7 +243,7 @@ def load_ds(traindomains=("restaurants",),
                                                       general_tokens=general_tokens), c)
                            for a, b, c in domains[domain]]
 
-    if supportsetting == "min":
+    if supportsetting == "min" or supportsetting == "train":
         for domain, domainexamples in domains.items():
             mindomainexamples = get_maximum_spanning_examples([(a, b, c) for a, b, c in domainexamples if c == "train"],
                                           mincoverage=mincoverage, #loadedex=None)
@@ -309,8 +309,10 @@ def load_ds(traindomains=("restaurants",),
 
     sourceret = {}
     targetret = {}
-    finetunekey = "train" if supportsetting == "train" else "finetune"
     for domain in domains:
+        finetunekey = "finetune"
+        if supportsetting == "train" and domain != testdomain:
+            finetunekey = "train"
         finetuneds = ds[lambda x: x[3] == finetunekey and x[4] == domain].map(tokenize)
         trainds = ds[lambda x: x[3] == "train" and x[4] == domain].map(tokenize)
         validds = ds[lambda x: x[3] == "valid" and x[4] == domain].map(tokenize)
@@ -518,7 +520,8 @@ class BartGeneratorTrain(torch.nn.Module):
         self.current_tokenmask = None
 
     def forward(self, input_ids, output_ids, *args, **kwargs):
-        ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=output_ids, tokenmask=self.current_tokenmask)
+        ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id,
+                         decoder_input_ids=output_ids[:, :-1], tokenmask=self.current_tokenmask)
         probs = ret[0]
         _, predactions = probs.max(-1)
         outputs = [metric(probs, predactions, output_ids[:, 1:]) for metric in self.metrics]
@@ -678,6 +681,7 @@ def create_model(encoder_name="bert-base-uncased",
     decoder_config = BartConfig(d_model=dec_dim,
                                 pad_token_id=0,
                                 bos_token_id=1,
+                                eos_token_id=2,
                                 vocab_size=dec_vocabsize,
                                 decoder_attention_heads=dec_heads//2,
                                 decoder_layers=dec_layers,
