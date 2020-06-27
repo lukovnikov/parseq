@@ -10,8 +10,10 @@ import faulthandler
 import itertools
 import json
 import math
+import os
 import random
 import re
+import shelve
 import string
 from copy import deepcopy
 from functools import partial
@@ -1054,8 +1056,7 @@ def meta_train_epoch(model=None,
                      outergradnorm=3,
                      innergradnorm=3,
                      gradacc=1,
-                     abstract_contrib=0.,
-                     startmtafter=0):
+                     abstract_contrib=0.,):
     """
     Performs an epoch of training on given model, with data from given dataloader, using given optimizer,
     with loss computed based on given losses.
@@ -1465,41 +1466,66 @@ def run(traindomains="ALL",
             reset_special_inner(_x)
         return _x
 
-    pretrainepoch = partial(meta_train_epoch,
-                         model=trainm,
-                         absmodel=abstrainm,
-                         data=sourcedss,
-                         allsourcedata=allsourceds,
-                         injecttraindata=injecttraindata,
-                         optim=optim,
-                         get_ft_model=partial(get_ft_model, _resetspecialinner=False),
-                         get_ft_optim=partial(get_optim,
-                                              _lr=ftlr,
-                                              _enclrmul=enclrmul,
-                                              _wreg=wreg),
-                         gradmode="none",
-                         losses=metrics,
-                         abslosses=absmetrics,
-                         ftlosses=ftmetrics,
-                         finetunesteps=0,
-                         outersteps=1,
-                         clipgradnorm=clipgradnorm,
-                         outergradnorm=gradnorm,
-                         innergradnorm=ftgradnorm,
-                         device=device,
-                         on_end=[],
-                         gradacc=gradacc,
-                         abstract_contrib=0.,
-                         startmtafter=startmtafter)
-
     if startmtafter > 0:
-        tt.tick("pre-pretraining")
-        q.run_training(run_train_epoch=pretrainepoch,
-                       max_epochs=startmtafter)
+        shelfpath = "metapretrain.shelf"
+        pretrainmodelsettings = f"traindomains:{traindomains}" \
+                                f"+testdomain:{domain}" \
+                                f"+dropout:{dropout}" \
+                                f"+numlayers:{numlayers}" \
+                                f"+hdim:{hdim}" \
+                                f"+numheads:{numheads}" \
+                                f"+seed:{seed}" \
+                                f"+metarare:{metarare}" \
+                                f"+lr:{lr}" \
+                                f"+useadapters:{useadapters}" \
+                                f"+batsize:{batsize}" \
+                                f"+gradnorm:{gradnorm}" \
+                                f"+gradacc:{gradacc}"
+        with shelve.open(shelfpath) as shelf:
+            if pretrainmodelsettings not in shelf:
+                pretrainepoch = partial(meta_train_epoch,
+                                     model=trainm,
+                                     absmodel=abstrainm,
+                                     data=sourcedss,
+                                     allsourcedata=allsourceds,
+                                     injecttraindata=injecttraindata,
+                                     optim=optim,
+                                     get_ft_model=partial(get_ft_model, _resetspecialinner=False),
+                                     get_ft_optim=partial(get_optim,
+                                                          _lr=ftlr,
+                                                          _enclrmul=enclrmul,
+                                                          _wreg=wreg),
+                                     gradmode="none",
+                                     losses=metrics,
+                                     abslosses=absmetrics,
+                                     ftlosses=ftmetrics,
+                                     finetunesteps=0,
+                                     outersteps=1,
+                                     clipgradnorm=clipgradnorm,
+                                     outergradnorm=gradnorm,
+                                     innergradnorm=ftgradnorm,
+                                     device=device,
+                                     on_end=[],
+                                     gradacc=gradacc,
+                                     abstract_contrib=0.,)
+
+                tt.tick("pre-pretraining")
+                q.run_training(run_train_epoch=pretrainepoch,
+                               max_epochs=startmtafter)
+                tt.tock("done pre-pretraining")
+                tt.tick("saving in shelf")
+                shelf[pretrainmodelsettings] = trainm.state_dict()
+                tt.tock("saved in shelf")
+
+            tt.tick("loading from shelf")
+            trainmdict = shelf[pretrainmodelsettings]
+            trainm.load_state_dict(trainmdict)
+            assert(torch.all(trainm.model.outlin.weight == abstrainm.model.outlin.weight))
+            tt.tock("loaded from shelf")
+
         if reinitspecialinner:
             tt.msg("resetting special inner")
             reset_special_inner(trainm)
-        tt.tock("done pre-pretraining")
 
     def doreinitspecial(_m=None, _reinit=False):
         if _reinit:
@@ -1530,8 +1556,7 @@ def run(traindomains="ALL",
                          on_start=[partial(doreinitspecial, _m=trainm, _reinit=reinitspecialinnerepoch)],
                          on_end=[lambda: lr_schedule.step()],
                          gradacc=gradacc,
-                         abstract_contrib=abscontrib,
-                         startmtafter=startmtafter)
+                         abstract_contrib=abscontrib,)
 
     bestfinetunesteps = q.hyperparam(0)
     validepoch = partial(meta_test_epoch,
