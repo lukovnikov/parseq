@@ -1725,7 +1725,7 @@ def run(traindomains="ALL",
     return settings
 
 # python overnight_new_meta_pretrain.py -gpu 0 -numbeam 5 -supportsetting min -metarare emb+linout -gradmode metarare -resetspecialinner -startmtafter 15 -abscontrib 0. -numlayers 3 -seed 87646464 -dropout .2 -finetunesteps 5
-def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1,
+def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1, supportsize=-1,
                          smoothing=0., dropout=-1., numlayers=-1, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
                          numbeam=1, supportsetting="undefined", abscontrib=-1., metarare="undefined", finetunesteps=-1, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=60, injecttraindata=False, useadapters=False,
@@ -1800,7 +1800,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
                       reinitspecialinnerepoch=reinitspecialinnerepoch,
                       ftgradnorm=ftgradnorm,
                       validinter=validinter,
-                      startmtafter=startmtafter)
+                      startmtafter=startmtafter,
+                      supportsize=supportsize)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
