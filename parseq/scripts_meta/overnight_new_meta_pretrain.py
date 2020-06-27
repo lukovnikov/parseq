@@ -1537,7 +1537,7 @@ def run(traindomains="ALL",
             tt.tick("loading from shelf")
             trainmdict = shelf[pretrainmodelsettings]
             trainm.load_state_dict(trainmdict)
-            assert(torch.all(trainm.model.outlin.weight == abstrainm.model.outlin.weight))
+            # assert(torch.all(trainm.model.outlin.weight == abstrainm.model.outlin.weight))
             tt.tock("loaded from shelf")
 
         if reinitspecialinner:
