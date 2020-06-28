@@ -1754,8 +1754,8 @@ def run(traindomains="ALL",
 # python overnight_new_meta_pretrain.py -gpu 0 -numbeam 5 -supportsetting min -metarare emb+linout -gradmode metarare -resetspecialinner -startmtafter 15 -abscontrib 0. -numlayers 3 -seed 87646464 -dropout .2 -finetunesteps 5
 def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=-1, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1, supportsize=-1,
                          smoothing=0., dropout=0.3, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
-                         numbeam=1, supportsetting="train", abscontrib=-1., metarare="undefined", finetunesteps=5, outersteps=1, gradmode="undefined",
-                         maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=60, injecttraindata=False, useadapters=False,
+                         numbeam=5, supportsetting="train", abscontrib=-1., metarare="undefined", finetunesteps=5, outersteps=1, gradmode="undefined",
+                         maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=30, injecttraindata=False, useadapters=False,
                         seed=-1, mincoverage=2, resetspecialinner=False, reinitspecialinner=False, reinitinterval=-1, nospecialshared=False, validinter=1,
                     startmtafter=0):
     ranges = {
@@ -1769,7 +1769,7 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
         "numlayers": [3],
         "dropout": [0.3],
         "smoothing": [smoothing],
-        "supportsetting": ["min", "train"],
+        "supportsetting": ["train"],
         "hdim": [hdim],
         "finetunesteps": [0],
         "numbeam": [numbeam],
@@ -1777,8 +1777,8 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
         "ftbatsize": [ftbatsize],
         "abscontrib": [0.],
         "seed": [87646464, 98765456, 23655798],
-        "gradmode": ["none", "metarare"],
-        "metarare": ["no", "yes"],
+        "gradmode": ["none"],
+        "metarare": ["yes"],
         "reinitinterval": [0]
     }
     p = __file__ + f".{domain}"
