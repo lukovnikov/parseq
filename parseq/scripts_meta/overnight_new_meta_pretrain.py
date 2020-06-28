@@ -1759,27 +1759,27 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
                         seed=-1, mincoverage=2, resetspecialinner=False, reinitspecialinner=False, reinitinterval=-1, nospecialshared=False, validinter=1,
                     startmtafter=0):
     ranges = {
-        "domain": ["recipes", "blocks", "calendar", "housing", "publications"],
+        "domain": ["restaurants", "recipes", "blocks", "calendar", "housing", "publications"],
         "lr": [lr],
         "ftlr": [ftlr],
         "enclrmul": [enclrmul],
         "warmup": [0],
         "epochs": [epochs],
         "numheads": [numheads],
-        "numlayers": [2, 3, 4, 5],
-        "dropout": [0.1, 0.2, 0.3, 0.5],
+        "numlayers": [3],
+        "dropout": [0.3],
         "smoothing": [smoothing],
         "supportsetting": ["min", "train"],
         "hdim": [hdim],
-        "finetunesteps": [3, 5, 10, 15],
+        "finetunesteps": [0],
         "numbeam": [numbeam],
         "batsize": [batsize],
         "ftbatsize": [ftbatsize],
-        "abscontrib": [0., 0.1],
+        "abscontrib": [0.],
         "seed": [87646464, 98765456, 23655798],
         "gradmode": ["none", "metarare"],
         "metarare": ["no", "yes"],
-        "reinitinterval": [0, 1, 3, 5]
+        "reinitinterval": [0]
     }
     p = __file__ + f".{domain}"
     if domain != "undefined":
