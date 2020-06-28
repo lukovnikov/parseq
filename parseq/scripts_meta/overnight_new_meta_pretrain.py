@@ -578,7 +578,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 class SpecialEmbedding(torch.nn.Embedding):
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None,
-                 metarare_targets=None, init_std=0.02):
+                 metarare_targets=None, init_std=0.02, nospecialshared=False):
         super(SpecialEmbedding, self).__init__(num_embeddings, embedding_dim, padding_idx=padding_idx)
         self.register_buffer("metarare_targets", metarare_targets)
         # self.metarare = self.weight[self.metarare_source, :]
@@ -588,6 +588,7 @@ class SpecialEmbedding(torch.nn.Embedding):
         self.init_std = init_std
         self.apply(self._init_weights)
         # self.extra_emb.weight.data.fill_(0)
+        self.nospecialshared = nospecialshared
 
     def _init_weights(self, module):
         std = self.init_std
@@ -608,14 +609,16 @@ class SpecialEmbedding(torch.nn.Embedding):
         metarare_emb = self.metarare_emb(torch.zeros_like(input))
         extra_emb = self.extra_emb(input)
         switch = self.metarare_targets[input].float()
-        emb = switch[:, :, None] * (extra_emb + metarare_emb) \
-              + (1 - switch[:, :, None]) * base_emb
-        # emb = switch[:, :, None] * extra_emb + (1 - switch[:, :, None]) * base_emb
+        if self.nospecialshared:
+            emb = switch[:, :, None] * extra_emb + (1 - switch[:, :, None]) * base_emb
+        else:
+            emb = switch[:, :, None] * (extra_emb + metarare_emb) \
+                  + (1 - switch[:, :, None]) * base_emb
         return emb
 
 
 class SpecialOutlin(torch.nn.Linear):
-    def __init__(self, dim, vocsize, metarare_targets=None, bias=True, init_std=0.02):
+    def __init__(self, dim, vocsize, metarare_targets=None, bias=True, init_std=0.02, nospecialshared=False):
         super(SpecialOutlin, self).__init__(dim, vocsize, bias=bias)
         self.register_buffer("metarare_targets", metarare_targets)
         # self.metarare = self.weight[self.metarare_source, :]
@@ -626,6 +629,7 @@ class SpecialOutlin(torch.nn.Linear):
         self.apply(self._init_weights)
         # self.extra_lin.weight.data.fill_(0)
         # self.extra_lin.bias.data.fill_(0)
+        self.nospecialshared = nospecialshared
 
     def _init_weights(self, module):
         std = self.init_std
@@ -646,8 +650,10 @@ class SpecialOutlin(torch.nn.Linear):
         metarare_logits = self.metarare_lin(input)
         switch = self.metarare_targets[None, None, :].float()
 
-        logits = switch * (extra_logits + metarare_logits) + (1 - switch) * base_logits
-        # logits = switch * extra_logits + (1 - switch) * base_logits
+        if self.nospecialshared:
+            logits = switch * extra_logits + (1 - switch) * base_logits
+        else:
+            logits = switch * (extra_logits + metarare_logits) + (1 - switch) * base_logits
         return logits
 
 
@@ -655,7 +661,7 @@ def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None,
                  tokenmasks=None,
-                 metarare="no", useadapters=False):
+                 metarare="no", useadapters=False, nospecialshared=False):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
     pretrained = BertModel.from_pretrained(encoder_name)
@@ -707,7 +713,8 @@ def create_model(encoder_name="bert-base-uncased",
             emb = SpecialEmbedding(decoder_config.vocab_size,
                                    decoder_config.d_model,
                                    decoder_config.pad_token_id,
-                                   metarare_targets=tokenmasks["_metarare"])
+                                   metarare_targets=tokenmasks["_metarare"],
+                                   nospecialshared=nospecialshared)
         else:
             emb = None
         if "outlin" in metarare.split("+") or metarare == "yes":
@@ -715,7 +722,8 @@ def create_model(encoder_name="bert-base-uncased",
             # outlin = torch.nn.Linear(decoder_config.d_model, decoder_config.vocab_size)
             outlin = SpecialOutlin(decoder_config.d_model,
                                    decoder_config.vocab_size,
-                                   metarare_targets=tokenmasks["_metarare"])
+                                   metarare_targets=tokenmasks["_metarare"],
+                                   nospecialshared=nospecialshared)
         else:
             outlin = None
         #
@@ -1332,6 +1340,22 @@ def meta_test_epoch(model=None,
     return ttmsg
 
 
+class Reinitializer(object):
+    def __init__(self, model, interval, **kw):
+        super(Reinitializer, self).__init__(**kw)
+        self.model = model
+        self.interval = interval
+        self.count = 1
+
+    def __call__(self):
+        if self.interval >= 1:
+            if self.count % self.interval == 0:
+                reset_special_inner(self.model)
+                self.count = 1  # reset counter
+            else:
+                self.count += 1 # advance counter
+
+
 def run(traindomains="ALL",
         domain="restaurants",
         mincoverage=2,
@@ -1374,7 +1398,8 @@ def run(traindomains="ALL",
         useadapters=False,
         resetspecialinner=False,
         reinitspecialinner=False,
-        reinitspecialinnerepoch=False,
+        reinitinterval=0,
+        nospecialshared=False,
         validinter=1,
         startmtafter=0,
         ):
@@ -1424,7 +1449,8 @@ def run(traindomains="ALL",
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  tokenmasks=tokenmasks,
                                  metarare=metarare,
-                                 useadapters=useadapters
+                                 useadapters=useadapters,
+                                     nospecialshared=nospecialshared,
                                  )
     tt.tock("model created")
 
@@ -1548,9 +1574,7 @@ def run(traindomains="ALL",
             tt.msg("resetting special inner")
             reset_special_inner(trainm)
 
-    def doreinitspecial(_m=None, _reinit=False):
-        if _reinit:
-            reset_special_inner(_m)
+    reinitializer = Reinitializer(trainm, reinitinterval)
 
     trainepoch = partial(meta_train_epoch,
                          model=trainm,
@@ -1575,7 +1599,7 @@ def run(traindomains="ALL",
                          outergradnorm=gradnorm,
                          innergradnorm=ftgradnorm,
                          device=device,
-                         on_start=[partial(doreinitspecial, _m=trainm, _reinit=reinitspecialinnerepoch)],
+                         on_start=[lambda: reinitializer()],
                          on_end=[lambda: lr_schedule.step()],
                          gradacc=gradacc,
                          abstract_contrib=abscontrib,)
@@ -1731,7 +1755,7 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
                          smoothing=0., dropout=0.3, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
                          numbeam=1, supportsetting="train", abscontrib=-1., metarare="undefined", finetunesteps=5, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=60, injecttraindata=False, useadapters=False,
-                        seed=-1, mincoverage=2, resetspecialinner=False, reinitspecialinner=False, reinitspecialinnerepoch=False, validinter=1,
+                        seed=-1, mincoverage=2, resetspecialinner=False, reinitspecialinner=False, reinitinterval=-1, nospecialshared=False, validinter=1,
                     startmtafter=0):
     ranges = {
         "domain": ["recipes", "blocks", "calendar", "housing", "publications"],
@@ -1753,7 +1777,8 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
         "abscontrib": [0., 0.1],
         "seed": [87646464, 98765456, 23655798],
         "gradmode": ["none", "metarare"],
-        "metarare": ["no", "yes"]
+        "metarare": ["no", "yes"],
+        "reinitinterval": [0, 1, 3, 5]
     }
     p = __file__ + f".{domain}"
     if domain != "undefined":
@@ -1774,6 +1799,8 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
         ranges["finetunesteps"] = [finetunesteps]
     if numlayers >= 0:
         ranges["numlayers"] = [numlayers]
+    if reinitinterval >= 0:
+        ranges["reinitinterval"] = [reinitinterval]
 
     def check_config(x):
         # effectiveenclr = x["enclrmul"] * x["lr"]
@@ -1802,7 +1829,7 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
                       useadapters=useadapters,
                       resetspecialinner=resetspecialinner,
                       reinitspecialinner=reinitspecialinner,
-                      reinitspecialinnerepoch=reinitspecialinnerepoch,
+                      nospecialshared=nospecialshared,
                       ftgradnorm=ftgradnorm,
                       validinter=validinter,
                       startmtafter=startmtafter,
