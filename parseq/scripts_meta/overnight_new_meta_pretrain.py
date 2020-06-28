@@ -1345,14 +1345,14 @@ class Reinitializer(object):
         super(Reinitializer, self).__init__(**kw)
         self.model = model
         self.interval = interval
-        self.count = 1
+        self.count = 0
 
     def __call__(self):
         if self.interval >= 1:
-            if self.count % self.interval == 0:
+            if (self.count + 1) == self.interval:
                 print("reinitializing domain-specific part of model")
                 reset_special_inner(self.model)
-                self.count = 1  # reset counter
+                self.count = 0  # reset counter
             else:
                 self.count += 1 # advance counter
 
