@@ -1727,13 +1727,14 @@ def run(traindomains="ALL",
     return settings
 
 # python overnight_new_meta_pretrain.py -gpu 0 -numbeam 5 -supportsetting min -metarare emb+linout -gradmode metarare -resetspecialinner -startmtafter 15 -abscontrib 0. -numlayers 3 -seed 87646464 -dropout .2 -finetunesteps 5
-def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=5, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1, supportsize=-1,
-                         smoothing=0., dropout=-1., numlayers=-1, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
-                         numbeam=1, supportsetting="undefined", abscontrib=-1., metarare="undefined", finetunesteps=-1, outersteps=1, gradmode="undefined",
+def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul=0.1, patience=-1, cosinelr=False, fullsimplify=True, batsize=50, ftbatsize=-1, supportsize=-1,
+                         smoothing=0., dropout=0.3, numlayers=3, numheads=12, hdim=768, domainstart=False, gradacc=1, gradnorm=3, ftgradnorm=-1,
+                         numbeam=1, supportsetting="train", abscontrib=-1., metarare="undefined", finetunesteps=5, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=60, injecttraindata=False, useadapters=False,
                         seed=-1, mincoverage=2, resetspecialinner=False, reinitspecialinner=False, reinitspecialinnerepoch=False, validinter=1,
                     startmtafter=0):
     ranges = {
+        "domain": ["recipes", "blocks", "calendar", "housing", "publications"],
         "lr": [lr],
         "ftlr": [ftlr],
         "enclrmul": [enclrmul],
@@ -1755,6 +1756,8 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         "metarare": ["no", "yes"]
     }
     p = __file__ + f".{domain}"
+    if domain != "undefined":
+        ranges["domain"] = [domain]
     if gradmode != "undefined":
         ranges["gradmode"] = [gradmode]
     if metarare != "undefined":
@@ -1784,7 +1787,7 @@ def run_experiments(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, enclrm
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, fullsimplify=fullsimplify,
+                      fullsimplify=fullsimplify,
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
                       domainstart=domainstart,
                       supportsetting=supportsetting,
