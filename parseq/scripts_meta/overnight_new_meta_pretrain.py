@@ -1352,9 +1352,7 @@ class Reinitializer(object):
             if self.count % self.interval == 0:
                 print("reinitializing domain-specific part of model")
                 reset_special_inner(self.model)
-                self.count = 0  # reset counter
-            else:
-                self.count += 1 # advance counter
+            self.count += 1 # advance counter
 
 
 def run(traindomains="ALL",
