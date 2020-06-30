@@ -1349,7 +1349,7 @@ class Reinitializer(object):
 
     def __call__(self):
         if self.interval >= 1:
-            if (self.count + 1) == self.interval:
+            if self.count % self.interval == 0:
                 print("reinitializing domain-specific part of model")
                 reset_special_inner(self.model)
                 self.count = 0  # reset counter
