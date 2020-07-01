@@ -914,15 +914,26 @@ def reset_special_grads_inner(_m:torch.nn.Module, mode="none"):
     #             _m.model.outlin.bias.grad = None
     #             _m.model.outlin.metarare_lin.bias.grad = None
 
-def reset_special_inner(m):
-    if isinstance(m, SpecialEmbedding):
-        m.extra_emb.apply(m._init_weights)
-    elif isinstance(m, SpecialOutlin):
-        m.extra_lin.apply(m._init_weights)
+def reset_special_inner(m, resetgeneral=False):
+    if resetgeneral:
+        if isinstance(m, SpecialEmbedding):
+            m.apply(m._init_weights)
+        elif isinstance(m, SpecialOutlin):
+            m.apply(m._init_weights)
+        else:
+            pass
+        for child in m.children():
+            reset_special_inner(child, resetgeneral=resetgeneral)
     else:
-        pass
-    for child in m.children():
-        reset_special_inner(child)
+        if isinstance(m, SpecialEmbedding):
+            m.extra_emb.apply(m._init_weights)
+        elif isinstance(m, SpecialOutlin):
+            m.extra_lin.apply(m._init_weights)
+        else:
+            pass
+        for child in m.children():
+            reset_special_inner(child, resetgeneral=resetgeneral)
+
 
 def reset_special_grads_outer(_m, mode="none"):
     # if mode == "metararetokensonly":
@@ -1342,17 +1353,18 @@ def meta_test_epoch(model=None,
 
 
 class Reinitializer(object):
-    def __init__(self, model, interval, **kw):
+    def __init__(self, model, interval, resetgeneral=False, **kw):
         super(Reinitializer, self).__init__(**kw)
         self.model = model
         self.interval = interval
         self.count = 0
+        self.resetgeneral = resetgeneral
 
     def __call__(self):
         if self.interval >= 1:
             if self.count % self.interval == 0:
                 print("reinitializing domain-specific part of model")
-                reset_special_inner(self.model)
+                reset_special_inner(self.model, resetgeneral=self.resetgeneral)
             self.count += 1 # advance counter
 
 
@@ -1402,6 +1414,7 @@ def run(traindomains="ALL",
         nospecialshared=False,
         validinter=1,
         startmtafter=0,
+        resetgeneral=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -1505,7 +1518,7 @@ def run(traindomains="ALL",
     def get_ft_model(x, _resetspecialinner=False):
         _x = deepcopy(x)
         if _resetspecialinner:
-            reset_special_inner(_x)
+            reset_special_inner(_x, resetgeneral=resetgeneral)
         return _x
 
     if startmtafter > 0:
@@ -1571,10 +1584,10 @@ def run(traindomains="ALL",
         #     # optim = get_optim(trainm, lr, enclrmul, wreg)
 
         if reinitspecialinner:
-            tt.msg("resetting special inner")
-            reset_special_inner(trainm)
+            tt.msg(f"resetting special inner (resetgeneral:{resetgeneral})")
+            reset_special_inner(trainm, resetgeneral=resetgeneral)
 
-    reinitializer = Reinitializer(trainm, reinitinterval)
+    reinitializer = Reinitializer(trainm, reinitinterval, resetgeneral=resetgeneral)
 
     trainepoch = partial(meta_train_epoch,
                          model=trainm,
@@ -1756,7 +1769,7 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
                          numbeam=5, supportsetting="train", abscontrib=-1., metarare="undefined", finetunesteps=0, outersteps=1, gradmode="undefined",
                          maxfinetunesteps=100, evalinterval=20, testevalinterval=5, epochs=30, injecttraindata=False, useadapters=False,
                         seed=-1, mincoverage=2, resetspecialinner=False, reinitspecialinner=False, reinitinterval=-1, nospecialshared=False, validinter=1,
-                    startmtafter=0):
+                    startmtafter=0, resetgeneral=False):
     ranges = {
         "domain": ["restaurants", "recipes", "blocks", "calendar", "housing", "publications"],
         "lr": [lr],
@@ -1833,7 +1846,8 @@ def run_experiments(domain="undefined", gpu=-1, lr=0.0001, ftlr=0.0001, enclrmul
                       ftgradnorm=ftgradnorm,
                       validinter=validinter,
                       startmtafter=startmtafter,
-                      supportsize=supportsize)
+                      supportsize=supportsize,
+                      resetgeneral=resetgeneral)
 
 
 def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
