@@ -320,7 +320,7 @@ class SGRUCell(torch.nn.Module):
         return h_new
 
 
-class MemDecoder(ABC, torch.nn.Module):
+class DecoderWithMemory(ABC, torch.nn.Module):
     """ Defines forward interface for all memory based decoders. """
     @abstractmethod
     def forward(self, x_enc, y, memids=None, memencs=None, xmask=None, memmask=None, istraining:bool=True)->Dict:
@@ -502,10 +502,10 @@ class LSTMMemDecoderCell(TransitionModel):
         return out, x
 
 
-class StateMemDecoder(MemDecoder):
+class StateDecoderWithMemory(DecoderWithMemory):
     """ Wraps a SeqDecoder and creates a state from args. """
     def __init__(self, cell:TransitionModel, eval, maxtime=100, **kw):
-        super(StateMemDecoder, self).__init__(**kw)
+        super(StateDecoderWithMemory, self).__init__(**kw)
         self.decoder = SeqDecoder(cell, eval=eval, maxtime=maxtime)
         self.cell = cell
 
@@ -527,12 +527,17 @@ class StateMemDecoder(MemDecoder):
         return decout
 
 
+class MemoryDecoder(torch.nn.Module):
+    """ Decoder for in-memory examples. Does only teacher-forced mode. """
+    pass        # TODO
+
+
 class MetaSeqMemNN(torch.nn.Module):
     """
     Top-level module for memory-based meta learning for seq2seq
     """
     def __init__(self, support_encoder, support_decoder,
-                       encoder, decoder:MemDecoder,
+                 encoder, decoder:DecoderWithMemory,
                  dim = None,
                  encdim=None,
                  dropout=0., **kw):
