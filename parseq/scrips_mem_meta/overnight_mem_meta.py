@@ -453,10 +453,10 @@ class DecoderOutputLayer(torch.nn.Module):
 
 
 class InnerLSTMDecoderCell(TransitionModel):
-    """ LSTM cell based decoder cell.
+    """
+        LSTM cell based decoder cell.
         This decoder cell will be used to "encode" the output parts of the memory.
     """
-
     def __init__(self, inplayer:DecoderInputLayer=None,
                  dim=None, encdim=None, numlayers=1, dropout=0., **kw):
         super(InnerLSTMDecoderCell, self).__init__(**kw)
