@@ -211,8 +211,7 @@ def load_ds(traindomains=("restaurants",),
                              add_start_token=False, add_end_token=True)
     for example in ds.examples:
         abstracttokens |= set(example[2])
-        seqenc.inc_build_vocab(example[1], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
-        seqenc.inc_build_vocab(example[2], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
+        seqenc.inc_build_vocab(example[1], seen=example[2] in ("train", "support") if example[3] != testdomain else example[2] == "support")
     seqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
 
     abstracttokenids = {seqenc.vocab[at] for at in abstracttokens}
