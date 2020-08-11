@@ -11,6 +11,7 @@ import itertools
 import json
 import math
 import random
+import re
 import string
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -27,7 +28,7 @@ from nltk import Tree
 from torch.utils.data import DataLoader
 
 from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, autocollate, Dataset
-from parseq.decoding import merge_metric_dicts, SeqDecoder
+from parseq.decoding import merge_metric_dicts, SeqDecoder, StopDecoding
 from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
 from parseq.states import State, TrainableDecodableState
@@ -50,6 +51,7 @@ def get_labels_from_tree(x:Tree):
     return ret
 
 
+# region data
 def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     """
     Sort given examples by the degree they span their vocabulary.
@@ -64,7 +66,7 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     uniquetokensperexample = []
     examplespertoken = {}        # reverse index from token to example number
     for i, example in enumerate(examples):
-        exampletokens = set(get_labels_from_tree(example[1]))
+        exampletokens = set(example[1])
         uniquetokensperexample.append(exampletokens)
         for token in exampletokens:
             if token not in tokencounts:
@@ -119,16 +121,75 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     return out
 
 
+def get_lf_abstract_transform(examples, general_tokens=None):
+    """
+    Receives examples from different domains in the format (_, out_tokens, split, domain).
+    Returns a function that transforms a sequence of domain-specific output tokens
+        into a sequence of domain-independent tokens, abstracting domain-specific tokens/subtrees.
+    :param examples:
+    :return:
+    """
+    if general_tokens is None:
+        # get shared vocabulary
+        domainspertoken = {}
+        domains = set()
+        for i, example in enumerate(examples):
+            if "train" in example[2]:
+                exampletokens = set(example[1])
+                for token in exampletokens:
+                    if token not in domainspertoken:
+                        domainspertoken[token] = set()
+                    domainspertoken[token].add(example[3])
+                domains.add(example[3])
+
+        sharedtokens = set([k for k, v in domainspertoken.items() if len(v) == len(domains)])
+    else:
+        sharedtokens = set()
+        sharedtokens.update(general_tokens)
+
+    sharedtokens.add("@ABS@")
+    sharedtokens.add("@ABSSTART@")
+    sharedtokens.add("@END@")
+    sharedtokens.add("@START@")
+    sharedtokens.add("@META@")
+    sharedtokens.add("@UNK@")
+    sharedtokens.add("@PAD@")
+    sharedtokens.add("@METARARE@")
+    replacement = "@ABS@"
+
+    def example_transform(x):
+        abslf = [xe if xe in sharedtokens else replacement for xe in x]
+        abslf = ["@ABSSTART@"] + abslf[1:]
+        return abslf
+
+    return example_transform
+
+
+def tokenize_and_add_start(t, _domain, general_tokens=None):
+    tokens = tree_to_lisp_tokens(t)
+    if general_tokens is not None:
+        newtokens = []
+        for token in tokens:
+            if re.match("@[^@]+@", token) or token in general_tokens:
+                newtokens.append(token)
+            else:
+                newtokens.append(f"{_domain}|{token}")
+        tokens = newtokens
+    starttok = "@START@"
+    tokens = [starttok] + tokens
+    return tokens
+
+
 def load_ds(traindomains=("restaurants",),
             testdomain="housing",
             min_freq=1,
             mincoverage=1,
             top_k=np.infty,
             batsize=10,
+            ftbatsize=-1,
             nl_mode="bert-base-uncased",
-            fullsimplify=False,
-            add_domain_start=True,
-            supportsetting="lex",   # "lex" or "min"
+            fullsimplify=True,
+            supportsetting="lex",   # "lex" or "min" or "train"
             ):
     """
     :param traindomains:
@@ -150,16 +211,13 @@ def load_ds(traindomains=("restaurants",),
                             ! Validation is over a fraction of training data
     :return:
     """
-
-    def tokenize_and_add_start(t, _domain, meta=False):
-        tokens = tree_to_lisp_tokens(t)
-        if not meta:
-            starttok = f"@START/{_domain}@" if add_domain_start else "@START@"
-            tokens = [starttok] + tokens
-        else:
-            starttok = f"@META/{_domain}@" if add_domain_start else "@META@"
-            tokens = [starttok] + tokens
-        return tokens
+    ftbatsize = batsize if ftbatsize < 0 else ftbatsize
+    general_tokens = {
+        "(", ")", "arg:~type", "arg:type", "op:and", "SW:concat", "cond:has",
+        "arg:<=", "arg:<", "arg:>=", "arg:>", "arg:!=", "arg:=", "SW:superlative",
+        "SW:CNT-arg:min", "SW:CNT-arg:<", "SW:CNT-arg:<=", "SW:CNT-arg:>=", "SW:CNT-arg:>",
+        "SW:CNT-arg:max", "SW:CNT-arg:=", "arg:max",
+    }
 
     domains = {}
     alltrainex = []
@@ -177,85 +235,157 @@ def load_ds(traindomains=("restaurants",),
             alltrainex += [(a, b, c, domain) for a, b, c in domainexamples if c == "train"]
         domains[domain] = domainexamples
 
-    if supportsetting == "min":
+    for domain in domains:
+        domains[domain] = [(a, tokenize_and_add_start(b, domain, general_tokens=general_tokens), c)
+                           for a, b, c in domains[domain]]
+
+    if supportsetting == "min" or supportsetting == "train":
         for domain, domainexamples in domains.items():
+            print(domain)
             mindomainexamples = get_maximum_spanning_examples([(a, b, c) for a, b, c in domainexamples if c == "train"],
-                                          mincoverage=mincoverage,
+                                          mincoverage=mincoverage, #loadedex=None)
                                           loadedex=[a for a in alltrainex if a[3] != domain])
             domains[domain] = domains[domain] + [(a, b, "support") for a, b, c in mindomainexamples]
-
-    for domain in domains:
-        domains[domain] = [(a, tokenize_and_add_start(b, domain, meta=c=="support"), c)
-                           for a, b, c in domains[domain]]
-        # sourceex += ds[(None, None, lambda x: x in ("train", "valid", "lexicon"))].examples       # don't use test examples
 
     allex = []
     for domain in domains:
         allex += [(a, b, c, domain) for a, b, c in domains[domain]]
     ds = Dataset(allex)
 
-    abstracttokens = set()
-    # abstracttokens.add("@META@")
-    abstracttokens.add("@START@")
-    abstracttokens.add("@END@")
-    abstracttokens.add("@UNK@")
-    abstracttokens.add("@PAD@")
-    abstracttokens.add("@ABS@")
-    abstracttokens.add("@ABSSTART@")
-    abstracttokens.add("@METARARE@")
-    seqenc_vocab = Vocab(padid=0, startid=1, endid=2, unkid=UNKID)
+    et = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples, general_tokens=general_tokens)
+    ds = ds.map(lambda x: (x[0], x[1], et(x[1]), x[2], x[3]))
+
+    seqenc_vocab = Vocab(padid=0, unkid=1, startid=2, endid=3)
     seqenc_vocab.add_token("@ABS@", seen=np.infty)
     seqenc_vocab.add_token("@ABSSTART@", seen=np.infty)
     seqenc_vocab.add_token("@METARARE@", seen=np.infty)
+    seqenc_vocab.add_token("@META@", seen=np.infty)
     seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=lambda x: x,
                              add_start_token=False, add_end_token=True)
     for example in ds.examples:
-        abstracttokens |= set(example[2])
-        seqenc.inc_build_vocab(example[1], seen=example[2] in ("train", "support") if example[3] != testdomain else example[2] == "support")
+        seqenc.inc_build_vocab(example[1], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
+        seqenc.inc_build_vocab(example[2], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
     seqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
 
-    abstracttokenids = {seqenc.vocab[at] for at in abstracttokens}
+    generaltokenmask = torch.zeros(seqenc_vocab.number_of_ids(), dtype=torch.long)
+    for token, tokenid in seqenc_vocab.D.items():
+        if token in general_tokens:
+            generaltokenmask[tokenid] = 1
+
+    tokenmasks = {"_general": generaltokenmask}
+    metararemask = torch.zeros_like(generaltokenmask)
+
+    for domain in domains:
+        tokenmasks[domain] = torch.zeros_like(generaltokenmask)
+        for token, tokenid in seqenc_vocab.D.items():
+            if token.startswith(domain + "|"):
+                tokenmasks[domain][tokenid] = 1
+        metararemask += tokenmasks[domain]
+
+    tokenmasks["_metarare"] = metararemask.clamp_max(1)
+
+    abstractmask = torch.zeros_like(generaltokenmask)
+    for token in ["@ABS@", "@ABSSTART@"]:
+        abstractmask[seqenc_vocab[token]] = 1
+    tokenmasks["_abstract"] = abstractmask
+
+    specialmask = torch.zeros_like(generaltokenmask)
+    for token, tokenid in seqenc_vocab.D.items():
+        if re.match("@[^@]+@", token) and not token in ["@ABS@", "@ABSSTART@"]:
+            specialmask[tokenid] = 1
+    tokenmasks["_special"] = specialmask
 
     nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
     def tokenize(x):
         ret = (nl_tokenizer.encode(x[0], return_tensors="pt")[0],
                seqenc.convert(x[1], return_what="tensor"),
                seqenc.convert(x[2], return_what="tensor"),
-               x[3],
+               x[3], x[4],
                x[0], x[1], x[2], x[3])
         return ret
+    allex = [tokenize(ex) for ex in ds.examples]
+    return allex, nl_tokenizer, seqenc, tokenmasks
 
-    sourceret = {}
-    targetret = {}
-    for domain in domains:
-        finetuneds = ds[lambda x: x[3] == "support" and x[4] == domain].map(tokenize)
-        trainds = ds[lambda x: x[3] == "train" and x[4] == domain].map(tokenize)
-        validds = ds[lambda x: x[3] == "valid" and x[4] == domain].map(tokenize)
-        testds = ds[lambda x: x[3] == "test" and x[4] == domain].map(tokenize)
-        if domain == testdomain:
-            ret = targetret
+
+def pack_loaded_ds(allex, traindomains, testdomain):
+    trainex = []
+    validex = []
+    testex = []
+    supportex = {}
+    for ex in allex:
+        if ex[3] == "support":
+            exdomain = ex[4]
+            if exdomain not in supportex:
+                supportex[exdomain] = []
+            supportex[exdomain].append(ex)
         else:
-            ret = sourceret
-        ret[domain] = {
-            "finetune":DataLoader(finetuneds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
-            "train": DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
-            "valid": DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0)),
-            "test": DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0))
-        }
+            if ex[4] == testdomain:
+                if ex[3] == "test":
+                    testex.append(ex)
+            elif ex[4] in traindomains:
+                if ex[3] == "train":
+                    trainex.append(ex)
+                elif ex[3] == "valid":
+                    validex.append(ex)
+                elif ex[3] == "test":
+                    pass
+    trainds = Dataset(trainex)
+    validds = Dataset(validex)
+    testds = Dataset(testex)
 
-    # populate the "all" domain
-    allsourceret = {
-        "finetune": DataLoader(ds[lambda x: x[3] == "finetune" and x[4] in traindomains].map(tokenize),
-                               batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
-        "train": DataLoader(ds[lambda x: x[3] == "train" and x[4] in traindomains].map(tokenize),
-                            batch_size=batsize, shuffle=True, collate_fn=partial(autocollate, pad_value=0)),
-        "valid": DataLoader(ds[lambda x: x[3] == "valid" and x[4] in traindomains].map(tokenize),
-                            batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0)),
-        "test": DataLoader(ds[lambda x: x[3] == "test" and x[4] in traindomains].map(tokenize),
-                           batch_size=batsize, shuffle=False, collate_fn=partial(autocollate, pad_value=0)),
-    }
-    return sourceret, targetret, allsourceret, nl_tokenizer, seqenc, abstracttokenids
+    def supportretriever(x, domain_mems=None):
+        domainex = domain_mems[x[4]]
+        mem = [(x[0], x[1]) for x in domainex]
+        mem = autocollate(mem)
+        ret = (x[0], x[1],) + tuple(mem)
+        return ret
 
+    trainds = trainds.map(partial(supportretriever, domain_mems=supportex)).cache()
+    validds = validds.map(partial(supportretriever, domain_mems=supportex)).cache()
+    testds = testds.map(partial(supportretriever, domain_mems=supportex)).cache()
+    trainds[0]
+    trainds[0]
+    return trainds, validds, testds
+
+
+def load_data(traindomains=("restaurants",),
+              testdomain="housing",
+              supportsetting="lex", # "lex" or "min"
+              batsize=5,
+              numworkers=0,
+              ):
+    allex, nltok, flenc, tokenmasks = \
+        load_ds(traindomains=traindomains,
+                testdomain=testdomain,
+                supportsetting=supportsetting,
+                )
+    trainds, validds, testds = pack_loaded_ds(allex, traindomains, testdomain)
+
+    def collatefn(x, pad_value=0):
+        y = list(zip(*x))
+        for i, yi in enumerate(y):
+            if isinstance(yi[0], torch.LongTensor):
+                if yi[0].dim() == 1:
+                    y[i] = q.pad_tensors(yi, 0, pad_value)
+                elif yi[0].dim() == 2:
+                    y[i] = q.pad_tensors(yi, (0, 1), pad_value)
+        for i, yi in enumerate(y):
+            if isinstance(yi[0], torch.Tensor):
+                y[i] = torch.stack(yi, 0)
+        supmask_source = y[2][:, :, 0] == y[2][0, 0, 0]
+        supmask_target = y[3][:, :, 0] == y[3][0, 0, 0]
+        assert (torch.allclose(supmask_source.float(), supmask_target.float()))
+        y[2][:, :, 0] = y[2][0, 0, 0]
+        y[3][:, :, 0] = y[3][0, 0, 0]
+        y.append(supmask_target)
+        return y
+
+    traindl = DataLoader(trainds, batsize, shuffle=True, num_workers=numworkers, collate_fn=collatefn)
+    validdl = DataLoader(validds, batsize, shuffle=True, num_workers=numworkers, collate_fn=collatefn)
+    testdl = DataLoader(testds, batsize, shuffle=True, num_workers=numworkers, collate_fn=collatefn)
+
+    return traindl, validdl, testdl, nltok, flenc, tokenmasks
+# endregion
 
 def apply_withpath(m:torch.nn.Module, fn:Callable, mpath=None):
     """ Apply function 'fn' recursively on 'm' and its submodules, where 'fn' gets 'm' and 'mpath' as argument """
@@ -319,18 +449,12 @@ class SGRUCell(torch.nn.Module):
         return h_new
 
 
-class DecoderWithMemory(ABC, torch.nn.Module):
-    """ Defines forward interface for all memory based decoders. """
-    @abstractmethod
-    def forward(self, x_enc, y, memids=None, memencs=None, xmask=None, memmask=None, istraining:bool=True)->Dict:
-        pass
-
-
-class BasicDecoderState(TrainableDecodableState):
+class SuperBasicDecoderState(TrainableDecodableState):
     """ Most basic decoder state for use with parseq SeqDecoder.
-        Needs a End-Of-Sequence token id specified."""
-    def __init__(self, *args, eos_id=3, **kw):
-        super(BasicDecoderState, self).__init__(*args, **kw)
+        Needs a End-Of-Sequence token id specified! """
+    EOS_ID = 3
+    def __init__(self, *args, eos_id=EOS_ID, **kw):
+        super(SuperBasicDecoderState, self).__init__(*args, **kw)
         self._is_terminated = None
         self.eos_id = eos_id
 
@@ -355,11 +479,21 @@ class BasicDecoderState(TrainableDecodableState):
         if i is None:
             return self.gold
         else:
+            if i >= self.gold.size(1):
+                raise StopDecoding()
             return self.gold[:, i]
 
 
 class DecoderInputLayer(torch.nn.Module):
     def __init__(self, vocsize, dim, encdim=None, unkid=1, unktoks:Set[int]=set(), **kw):
+        """
+        :param vocsize:     Number of unique words in vocabulary
+        :param dim:         Embedding dimension
+        :param encdim:      dimension of encoding passed as prev_inp_summ in forward()
+        :param unkid:       the id to map unknown tokens to
+        :param unktoks:     set of integer ids of unknown tokens. These tokens get mapped to unkid.
+        :param kw:
+        """
         super(DecoderInputLayer, self).__init__(**kw)
         self.vocsize = vocsize
         self.dim = dim
@@ -385,7 +519,18 @@ class DecoderInputLayer(torch.nn.Module):
 
 
 class DecoderOutputLayer(torch.nn.Module):
+    """
+    Decoder Output Layer that combines generation and copying from a memory.
+    Unktokens are not able to be produced by generation!
+
+    """
     def __init__(self, dim, vocsize, unktoks:Set[int]=set(), **kw):
+        """
+        :param dim:     dimension of input vectors
+        :param vocsize: number of unique words in vocabulary
+        :param unktoks: set of integer ids of tokens that are unknown. Their generation probabilities will be set to zero.
+        :param kw:
+        """
         super(DecoderOutputLayer, self).__init__(**kw)
         self.dim = dim
         self.vocsize = vocsize
@@ -402,9 +547,9 @@ class DecoderOutputLayer(torch.nn.Module):
         """
         :param enc:     (batsize, dim)
         :param summ:    (batsize, indim)
-        :param memids:  (batsize, memsize, memseqlen)
-        :param memencs: (batsize, memsize, memseqlen, memdim)
-        :param memmask: (batsize, memsize, memseqlen)
+        :param memids:  (batsize, memsize, memseqlen) - integer ids of sequences in given memory
+        :param memencs: (batsize, memsize, memseqlen, memdim) - encoding of memory
+        :param memmask: (batsize, memsize, memseqlen) - bool mask whether memory token is padding
         :return:
         """
         if memmask is None:
@@ -422,9 +567,9 @@ class DecoderOutputLayer(torch.nn.Module):
         # mem_weights_size = mem_weights.size()
         mem_weights = mem_weights.view(mem_weights.size(0), -1)
         mem_alphas = torch.softmax(mem_weights, -1) # (batsize, memsize*memseqlen)
-        mem_summ = mem_alphas[:, :, None] * memencs.view(memencs.size(0), memencs.size(1) * memencs.size(2), -1)
+        mem_summ = mem_alphas[:, :, None] * memencs.contiguous().view(memencs.size(0), memencs.size(1) * memencs.size(2), -1)
         mem_summ = mem_summ.sum(1)
-        mem_toks = memids.view(memids.size(0), -1)  # (batsize, memsize*memseqlen)
+        mem_toks = memids.contiguous().view(memids.size(0), -1)  # (batsize, memsize*memseqlen)
         probs_mem = probs_mem.scatter_add(1, mem_toks, mem_alphas)
 
         h = self.merger2(h, mem_summ)
@@ -457,7 +602,16 @@ class InnerLSTMDecoderCell(TransitionModel):
         This decoder cell will be used to "encode" the output parts of the memory.
     """
     def __init__(self, inplayer:DecoderInputLayer=None,
-                 dim=None, encdim=None, numlayers=1, dropout=0., **kw):
+                 dim=None, encdim=None, numlayers=1, dropout=0.,
+                 eos_id=3, **kw):
+        """
+        :param inplayer:    DecoderInputLayer used for embedding.
+        :param dim:         encoding output dimension
+        :param encdim:      not used # TODO
+        :param numlayers:
+        :param dropout:
+        :param kw:
+        """
         super(InnerLSTMDecoderCell, self).__init__(**kw)
         self.inplayer = inplayer
         self.dim = dim
@@ -472,8 +626,10 @@ class InnerLSTMDecoderCell(TransitionModel):
         self.inp_att_qlin = None #torch.nn.Linear(self.dim, self.dim)
         self.inp_att_klin = None #torch.nn.Linear(self.encdim, self.dim)
 
+        self.eos_id = eos_id
+
     def get_init_state(self, batsize, device=torch.device("cpu")):
-        return BasicDecoderState(lstmstate=self.lstm_transition.get_init_state(batsize, device=device))
+        return SuperBasicDecoderState(lstmstate=self.lstm_transition.get_init_state(batsize, device=device), eos_id=self.eos_id)
 
     def inp_att(self, q, k, v, kmask=None):
         """
@@ -505,49 +661,72 @@ class InnerLSTMDecoderCell(TransitionModel):
         x.prev_summ = summ
 
         enc = self.merger(enc, summ)
-
-        if "enc" not in x:
-            x.enc = enc[:, None, :][:, :0, :]
-        x.enc = torch.cat([x.enc, enc[:, None, :]], 1)
+        #
+        # if "enc" not in x:
+        #     x.enc = enc[:, None, :][:, :0, :]
+        # x.enc = torch.cat([x.enc, enc[:, None, :]], 1)
         return enc, x
 
 
 class InnerDecoder(ABC, torch.nn.Module):
     @abstractmethod
-    def forward(self, y, ctx, mask=None, ctxmask=None):
+    def forward(self, starttokens, y, ctx, ctxmask=None):
+        """
+        Computes the "decoding" encoding of output sequence 'y' given the context 'ctx'.
+
+        :param starttokens  (batsize*memsize,) int ids of starting tokens
+        :param y:           (batsize*memsize, seqlen)  output sequence int ids
+        :param ctx:         (batsize*memsize, inseqlen, indim) encodings of the input side of memory
+        :param ctxmask:     (batsize*memsize, inseqlen) mask for input side
+        :return:            (batsize*memsize, seqlen, dim) - encoding of output sequence y
+        """
         pass
 
 
 class StateInnerDecoder(InnerDecoder):
-    """ Wraps a SeqDecoder and creates a state from args. """
+    """ State-based decoder to use to encode memory output side.
+        Wraps a SeqDecoder and creates a state from args. """
     def __init__(self, cell:TransitionModel, maxtime=100, **kw):
         super(StateInnerDecoder, self).__init__(**kw)
         self.decoder = SeqDecoder(cell, maxtime=maxtime)
         self.cell = cell
 
     @classmethod
-    def create_state(cls, cell, y, ctx, ctxmask=None):
+    def create_state(cls, cell, starttokens, y, ctx, ctxmask=None):
         state = cell.get_init_state(ctx.size(0), device=ctx.device)
-        state.prev_actions = y[:, 0]
+        state.prev_actions = starttokens
         state.prev_summ = torch.zeros_like(ctx[:, 0])
         state.ctx = ctx
         state.gold = y
         state.ctxmask = ctxmask
         return state
 
-    def forward(self, y, ctx, ctxmask=None):
+    def forward(self, starttokens, y, ctx, ctxmask=None):
         # create state
-        state = self.create_state(self.cell, y, ctx, ctxmask=ctxmask)
+        state = self.create_state(self.cell, starttokens, y, ctx, ctxmask=ctxmask)
 
         # decode from state
-        _, newstate = self.decoder(state, tf_ratio=1.)
-        return newstate.enc
+        _, newstate, enc, _, _ = self.decoder(state, tf_ratio=1., return_all=True)
+        return enc
 
 
 class LSTMDecoderCellWithMemory(TransitionModel):
+    """
+    Decoder cell for use with StateDecoderWithMemory.
+    """
     def __init__(self, inplayer:DecoderInputLayer=None,
                  dim=None, encdim=None, numlayers=1, dropout=0.,
-                 outlayer:DecoderOutputLayer=None, **kw):
+                 outlayer:DecoderOutputLayer=None,
+                 eos_id=3, **kw):
+        """
+        :param inplayer:    DecoderInputLayer to embed input tokens
+        :param dim:         dimensionality of embedding
+        :param encdim:      not used ! # TODO
+        :param numlayers:   number of LSTM cell layers
+        :param dropout:
+        :param outlayer:    DecoderOutputLayer
+        :param kw:
+        """
         super(LSTMDecoderCellWithMemory, self).__init__(**kw)
         self.inplayer = inplayer
         self.dim = dim
@@ -561,8 +740,10 @@ class LSTMDecoderCellWithMemory(TransitionModel):
         self.inp_att_qlin = None #torch.nn.Linear(self.dim, self.dim)
         self.inp_att_klin = None #torch.nn.Linear(self.encdim, self.dim)
 
+        self.eos_id = eos_id
+
     def get_init_state(self, batsize, device=torch.device("cpu")):
-        return BasicDecoderState(lstmstate=self.lstm_transition.get_init_state(batsize, device=device))
+        return SuperBasicDecoderState(lstmstate=self.lstm_transition.get_init_state(batsize, device=device), eos_id=self.eos_id)
 
     def inp_att(self, q, k, v, kmask=None):
         """
@@ -599,17 +780,28 @@ class LSTMDecoderCellWithMemory(TransitionModel):
         return out, x
 
 
+class DecoderWithMemory(ABC, torch.nn.Module):
+    """ Defines forward interface for all memory based decoders. """
+    @abstractmethod
+    def forward(self, x_enc, starttokens, y=None, memids=None, memencs=None, xmask=None, memmask=None, istraining:bool=True)->Dict:
+        pass
+
+
 class StateDecoderWithMemory(DecoderWithMemory):
-    """ Wraps a SeqDecoder and creates a state from args. """
+    """ State-based decoder with memory.
+        Wraps a SeqDecoder and creates a state from args.
+        Used for outer decoder.
+        Decoder contains a memory.
+    """
     def __init__(self, cell:TransitionModel, eval=tuple(), maxtime=100, **kw):
         super(StateDecoderWithMemory, self).__init__(**kw)
         self.decoder = SeqDecoder(cell, eval=eval, maxtime=maxtime)
         self.cell = cell
 
     @classmethod
-    def create_state(cls, cell, x_enc, y, memencs, memids, xmask, memmask):
+    def create_state(cls, cell, x_enc, starttokens, y, memencs, memids, xmask, memmask):
         state = cell.get_init_state(x_enc.size(0), device=x_enc.device)
-        state.prev_actions = y[:, 0]
+        state.prev_actions = starttokens
         state.prev_inp_summ = torch.zeros_like(x_enc[:, 0])
         state.prev_mem_summ = torch.zeros_like(memencs[:, 0, 0])
         state.x_enc = x_enc
@@ -620,21 +812,20 @@ class StateDecoderWithMemory(DecoderWithMemory):
         state.memmask = memmask
         return state
 
-    def forward(self, x_enc, y, memids=None, memencs=None, xmask=None, memmask=None, istraining:bool=True):
+    def forward(self, x_enc, starttokens, y=None, memids=None, memencs=None, xmask=None, memmask=None, istraining:bool=True):
         # create state
-        state = self.create_state(self.cell, x_enc, y, memencs, memids, xmask, memmask)
+        state = self.create_state(self.cell, x_enc, starttokens, y, memencs, memids, xmask, memmask)
 
         # decode from state
-        decout = self.decoder(state, tf_ratio=1. if istraining else 0.)
-        return decout
+        _, _, out, predactions, golds = self.decoder(state, tf_ratio=1. if istraining else 0., return_all=True)
+        return out, predactions
 
 
 class MetaSeqMemNN(torch.nn.Module):
     """
     Top-level module for memory-based meta learning for seq2seq
     """
-    def __init__(self, memory_encoder, memory_decoder:InnerDecoder,
-                 encoder, decoder:DecoderWithMemory,
+    def __init__(self, encoder, memory_encoder, decoder:DecoderWithMemory, memory_decoder:InnerDecoder,
                  dim = None,
                  dropout=0., **kw):
         """
@@ -656,7 +847,7 @@ class MetaSeqMemNN(torch.nn.Module):
         self.supinput_enc_lin = torch.nn.Linear(self.dim, self.dim)
         self.merge_x = SGRUCell(self.dim, dropout=dropout)
 
-    def forward(self, x, xsup, y, ysup, supmask, istraining=None):
+    def forward(self, x, y, xsup, ysup, supmask, istraining=None):
         """
         :param x:       2D (batsize, seqlen) int tensor for input
         :param xsup:    3D (batsize, memsize, seqlen) int tensor for input side of support set for every example
@@ -666,7 +857,7 @@ class MetaSeqMemNN(torch.nn.Module):
                         (! non-entries must consist of some token(s) !)
         :return:
         """
-        istraining = self.training
+        istraining = self.training if istraining is None else istraining
         # encode the input and output sides of the support set
         xsup_size = xsup.size()
         ysup_size = ysup.size()
@@ -675,13 +866,16 @@ class MetaSeqMemNN(torch.nn.Module):
         xsup_mask = xsup != 0
         ysup_mask = ysup != 0
         xsup_enc = self.memory_encoder(xsup, mask=xsup_mask)   # (batsize*memsize, seqlen, dim)
-        ysup_enc = self.memory_decoder(ysup, xsup_enc,  # (batsize*memsize, seqlen, dim)
-                                       ctxmask=xsup_mask, mask=ysup_mask)
+        ysup_enc = self.memory_decoder(ysup[:, 0], ysup[:, 1:],
+                                       xsup_enc,  # (batsize*memsize, seqlen, dim)
+                                       ctxmask=xsup_mask)
         xsup_enc = xsup_enc.view(xsup_size + (xsup_enc.size(-1),))     # (batsize, memsize, seqlen, dim)
-        ysup_enc = ysup_enc.view(ysup_size + (ysup_enc.size(-1),))
+        ysup_enc = ysup_enc.view(ysup_size[:2] + ysup_enc.size()[-2:])
         xsup_mask = xsup_mask.view(xsup_size)   # (batsize, memsize, seqlen)
         ysup_mask = ysup_mask.view(ysup_size)
+        ysup_mask = ysup_mask[:, :, 1:]
         ysup = ysup.view(ysup_size)
+        ysup = ysup[:, :, 1:]
 
         # region compute input encoding
         # compute encoding
@@ -694,8 +888,8 @@ class MetaSeqMemNN(torch.nn.Module):
             # (batsize, seqlen, memsize, memseqlen) and (batsize, seqlen, dim)
 
         # compute encodings
-        _x_enc_base = x_enc_base.view(-1, x_enc_base.size(-1))
-        _xsup_summ = xsup_summ.view(-1, xsup_summ.size(-1))
+        _x_enc_base = x_enc_base.contiguous().view(-1, x_enc_base.size(-1))
+        _xsup_summ = xsup_summ.contiguous().view(-1, xsup_summ.size(-1))
         x_enc = self.merge_x(_xsup_summ, _x_enc_base)
         x_enc = x_enc.view(x_enc_base.size())
         # endregion
@@ -703,10 +897,11 @@ class MetaSeqMemNN(torch.nn.Module):
         # run decoder
         if not istraining:
             assert(y.size(1) == 1)
-        decout = self.decoder(x_enc, y, memids=ysup, memencs=ysup_enc,
+
+        out, predactions = self.decoder(x_enc, y[:, 0], y[:, 1:], memids=ysup, memencs=ysup_enc,
                               xmask=x_mask, memmask=ysup_mask.float() * supmask[:, :, None].float(),
                               istraining=istraining)
-        return decout
+        return out, predactions
 
     def align_inputs(self, x_enc_base, xsup_enc, mask=None, supmask=None):
         """
@@ -739,6 +934,19 @@ class MetaSeqMemNN(torch.nn.Module):
         # TODO: more memory-efficient?
         summ = torch.einsum("bsmz,bmzd->bsd", att, _xsup_enc)
         return att, summ, att_weights
+
+
+def create_lstm_model(encoder, vocsize, dim, numlayers=2, dropout=0., unktokens:Set[int]=None, eos_id=3):
+    unktokens = set() if unktokens is None else unktokens
+
+    inplayer = DecoderInputLayer(vocsize, dim, unktoks=unktokens)
+    outlayer = DecoderOutputLayer(dim, vocsize, unktoks=unktokens)
+    cell = LSTMDecoderCellWithMemory(inplayer, dim, outlayer=outlayer, numlayers=numlayers, eos_id=eos_id)
+    dec = StateDecoderWithMemory(cell)
+    memcell = InnerLSTMDecoderCell(inplayer, dim, numlayers=numlayers, eos_id=eos_id)
+    memdec = StateInnerDecoder(memcell)
+    m = MetaSeqMemNN(encoder, encoder, dec, memdec, dim, dropout)
+    return m
 
 
 def _tensor2tree(x, D:Vocab=None):

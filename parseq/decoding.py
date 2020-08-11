@@ -9,6 +9,10 @@ from parseq.states import DecodableState, TrainableDecodableState, ListState, St
 from parseq.transitions import TransitionModel
 
 
+class StopDecoding(Exception):
+    pass
+
+
 class SeqDecoder(torch.nn.Module):
     def __init__(self, model:TransitionModel,
                  eval:List[Union[Metric, Loss]]=tuple(),
@@ -20,39 +24,46 @@ class SeqDecoder(torch.nn.Module):
         self.tf_ratio = tf_ratio        # 1 is for full TF, 0 for freerunning
         assert(self.tf_ratio == 1. or self.tf_ratio == 0)
 
-    def forward(self, x:TrainableDecodableState, tf_ratio:float=None) -> Tuple[Dict, State]:
+    def forward(self, x:TrainableDecodableState, tf_ratio:float=None, return_all=False) -> Tuple[Dict, State]:
         tf_ratio = self.tf_ratio if tf_ratio is None else tf_ratio
         # sb = sb.make_copy()
         x.start_decoding()
 
-        outprobs = []
+        out = []
         predactions = []
 
         i = 0
 
         all_terminated = x.all_terminated()
         while not all_terminated:
-            actionprobs, x = self.model(x)
-            _, _predactions = actionprobs.max(-1)
-            # feed next
-            if tf_ratio == 1.:
-                goldactions = x.get_gold(i)
-                x.step(goldactions)
-            elif tf_ratio == 0.:
-                x.step(_predactions)
-            all_terminated = x.all_terminated() or i >= self.maxtime - 1
-            outprobs.append(actionprobs)
-            predactions.append(_predactions)
-            i += 1
+            try:
+                actionprobs, x = self.model(x)
+                _, _predactions = actionprobs.max(-1)
+                # feed next
+                if tf_ratio == 1.:
+                    goldactions = x.get_gold(i)
+                    x.step(goldactions)
+                elif tf_ratio == 0.:
+                    x.step(_predactions)
+                all_terminated = x.all_terminated() or i >= self.maxtime - 1
+                out.append(actionprobs)
+                predactions.append(_predactions)
+                i += 1
+            except StopDecoding as e:
+                all_terminated = True
 
-        outprobs = torch.stack(outprobs, 1)
+        out = torch.stack(out, 1)
         predactions = torch.stack(predactions, 1)
 
         golds = x.get_gold()
 
-        metrics = [metric(outprobs, predactions, golds, x) for metric in self._metrics]
+        metrics = [metric(out, predactions, golds, x) for metric in self._metrics]
         metrics = merge_metric_dicts(*metrics)
-        return metrics, x
+
+        if return_all:
+            return metrics, x, out, predactions, golds
+        else:
+            return metrics, x
 
 
 def merge_metric_dicts(*dicts, sum_loss=True, sum_penalties=True):
