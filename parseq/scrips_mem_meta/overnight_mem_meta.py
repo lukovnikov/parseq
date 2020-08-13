@@ -852,8 +852,8 @@ class MetaSeqMemNN(torch.nn.Module):
         self.memory_encoder, self.memory_decoder = memory_encoder, memory_decoder
         self.encoder, self.decoder = encoder, decoder
 
-        self.input_enc_lin = torch.nn.Linear(self.dim, self.dim)
-        self.supinput_enc_lin = torch.nn.Linear(self.dim, self.dim)
+        self.input_enc_lin = None #torch.nn.Linear(self.dim, self.dim)
+        self.supinput_enc_lin = None #torch.nn.Linear(self.dim, self.dim)
         self.merge_x = SGRUCell(self.dim, dropout=dropout)
 
     def forward(self, x, y, xsup, ysup, supmask, istraining=None):
@@ -922,8 +922,10 @@ class MetaSeqMemNN(torch.nn.Module):
         """
         _x_enc_base = x_enc_base
         _xsup_enc = xsup_enc
-        x_enc_base = self.input_enc_lin(x_enc_base)
-        xsup_enc = self.supinput_enc_lin(xsup_enc)
+        if self.input_enc_lin is not None:
+            x_enc_base = self.input_enc_lin(x_enc_base)
+        if self.supinput_enc_lin is not None:
+            xsup_enc = self.supinput_enc_lin(xsup_enc)
 
         if mask is None:
             mask = torch.ones_like(x_enc_base[:, :, 0])
