@@ -1208,7 +1208,7 @@ def run(traindomains="ALL",
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  tokenmasks=tokenmasks,
                                  )
-    print(trainm)
+    # print(trainm)
     tt.tock("model created")
 
     # region pretrain on all domains
@@ -1269,8 +1269,8 @@ def run(traindomains="ALL",
                                         on_end=[lambda: lr_schedule.step()])
 
     validepoch = partial(q.test_epoch, model=testm,
-                                       losses=vmetrics,
-                                       dataloader=validdl,
+                                       losses=xmetrics,
+                                       dataloader=testdl,
                                        device=device,
                                        on_end=[lambda: eyt.on_epoch_end()])
 
