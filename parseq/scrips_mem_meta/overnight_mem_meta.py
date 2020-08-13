@@ -904,8 +904,8 @@ class MetaSeqMemNN(torch.nn.Module):
         # endregion
 
         # run decoder
-        if not istraining:
-            assert(y.size(1) == 1)
+        # if not istraining:
+        #     assert(y.size(1) == 1)
 
         out, predactions = self.decoder(x_enc, y[:, 0], y[:, 1:], memids=ysup, memencs=ysup_enc,
                               xmask=x_mask, memmask=ysup_mask.float() * supmask[:, :, None].float(),
