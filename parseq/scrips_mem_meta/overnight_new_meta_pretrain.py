@@ -245,6 +245,7 @@ def load_ds(traindomains=("restaurants",),
                                                       general_tokens=general_tokens), c)
                            for a, b, c in domains[domain]]
 
+    # TODO: BUG! because alltrainex contains trees but domains is tokenized here, loadedex in get_maximum_spanning_examples has no effect
     if supportsetting == "min" or supportsetting == "train":
         for domain, domainexamples in domains.items():
             print(domain)

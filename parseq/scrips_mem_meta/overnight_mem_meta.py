@@ -82,7 +82,7 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
 
     if loadedex is not None:
         for i, example in enumerate(loadedex):
-            exampletokens = set(get_labels_from_tree(example[1]))
+            exampletokens = set(example[1])
             for token in exampletokens:
                 if token in selectiontokencounts:
                     selectiontokencounts[token] += 1
@@ -173,6 +173,8 @@ def tokenize_and_add_start(t, _domain, general_tokens=None):
             if re.match("@[^@]+@", token) or token in general_tokens:
                 newtokens.append(token)
             else:
+                # if token in ("-1", "0", "1", "2", "3"):
+                #     print("Numeric token!")
                 newtokens.append(f"{_domain}|{token}")
         tokens = newtokens
     starttok = "@START@"
@@ -188,7 +190,6 @@ def load_ds(traindomains=("restaurants",),
             batsize=10,
             ftbatsize=-1,
             nl_mode="bert-base-uncased",
-            fullsimplify=True,
             supportsetting="lex",   # "lex" or "min" or "train"
             ):
     """
@@ -211,16 +212,22 @@ def load_ds(traindomains=("restaurants",),
                             ! Validation is over a fraction of training data
     :return:
     """
-    ftbatsize = batsize if ftbatsize < 0 else ftbatsize
+    fullsimplify=True
+
+    if supportsetting == "lex":
+        if mincoverage > 1:
+            print(f"Changing mincoverage to 1 because supportsetting=='{lex}', mincoverage was {mincoverage}.")
+            mincoverage = 1
+
     general_tokens = {
         "(", ")", "arg:~type", "arg:type", "op:and", "SW:concat", "cond:has",
         "arg:<=", "arg:<", "arg:>=", "arg:>", "arg:!=", "arg:=", "SW:superlative",
         "SW:CNT-arg:min", "SW:CNT-arg:<", "SW:CNT-arg:<=", "SW:CNT-arg:>=", "SW:CNT-arg:>",
-        "SW:CNT-arg:max", "SW:CNT-arg:=", "arg:max",
-    }
+        "SW:CNT-arg:max", "SW:CNT-arg:=", "arg:max", "arg:min", ".size",
+        "agg:arg:sum", "agg:arg:avg"}
+        # "-1", "0", "1", "2", "3", "5", "10", "15", "30", "40", "300", "2000", "1000", "1500", "800", "2015", "2004"}
 
     domains = {}
-    alltrainex = []
     for domain in list(traindomains) + [testdomain]:
         ds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True,
                                     restore_reverse=DATA_RESTORE_REVERSE, validfrac=.10)\
@@ -231,20 +238,22 @@ def load_ds(traindomains=("restaurants",),
                               for a, b, c in domainexamples]
         else:
             domainexamples = [(a, b, c) for a, b, c in domainexamples if c != "lexicon"]
-        if domain != testdomain:
-            alltrainex += [(a, b, c, domain) for a, b, c in domainexamples if c == "train"]
         domains[domain] = domainexamples
 
+    alltrainex = []
     for domain in domains:
         domains[domain] = [(a, tokenize_and_add_start(b, domain, general_tokens=general_tokens), c)
                            for a, b, c in domains[domain]]
+        alltrainex += [(a, b, c, domain) for a, b, c in domains[domain]]
 
-    if supportsetting == "min" or supportsetting == "train":
+    if True or supportsetting == "min" or supportsetting == "train":
         for domain, domainexamples in domains.items():
             print(domain)
+            loadedex = [a for a in alltrainex if a[3] == domain and a[2] == "support"]
+            loadedex += [a for a in alltrainex if (a[3] != domain and a[2] == "train")]
             mindomainexamples = get_maximum_spanning_examples([(a, b, c) for a, b, c in domainexamples if c == "train"],
                                           mincoverage=mincoverage, #loadedex=None)
-                                          loadedex=[a for a in alltrainex if a[3] != domain])
+                                          loadedex=loadedex)
             domains[domain] = domains[domain] + [(a, b, "support") for a, b, c in mindomainexamples]
 
     allex = []
@@ -936,17 +945,130 @@ class MetaSeqMemNN(torch.nn.Module):
         return att, summ, att_weights
 
 
-def create_lstm_model(encoder, vocsize, dim, numlayers=2, dropout=0., unktokens:Set[int]=None, eos_id=3):
+def create_lstm_model(encoder, vocsize, dim, numlayers=2, dropout=0., unktokens:Set[int]=None, eos_id=3, maxlen=100):
     unktokens = set() if unktokens is None else unktokens
 
     inplayer = DecoderInputLayer(vocsize, dim, unktoks=unktokens)
     outlayer = DecoderOutputLayer(dim, vocsize, unktoks=unktokens)
     cell = LSTMDecoderCellWithMemory(inplayer, dim, outlayer=outlayer, numlayers=numlayers, eos_id=eos_id)
-    dec = StateDecoderWithMemory(cell)
+    dec = StateDecoderWithMemory(cell, maxtime=maxlen)
     memcell = InnerLSTMDecoderCell(inplayer, dim, numlayers=numlayers, eos_id=eos_id)
     memdec = StateInnerDecoder(memcell)
     m = MetaSeqMemNN(encoder, encoder, dec, memdec, dim, dropout)
     return m
+
+
+class TrainModel(torch.nn.Module):
+    def __init__(self, model:MetaSeqMemNN, tensor2tree:Callable=None, orderless:Set[str]=set(),
+                 maxlen:int=100, smoothing:float=0., padid:int=0, **kw):
+        super(TrainModel, self).__init__(**kw)
+        self.model = model
+
+        # CE loss
+        self.ce = CELoss(ignore_index=padid,
+                         smoothing=smoothing,
+                         mode="probs")
+
+        # accuracies
+        self.accs = SeqAccuracies()
+        self.accs.padid = padid
+        self.accs.unkid = UNKID
+
+        self.tensor2tree = tensor2tree
+        self.orderless = orderless
+        self.maxlen = maxlen
+        self.treeacc = TreeAccuracy(tensor2tree=tensor2tree,
+                                    orderless=orderless)
+
+        self.metrics = [self.ce, self.accs, self.treeacc]
+
+    def forward(self, x, y, xsup, ysup, supmask, istraining=True):
+        probs, predactions = self.model(x, y, xsup, ysup, supmask, istraining)
+        # _, predactions = probs.max(-1)
+        outputs = [metric(probs, predactions, y[:, 1:]) for metric in self.metrics]
+        outputs = merge_metric_dicts(*outputs)
+        return outputs, (probs, predactions)
+
+
+class TestModel(torch.nn.Module):
+    def __init__(self, model: MetaSeqMemNN, tensor2tree: Callable = None, orderless: Set[str] = set(),
+                 maxlen: int = 100, smoothing: float = 0., padid: int = 0, **kw):
+        super(TestModel, self).__init__(**kw)
+        self.model = model
+
+        # accuracies
+        self.accs = SeqAccuracies()
+        self.accs.padid = padid
+        self.accs.unkid = UNKID
+
+        self.tensor2tree = tensor2tree
+        self.orderless = orderless
+        self.maxlen = maxlen
+        self.treeacc = TreeAccuracy(tensor2tree=tensor2tree,
+                                    orderless=orderless)
+
+        self.metrics = [self.accs, self.treeacc]
+
+    def forward(self, x, y, xsup, ysup, supmask, istraining=False):
+        probs, predactions = self.model(x, y, xsup, ysup, supmask, istraining)
+        # _, predactions = probs.max(-1)
+        outputs = [metric(probs, predactions, y[:, 1:]) for metric in self.metrics]
+        outputs = merge_metric_dicts(*outputs)
+        return outputs, (probs, predactions)
+
+
+
+def create_model(encoder_name="bert-base-uncased",
+                 dec_vocabsize=None,
+                 dec_layers=2,
+                 dec_dim=200,
+                 dropout=0.,
+                 maxlen=30,
+                 smoothing=0.,
+                 tensor2tree=None,
+                 tokenmasks=None,
+                 ):
+    if encoder_name != "bert-base-uncased":
+        raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
+    pretrained = BertModel.from_pretrained(encoder_name)
+    encoder = pretrained
+
+    class BertEncoderWrapper(torch.nn.Module):
+        def __init__(self, model, dropout=0., **kw):
+            super(BertEncoderWrapper, self).__init__(**kw)
+            self.inner_bert_model = model
+            self.proj = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False) \
+                if dec_dim != pretrained.config.hidden_size \
+                else None
+            self.dropout = torch.nn.Dropout(dropout)
+
+        def forward(self, input_ids, mask=None):
+            ret, _ = self.inner_bert_model(input_ids, attention_mask=mask)
+            if pretrained.config.hidden_size != dec_dim:
+                ret = self.proj(ret)
+                ret = self.dropout(ret)
+            return ret
+
+    encoder = BertEncoderWrapper(encoder, dropout=dropout)
+    unktokens = set(tokenmasks["_metarare"].nonzero()[:, 0].cpu().numpy())
+    m = create_lstm_model(encoder, dec_vocabsize, dim=dec_dim, numlayers=dec_layers,
+                          dropout=dropout, unktokens=unktokens, eos_id=3, maxlen=maxlen)
+
+    orderless = {"op:and", "SW:concat"}
+
+    trainmodel = TrainModel(m,
+                            smoothing=smoothing,
+                            tensor2tree=tensor2tree,
+                            orderless=orderless,
+                            maxlen=maxlen)
+
+    testmodel = TestModel(m,
+                            smoothing=smoothing,
+                            tensor2tree=tensor2tree,
+                            orderless=orderless,
+                            maxlen=maxlen)
+
+    return trainmodel, testmodel
 
 
 def _tensor2tree(x, D:Vocab=None):
@@ -1023,17 +1145,15 @@ def cat_batches(*x, pad_value=0):
 
 def run(traindomains="ALL",
         domain="restaurants",
+        supportsetting="lex",   # "lex" or "min"
         mincoverage=2,
         lr=0.0001,
         enclrmul=0.1,
         numbeam=1,
-        ftlr=0.0001,
         cosinelr=False,
         warmup=0.,
         batsize=30,
         epochs=100,
-        finetunesteps=5,
-        maxfinetunesteps=4,
         evalinterval=2,
         dropout=0.1,
         wreg=1e-9,
@@ -1044,25 +1164,19 @@ def run(traindomains="ALL",
         gpu=-1,
         seed=123456789,
         encoder="bert-base-uncased",
-        numlayers=6,
-        hdim=600,
+        numlayers=2,
+        hdim=200,
         numheads=8,
         maxlen=30,
         fullsimplify=True,
-        domainstart=False,
-        supportsetting="lex",   # "lex" or "min"
-        metarare="no",
         abscontrib=1.,
-        gradmode="none",    # "none", "metarare", "metarareonly", "split"
-        injecttraindata=False,
-        useadapters=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
     # wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
     #            reinit=True, config=settings)
     if traindomains == "ALL":
-        alldomains = {"recipes", "restaurants", "blocks", "calendar", "housing", "publications"}
+        alldomains = {"recipes", "restaurants", "calendar", "housing", "publications"}  # blocks
         traindomains = alldomains - {domain, }
     else:
         traindomains = set(traindomains.split("+"))
@@ -1072,57 +1186,44 @@ def run(traindomains="ALL",
     tt = q.ticktock("script")
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
-    if useadapters:
-        assert(gradmode=="none", gradmode == "adapter" or gradmode == "adaptersplit")
-
-    if gradmode == "split" and injecttraindata == False:
-        tt.msg("probably makes sense to inject training data (-injecttraindata) when gradmode is \"split\"")
-    if injecttraindata:
-        tt.msg("injecting some training examples from all observed domains during finetuning!")
-
     tt.tick("loading data")
-    sourcedss, targetdss, allsourceds, nltok, flenc, abstract_token_ids = \
-        load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
-                fullsimplify=fullsimplify, add_domain_start=domainstart, batsize=batsize,
-                supportsetting=supportsetting)
+    traindl, validdl, testdl, nltok, flenc, tokenmasks = \
+        load_data(traindomains=traindomains,
+                  testdomain=domain,
+                  supportsetting=supportsetting,
+                  batsize=batsize,)
     tt.tock("data loaded")
 
     tt.tick("creating model")
-    trainm, abstrainm = create_model(encoder_name=encoder,
+    trainm, testm = create_model(encoder_name=encoder,
                                  dec_vocabsize=flenc.vocab.number_of_ids(),
                                  dec_layers=numlayers,
                                  dec_dim=hdim,
-                                 dec_heads=numheads,
                                  dropout=dropout,
                                  smoothing=smoothing,
                                  maxlen=maxlen,
-                                 numbeam=numbeam,
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
-                                 abstract_token_ids=abstract_token_ids,
-                                 metarare=metarare,
-                                 useadapters=useadapters
+                                 tokenmasks=tokenmasks,
                                  )
     tt.tock("model created")
 
     # region pretrain on all domains
     metrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
-    absmetrics = make_array_of_metrics("loss", "tree_acc")
-    ftmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
     vmetrics = make_array_of_metrics("seq_acc", "tree_acc")
-    vftmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
     xmetrics = make_array_of_metrics("seq_acc", "tree_acc")
-    xftmetrics = make_array_of_metrics("loss", "elem_acc", "seq_acc", "tree_acc")
 
     # region parameters
     def get_parameters(m, _lr, _enclrmul):
-        trainable_params = list(m.named_parameters())
-
-        # tt.msg("different param groups")
-        encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
-        otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
-        if len(encparams) == 0:
+        bertparams = []
+        otherparams = []
+        for k, v in m.named_parameters():
+            if "inner_bert_model" in k:
+                bertparams.append(v)
+            else:
+                otherparams.append(v)
+        if len(bertparams) == 0:
             raise Exception("No encoder parameters found!")
-        paramgroups = [{"params": encparams, "lr": _lr * _enclrmul},
+        paramgroups = [{"params": bertparams, "lr": _lr * _enclrmul},
                        {"params": otherparams}]
         return paramgroups
     # endregion
@@ -1152,91 +1253,36 @@ def run(traindomains="ALL",
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
-    trainepoch = partial(meta_train_epoch,
-                         model=trainm,
-                         absmodel=abstrainm,
-                         data=sourcedss,
-                         allsourcedata=allsourceds,
-                         injecttraindata=injecttraindata,
-                         optim=optim,
-                         get_ft_model=lambda x: deepcopy(x),
-                         get_ft_optim=partial(get_optim,
-                                              _lr=ftlr,
-                                              _enclrmul=enclrmul,
-                                              _wreg=wreg),
-                         gradmode=gradmode,
-                         losses=metrics,
-                         abslosses=absmetrics,
-                         ftlosses=ftmetrics,
-                         finetunesteps=finetunesteps,
-                         clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
-                         device=device,
-                         on_end=[lambda: lr_schedule.step()],
-                         gradacc=gradacc,
-                         abstract_contrib=abscontrib,)
+    trainbatch = partial(q.train_batch, gradient_accumulation_steps=gradacc,
+                                        on_before_optim_step=[lambda : clipgradnorm(_m=trainm, _norm=gradnorm)])
 
-    bestfinetunesteps = q.hyperparam(0)
-    validepoch = partial(meta_test_epoch,
-                        model=trainm,
-                        data=targetdss,
-                         allsourcedata=allsourceds,
-                         injecttraindata=injecttraindata,
-                        get_ft_model=lambda x: deepcopy(x),
-                        get_ft_optim=partial(get_optim,
-                                             _lr=ftlr,
-                                             _enclrmul=enclrmul,
-                                             _wreg=wreg),
-                        gradmode=gradmode,
-                        bestfinetunestepsvar=bestfinetunesteps,
-                        bestfinetunestepswhichmetric=1,
-                        losses=vmetrics,
-                        ftlosses=vftmetrics,
-                        finetunesteps=maxfinetunesteps,
-                        mode="valid",
-                        evalinterval=evalinterval,
-                        clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
-                        device=device,
-                        print_every_batch=False,
-                        on_outer_end=[lambda: eyt.on_epoch_end()])
+    trainepoch = partial(q.train_epoch, model=trainm,
+                                        dataloader=traindl,
+                                        optim=optim,
+                                        losses=metrics,
+                                        device=device,
+                                        _train_batch=trainbatch,
+                                        on_end=[lambda: lr_schedule.step()])
 
-    # print(testepoch())
+    validepoch = partial(q.test_epoch, model=testm,
+                                       losses=vmetrics,
+                                       dataloader=validdl,
+                                       device=device,
+                                       on_end=[lambda: eyt.on_epoch_end()])
 
-    tt.tick("pretraining")
+    tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=validepoch,
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()])
-    tt.tock("done pretraining")
+    tt.tock("done training")
 
-    tt.msg(f"best finetune steps: {q.v(bestfinetunesteps)+1}")
-    if eyt.get_remembered() is not None:
-        tt.msg("reloaded")
-        trainm.model = eyt.get_remembered()
+    testepoch =  partial(q.test_epoch, model=testm,
+                                      losses=xmetrics,
+                                      dataloader=testdl,
+                                      device=device)
 
-    testepoch = partial(meta_test_epoch,
-                        model=trainm,
-                        data=targetdss,
-                         allsourcedata=allsourceds,
-                         injecttraindata=injecttraindata,
-                        get_ft_model=lambda x: deepcopy(x),
-                        get_ft_optim=partial(get_optim,
-                                             _lr=ftlr,
-                                             _enclrmul=enclrmul,
-                                             _wreg=wreg),
-                        gradmode=gradmode,
-                        bestfinetunestepsvar=bestfinetunesteps,
-                        bestfinetunestepswhichmetric=1,
-                        losses=xmetrics,
-                        ftlosses=xftmetrics,
-                        finetunesteps=maxfinetunesteps,
-                        mode="test",
-                        clipgradnorm=partial(clipgradnorm, _norm=gradnorm),
-                        device=device,
-                        print_every_batch=False,
-                        on_outer_end=[lambda: eyt.on_epoch_end()])
-
-    tt.tick(f"testing with @{q.v(bestfinetunesteps)+1} (out of {q.v(maxfinetunesteps)}) steps")
-    testmsg = testepoch(finetunesteps=maxfinetunesteps)
+    testmsg = testepoch()
     tt.msg(testmsg)
     tt.tock("tested")
 
@@ -1340,7 +1386,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, lr=0.0001, ftlr=0.0001, p
 
 if __name__ == '__main__':
     faulthandler.enable()
-    # ret = q.argprun(run)
+    ret = q.argprun(run)
     # print(ret)
     # q.argprun(run_experiments)
-    fire.Fire(run_experiments)
+    # fire.Fire(run_experiments)
