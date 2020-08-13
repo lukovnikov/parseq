@@ -190,6 +190,7 @@ class EntropyLoss(Loss):
 class CELoss(Loss):
     def __init__(self, weight=None, reduction="mean", ignore_index=0, mode="logits", smoothing:float=0., **kw):
         super(CELoss, self).__init__(**kw)
+        self.mode = mode
         self.ce = q.CELoss(weight=weight, reduction=reduction, ignore_index=ignore_index, mode=mode)
         if smoothing != 0.:
             assert(smoothing < 1. and smoothing > 0.)
@@ -208,7 +209,7 @@ class CELoss(Loss):
             print(probs, golds)
 
         selected = probs.gather(2, golds[:, :, None])
-        if torch.any(selected == -np.infty):
+        if torch.any(selected == (-np.infty if self.mode in ("logits", "logprobs") else 0.)):
             print("gold id could not be generated")
 
         loss = self.ce(probs, golds)
