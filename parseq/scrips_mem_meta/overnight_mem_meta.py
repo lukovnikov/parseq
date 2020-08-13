@@ -1208,6 +1208,7 @@ def run(traindomains="ALL",
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  tokenmasks=tokenmasks,
                                  )
+    print(trainm)
     tt.tock("model created")
 
     # region pretrain on all domains
