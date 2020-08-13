@@ -26,3 +26,11 @@
 (rule $VP/NP (is below) (ConstantFn (string below)))
 
 (rule $VP (is special) (ConstantFn (string is_special)))
+
+# Manually added reverse relations rules
+#   (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse
+(rule $RelNP (is shape of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string below))))
+(rule $RelNP (is color of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string color))))
+(rule $RelNP (is length of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string length))))
+(rule $RelNP (is width of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string width))))
+(rule $RelNP (is height of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string height))))

@@ -31,3 +31,14 @@
 
 # Unaries
 (rule $VP (is important) (ConstantFn (string is_important)))
+
+
+# Manually added reverse relations rules
+#   (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse
+
+(rule $RelNP (is date of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string date))))
+(rule $RelNP (is start time of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string start_time))))
+(rule $RelNP (is end time of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string end_time))))
+(rule $RelNP (is length of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string length))))
+(rule $RelNP (is attendee of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string attendee))))
+(rule $RelNP (is location of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string location))))

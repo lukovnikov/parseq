@@ -44,3 +44,13 @@
 (rule $VP (has waiter service) (ConstantFn (string waiter)))
 (rule $VP (is good for kids) (ConstantFn (string kids)))
 (rule $VP (is good for groups) (ConstantFn (string groups)))
+
+
+# Manually added reverse relations rules
+#   (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse
+
+(rule $RelNP (is star rating of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string star_rating))))
+(rule $RelNP (is price rating of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string price_rating))))
+(rule $RelNP (is number of reviews of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string reviews))))
+(rule $RelNP (is neighborhood of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string neighborhood))))
+(rule $RelNP (is cuisine of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string cuisine))))

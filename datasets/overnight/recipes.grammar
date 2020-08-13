@@ -31,3 +31,13 @@
 (rule $RelNP (posting date) (ConstantFn (string posting_date)))
 (rule $EntityNP1 (2004) (ConstantFn (date 2004 -1 -1)))
 (rule $EntityNP2 (2010) (ConstantFn (date 2010 -1 -1)))
+
+
+# Manually added reverse relations rules
+#   (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse
+
+(rule $RelNP (is preparation time of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string preparation_time))))
+(rule $RelNP (is cooking time of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string cooking_time))))
+(rule $RelNP (is cuisine of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string cuisine))))
+(rule $RelNP (is posting date of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string posting_date))))
+(rule $VP/NP (is required by) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string requires))))

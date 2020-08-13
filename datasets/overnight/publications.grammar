@@ -25,3 +25,11 @@
 
 # Unaries
 (rule $VP (won an award) (ConstantFn (string won_award)))
+
+
+# Manually added reverse relations rules
+#   (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse
+
+(rule $RelNP (is author of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string author))))
+(rule $RelNP (is venue of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string venue))))
+(rule $RelNP (is publication date of) (ConstantFn (call edu.stanford.nlp.sempre.overnight.SimpleWorld.reverse (string publication_date))))
