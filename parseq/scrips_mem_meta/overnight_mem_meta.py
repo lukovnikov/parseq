@@ -533,7 +533,7 @@ class DecoderOutputLayer(torch.nn.Module):
     Unktokens are not able to be produced by generation!
 
     """
-    def __init__(self, dim, vocsize, unktoks:Set[int]=set(), **kw):
+    def __init__(self, dim, vocsize, unktoks:Set[int]=set(), dropout=0., **kw):
         """
         :param dim:     dimension of input vectors
         :param vocsize: number of unique words in vocabulary
@@ -547,6 +547,7 @@ class DecoderOutputLayer(torch.nn.Module):
         self.merger2 = SGRUCell(dim)
         self.mixer = torch.nn.Linear(dim, 2)
         self.outlin = torch.nn.Linear(dim, vocsize)
+        self.dropout = dropout
         unktok_mask = torch.ones(vocsize)
         for unktok in unktoks:
             unktok_mask[unktok] = 0
@@ -630,7 +631,7 @@ class InnerLSTMDecoderCell(TransitionModel):
         self.lstm_transition = LSTMCellTransition(*lstms, dropout=dropout)
         self.dropout = dropout
 
-        self.merger = SGRUCell(self.dim)
+        self.merger = SGRUCell(self.dim, dropout=self.dropout)
 
         self.inp_att_qlin = None #torch.nn.Linear(self.dim, self.dim)
         self.inp_att_klin = None #torch.nn.Linear(self.encdim, self.dim)
@@ -951,10 +952,10 @@ def create_lstm_model(encoder, vocsize, dim, numlayers=2, dropout=0., unktokens:
     unktokens = set() if unktokens is None else unktokens
 
     inplayer = DecoderInputLayer(vocsize, dim, unktoks=unktokens)
-    outlayer = DecoderOutputLayer(dim, vocsize, unktoks=unktokens)
-    cell = LSTMDecoderCellWithMemory(inplayer, dim, outlayer=outlayer, numlayers=numlayers, eos_id=eos_id)
+    outlayer = DecoderOutputLayer(dim, vocsize, unktoks=unktokens, dropout=0.)
+    cell = LSTMDecoderCellWithMemory(inplayer, dim, outlayer=outlayer, numlayers=numlayers, eos_id=eos_id, dropout=dropout)
     dec = StateDecoderWithMemory(cell, maxtime=maxlen)
-    memcell = InnerLSTMDecoderCell(inplayer, dim, numlayers=numlayers, eos_id=eos_id)
+    memcell = InnerLSTMDecoderCell(inplayer, dim, numlayers=numlayers, eos_id=eos_id, dropout=dropout)
     memdec = StateInnerDecoder(memcell)
     m = MetaSeqMemNN(encoder, encoder, dec, memdec, dim, dropout)
     return m
@@ -1051,7 +1052,7 @@ def create_model(encoder_name="bert-base-uncased",
                 ret = self.dropout(ret)
             return ret
 
-    encoder = BertEncoderWrapper(encoder, dropout=dropout)
+    encoder = BertEncoderWrapper(encoder, dropout=0.)
     unktokens = set(tokenmasks["_metarare"].nonzero()[:, 0].cpu().numpy())
     m = create_lstm_model(encoder, dec_vocabsize, dim=dec_dim, numlayers=dec_layers,
                           dropout=dropout, unktokens=unktokens, eos_id=3, maxlen=maxlen)
