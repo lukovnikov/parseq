@@ -591,10 +591,26 @@ def remove_literals(x:Tree, literalparents=("placeid", "countryid", "riverid", "
         return x
 
 
-def load_geoquery(lang:str="en", nltok_name:str="bert-base-uncased",
+def load_multilingual_geoquery(lang:str="en", nltok_name:str="bert-base-uncased",
+                  validfrac=0.2,
                   top_k:int=np.infty, min_freq:int=0,
                   p:str="../../datasets/geo880_multiling/geoquery"):
-    ds = MultilingualGeoqueryDatasetLoader(p=p).load(lang)
+    """
+    :param lang:        one of the following language codes: "de", "en", "el", "fa", "id", "sv", "th", "zh"
+    :param nltok_name:  what tokenizer from huggingface transformers to use
+    :param validfrac:   portion of training data to randomly select to use as validation data (will not occur in training data)
+    :param top_k:       retain only top k words at the output side
+    :param min_freq:    retain words that occur at least this number of times in training dataset
+    :param p:           path to directory containing json files for geoquery in different languages
+    :return:
+        trainds (parseq Dataset) - training data in a dataset
+        validds (parseq Dataset) - validation data in a dataset
+        testds (parseq Dataset) - test data in a dataset
+        nltok - tokenizer from huggingface transformers used to tokenize and index the NL
+        flenc - SequenceEncoder used to index the FL side (flenc.vocab.D gives the dict of the dictionary)
+    """
+    ds = MultilingualGeoqueryDatasetLoader(p=p, validfrac=validfrac)\
+        .load(lang)
     bert_tok = AutoTokenizer.from_pretrained(nltok_name)
 
     ds = ds.map(lambda x: (bert_tok.encode(x["nl"], return_tensors="pt")[0],
@@ -619,7 +635,7 @@ def load_geoquery(lang:str="en", nltok_name:str="bert-base-uncased",
 
 
 def try_multilingual_geoquery_dataset_loader():
-    tds, vds, xds, nltok, flenc = load_geoquery("en")
+    tds, vds, xds, nltok, flenc = load_multilingual_geoquery("en")
     print(tds[0])
     print(flenc.vocab.D)
     print("done")
