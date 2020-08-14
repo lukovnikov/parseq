@@ -1,20 +1,124 @@
 import json
 import os
+import re
 import random
 from abc import abstractmethod, ABC
 from copy import copy
 from typing import List, Tuple, Callable, Union
 
-import nltk
 import torch
-from nltk import Tree, Nonterminal
+from nltk import Tree
 import numpy as np
-from scipy.special import softmax
 from torch.utils.data.dataloader import default_collate, DataLoader
-from tqdm import tqdm
 
-from parseq.grammar import prolog_to_tree
-from transformers import BertTokenizer, AutoTokenizer
+from transformers import AutoTokenizer
+
+
+class TreeStrParser(ABC):
+    def __init__(self, x:str=None, brackets="()"):
+        super(TreeStrParser, self).__init__()
+        self.stack = [[]]
+        self.curstring = None
+        self.stringmode = None
+        self.prevescape = 0
+        self.next_is_sibling = False
+        self.nameless_func = "@NAMELESS@"
+        self.brackets = brackets
+
+        if x is not None:
+            self.feed(x)
+
+    @abstractmethod
+    def add_level(self):
+        pass
+
+    @abstractmethod
+    def close_level(self):
+        pass
+
+    @abstractmethod
+    def add_sibling(self, next_token):
+        pass
+
+    def feed(self, x:str):
+        xsplits = re.split("([\(\)\s'\"])", x)
+        queue = list(xsplits)
+        while len(queue) > 0:
+            next_token = queue.pop(0)
+            if self.curstring is not None:
+                if next_token == "\\":
+                    self.prevescape = 2
+                elif next_token == "":
+                    continue
+                self.curstring += next_token
+                if self.curstring[-1] == self.stringmode and self.prevescape == 0:  # closing string
+                    self.stack[-1].append(self.curstring)
+                    self.curstring = None
+                    self.stringmode = None
+                self.prevescape = max(self.prevescape - 1, 0)
+            else:
+                self.next_is_sibling = False
+                next_token = next_token.strip()
+                self.prevescape = False
+                if next_token == self.brackets[0]:
+                    # add one level on stack
+                    self.add_level()
+                elif next_token == self.brackets[1]:
+                    # close last level on stack, merge into subtree
+                    self.close_level()
+                elif next_token == "" or next_token == " ":
+                    pass  # do nothing
+                elif next_token == "'":
+                    self.curstring = next_token
+                    self.stringmode = "'"
+                elif next_token == '"':
+                    self.curstring = next_token
+                    self.stringmode = '"'
+                elif next_token == ",":
+                    self.next_is_sibling = True
+                else:
+                    self.add_sibling(next_token)
+        if len(self.stack) != 1 or len(self.stack[-1]) != 1:
+            return None
+        else:
+            return self.stack[-1][-1]
+
+
+class PrologToTree(TreeStrParser):
+    def add_level(self):
+        self.stack.append([])
+
+    def close_level(self):
+        siblings = self.stack.pop(-1)
+        self.stack[-1][-1].extend(siblings)
+
+    def add_sibling(self, next_token):
+        self.stack[-1].append(Tree(next_token, []))
+
+
+def _inc_convert_treestr(x, cls, self=-1, brackets="()"):
+    """
+    :param x: lisp-style string
+    strings must be surrounded by single quotes (') and may not contain anything but single quotes
+    :return:
+    """
+    if isinstance(self, cls):
+        ret = self.feed(x)
+        return ret, self
+    else:
+        _self = cls(x, brackets=brackets) if not isinstance(self, cls) else self
+        ret = _self.feed("")
+        if ret is None:
+            return None, _self
+        else:
+            if self is None:
+                return ret, _self
+            else:
+                return ret
+
+
+def prolog_to_tree(x: str, self:PrologToTree = -1, brackets="()"):
+    return _inc_convert_treestr(x, PrologToTree, self=self, brackets=brackets)
 
 
 class _Vocab(object):
@@ -525,7 +629,7 @@ def try_multilingual_geoquery_dataset_loader():
     batch = next(iter(dl))
 
     print(batch)
-    print(" ".join([flenc.vocab(xe) for xe in batch[1][0].numpy()]))
+    print(" ".join([flenc.vocab(xe) for xe in batch[1][3].numpy()]))
 
 
 if __name__ == '__main__':
