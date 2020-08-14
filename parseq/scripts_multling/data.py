@@ -597,7 +597,7 @@ def load_geoquery(lang:str="en", nltok_name:str="bert-base-uncased",
     ds = MultilingualGeoqueryDatasetLoader(p=p).load(lang)
     bert_tok = AutoTokenizer.from_pretrained(nltok_name)
 
-    ds = ds.map(lambda x: (bert_tok.encode(x["nl"]),
+    ds = ds.map(lambda x: (bert_tok.encode(x["nl"], return_tensors="pt")[0],
                            tree_to_lisp_tokens(
                                remove_literals(
                                    prolog_to_tree(x["mrl"]))),
@@ -619,7 +619,7 @@ def load_geoquery(lang:str="en", nltok_name:str="bert-base-uncased",
 
 
 def try_multilingual_geoquery_dataset_loader():
-    tds, vds, xds, _, flenc = load_geoquery("fa")
+    tds, vds, xds, nltok, flenc = load_geoquery("en")
     print(tds[0])
     print(flenc.vocab.D)
     print("done")
@@ -629,7 +629,8 @@ def try_multilingual_geoquery_dataset_loader():
     batch = next(iter(dl))
 
     print(batch)
-    print(" ".join([flenc.vocab(xe) for xe in batch[1][3].numpy()]))
+    print(nltok.convert_tokens_to_string(nltok.convert_ids_to_tokens(batch[0][2])))
+    print(" ".join([flenc.vocab(xe) for xe in batch[1][2].numpy()]))
 
 
 if __name__ == '__main__':
