@@ -234,7 +234,7 @@ class Vocab(_Vocab):
 
     def tostr(self, x:Union[np.ndarray, torch.Tensor], return_tokens=False):
         """
-        :param x:   2D LongTensor or array
+        :param x:   1D LongTensor or array
         :param return_tokens:
         :return:
         """
@@ -635,18 +635,20 @@ def load_multilingual_geoquery(lang:str="en", nltok_name:str="bert-base-uncased"
 
 
 def try_multilingual_geoquery_dataset_loader():
+    # region example usage
     tds, vds, xds, nltok, flenc = load_multilingual_geoquery("en")
+    dl = DataLoader(tds, batch_size=5, shuffle=True, collate_fn=autocollate)
+    # endregion
+
     print(tds[0])
     print(flenc.vocab.D)
     print("done")
 
-    dl = DataLoader(tds, batch_size=5, shuffle=True, collate_fn=autocollate)
-
     batch = next(iter(dl))
 
     print(batch)
-    print(nltok.convert_tokens_to_string(nltok.convert_ids_to_tokens(batch[0][2])))
-    print(" ".join([flenc.vocab(xe) for xe in batch[1][2].numpy()]))
+    print(nltok.convert_tokens_to_string(nltok.convert_ids_to_tokens(batch[0][4])))
+    print(flenc.vocab.tostr(batch[1][4]))
 
 
 if __name__ == '__main__':
