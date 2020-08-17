@@ -39,7 +39,7 @@ from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartFo
 from transformers.activations import ACT2FN
 from transformers.modeling_bart import SinusoidalPositionalEmbedding, DecoderLayer, SelfAttention, LayerNorm
 
-UNKID = 3
+UNKID = 1
 
 DATA_RESTORE_REVERSE = False
 
@@ -1046,6 +1046,8 @@ def _tensor2tree(x, D:Vocab=None):
         if x[i] == ")":
             x.pop(i)
             parentheses_balance += 1
+        else:
+            break
         i -= 1
 
     # convert to nltk.Tree
@@ -1094,15 +1096,15 @@ def run(traindomains="ALL",
         domain="restaurants",
         supportsetting="lex",   # "lex" or "min"
         mincoverage=2,
-        lr=0.0001,
+        lr=0.001,
         enclrmul=0.1,
         numbeam=1,
         cosinelr=False,
         warmup=0.,
-        batsize=30,
+        batsize=10,
         epochs=100,
         evalinterval=2,
-        dropout=0.1,
+        dropout=0.2,
         wreg=1e-9,
         gradnorm=3,
         gradacc=1,
@@ -1112,7 +1114,7 @@ def run(traindomains="ALL",
         seed=123456789,
         encoder="bert-base-uncased",
         numlayers=2,
-        hdim=200,
+        hdim=100,
         numheads=8,
         maxlen=30,
         fullsimplify=True,
