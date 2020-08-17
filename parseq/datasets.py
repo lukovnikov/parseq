@@ -461,6 +461,31 @@ class SubtreeMasker(TokenMasker):
 
 
 # region SPECIFIC DATASETS
+
+class MultilingualGeoqueryDatasetLoader(object):
+    def __init__(self,
+                 p="../datasets/geo880_multiling/geoquery",
+                 validfrac=0.2,
+                 **kw):
+        super(MultilingualGeoqueryDatasetLoader, self).__init__(**kw)
+        self.p = p
+        self.validfrac = validfrac
+
+    def load(self, lang:str="en"):
+        data = []
+        with open(os.path.join(self.p, f"geo-{lang}.json")) as f:
+            data = json.load(f)
+        print(f"{len(data)} examples loaded for language {lang}")
+        return Dataset(data)
+
+
+def try_multilingual_geoquery_dataset_loader():
+    dsl = MultilingualGeoqueryDatasetLoader()
+    dsl.load("fa")
+    print("done")
+
+
+
 class OvernightDatasetLoader(object):
     def __init__(self,
                  p="../datasets/overnightData/",
@@ -1026,7 +1051,7 @@ if __name__ == '__main__':
     # try_tokenizer_dataset()
     # try_perturbed_generated_dataset()
     # try_top_dataset()
-    ovd = OvernightDatasetLoader(usecache=False, simplify_mode="light").load()
+    # ovd = OvernightDatasetLoader(usecache=False, simplify_mode="light").load()
     # govd = PCFGDataset(OvernightPCFGBuilder()
     #                    .build(ovd[lambda x: x[2] in {"train", "valid"}]
     #                           .map(lambda f: f[1])
@@ -1034,3 +1059,4 @@ if __name__ == '__main__':
     # print(ovd[0])
     # print(govd[0])
     # print(govd.examples)
+    print(try_multilingual_geoquery_dataset_loader())

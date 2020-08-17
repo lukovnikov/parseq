@@ -600,5 +600,61 @@ class PtrGenOutput3(PtrGenOutput):
             return out_probs, ptr_or_gen_scores, gen_probs, self.sm(attn_scores)
 
 
+class GatedFF(torch.nn.Module):
+    def __init__(self, indim, odim, dropout=0., activation=None, zdim=None, **kw):
+        super(GatedFF, self).__init__(**kw)
+        self.dim = indim
+        self.odim = odim
+        self.zdim = self.dim * 4 if zdim is None else zdim
+
+        self.activation = torch.nn.CELU() if activation is None else activation
+
+        self.linA = torch.nn.Linear(self.dim, self.zdim)
+        self.linB = torch.nn.Linear(self.zdim, self.odim)
+        self.linMix = torch.nn.Linear(self.zdim, self.odim)
+        # self.linMix.bias.data.fill_(3.)
+
+        self.dropout = torch.nn.Dropout(dropout)
+
+    def forward(self, *inps):
+        h = inps[-1]
+        _h = torch.cat(inps, -1)
+        _cand = self.linA(self.dropout(_h))
+        _cand = self.activation(_cand)
+        cand = self.linB(self.dropout(_cand))
+        mix = torch.sigmoid(self.linMix(_cand))
+        ret = h * mix + cand * (1 - mix)
+        return ret
+
+
+class SGRUCell(torch.nn.Module):
+    def __init__(self, dim, bias=True, dropout=0., **kw):
+        super(SGRUCell, self).__init__(**kw)
+        self.dim, self.bias = dim, bias
+        self.gateW = torch.nn.Linear(dim * 2, dim * 5, bias=bias)
+        self.gateU = torch.nn.Linear(dim * 2, dim, bias=bias)
+        self.sm = torch.nn.Softmax(-1)
+        self.dropout = torch.nn.Dropout(dropout)
+
+    def forward(self, x, h):
+        inp = torch.cat([x, h], 1)
+        inp = self.dropout(inp)
+        gates = self.gateW(inp)
+        gates = list(gates.chunk(5, 1))
+        rx = torch.sigmoid(gates[0])
+        rh = torch.sigmoid(gates[1])
+        z_gates = gates[2:5]
+        # z_gates[2] = z_gates[2] - self.gate_bias
+        z = torch.softmax(torch.stack(z_gates, 2), -1)
+        inp = torch.cat([x * rx, h * rh], 1)
+        inp = self.dropout(inp)
+        u = self.gateU(inp)
+        u = torch.tanh(u)
+        h_new = torch.stack([x, h, u], 2) * z
+        h_new = h_new.sum(-1)
+        return h_new
+
+
+
 if __name__ == '__main__':
     try_dgru_cell()
