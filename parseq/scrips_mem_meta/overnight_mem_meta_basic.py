@@ -952,50 +952,50 @@ def create_model(encoder_name="bert-base-uncased",
                  tensor2tree=None,
                  tokenmasks=None,
                  ):
-    # if encoder_name != "bert-base-uncased":
-    #     raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
-    # pretrained = BertModel.from_pretrained(encoder_name)
-    # encoder = pretrained
-    #
-    # class BertEncoderWrapper(torch.nn.Module):
-    #     def __init__(self, model, dropout=0., **kw):
-    #         super(BertEncoderWrapper, self).__init__(**kw)
-    #         self.inner_bert_model = model
-    #         self.proj = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False) \
-    #             if dec_dim != pretrained.config.hidden_size \
-    #             else None
-    #         self.projZ = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False) \
-    #             if dec_dim != pretrained.config.hidden_size \
-    #             else None
-    #         self.dropout = torch.nn.Dropout(dropout)
-    #
-    #     def forward(self, input_ids, mask=None):
-    #         ret, z = self.inner_bert_model(input_ids, attention_mask=mask)
-    #         if pretrained.config.hidden_size != dec_dim:
-    #             ret = self.proj(ret)
-    #             z = self.projZ(z)
-    #             # ret = self.dropout(ret)
-    #         return z, ret
-    #
-    # encoder = BertEncoderWrapper(encoder, dropout=0.)
+    if encoder_name != "bert-base-uncased":
+        raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
+    pretrained = BertModel.from_pretrained(encoder_name)
+    encoder = pretrained
 
-    class LSTMEncoder(torch.nn.Module):
-        def __init__(self, vocsize, dim, numlayers=2, dropout=0., **kw):
-            super(LSTMEncoder, self).__init__(**kw)
-            self.emb = torch.nn.Embedding(vocsize, dim)
-            self.lstm = torch.nn.LSTM(dim, dim//2, numlayers, dropout=dropout, bidirectional=True)
+    class BertEncoderWrapper(torch.nn.Module):
+        def __init__(self, model, dropout=0., **kw):
+            super(BertEncoderWrapper, self).__init__(**kw)
+            self.inner_bert_model = model
+            self.proj = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False) \
+                if dec_dim != pretrained.config.hidden_size \
+                else None
+            self.projZ = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False) \
+                if dec_dim != pretrained.config.hidden_size \
+                else None
+            self.dropout = torch.nn.Dropout(dropout)
 
-        def forward(self, x, mask=None):
-            emb = self.emb(x)
-            packed_emb, unsorter = q.seq_pack(emb, mask)
-            enc_packed, states = self.lstm(packed_emb)
-            enc, recon_mask = q.seq_unpack(enc_packed, unsorter)
-            z = states[0].index_select(1, unsorter)[-2:]\
-                .transpose(0, 1).contiguous()\
-                .view(enc.size(0), enc.size(2))
-            return z, enc
+        def forward(self, input_ids, mask=None):
+            ret, z = self.inner_bert_model(input_ids, attention_mask=mask)
+            if pretrained.config.hidden_size != dec_dim:
+                ret = self.proj(ret)
+                z = self.projZ(z)
+                # ret = self.dropout(ret)
+            return z, ret
 
-    encoder = LSTMEncoder(enc_vocabsize, dec_dim, numlayers=dec_layers, dropout=dropout)
+    encoder = BertEncoderWrapper(encoder, dropout=0.)
+
+    # class LSTMEncoder(torch.nn.Module):
+    #     def __init__(self, vocsize, dim, numlayers=2, dropout=0., **kw):
+    #         super(LSTMEncoder, self).__init__(**kw)
+    #         self.emb = torch.nn.Embedding(vocsize, dim)
+    #         self.lstm = torch.nn.LSTM(dim, dim//2, numlayers, dropout=dropout, bidirectional=True)
+    #
+    #     def forward(self, x, mask=None):
+    #         emb = self.emb(x)
+    #         packed_emb, unsorter = q.seq_pack(emb, mask)
+    #         enc_packed, states = self.lstm(packed_emb)
+    #         enc, recon_mask = q.seq_unpack(enc_packed, unsorter)
+    #         z = states[0].index_select(1, unsorter)[-2:]\
+    #             .transpose(0, 1).contiguous()\
+    #             .view(enc.size(0), enc.size(2))
+    #         return z, enc
+    #
+    # encoder = LSTMEncoder(enc_vocabsize, dec_dim, numlayers=dec_layers, dropout=dropout)
 
     unktokens = set(tokenmasks["_metarare"].nonzero()[:, 0].cpu().numpy())
     m = create_lstm_model(encoder, dec_vocabsize, dim=dec_dim, numlayers=dec_layers,

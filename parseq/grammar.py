@@ -229,6 +229,19 @@ def try_str_to_pas():
     print(prolog_to_pas(x))
 
 
+def try_lisp_to_tree():
+    a = "(wife (president ((us))))"
+    b = "(wife (president us))"
+    c = "(wife (president (us)))"
+    at = lisp_to_tree(a)
+    bt = lisp_to_tree(b)
+    ct = lisp_to_tree(c)
+    print(at)
+    print(bt)
+    print(ct)
+
+
+
 def pas_to_tree(x):
     if isinstance(x, tuple):    # has children
         node = Tree(x[0], [])
@@ -843,4 +856,5 @@ class FuncGrammar(object):
 
 
 if __name__ == '__main__':
-    try_str_to_pas()
+    # try_str_to_pas()
+    try_lisp_to_tree()
