@@ -513,12 +513,16 @@ class OvernightDatasetLoader(object):
         return self.simplify_mode == "full"
 
     def load(self, domain:str="restaurants", trainonvalid=False):
+
         examples, lexicon = self._initialize(self._p, self._mp, domain)
 
         # _examples = examples
         # examples = [example for example in _examples if example[2] != "train"]
         examples += [(nl, lf, "lexicon") for nl, lf in lexicon]
-
+        '''
+        examples is a list of tuples with each tuple being nl (utterance), lf (logical form) 
+        and (text/train/valid/lexicon)
+        '''
         if trainonvalid:
             _examples = examples
             examples = []
@@ -819,6 +823,12 @@ class OvernightDatasetLoader(object):
                 pass
 
         if trainexamples is None:
+            '''
+                Train/Test/Grammar-lines: read the dataset and split it line by line.
+                lexicon: all the tokens (entities and relations) which are used for creating semantic parse.
+                Train/Test-examples: question and the corresponding target semantic parse (TargetFormula) represented as a nltk Tree.
+                (http://www.nltk.org/_modules/nltk/tree.html)
+            '''
 
             trainlines = [x.strip() for x in
                          open(os.path.join(os.path.dirname(__file__), p, f"{domain}.paraphrases.train.examples"), "r").readlines()]
@@ -838,11 +848,12 @@ class OvernightDatasetLoader(object):
         trainlen = int(round((1-self.validfrac) * len(trainexamples)))
         validlen = len(trainexamples) - trainlen
         splits = ["train"] * trainlen + ["valid"] * validlen
-        rng = np.random.RandomState(12345678)
+        rng = np.random.RandomState(12345678) # random number generator
         rng.shuffle(splits)
         assert(len(splits) == len(trainexamples))
         splits = splits + ["test"] * len(testexamples)
 
+        # Splits represent train/test/valid indices.
         examples = list(zip(questions, queries, splits))
         return examples, lexicon
 

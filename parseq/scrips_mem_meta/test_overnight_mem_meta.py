@@ -307,3 +307,8 @@ class TestMetaSeqMemNN(TestCase):
 
         outs = m(*batch)
         print(outs)
+
+
+if __name__ == '__main__':
+    tlds = TestLoadDS()
+    tlds.test_load_ds_lex()

@@ -88,11 +88,19 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
                     selectiontokencounts[token] += 1
 
     def get_example_score(i):
+
+        # What's the freq of the least seen token (based on the support set)
         minfreq = min(selectiontokencounts.values())
-        ret = 0
+
+        score = 0
+
+        # For all tokens in the given example from this domain (restaurants)
         for token in uniquetokensperexample[i]:
-            ret += 1/8 ** (selectiontokencounts[token] - minfreq)
-        return ret
+
+            # Calculate score based on (selectiontokencounts[token]-minfreq) -> freq of seeing this token ( - min freq)
+            # Score b/w 1 and 0. 1 for least frequent, 0 for highest frequent.
+            score += 1/8 ** (selectiontokencounts[token] - minfreq)
+        return score
 
     exampleids = set(range(len(examples)))
     outorder = []
@@ -100,20 +108,41 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     i = 0
 
     while len(exampleids) > 0:
+
+        # These example IDs are sorted like:
+        # # (one with the least seen tokens is at the start)
+        # # (one with the most seen tokens is at the end)
         sortedexampleids = sorted(exampleids, key=get_example_score, reverse=True)
+
+        # Take the one with least seen tokens in outorder
         outorder.append(sortedexampleids[0])
         exampleids -= {sortedexampleids[0]}
-        # update selection token counts
+
+        # Update selection token counts:
+        # # since that example is out, we update selectiontokencount based on all its tokens.
         for token in uniquetokensperexample[sortedexampleids[0]]:
             selectiontokencounts[token] += 1
+
+        # Effectively, now, we have isolated and removed the example whose tokens are least seen in the support set.
+
         minfreq = np.infty
         for k, v in selectiontokencounts.items():
+
             if tokencounts[k] < mincoverage and selectiontokencounts[k] >= tokencounts[k]:
+                # selectiontokencounts[k] >= tokencounts[k]:
+                # # if a token has been seen more in the support set than in this dataset's training examples
+
+                # tokencounts[k] < mincoverage
+                # # if the token is seen less times in our dataset than the mincoverage ( = 1, often)
+
                 pass
             else:
                 minfreq = min(minfreq, selectiontokencounts[k])
-        i += 1
-        if minfreq >= mincoverage:
+
+        # Effectively, minfreq is just seeing the min freq of tokens in our given domain with some caveats.
+
+        i += 1                              # Go to the next example
+        if minfreq >= mincoverage:          # If the min freq is satisfied, break.
             break
 
     out = [examples[i] for i in outorder]
@@ -166,7 +195,10 @@ def get_lf_abstract_transform(examples, general_tokens=None):
 
 
 def tokenize_and_add_start(t, _domain, general_tokens=None):
+    # Tokenize the parse structure (to a sequence)
     tokens = tree_to_lisp_tokens(t)
+
+    # If a token is domain specific, then append the domain name alongwith (eg. 'restaurants|en.restaurant')
     if general_tokens is not None:
         newtokens = []
         for token in tokens:
@@ -177,8 +209,11 @@ def tokenize_and_add_start(t, _domain, general_tokens=None):
                 #     print("Numeric token!")
                 newtokens.append(f"{_domain}|{token}")
         tokens = newtokens
+
+    # Append the start token
     starttok = "@START@"
     tokens = [starttok] + tokens
+
     return tokens
 
 
@@ -232,8 +267,8 @@ def load_ds(traindomains=("restaurants",),
         ds = OvernightDatasetLoader(simplify_mode="light" if not fullsimplify else "full", simplify_blocks=True,
                                     restore_reverse=DATA_RESTORE_REVERSE, validfrac=.10)\
             .load(domain=domain)
-        domainexamples = [(a, b, c) for a, b, c in ds.examples]
-        if supportsetting == "lex":
+        domainexamples = [(a, b, c) for a, b, c in ds.examples] # a-utterance, b-logical form, c-test/train/valid/lexicon
+        if supportsetting == "lex": # if support set includes lexicon, mark it as support set.
             domainexamples = [(a, b, "support" if c == "lexicon" else c)
                               for a, b, c in domainexamples]
         else:
@@ -249,8 +284,19 @@ def load_ds(traindomains=("restaurants",),
     if True or supportsetting == "min" or supportsetting == "train":
         for domain, domainexamples in domains.items():
             print(domain)
+            '''
+            Loadedex has all the lexicons of a given domain and all train examples from every other domain.
+            '''
             loadedex = [a for a in alltrainex if a[3] == domain and a[2] == "support"]
             loadedex += [a for a in alltrainex if (a[3] != domain and a[2] == "train")]
+            '''
+            get_maximum_spanning_examples is mechanism to find a set of examples (from other domain i.e. not restaurant) such that all the tokens 
+            of a given domain (restaurant for argument sake) are present in this set of examples (returned from 
+            get_maximum_spanning_examples).
+            
+            
+            @ask denis. 
+            '''
             mindomainexamples = get_maximum_spanning_examples([(a, b, c) for a, b, c in domainexamples if c == "train"],
                                           mincoverage=mincoverage, #loadedex=None)
                                           loadedex=loadedex)
@@ -260,7 +306,7 @@ def load_ds(traindomains=("restaurants",),
     for domain in domains:
         allex += [(a, b, c, domain) for a, b, c in domains[domain]]
     ds = Dataset(allex)
-
+# @TODO: pick up from here.
     et = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples, general_tokens=general_tokens)
     ds = ds.map(lambda x: (x[0], x[1], et(x[1]), x[2], x[3]))
 
