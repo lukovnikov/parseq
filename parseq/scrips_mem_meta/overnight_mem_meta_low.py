@@ -187,9 +187,7 @@ def load_ds(traindomains=("restaurants",),
             min_freq=1,
             mincoverage=1,
             top_k=np.infty,
-            batsize=10,
-            ftbatsize=-1,
-            nl_mode="bert-base-uncased",
+            nl_mode="basic",
             supportsetting="lex",   # "lex" or "min" or "train"
             ):
     """
@@ -304,9 +302,18 @@ def load_ds(traindomains=("restaurants",),
             specialmask[tokenid] = 1
     tokenmasks["_special"] = specialmask
 
-    nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
+    if nl_mode == "basic":
+        nl_tokenizer = SequenceEncoder(tokenizer=lambda x: x.split(),
+                                 add_start_token=True, add_end_token=True)
+        for example in ds.examples:
+            nl_tokenizer.inc_build_vocab(example[0], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
+        nl_tokenizer.finalize_vocab(min_freq=min_freq, top_k=top_k)
+        nl_tok_f = lambda x: nl_tokenizer.convert(x, return_what="tensor")
+    else:
+        nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
+        nl_tok_f = lambda x: nl_tokenizer(x, return_tensors="pt")[0]
     def tokenize(x):
-        ret = (nl_tokenizer.encode(x[0], return_tensors="pt")[0],
+        ret = (nl_tok_f(x[0]),
                seqenc.convert(x[1], return_what="tensor"),
                seqenc.convert(x[2], return_what="tensor"),
                x[3], x[4],
@@ -478,7 +485,7 @@ class DecoderOutputLayer(torch.nn.Module):
     Unktokens are not able to be produced by generation!
 
     """
-    def __init__(self, dim, vocsize, unktoks:Set[int]=set(), dropout=0., **kw):
+    def __init__(self, dim, embdim, vocsize, unktoks:Set[int]=set(), dropout=0., **kw):
         """
         :param dim:     dimension of input vectors
         :param vocsize: number of unique words in vocabulary
@@ -487,11 +494,12 @@ class DecoderOutputLayer(torch.nn.Module):
         """
         super(DecoderOutputLayer, self).__init__(**kw)
         self.dim = dim
+        self.embdim = embdim
         self.vocsize = vocsize
-        self.attvectormasker = torch.nn.Linear(dim * 2, dim * 2)
+        self.attvectormasker = torch.nn.Linear(dim * 2 + embdim, dim * 2 + embdim)
         self.mixer = torch.nn.Linear(dim*2, 2)
         self.outlin = torch.nn.Linear(dim*2, vocsize)
-        self.bilinear_lin = torch.nn.Linear(dim*2, dim*2, bias=False)
+        # self.bilinear_lin = torch.nn.Linear(dim*2, dim*2, bias=False)
         self.dropout = dropout
         unktok_mask = torch.ones(vocsize)
         for unktok in unktoks:
@@ -502,10 +510,18 @@ class DecoderOutputLayer(torch.nn.Module):
     def reset_parameters(self):
         torch.nn.init.constant_(self.attvectormasker.bias, +3)
 
-    def forward(self, enc, summ, memids=None, memkeys=None, memencs=None, memmask=None):
+    def forward(self,
+                enc,
+                encsumm,
+                embsumm,
+                memencs=None,
+                memencsumm=None,
+                memembsumm=None,
+                memmask=None,
+                memids=None):
         """
         :param enc:     (batsize, dim)
-        :param summ:    (batsize, indim)
+        :param encsumm:    (batsize, indim)
         :param memids:  (batsize, memsize, memseqlen) - integer ids of sequences in given memory
         :param memkeys: (batsize, memsize, memseqlen, memdim) - input summaries
         :param memencs: (batsize, memsize, memseqlen, memdim) - output states of memory decoder
@@ -516,17 +532,17 @@ class DecoderOutputLayer(torch.nn.Module):
             memmask = torch.ones_like(memids).float()
         # compute
         # TODO: use only summary
-        query = torch.cat([summ, torch.zeros_like(enc)], 1)
+        query = torch.cat([embsumm, encsumm, enc], -1)
         attvector_mask = torch.sigmoid(self.attvectormasker(query))
         query = query * attvector_mask
-        keys = torch.cat([memkeys, torch.zeros_like(memencs)], -1)
+        keys = torch.cat([memembsumm, memencsumm, memencs], -1)
 
         # compute probs from memory
         probs_mem = torch.zeros(query.size(0), self.vocsize, device=query.device)
             # (batsize, vocsize)
 
         # compute attentions to memory
-        query = self.bilinear_lin(query)
+        # query = self.bilinear_lin(query)
         mem_weights = torch.einsum("bd,bmzd->bmz", query, keys)
         mem_weights = mem_weights + torch.log(memmask.float())
         # mem_weights_size = mem_weights.size()
@@ -534,12 +550,12 @@ class DecoderOutputLayer(torch.nn.Module):
         mem_alphas = torch.softmax(mem_weights, -1) # (batsize, memsize*memseqlen)
         mem_enc_summ = mem_alphas[:, :, None] * memencs.contiguous().view(memencs.size(0), memencs.size(1) * memencs.size(2), -1)
         mem_enc_summ = mem_enc_summ.sum(1)
-        mem_key_summ = mem_alphas[:, :, None] * memkeys.contiguous().view(memkeys.size(0), memkeys.size(1) * memkeys.size(2), -1)
-        mem_key_summ = mem_key_summ.sum(1)
+        # mem_key_summ = mem_alphas[:, :, None] * memkeys.contiguous().view(memkeys.size(0), memkeys.size(1) * memkeys.size(2), -1)
+        # mem_key_summ = mem_key_summ.sum(1)
         mem_toks = memids.contiguous().view(memids.size(0), -1)  # (batsize, memsize*memseqlen)
         probs_mem = probs_mem.scatter_add(1, mem_toks, mem_alphas)
 
-        h = torch.cat([summ, enc], -1)
+        h = torch.cat([encsumm, enc], -1)
         logits_gen = self.outlin(h)
         mask_gen = self.unktok_mask[None, :].repeat(logits_gen.size(0), 1)
         logits_gen = logits_gen + torch.log(mask_gen)
@@ -620,7 +636,7 @@ class InnerLSTMDecoderCell(TransitionModel):
 
         alphas, summ, _ = self.inp_att(enc, x.ctx, x.ctx, x.ctxmask)
         x.prev_summ = summ
-        return summ, enc, x
+        return enc, alphas, x
 
 
 class InnerDecoder(ABC, torch.nn.Module):
@@ -661,7 +677,7 @@ class StateInnerDecoder(InnerDecoder):
         state = self.create_state(self.cell, starttokens, y, ctx, ctxmask=ctxmask, prev_summ=prev_summ)
         state.start_decoding()
 
-        keys = []
+        alphas = []
         encs = []
 
         i = 0
@@ -669,21 +685,21 @@ class StateInnerDecoder(InnerDecoder):
         all_terminated = state.all_terminated()
         while not all_terminated:
             try:
-                key, enc, state = self.cell(state)
+                enc, att, state = self.cell(state)
                 # feed next
                 goldactions = state.get_gold(i)
                 state.step(goldactions)
                 all_terminated = state.all_terminated()
-                keys.append(key)
+                alphas.append(att)
                 encs.append(enc)
                 i += 1
             except StopDecoding as e:
                 all_terminated = True
 
-        keys = torch.stack(keys, 1)
+        alphas = torch.stack(alphas, 1)
         encs = torch.stack(encs, 1)
 
-        return keys, encs
+        return encs, alphas
 
 
 class LSTMDecoderCellWithMemory(TransitionModel):
@@ -742,16 +758,24 @@ class LSTMDecoderCellWithMemory(TransitionModel):
         return alphas, summ, weights
 
     def forward(self, x:State):
-        inp = self.inplayer(x.prev_actions, x.prev_inp_summ, x.prev_mem_summ)
+        inp = self.inplayer(x.prev_actions, x.prev_summ)
 
         enc, new_lstmstate = self.lstm_transition(inp, x.lstmstate)
         # x.lstmstate = new_lstmstate
 
-        alphas, summ, _ = self.inp_att(enc, x.x_enc, x.x_enc, x.xmask)
-        x.prev_inp_summ = summ
+        alphas, encsumm, _ = self.inp_att(enc, x.x_enc, x.x_enc, x.xmask)
+        embsumm = torch.einsum("bz,bzd->bd", alphas, x.x_emb)
+        x.prev_summ = encsumm
 
-        out, mem_summ = self.outlayer(enc, summ,
-            memids=x.memids, memkeys=x.memkeys, memencs=x.memencs, memmask=x.memmask)
+        out, mem_summ = self.outlayer(
+            enc,
+            encsumm,
+            embsumm,
+            memencs=x.memencs,
+            memencsumm=x.memencsumm,
+            memembsumm=x.memembsumm,
+            memids=x.memids,
+            memmask=x.memmask)
         x.prev_mem_summ = mem_summ
         return out, x
 
@@ -759,7 +783,19 @@ class LSTMDecoderCellWithMemory(TransitionModel):
 class DecoderWithMemory(ABC, torch.nn.Module):
     """ Defines forward interface for all memory based decoders. """
     @abstractmethod
-    def forward(self, x_enc, starttokens, y=None, memids=None, memkeys=None, memencs=None, xmask=None, memmask=None, istraining:bool=True)->Dict:
+    def forward(self,
+                x_enc,              # TODO: comments
+                starttokens,
+                y=None,
+                x_emb=None,
+                memids=None,
+                memencs=None,
+                memencsumm=None,
+                memembsumm=None,
+                xmask=None,
+                memmask=None,
+                prev_summ=None,
+                istraining: bool = True)->Dict:
         pass
 
 
@@ -775,23 +811,59 @@ class StateDecoderWithMemory(DecoderWithMemory):
         self.cell = cell
 
     @classmethod
-    def create_state(cls, cell, x_enc, starttokens, y, memkeys, memencs, memids, xmask, memmask, prev_inp_summ=None):
+    def create_state(cls, cell,
+                x_enc,
+                starttokens,
+                y=None,
+                x_emb=None,
+                memids=None,
+                memencs=None,
+                memencsumm=None,
+                memembsumm=None,
+                xmask=None,
+                memmask=None,
+                prev_summ=None):
         state = cell.get_init_state(x_enc.size(0), device=x_enc.device)
         state.prev_actions = starttokens
-        state.prev_inp_summ = prev_inp_summ if prev_inp_summ is not None else torch.zeros_like(x_enc[:, 0])
+        state.prev_summ = prev_summ if prev_summ is not None else torch.zeros_like(x_enc[:, 0])
         state.prev_mem_summ = torch.zeros_like(memencs[:, 0, 0])
         state.x_enc = x_enc
+        state.x_emb = x_emb
         state.gold = y
         state.memids = memids
-        state.memkeys = memkeys
         state.memencs = memencs
+        state.memencsumm = memencsumm
+        state.memembsumm = memembsumm
         state.xmask = xmask
         state.memmask = memmask
         return state
 
-    def forward(self, x_enc, starttokens, y=None, memids=None, memkeys=None, memencs=None, xmask=None, memmask=None, prev_inp_summ=None, istraining:bool=True):
+    def forward(self,
+                x_enc,
+                starttokens,
+                y=None,
+                x_emb=None,
+                memids=None,
+                memencs=None,
+                memencsumm=None,
+                memembsumm=None,
+                xmask=None,
+                memmask=None,
+                prev_summ=None,
+                istraining:bool=True):
         # create state
-        state = self.create_state(self.cell, x_enc, starttokens, y, memkeys, memencs, memids, xmask, memmask, prev_inp_summ=prev_inp_summ)
+        state = self.create_state(self.cell,
+                                  x_enc,
+                                  starttokens,
+                                  y=y,
+                                  x_emb=x_emb,
+                                  memids=memids,
+                                  memencs=memencs,
+                                  memencsumm=memencsumm,
+                                  memembsumm=memembsumm,
+                                  xmask=xmask,
+                                  memmask=memmask,
+                                  prev_summ=prev_summ)
 
         # decode from state
         _, _, out, predactions, golds = self.decoder(state, tf_ratio=1. if istraining else 0., return_all=True)
@@ -839,14 +911,28 @@ class MetaSeqMemNN(torch.nn.Module):
         ymem = ymem.view(-1, ymem.size(-1))
         xmem_mask = xmem != 0
         ymem_mask = ymem != 0
-        xmem_enc_z, xmem_enc = self.memory_encoder(xmem, mask=xmem_mask)   # (batsize*memsize, seqlen, dim)
-        ymem_keys, ymem_enc = self.memory_decoder(ymem[:, 0], ymem[:, 1:],
-                                        xmem_enc,  # (batsize*memsize, seqlen, dim)
-                                        ctxmask=xmem_mask, prev_summ=xmem_enc_z)
+        xmem_enc_z, xmem_enc, xmem_emb = self.memory_encoder(xmem, mask=xmem_mask)   # (batsize*memsize, seqlen, dim)
+        # TODO from here
+        ymem_enc, ymem_alphas = self.memory_decoder(
+            ymem[:, 0],
+            ymem[:, 1:],
+            xmem_enc,  # (batsize*memsize, seqlen, dim)
+            ctxmask=xmem_mask,
+            prev_summ=xmem_enc_z)
+        """ ymem_enc:    (batsize, outlen, dim) sequence of decoder states
+            ymem_alphas: (batsize, outlen, inplen) sequence of attentions computed from each decoder state """
         # xmem_enc = xmem_enc.view(xmem_size + (xmem_enc.size(-1),))     # (batsize, memsize, seqlen, dim)
-        ymem_keys = ymem_keys.view(ymem_size[:2] + ymem_keys.size()[-2:])
+        # ymem_alphas = ymem_alphas.view(ymem_size[:2] + ymem_alphas.size()[-2:])
         ymem_enc = ymem_enc.view(ymem_size[:2] + ymem_enc.size()[-2:])
         # xmem_mask = xmem_mask.view(xmem_size)   # (batsize, memsize, seqlen)
+
+        # compute memory inputs
+        ymem_enc_summ = torch.einsum("bsz,bzd->bsd", ymem_alphas, xmem_enc)
+        ymem_emb_summ = torch.einsum("bsz,bzd->bsd", ymem_alphas, xmem_emb)
+
+        ymem_enc_summ = ymem_enc_summ.view(ymem_size[:2] + ymem_enc_summ.size()[-2:])
+        ymem_emb_summ = ymem_emb_summ.view(ymem_size[:2] + ymem_emb_summ.size()[-2:])
+
         ymem_mask = ymem_mask.view(ymem_size)
         ymem_mask = ymem_mask[:, :, 1:]
         ymem = ymem.view(ymem_size)
@@ -854,23 +940,32 @@ class MetaSeqMemNN(torch.nn.Module):
 
         # compute encoding
         x_mask = x != 0
-        x_enc_z, x_enc = self.encoder(x, mask=x_mask)   # (batsize, seqlen, dim)
+        x_enc_z, x_enc, x_emb = self.encoder(x, mask=x_mask)   # (batsize, seqlen, dim)
 
         # run decoder
         # if not istraining:
         #     assert(y.size(1) == 1)
 
-        out, predactions = self.decoder(x_enc, y[:, 0], y[:, 1:], memids=ymem, memkeys=ymem_keys, memencs=ymem_enc,
-                                        xmask=x_mask, memmask=ymem_mask.float() * memmask[:, :, None].float(), prev_inp_summ=x_enc_z,
+        out, predactions = self.decoder(x_enc,
+                                        y[:, 0],
+                                        y[:, 1:],
+                                        x_emb=x_emb,
+                                        memids=ymem,
+                                        memencs=ymem_enc,
+                                        memencsumm=ymem_enc_summ,
+                                        memembsumm=ymem_emb_summ,
+                                        xmask=x_mask,
+                                        memmask=ymem_mask.float() * memmask[:, :, None].float(),
+                                        prev_summ=x_enc_z,
                                         istraining=istraining)
         return out, predactions
 
 
-def create_lstm_model(encoder, vocsize, dim, numlayers=2, dropout=0., unktokens:Set[int]=None, eos_id=3, maxlen=100):
+def create_lstm_model(encoder, vocsize, dim=-1, embdim=-1, numlayers=2, dropout=0., unktokens:Set[int]=None, eos_id=3, maxlen=100):
     unktokens = set() if unktokens is None else unktokens
 
     inplayer = DecoderInputLayer(vocsize, dim, unktoks=unktokens)
-    outlayer = DecoderOutputLayer(dim, vocsize, unktoks=unktokens, dropout=0.)
+    outlayer = DecoderOutputLayer(dim, embdim, vocsize, unktoks=unktokens, dropout=0.)
 
     dims = [inplayer.outdim] + [dim] * numlayers
     lstms = [torch.nn.LSTMCell(dims[i], dims[i + 1]) for i in range(len(dims) - 1)]
@@ -943,65 +1038,100 @@ class TestModel(torch.nn.Module):
         return outputs, (probs, predactions)
 
 
+def cosine_sim(a, b):
+    d = np.dot(a, b)
+    n = np.sqrt(np.sum(a**2)) * np.sqrt(np.sum(b**2))
+    return d/n
 
-def create_model(encoder_name="bert-base-uncased",
-                 enc_vocabsize=None,
-                 dec_vocabsize=None,
-                 dec_layers=2,
-                 dec_dim=200,
+
+def create_nl_emb(D:Vocab, min_freq:int=0):
+    class CustomEmb(torch.nn.Module):
+        def __init__(self,
+                     m:torch.nn.Embedding,
+                     m2:torch.nn.Embedding,
+                     mix, mapper=None, **kw):
+            super(CustomEmb, self).__init__(**kw)
+            self.main_m = m
+            self.aux_m = m2
+            self.register_buffer("mix", mix)
+            self.register_buffer("mapper", mapper)
+            self.embedding_dim = self.main_m.embedding_dim
+            self.num_embeddings = self.main_m.num_embeddings
+
+        def forward(self, x:torch.Tensor):
+            if self.mapper is not None:
+                x = self.mapper[x]
+            main_emb = self.main_m(x)
+            aux_emb = self.aux_m(x)
+            mix = self.mix[x].unsqueeze(-1)
+            emb = mix * aux_emb + (1 - mix) * main_emb
+            return emb
+
+    glove_vectors, glove_D = q.VectorLoader.load_glove_data("glove.300d")
+
+    W = torch.zeros(D.number_of_ids(), glove_vectors.shape[1])
+    switch = torch.zeros(D.number_of_ids())
+    mapper = torch.arange(D.number_of_ids())
+    for k, v in D.D.items():
+        if k in glove_D:
+            W[v, :] = torch.tensor(glove_vectors[glove_D[k]])
+            switch[v] = 1
+        if k not in glove_D and D.counts[k] < min_freq:
+            mapper[k] = D[D.unktoken]
+    glove_m = torch.nn.Embedding.from_pretrained(W, padding_idx=D[D.padtoken])
+
+    vanilla_m = torch.nn.Embedding(D.number_of_ids(), glove_m.embedding_dim, padding_idx=D[D.padtoken])
+
+    m = CustomEmb(vanilla_m, glove_m, switch, mapper=mapper)
+    return m
+
+
+def create_model(inpD=None,
+                 outD=None,
+                 num_layers=2,
+                 dim=200,
                  dropout=0.,
                  maxlen=30,
                  smoothing=0.,
                  tensor2tree=None,
                  tokenmasks=None,
                  ):
-    if encoder_name != "bert-base-uncased":
-        raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
-    pretrained = BertModel.from_pretrained(encoder_name)
-    encoder = pretrained
 
-    class BertEncoderWrapper(torch.nn.Module):
-        def __init__(self, model, dropout=0., **kw):
-            super(BertEncoderWrapper, self).__init__(**kw)
-            self.inner_bert_model = model
-            self.proj = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False) \
-                if dec_dim != pretrained.config.hidden_size \
-                else None
-            self.projZ = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False) \
-                if dec_dim != pretrained.config.hidden_size \
-                else None
-            self.dropout = torch.nn.Dropout(dropout)
+    # TODO: create glove embeddings using dictionary
 
-        def forward(self, input_ids, mask=None):
-            ret, z = self.inner_bert_model(input_ids, attention_mask=mask)
-            if pretrained.config.hidden_size != dec_dim:
-                ret = self.proj(ret)
-                z = self.projZ(z)
-                # ret = self.dropout(ret)
-            return z, ret
+    class LSTMEncoder(torch.nn.Module):
+        def __init__(self, emb, dim, numlayers=2, dropout=0., **kw):
+            super(LSTMEncoder, self).__init__(**kw)
+            self.emb = emb
+            if self.emb.embedding_dim != dim:
+                self.adapter = torch.nn.Linear(self.emb.embedding_dim, dim)
+            else:
+                self.adapter = None
+            self.lstm = torch.nn.LSTM(dim, dim//2, numlayers, dropout=dropout, bidirectional=True)
+            self.adapt_z = torch.nn.Linear(dim, dim)
 
-    encoder = BertEncoderWrapper(encoder, dropout=0.)
+        def forward(self, x, mask=None):
+            emb = self.emb(x)
+            if self.adapter is not None:
+                _emb = self.adapter(emb)
+            else:
+                _emb = emb
+            packed_emb, unsorter = q.seq_pack(_emb, mask)
+            enc_packed, states = self.lstm(packed_emb)
+            enc, recon_mask = q.seq_unpack(enc_packed, unsorter)
+            z = states[0].index_select(1, unsorter)[-2:]\
+                .transpose(0, 1).contiguous()\
+                .view(enc.size(0), enc.size(2))
+            z = torch.tanh(self.adapt_z(z))
+            return z, enc, emb
 
-    # class LSTMEncoder(torch.nn.Module):
-    #     def __init__(self, vocsize, dim, numlayers=2, dropout=0., **kw):
-    #         super(LSTMEncoder, self).__init__(**kw)
-    #         self.emb = torch.nn.Embedding(vocsize, dim)
-    #         self.lstm = torch.nn.LSTM(dim, dim//2, numlayers, dropout=dropout, bidirectional=True)
-    #
-    #     def forward(self, x, mask=None):
-    #         emb = self.emb(x)
-    #         packed_emb, unsorter = q.seq_pack(emb, mask)
-    #         enc_packed, states = self.lstm(packed_emb)
-    #         enc, recon_mask = q.seq_unpack(enc_packed, unsorter)
-    #         z = states[0].index_select(1, unsorter)[-2:]\
-    #             .transpose(0, 1).contiguous()\
-    #             .view(enc.size(0), enc.size(2))
-    #         return z, enc
-    #
-    # encoder = LSTMEncoder(enc_vocabsize, dec_dim, numlayers=dec_layers, dropout=dropout)
+    emb = create_nl_emb(inpD)
+    encoder = LSTMEncoder(emb, dim, numlayers=num_layers, dropout=dropout)
 
     unktokens = set(tokenmasks["_metarare"].nonzero()[:, 0].cpu().numpy())
-    m = create_lstm_model(encoder, dec_vocabsize, dim=dec_dim, numlayers=dec_layers,
+    m = create_lstm_model(encoder, outD.number_of_ids(),
+                          dim=dim, embdim=emb.embedding_dim,
+                          numlayers=num_layers,
                           dropout=dropout, unktokens=unktokens, eos_id=3, maxlen=maxlen)
 
     orderless = {"op:and", "SW:concat"}
@@ -1139,7 +1269,7 @@ def run(traindomains="ALL",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     tt.tick("loading data")
-    traindl, validdl, testdl, nltok, flenc, tokenmasks = \
+    traindl, validdl, testdl, nlenc, flenc, tokenmasks = \
         load_data(traindomains=traindomains,
                   testdomain=domain,
                   supportsetting=supportsetting,
@@ -1147,16 +1277,15 @@ def run(traindomains="ALL",
     tt.tock("data loaded")
 
     tt.tick("creating model")
-    trainm, testm = create_model(encoder_name=encoder,
-                                 enc_vocabsize=nltok.vocab_size,
-                                 dec_vocabsize=flenc.vocab.number_of_ids(),
-                                 dec_layers=numlayers,
-                                 dec_dim=hdim,
+    trainm, testm = create_model(inpD=nlenc.vocab,
+                                 outD=flenc.vocab,
+                                 num_layers=numlayers,
+                                 dim=hdim,
                                  dropout=dropout,
                                  smoothing=smoothing,
                                  maxlen=maxlen,
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
-                                 tokenmasks=tokenmasks,
+                                  tokenmasks=tokenmasks,
                                  )
     # print(trainm)
     tt.tock("model created")
@@ -1171,6 +1300,8 @@ def run(traindomains="ALL",
         bertparams = []
         otherparams = []
         for k, v in m.named_parameters():
+            if "aux_m" in k:
+                continue
             if "inner_bert_model" in k:
                 bertparams.append(v)
             else:
