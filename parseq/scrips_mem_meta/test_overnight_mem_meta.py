@@ -12,6 +12,7 @@ import qelos as q
 
 class TestLoadDS(TestCase):
     def test_load_ds_lex(self):
+        """dummy commits"""
         tt = q.ticktock()
         batsize = 4
         numworkers = 0
