@@ -532,10 +532,10 @@ class DecoderOutputLayer(torch.nn.Module):
             memmask = torch.ones_like(memids).float()
         # compute
         # TODO: use only summary
-        query = torch.cat([embsumm, encsumm, enc], -1)
-        attvector_mask = torch.sigmoid(self.attvectormasker(query))
-        query = query * attvector_mask
-        keys = torch.cat([memembsumm, memencsumm, memencs], -1)
+        query = torch.cat([embsumm, torch.zeros_like(encsumm), enc], -1)
+        # attvector_mask = torch.sigmoid(self.attvectormasker(query))
+        # query = query * attvector_mask
+        keys = torch.cat([memembsumm, torch.zeros_like(memencsumm), memencs], -1)
 
         # compute probs from memory
         probs_mem = torch.zeros(query.size(0), self.vocsize, device=query.device)
