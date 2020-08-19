@@ -225,7 +225,7 @@ def load_ds(traindomains=("restaurants",),
 
     if supportsetting == "lex":
         if mincoverage > 1:
-            print(f"Changing mincoverage to 1 because supportsetting=='{lex}', mincoverage was {mincoverage}.")
+            print(f"Changing mincoverage to 1 because supportsetting=='lex', mincoverage was {mincoverage}.")
             mincoverage = 1
 
     general_tokens = {
@@ -349,11 +349,11 @@ def pack_loaded_ds(allex, traindomains, testdomain):
             if ex[4] == testdomain:
                 if ex[3] == "test":
                     testex.append(ex)
-            elif ex[4] in traindomains:
-                if ex[3] == "train":
-                    trainex.append(ex)
                 elif ex[3] == "valid":
                     validex.append(ex)
+            elif ex[4] in traindomains:
+                if ex[3] == "train" or ex[3] == "valid":
+                    trainex.append(ex)
                 elif ex[3] == "test":
                     pass
     trainds = Dataset(trainex)
@@ -1368,8 +1368,8 @@ def run(traindomains="ALL",
                                         on_end=[lambda: lr_schedule.step()])
 
     validepoch = partial(q.test_epoch, model=testm,
-                                       losses=xmetrics,
-                                       dataloader=testdl,
+                                       losses=vmetrics,
+                                       dataloader=validdl,
                                        device=device,
                                        on_end=[lambda: eyt.on_epoch_end()])
 
