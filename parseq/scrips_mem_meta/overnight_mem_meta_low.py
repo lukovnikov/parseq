@@ -185,7 +185,7 @@ def tokenize_and_add_start(t, _domain, general_tokens=None):
 
 def load_ds(traindomains=("restaurants",),
             testdomain="housing",
-            min_freq=1,
+            min_freq=0,
             mincoverage=1,
             top_k=np.infty,
             nl_mode="basic",
@@ -273,7 +273,7 @@ def load_ds(traindomains=("restaurants",),
     for example in ds.examples:
         seqenc.inc_build_vocab(example[1], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
         seqenc.inc_build_vocab(example[2], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
-    seqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
+    seqenc.finalize_vocab(min_freq=0)
 
     generaltokenmask = torch.zeros(seqenc_vocab.number_of_ids(), dtype=torch.long)
     for token, tokenid in seqenc_vocab.D.items():
@@ -308,7 +308,7 @@ def load_ds(traindomains=("restaurants",),
                                  add_start_token=True, add_end_token=True)
         for example in ds.examples:
             nl_tokenizer.inc_build_vocab(example[0], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
-        nl_tokenizer.finalize_vocab(min_freq=min_freq, top_k=top_k)
+        nl_tokenizer.finalize_vocab(min_freq=0)
         nl_tok_f = lambda x: nl_tokenizer.convert(x, return_what="tensor")
     else:
         nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
@@ -1046,7 +1046,7 @@ def cosine_sim(a, b):
     return d/n
 
 
-def create_nl_emb(D:Vocab, min_freq:int=0):
+def create_nl_emb(D:Vocab, min_freq:int=1):
     class CustomEmb(torch.nn.Module):
         def __init__(self,
                      m:torch.nn.Embedding,
