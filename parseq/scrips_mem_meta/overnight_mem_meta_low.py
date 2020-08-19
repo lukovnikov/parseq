@@ -19,6 +19,7 @@ from typing import Callable, Set, Dict, Union, List
 
 import fire
 # import wandb
+from IPython import embed
 
 import qelos as q   # branch v3
 import numpy as np
@@ -1031,6 +1032,7 @@ class TestModel(torch.nn.Module):
         self.metrics = [self.accs, self.treeacc]
 
     def forward(self, x, y, xsup, ysup, supmask, istraining=False):
+        self.model.eval()
         probs, predactions = self.model(x, y, xsup, ysup, supmask, istraining)
         # _, predactions = probs.max(-1)
         outputs = [metric(probs, predactions, y[:, 1:]) for metric in self.metrics]
@@ -1361,6 +1363,22 @@ def run(traindomains="ALL",
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()])
     tt.tock("done training")
+
+    tt.tick("making predictions")
+    testm.eval()
+    inps, golds, predictions = [], [], []
+    for batch in testdl:
+        outs = testm(*batch)
+        for inpse, goldse, outse in zip(list(batch[0]), list(batch[1]), list(outs[1][1])):
+            inpstr = nlenc.vocab.tostr(inpse)
+            goldstr = flenc.vocab.tostr(goldse)
+            predstr = flenc.vocab.tostr(outse)
+            inps.append(inpstr)
+            golds.append(goldstr)
+            predictions.append(predstr)
+    tt.tock("made predictions")
+    embed()
+
 
     testepoch =  partial(q.test_epoch, model=testm,
                                       losses=xmetrics,
