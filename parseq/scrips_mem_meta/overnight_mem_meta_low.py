@@ -1300,7 +1300,7 @@ def run(traindomains="ALL",
         bertparams = []
         otherparams = []
         for k, v in m.named_parameters():
-            if "aux_m" in k:
+            if ".aux_m." in k:
                 continue
             if "inner_bert_model" in k:
                 bertparams.append(v)
