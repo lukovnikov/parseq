@@ -912,7 +912,7 @@ class MetaSeqMemNN(torch.nn.Module):
         xmem_mask = xmem != 0
         ymem_mask = ymem != 0
         xmem_enc_z, xmem_enc, xmem_emb = self.memory_encoder(xmem, mask=xmem_mask)   # (batsize*memsize, seqlen, dim)
-        # TODO from here
+
         ymem_enc, ymem_alphas = self.memory_decoder(
             ymem[:, 0],
             ymem[:, 1:],
