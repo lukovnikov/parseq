@@ -1303,7 +1303,7 @@ def run(traindomains="ALL",
     # wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
     #            reinit=True, config=settings)
     if traindomains == "ALL":
-        alldomains = {"recipes", "restaurants", "calendar", "housing", "publications"}  # blocks
+        alldomains = {"recipes", "restaurants", "calendar", "housing", "publications", "blocks"}  # blocks
         traindomains = alldomains - {domain, }
     else:
         traindomains = set(traindomains.split("+"))
