@@ -122,7 +122,7 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     return out
 
 
-def get_lf_abstract_transform(examples, general_tokens=None):
+def get_lf_abstract_transform(examples, general_tokens=None, testdomain=None):
     """
     Receives examples from different domains in the format (_, out_tokens, split, domain).
     Returns a function that transforms a sequence of domain-specific output tokens
@@ -174,6 +174,32 @@ def get_lf_abstract_transform(examples, general_tokens=None):
         return _abslf
 
     return example_transform
+
+
+def get_nl_abstract_transform(examples):
+    cutoff = .66     # word must occur in at least this fraction of present domains
+    nl_token_domains = {}
+    alldomains = set()
+    for example in examples:
+        for word in example[0]:
+            if word not in nl_token_domains:
+                nl_token_domains[word] = set()
+            nl_token_domains[word].add(example[3])
+        alldomains.add(example[3])
+
+    general_words = set()
+    for token in nl_token_domains:
+        if len(nl_token_domains[token]) > len(alldomains) * cutoff:
+            general_words.add(token)
+
+    print(len(general_words))
+
+    def transform(x:List[str]):
+        ret = [xe if xe in general_words else "@UNK@" for xe in x]
+        return ret
+
+    return transform
+
 
 
 def tokenize_and_add_start(t, _domain, general_tokens=None):
@@ -250,8 +276,9 @@ def load_ds(traindomains=("restaurants",),
         domains[domain] = domainexamples
 
     alltrainex = []
+    nl_split = lambda x: x.split()      # TODO replace this with spacy tokenizer
     for domain in domains:
-        domains[domain] = [(a, tokenize_and_add_start(b, domain, general_tokens=general_tokens), c)
+        domains[domain] = [(nl_split(a), tokenize_and_add_start(b, domain, general_tokens=general_tokens), c)
                            for a, b, c in domains[domain]]
         alltrainex += [(a, b, c, domain) for a, b, c in domains[domain]]
 
@@ -270,8 +297,9 @@ def load_ds(traindomains=("restaurants",),
         allex += [(a, b, c, domain) for a, b, c in domains[domain]]
     ds = Dataset(allex)
 
-    et = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples, general_tokens=general_tokens)
-    ds = ds.map(lambda x: (x[0], x[1], et(x[1]), x[2], x[3]))
+    lfat = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples, general_tokens=general_tokens)
+    nlat = get_nl_abstract_transform(ds[lambda x: x[3] != testdomain].examples)
+    ds = ds.map(lambda x: (nlat(x[0]), x[1], lfat(x[1]), x[2], x[3]))
 
     seqenc_vocab = Vocab(padid=0, unkid=1, startid=2, endid=3)
     seqenc_vocab.add_token("@ABS@", seen=np.infty)
@@ -314,7 +342,7 @@ def load_ds(traindomains=("restaurants",),
     tokenmasks["_special"] = specialmask
 
     if nl_mode == "basic":
-        nl_tokenizer = SequenceEncoder(tokenizer=lambda x: x.split(),
+        nl_tokenizer = SequenceEncoder(tokenizer=lambda x: x,
                                  add_start_token=True, add_end_token=True)
         for example in ds.examples:
             nl_tokenizer.inc_build_vocab(example[0], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
