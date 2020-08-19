@@ -476,7 +476,7 @@ class DecoderInputLayer(torch.nn.Module):
         ids = self.mapper[ids]
 
         emb = self.emb(ids)
-        out = torch.cat([emb, prev_inp_summ], 1)
+        out = torch.cat([emb, torch.zeros_like(prev_inp_summ)], 1)
         return out
 
 
