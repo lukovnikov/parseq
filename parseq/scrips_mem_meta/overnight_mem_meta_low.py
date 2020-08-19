@@ -1079,7 +1079,7 @@ def create_nl_emb(D:Vocab, min_freq:int=1):
             W[v, :] = torch.tensor(glove_vectors[glove_D[k]])
             switch[v] = 1
         if k not in glove_D and D.counts[k] < min_freq:
-            mapper[k] = D[D.unktoken]
+            mapper[v] = D[D.unktoken]
     glove_m = torch.nn.Embedding.from_pretrained(W, padding_idx=D[D.padtoken])
 
     vanilla_m = torch.nn.Embedding(D.number_of_ids(), glove_m.embedding_dim, padding_idx=D[D.padtoken])
