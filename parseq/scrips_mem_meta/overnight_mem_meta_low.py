@@ -558,7 +558,7 @@ class DecoderOutputLayer(torch.nn.Module):
 
         h = torch.cat([encsumm, enc], -1)
         logits_gen = self.outlin(h)
-        mask_gen = self.unktok_mask[None, :].repeat(logits_gen.size(0), 1)
+        mask_gen = self.unktok_mask[None, :].float()
         logits_gen = logits_gen + torch.log(mask_gen)
         probs_gen = torch.softmax(logits_gen, -1)
         # # prevent naningrad
@@ -1368,6 +1368,7 @@ def run(traindomains="ALL",
     testm.eval()
     inps, golds, predictions = [], [], []
     for batch in testdl:
+        batch = q.recmap(batch, lambda x: x.to(device) if hasattr(x, "to") else x)
         outs = testm(*batch)
         for inpse, goldse, outse in zip(list(batch[0]), list(batch[1]), list(outs[1][1])):
             inpstr = nlenc.vocab.tostr(inpse)
