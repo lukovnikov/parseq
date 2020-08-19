@@ -534,8 +534,8 @@ class DecoderOutputLayer(torch.nn.Module):
         # compute
         # TODO: use only summary
         query = torch.cat([embsumm, torch.zeros_like(encsumm), enc], -1)
-        # attvector_mask = torch.sigmoid(self.attvectormasker(query))
-        # query = query * attvector_mask
+        attvector_mask = torch.sigmoid(self.attvectormasker(query))
+        query = query * attvector_mask
         keys = torch.cat([memembsumm, torch.zeros_like(memencsumm), memencs], -1)
 
         # compute probs from memory
