@@ -1097,6 +1097,7 @@ def create_model(inpD=None,
                  smoothing=0.,
                  tensor2tree=None,
                  tokenmasks=None,
+                 min_freq=2,
                  ):
 
     # TODO: create glove embeddings using dictionary
@@ -1127,7 +1128,7 @@ def create_model(inpD=None,
             z = torch.tanh(self.adapt_z(z))
             return z, enc, emb
 
-    emb = create_nl_emb(inpD)
+    emb = create_nl_emb(inpD, min_freq=min_freq)
     encoder = LSTMEncoder(emb, dim, numlayers=num_layers, dropout=dropout)
 
     unktokens = set(tokenmasks["_metarare"].nonzero()[:, 0].cpu().numpy())
@@ -1254,6 +1255,7 @@ def run(traindomains="ALL",
         maxlen=30,
         fullsimplify=True,
         abscontrib=1.,
+        min_freq=2,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -1288,6 +1290,7 @@ def run(traindomains="ALL",
                                  maxlen=maxlen,
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                   tokenmasks=tokenmasks,
+                                 min_freq=min_freq,
                                  )
     # print(trainm)
     tt.tock("model created")
