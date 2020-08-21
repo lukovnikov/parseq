@@ -18,7 +18,9 @@ class Vocab(_Vocab):
     starttoken = "@START@"
     endtoken = "@END@"
     masktoken = "@MASK@"
-    def __init__(self, padid:int=0, unkid:int=1, startid:int=2, endid:int=3, maskid:int=4, **kw):
+
+    def __init__(self, padid: int = 0, unkid: int = 1, startid: int = 2, endid: int = 3,
+                 maskid: int = 4, **kw):
         self.D = {self.padtoken: padid, self.unktoken: unkid}
         self.D[self.starttoken] = startid
         self.D[self.endtoken] = endid
@@ -36,7 +38,7 @@ class Vocab(_Vocab):
     def nextid(self):
         return max(self.D.values()) + 1
 
-    def finalize(self, min_freq:int=0, top_k:int=np.infty, keep_tokens=None):
+    def finalize(self, min_freq: int = 0, top_k: int = np.infty, keep_tokens=None):
         self.growing = False
         sorted_counts = sorted(self.counts.items(), key=lambda x: x[1], reverse=True)
 
@@ -55,7 +57,8 @@ class Vocab(_Vocab):
                 while True:
                     i += where * len(sorted_counts) // divider
                     if (i == len(sorted_counts)) or (
-                            sorted_counts[i][1] <= min_freq - 1 and sorted_counts[i - 1][1] >= min_freq):
+                            sorted_counts[i][1] <= min_freq - 1 and sorted_counts[i - 1][
+                        1] >= min_freq):
                         break  # found
                     elif sorted_counts[i][1] < min_freq:  # go up
                         where = -1
@@ -67,7 +70,8 @@ class Vocab(_Vocab):
                 if keep_tokens in ("all", "ALL"):
                     self.rare_tokens = set([t[0] for t in sorted_counts[i:]])
                 else:
-                    sorted_counts = [sc for j, sc in enumerate(sorted_counts) if sc[0] in keep_tokens or j < i]
+                    sorted_counts = [sc for j, sc in enumerate(sorted_counts) if
+                                     sc[0] in keep_tokens or j < i]
                     self.rare_tokens = set([t[0] for t in sorted_counts[i:]]) & keep_tokens
             else:
                 sorted_counts = sorted_counts[:i]
@@ -82,21 +86,21 @@ class Vocab(_Vocab):
         if keep_tokens is not None:
             self.rare_ids = set([self[rare_token] for rare_token in self.rare_tokens])
 
-    def add_token(self, token, seen:Union[int,bool]=True):
-        assert(self.growing)
+    def add_token(self, token, seen: Union[int, bool] = True):
+        assert (self.growing)
         if token not in self.counts:
             self.counts[token] = 0
         if seen > 0:
             self.counts[token] += float(seen)
 
-    def __getitem__(self, item:str) -> int:
+    def __getitem__(self, item: str) -> int:
         if item not in self.D:
-            assert(self.unktoken in self.D)
+            assert (self.unktoken in self.D)
             item = self.unktoken
         id = self.D[item]
         return id
 
-    def __call__(self, item:int) -> str:
+    def __call__(self, item: int) -> str:
         return self.RD[item]
 
     def number_of_ids(self, exclude_rare=False):
@@ -111,7 +115,7 @@ class Vocab(_Vocab):
     def __iter__(self):
         return iter([(k, v) for k, v in self.D.items()])
 
-    def __contains__(self, item:Union[str,int]):
+    def __contains__(self, item: Union[str, int]):
         if isinstance(item, str):
             return item in self.D
         if isinstance(item, int):
@@ -119,7 +123,7 @@ class Vocab(_Vocab):
         else:
             raise Exception("illegal argument")
 
-    def tostr(self, x:Union[np.ndarray, torch.Tensor], return_tokens=False):
+    def tostr(self, x: Union[np.ndarray, torch.Tensor], return_tokens=False):
         """
         :param x:   2D LongTensor or array
         :param return_tokens:
@@ -141,7 +145,7 @@ class Vocab(_Vocab):
 
 
 class FixedVocab(Vocab):
-    def __init__(self, padid:int=0, unkid:int=1, vocab:Dict=None, **kw):
+    def __init__(self, padid: int = 0, unkid: int = 1, vocab: Dict = None, **kw):
         super(FixedVocab, self).__init__(padid, unkid, **kw)
         self.D = vocab
         self.growing = False
@@ -167,28 +171,29 @@ def try_vocab():
 
 class VocabBuilder(ABC):
     @abstractmethod
-    def inc_build_vocab(self, x:str, seen:bool=True):
+    def inc_build_vocab(self, x: str, seen: bool = True):
         raise NotImplemented()
 
     @abstractmethod
-    def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty):
+    def finalize_vocab(self, min_freq: int = 0, top_k: int = np.infty):
         raise NotImplemented()
 
     @abstractmethod
     def vocabs_finalized(self):
         raise NotImplemented()
 
-    
+
 class SequenceEncoder(VocabBuilder):
-    def __init__(self, tokenizer:Callable[[str], List[str]], vocab:Vocab=None, add_start_token=False, add_end_token=False, **kw):
+    def __init__(self, tokenizer: Callable[[str], List[str]], vocab: Vocab = None,
+                 add_start_token=False, add_end_token=False, **kw):
         super(SequenceEncoder, self).__init__(**kw)
         self.tokenizer = tokenizer
         self.vocab = vocab if vocab is not None else Vocab()
         self.vocab_final = False
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
-        
-    def inc_build_vocab(self, x:str, seen:bool=True):
+
+    def inc_build_vocab(self, x: str, seen: bool = True):
         if not self.vocab_final:
             tokens = self.tokenizer(x) + []
             if self.add_end_token:
@@ -198,24 +203,35 @@ class SequenceEncoder(VocabBuilder):
             return tokens
         else:
             return []
-    
-    def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty, keep_tokens=None):
+
+    def finalize_vocab(self, min_freq: int = 0, top_k: int = np.infty, keep_tokens=None):
         self.vocab_final = True
         self.vocab.finalize(min_freq=min_freq, top_k=top_k, keep_tokens=keep_tokens)
-        
+
     def vocabs_finalized(self):
         return self.vocab_final
-    
-    def convert(self, x:Union[str, List[str]], return_what:Union[str, List[str]]="tensor"):     # "tensor", "ids", "tokens" or comma-separated combo of all
-        return_what = [r.strip() for r in return_what.split(",")] if isinstance(return_what, str) and "," in return_what else return_what
+
+    def convert(self, x: Union[str, List[str]], return_what: Union[str, List[str]] = "tensor",
+                add_start_token: bool = None,
+                add_end_token: bool = None):
+        """ "tensor", "ids", "tokens" or comma-separated combo of all """
+
+        if add_start_token is None:
+            add_start_token = self.add_start_token
+
+        if add_end_token is None:
+            add_end_token = self.add_end_token
+
+        return_what = [r.strip() for r in return_what.split(",")] if isinstance(return_what,
+                                                                                str) and "," in return_what else return_what
         if isinstance(x, list) and not isinstance(x, Tree) \
                 and (x == [] or isinstance(x[0], str)):
             tokens = x
         else:
             tokens = self.tokenizer(x)
-        if self.add_start_token and tokens[0] != self.vocab.starttoken:
+        if add_start_token and tokens[0] != self.vocab.starttoken:
             tokens.insert(0, self.vocab.starttoken)
-        if self.add_end_token and tokens[-1] != self.vocab.endtoken:
+        if add_end_token and tokens[-1] != self.vocab.endtoken:
             tokens.append(self.vocab.endtoken)
         ret = {"tokens": tokens}
 
@@ -230,14 +246,15 @@ class SequenceEncoder(VocabBuilder):
             ret["tensor"] = torch.tensor(ret["ids"], dtype=torch.long)
         ret = [ret[r] for r in return_what]
         if return_single:
-            assert(len(ret) == 1)
+            assert (len(ret) == 1)
             ret = ret[0]
         return ret
-    
-    
+
+
 class FuncQueryEncoder(VocabBuilder):
-    def __init__(self, grammar:FuncGrammar=None, vocab_tokens:Vocab=None, vocab_actions:Vocab=None,
-                 sentence_encoder:SequenceEncoder=None, format:str= "prolog", **kw):
+    def __init__(self, grammar: FuncGrammar = None, vocab_tokens: Vocab = None,
+                 vocab_actions: Vocab = None,
+                 sentence_encoder: SequenceEncoder = None, format: str = "prolog", **kw):
         super(FuncQueryEncoder, self).__init__(**kw)
         self.vocab_final = False
         self.vocab_tokens = vocab_tokens if vocab_tokens is not None else Vocab()
@@ -268,7 +285,7 @@ class FuncQueryEncoder(VocabBuilder):
             self._valid_action_mask_by_type[typestr] = action_mask
         # self._valid_action_mask_by_type["_@unk@_"] = torch.tensor(self.vocab_actions.number_of_ids(), dtype=torch.uint8)
 
-    def get_action_mask_for(self, typ:str):
+    def get_action_mask_for(self, typ: str):
         if typ in self._valid_action_mask_by_type:
             return self._valid_action_mask_by_type[typ]
         else:
@@ -279,12 +296,12 @@ class FuncQueryEncoder(VocabBuilder):
     def vocabs_finalized(self):
         return self.vocab_final
 
-    def inc_build_vocab(self, x:str, seen:bool=True):
+    def inc_build_vocab(self, x: str, seen: bool = True):
         if not self.vocab_final:
             actions = self.grammar.actions_for(x, format=self.format)
             self._add_to_vocabs(actions, seen=seen)
 
-    def _add_to_vocabs(self, actions:List[str], seen:bool=True):
+    def _add_to_vocabs(self, actions: List[str], seen: bool = True):
         for action in actions:
             self.vocab_actions.add_token(action, seen=seen)
             head, body = action.split(" -> ")
@@ -294,7 +311,7 @@ class FuncQueryEncoder(VocabBuilder):
             for x in body:
                 self.vocab_tokens.add_token(x, seen=seen)
 
-    def finalize_vocab(self, min_freq:int=0, top_k:int=np.infty):
+    def finalize_vocab(self, min_freq: int = 0, top_k: int = np.infty):
         for out_type, rules in self.grammar.rules_by_type.items():
             self._add_to_vocabs(rules, seen=False)
 
@@ -307,7 +324,7 @@ class FuncQueryEncoder(VocabBuilder):
 
         self.prebuild_valid_action_masks()
 
-    def convert(self, x:str, return_what="tensor"):     # "tensor", "ids", "actions", "tree"
+    def convert(self, x: str, return_what="tensor"):  # "tensor", "ids", "actions", "tree"
         rets = [r.strip() for r in return_what.split(",")]
         ret = {}
         actions = self.grammar.actions_for(x, format=self.format)
