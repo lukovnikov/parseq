@@ -417,7 +417,7 @@ def pack_loaded_ds(allex, traindomains, testdomain, add_pos: bool):
 
     split_index = 3 if not add_pos else 4
     domain_index = 4 if not add_pos else 5
-    lf_index = 1 if not add_pos else 2
+
 
     for ex in allex:
 
@@ -444,16 +444,21 @@ def pack_loaded_ds(allex, traindomains, testdomain, add_pos: bool):
     validds = Dataset(validex)
     testds = Dataset(testex)
 
-    def supportretriever(x, domain_mems=None):
+    def supportretriever(x, add_pos: bool, domain_mems=None):
+        """Not adding pos-tags to support set i.e. memory."""
+        lf_index = 1 if not add_pos else 2
         domainex = domain_mems[x[domain_index]]
         mem = [(x[0], x[lf_index]) for x in domainex]
         mem = autocollate(mem)
-        ret = (x[0], x[lf_index],) + tuple(mem)
+        if add_pos:
+            ret = (x[0], x[1], x[lf_index],) + tuple(mem)
+        else:
+            ret = (x[0], x[lf_index],) + tuple(mem)
         return ret
 
-    trainds = trainds.map(partial(supportretriever, domain_mems=supportex)).cache()
-    validds = validds.map(partial(supportretriever, domain_mems=supportex)).cache()
-    testds = testds.map(partial(supportretriever, domain_mems=supportex)).cache()
+    trainds = trainds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
+    validds = validds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
+    testds = testds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
     return trainds, validds, testds
 
 
