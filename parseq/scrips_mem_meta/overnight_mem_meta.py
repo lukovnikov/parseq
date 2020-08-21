@@ -480,7 +480,8 @@ def load_data(traindomains=("restaurants",),
                 )
     trainds, validds, testds = pack_loaded_ds(allex, traindomains, testdomain, add_pos)
 
-    def collatefn(x, pad_value=0, add_pos: bool = False):
+    def collatefn(x, pad_value=0):
+        """ TODO: When is this called? POS Addition might lead to problems here. """
 
         y = list(zip(*x))
         for i, yi in enumerate(y):
@@ -501,11 +502,11 @@ def load_data(traindomains=("restaurants",),
         return y
 
     traindl = DataLoader(trainds, batsize, shuffle=True, num_workers=numworkers,
-                         collate_fn=partial(collatefn, add_pos=add_pos))
+                         collate_fn=collatefn)
     validdl = DataLoader(validds, batsize, shuffle=True, num_workers=numworkers,
-                         collate_fn=partial(collatefn, add_pos=add_pos))
+                         collate_fn=collatefn)
     testdl = DataLoader(testds, batsize, shuffle=True, num_workers=numworkers,
-                        collate_fn=partial(collatefn, add_pos=add_pos))
+                        collate_fn=collatefn)
 
     return traindl, validdl, testdl, nltok, flenc, tokenmasks
 

@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from parseq.datasets import autocollate
-from parseq.scrips_mem_meta.overnight_mem_meta import MetaSeqMemNN, DecoderOutputLayer, DecoderInputLayer, \
+from parseq.scrips_mem_meta.overnight_mem_meta_abs import MetaSeqMemNN, DecoderOutputLayer, DecoderInputLayer, \
     LSTMDecoderCellWithMemory, StateDecoderWithMemory, StateInnerDecoder, InnerLSTMDecoderCell, load_ds, pack_loaded_ds, \
     load_data, create_lstm_model, SuperBasicDecoderState
 import qelos as q

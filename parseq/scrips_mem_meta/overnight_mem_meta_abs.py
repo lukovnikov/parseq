@@ -24,6 +24,7 @@ from IPython import embed
 import qelos as q   # branch v3
 import numpy as np
 import torch
+import spacy
 from nltk import Tree
 from torch.utils.data import DataLoader
 
@@ -39,6 +40,10 @@ from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartFo
     BertModel
 from transformers.activations import ACT2FN
 from transformers.modeling_bart import SinusoidalPositionalEmbedding, DecoderLayer, SelfAttention, LayerNorm
+
+
+nlp = spacy.load('en_core_web_sm')
+
 
 UNKID = 1
 
@@ -225,7 +230,8 @@ def load_ds(traindomains=("restaurants",),
             mincoverage=1,
             top_k=np.infty,
             nl_mode="basic",
-            supportsetting="lex",   # "lex" or "min" or "train"
+            supportsetting="lex",# "lex" or "min" or "train"
+            add_pos: bool = False
             ):
     """
     :param traindomains:
@@ -306,6 +312,12 @@ def load_ds(traindomains=("restaurants",),
     seqenc_vocab.add_token("@ABSSTART@", seen=np.infty)
     seqenc_vocab.add_token("@METARARE@", seen=np.infty)
     seqenc_vocab.add_token("@META@", seen=np.infty)
+
+    if add_pos:
+        # Add spacy POS tags in the vocab as well.
+        for tag in nlp.get_pipe("tagger").labels:
+            seqenc_vocab.add_token(tag, seen=np.infty)
+
     seqenc = SequenceEncoder(vocab=seqenc_vocab, tokenizer=lambda x: x,
                              add_start_token=False, add_end_token=True)
     for example in ds.examples:
@@ -351,54 +363,90 @@ def load_ds(traindomains=("restaurants",),
     else:
         nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
         nl_tok_f = lambda x: nl_tokenizer(x, return_tensors="pt")[0]
-    def tokenize(x):
-        ret = (nl_tok_f(x[0]),
-               seqenc.convert(x[1], return_what="tensor"),
-               seqenc.convert(x[2], return_what="tensor"),
-               x[3], x[4],
-               x[0], x[1], x[2], x[3])
+
+    def tokenize(x, add_pos: bool):
+        """
+
+        :param x: str
+        :param add_pos: bool whether or not to include pos tags.
+            Doing so will add another element in data.
+
+        :return:
+        """
+
+        if add_pos:
+            doc = nlp(x[0])
+            posseq = [tok.tag_ for tok in doc]
+            nlseq = [tok.text.lower() for tok in doc]
+
+            # ##
+            # Instead of giving str (x[0]) to encode, we can also give a List[str],
+            # tokenized by spacy, to keep in correspondance with the POS tags.
+            # ##
+            ret = (nl_tok_f(x[0]),
+                   seqenc.convert(posseq, return_what="tensor", add_start_token=True),
+                   seqenc.convert(x[1], return_what="tensor"),
+                   seqenc.convert(x[2], return_what="tensor"),
+                   x[3], x[4],
+                   x[0], x[1], x[2], x[3])
+        else:
+            ret = (nl_tok_f(x[0]),
+                   seqenc.convert(x[1], return_what="tensor"),
+                   seqenc.convert(x[2], return_what="tensor"),
+                   x[3], x[4],
+                   x[0], x[1], x[2], x[3])
         return ret
-    allex = [tokenize(ex) for ex in ds.examples]
+
+    allex = [tokenize(ex, add_pos) for ex in ds.examples]
     return allex, nl_tokenizer, seqenc, tokenmasks
 
 
-def pack_loaded_ds(allex, traindomains, testdomain):
+def pack_loaded_ds(allex, traindomains, testdomain, add_pos: bool):
     trainex = []
     validex = []
     testex = []
     supportex = {}
+
+    split_index = 3 if not add_pos else 4
+    domain_index = 4 if not add_pos else 5
+
     for ex in allex:
-        if ex[3] == "support":
-            exdomain = ex[4]
+        if ex[split_index] == "support":
+            exdomain = ex[domain_index]
             if exdomain not in supportex:
                 supportex[exdomain] = []
             supportex[exdomain].append(ex)
         else:
-            if ex[4] == testdomain:
-                if ex[3] == "test":
+            if ex[domain_index] == testdomain:
+                if ex[split_index] == "test":
                     testex.append(ex)
-                elif ex[3] == "valid":
+                elif ex[split_index] == "valid":
                     validex.append(ex)
-            elif ex[4] in traindomains:
-                if ex[3] == "train" or ex[3] == "valid":
+            elif ex[domain_index] in traindomains:
+                if ex[split_index] == "train" or ex[split_index] == "valid":
                     trainex.append(ex)
-                elif ex[3] == "test":
+                elif ex[split_index] == "test":
                     pass
     trainds = Dataset(trainex)
     validds = Dataset(validex)
     testds = Dataset(testex)
 
-    def supportretriever(x, domain_mems=None):
+    def supportretriever(x, add_pos: bool, domain_mems=None):
+        lf_exact_index = 1 if not add_pos else 2
+        lf_abs_index = 2 if not add_pos else 3
         domainex = domain_mems[x[4]]
-        mem = [(x[0], x[1]) for x in domainex]
+        mem = [(x[0], x[lf_exact_index]) for x in domainex]
         mem = autocollate(mem)
-        ret = (x[0], x[2],) + tuple(mem)
+        if add_pos:
+            ret = (x[0], x[1], x[lf_abs_index],) + tuple(mem)
+        else:
+            ret = (x[0], x[lf_abs_index],) + tuple(mem)
         # ret = (x[0], x[1],) + tuple(mem)
         return ret
 
-    trainds = trainds.map(partial(supportretriever, domain_mems=supportex)).cache()
-    validds = validds.map(partial(supportretriever, domain_mems=supportex)).cache()
-    testds = testds.map(partial(supportretriever, domain_mems=supportex)).cache()
+    trainds = trainds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
+    validds = validds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
+    testds = testds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
     # trainds[0]
     # trainds[0]
     return trainds, validds, testds
@@ -409,15 +457,23 @@ def load_data(traindomains=("restaurants",),
               supportsetting="lex", # "lex" or "min"
               batsize=5,
               numworkers=0,
+              add_pos: bool = False
               ):
+
+    # add_pos = True
+
     allex, nltok, flenc, tokenmasks = \
         load_ds(traindomains=traindomains,
                 testdomain=testdomain,
                 supportsetting=supportsetting,
+                add_pos=add_pos
                 )
-    trainds, validds, testds = pack_loaded_ds(allex, traindomains, testdomain)
+
+    trainds, validds, testds = pack_loaded_ds(allex, traindomains, testdomain, add_pos)
 
     def collatefn(x, pad_value=0):
+        """ TODO: When is this called? POS Addition might lead to problems here. """
+
         y = list(zip(*x))
         for i, yi in enumerate(y):
             if isinstance(yi[0], torch.LongTensor):
