@@ -63,12 +63,12 @@ def add_descendants_ancestors(x:ATree, ancestors:Iterable[ATree]=tuple(), orderl
             ancestor._descendants.append(x)
         for i, xe in enumerate(x):
             add_descendants_ancestors(xe, ancestors+(x,))
-            xe._parent = x
+            xe.parent = x
     return x
 
 
 def child_number_of(x:ATree):
-    p = x._parent
+    p = x.parent
     for i in range(len(p)):
         if p[i] is x:
             return i
@@ -78,48 +78,62 @@ def child_number_of(x:ATree):
 def assign_gold_actions(x:ATree, orderless=None):
     """ assigns actions that can be taken at every node of the given tree """
     orderless = set() if orderless is None else orderless
+    assert(len(orderless) == 0)
     for xe in x:
         assign_gold_actions(xe, orderless)
     if not x.is_open:
         x.gold_actions = []
     else:
-        if x.label() == "(":        # can decode any ancestor in between here and its parent
-            x.gold_actions = []
-            for ancestor in x.align._ancestors[::-1]:
-                if ancestor is x._parent.align:
-                    break
-                else:
-                    x.gold_actions.append(ancestor)
-            if len(x.gold_actions) == 0:
-                x.gold_actions.append("@CLOSE@")
-        elif x.label() == ")":
+        if x.label() == ")" or x.label() == "(":
             x.is_open = False
             x.gold_actions = []
         elif x.label() == "@SLOT@":
             # get this slots's siblings
             x.gold_actions = []
-            if x._parent.label() in orderless:
-                # retrieve aligned nodes which have not been decoded yet
-                decoded = [xe.align for xe in x._parent if xe.label() != "@SLOT@"]
-                for xe in x._parent.align:
-                    if not any([decodede is xe for decodede in decoded]):
-                        x.gold_actions.append(xe)
+            xpos = child_number_of(x)
+            if xpos == 0:
+                leftsibling = None
+                leftsibling_nr = None
             else:
-                leftsibling = x._parent[child_number_of(x) - 1]
-                rightsibling = x._parent[child_number_of(x) + 1]
+                leftsibling = x.parent[xpos - 1]
                 leftsibling_nr = child_number_of(leftsibling.align)
+            if xpos == len(x) - 1:
+                rightsibling = None
+                rightsibling_nr = None
+            else:
+                rightsibling = x.parent[xpos + 1]
                 rightsibling_nr = child_number_of(rightsibling.align)
-                p = leftsibling.align._parent
-                for i in range(leftsibling_nr+1, rightsibling_nr):
-                    x.gold_actions.append(p[i])
+
+            if leftsibling is None and rightsibling is None:
+                # slot is only child, can use any descendant
+                # x.gold_actions = x.parent.align.descendants
+                assert(False)
+            else:
+                p = leftsibling.align.parent if leftsibling is not None else rightsibling.align.parent
+                if p.label() in orderless:
+                    # retrieve aligned nodes which have not been decoded yet
+                    decoded = [xe.align for xe in x.parent if xe.label() != "@SLOT@"]
+                    if len(decoded) > 0:
+                        for xe in p:
+                            if not any([decodede is xe for decodede in decoded]):
+                                x.gold_actions.append(xe)
+                    else:
+                        # can use any descendant
+                        x.gold_actions = x.parent.align.descendants
+                else:
+                    slicer = slice(leftsibling_nr, rightsibling_nr)
+                    x.gold_actions = p[slicer]
             if len(x.gold_actions) == 0:
                 x.gold_actions = ["@CLOSE@"]
         else:       # not a sibling slot ("@SLOT@"), not a "(" or ")"
-            if len(x) == 0:      # if it has children: can't do anything
-                if len(x.align._descendants) > 0:
-                    x.gold_actions = x.align._descendants
+            x.gold_actions = []
+            for descendant in x.align._descendants:
+                if any([descendant is child for child in x]):
+                    break
                 else:
-                    x.gold_actions = ["@CLOSE@"]
+                    x.gold_actions.append(descendant)
+        if len(x.gold_actions) == 0 and x.is_open:
+            x.gold_actions = ["@CLOSE@"]
 
     if len(x.gold_actions) > 0:
         # x._chosen_action = x.gold_actions[0]
@@ -150,81 +164,22 @@ def mark_for_execution(x:ATree, mode:str="single"):
 
 def execute_chosen_actions(x:ATree, orderless=None):
     orderless = set() if orderless is None else orderless
+    assert(len(orderless) == 0)
     if x._chosen_action is None or not x.is_open:
         iterr = list(x)
         for xe in iterr:
             execute_chosen_actions(xe, orderless=orderless)
         return x
     if x.label() == "(":    # insert a parent before current parent
-        if x._chosen_action == "@CLOSE@":
-            x.is_open = False
-        else:
-            p = x._parent
-            if isinstance(x._chosen_action, Tree):
-                newnode = ATree(x._chosen_action.label(), p[:])
-            else:       # string
-                newnode = ATree(x._chosen_action, p[:])
-            for xe in p:
-                xe._parent = newnode
-            newnode.is_open = False
-            if isinstance(x._chosen_action, Tree):
-                newnode.align = x._chosen_action
-            newnode._parent = p
-
-            if newnode.label() in orderless and p.label() not in orderless:
-                # convert from ordered to orderless
-                # remove all @SLOT@'s, add one @SLOT@ if there was any
-                newchildren = [child for child in newnode if child.label() != "@SLOT@"]
-                anyslot = len(newnode) - len(newchildren)
-                if anyslot > 1:
-                    leftslot = ATree("@SLOT@", [])
-                    leftslot.is_open = True
-                    leftslot._parent = newnode
-                    newchildren.insert(1, leftslot)
-                    newnode[:] = newchildren
-
-            elif newnode.label() not in orderless and p.label() in orderless:
-                # convert form orderless to ordered
-                # remove the @SLOT@ and insert @SLOT@ at every second position
-                newchildren = [child for child in newnode if child.label() != "@SLOT@"]
-                anyslot = len(newchildren) < len(newnode)
-                assert(len(newchildren) >= len(newnode) - 1)
-                if anyslot:
-                    newnode[:] = [newchildren.pop(0)]
-                    while len(newchildren) > 0:
-                        leftslot = ATree("@SLOT@", [])
-                        leftslot.is_open = True
-                        leftslot._parent = newnode
-                        newnode.append(leftslot)
-                        newnode.append(newchildren.pop(0))
-
-            leftbracket = ATree("(", [])
-            leftbracket.is_open = True
-            if isinstance(x._chosen_action, Tree):
-                leftbracket.align = newnode.align._parent[0]
-            leftbracket._parent = newnode._parent
-            rightbracket = ATree(")", [])
-            rightbracket.is_open = False
-
-            if isinstance(x._chosen_action, Tree):
-                rightbracket.align = newnode.align._parent[-1]
-            rightbracket._parent = newnode._parent
-            leftslot = ATree("@SLOT@", [])
-            leftslot.is_open = True
-            leftslot._parent = newnode._parent
-            rightslot = ATree("@SLOT@", [])
-            rightslot.is_open = True
-            rightslot._parent = newnode._parent
-
-            if p.label() in orderless:
-                p[:] = [leftbracket, leftslot, newnode, rightbracket]
-            else:
-                p[:] = [leftbracket, leftslot, newnode, rightslot, rightbracket]
+        pass
     elif x.label() == ")":
         pass
     elif x.label() == "@SLOT@":
         if x._chosen_action == "@CLOSE@":
-            del x._parent[child_number_of(x)]
+            del x.parent[child_number_of(x)]
+            # if parentheses became empty, remove
+            if len(x.parent) == 2 and x.parent[0].label() == "(" and x.parent[1].label() == ")":
+                x.parent[:] = []
         else:
             if isinstance(x._chosen_action, Tree):
                 x.set_label(x._chosen_action.label())
@@ -235,26 +190,32 @@ def execute_chosen_actions(x:ATree, orderless=None):
                 x.align = x._chosen_action
             x.is_open = True
 
-            leftslot = ATree("@SLOT@", [])
-            leftslot.is_open = True
-            leftslot._parent = x._parent
-            rightslot = ATree("@SLOT@", [])
-            rightslot.is_open = True
-            rightslot._parent = x._parent
+            leftslot = ATree("@SLOT@", [], is_open=True)
+            leftslot.parent = x.parent
+            rightslot = ATree("@SLOT@", [], is_open=True)
+            rightslot.parent = x.parent
 
-            if x._parent.label() in orderless:
-                x._parent.insert(1, leftslot)
+            if x.parent.label() in orderless:
+                x.parent.insert(1, leftslot)
             else:
-                x._parent.insert(child_number_of(x), leftslot)
-                x._parent.insert(child_number_of(x)+1, rightslot)
+                x.parent.insert(child_number_of(x), leftslot)
+                x.parent.insert(child_number_of(x)+1, rightslot)
+
+            # leftbracket = ATree("(", [], is_open=False)
+            # leftbracket.parent = x
+            # rightbracket = ATree("(", [], is_open=False)
+            # rightbracket.parent = x
+            slot = ATree("@SLOT@", [], is_open=True)
+            slot.parent = x
+            x[:] = [slot]
     else:
         iterr = list(x)
         for xe in iterr:
             execute_chosen_actions(xe, orderless=orderless)
         if x._chosen_action == "@CLOSE@":
-            x.is_open = False
+            x.is_open = False       # this node can't generate children anymore
         else:
-            x.is_open = False
+            # X(A, B, C) -> X _( _@SLOT _Y (A, B, C) [_@SLOT] _)
             # add child, with "(" and ")" and "@SLOT@" nodes
 
             if isinstance(x._chosen_action, Tree):
@@ -266,32 +227,48 @@ def execute_chosen_actions(x:ATree, orderless=None):
 
             if isinstance(x._chosen_action, Tree):
                 newnode.align = x._chosen_action
-            newnode._parent = x
+            newnode.parent = x
 
-            leftbracket = ATree("(", [])
-            leftbracket.is_open = True
+            newnode[:] = x[:]
+            for xe in newnode:
+                xe.parent = newnode
 
-            if isinstance(x._chosen_action, Tree):
-                leftbracket.align = newnode.align._parent[0]
-            leftbracket._parent = newnode._parent
-            rightbracket = ATree(")", [])
-            rightbracket.is_open = False
+            if newnode.label() in orderless and x.label() not in orderless:
+                # convert from ordered to orderless
+                # remove all @SLOT@'s, add one @SLOT@ if there was any
+                newchildren = [child for child in newnode if child.label() != "@SLOT@"]
+                anyslot = len(newnode) - len(newchildren)
+                if anyslot > 0:
+                    leftslot = ATree("@SLOT@", [])
+                    leftslot.is_open = True
+                    leftslot.parent = newnode
+                    newchildren.insert(1, leftslot)
+                    newnode[:] = newchildren
 
-            if isinstance(x._chosen_action, Tree):
-                rightbracket.align = newnode.align._parent[-1]
-            rightbracket._parent = newnode._parent
+            elif newnode.label() not in orderless and x.label() in orderless:
+                # convert form orderless to ordered
+                # remove the @SLOT@ and insert @SLOT@ at every second position
+                newchildren = [child for child in newnode if child.label() != "@SLOT@"]
+                anyslot = len(newchildren) < len(newnode)
+                assert(len(newchildren) >= len(newnode) - 1)
+                if anyslot:
+                    newnode[:] = [newchildren.pop(0)]
+                    while len(newchildren) > 0:
+                        leftslot = ATree("@SLOT@", [])
+                        leftslot.is_open = True
+                        leftslot.parent = newnode
+                        newnode.append(leftslot)
+                        newnode.append(newchildren.pop(0))
 
-            leftslot = ATree("@SLOT@", [])
-            leftslot.is_open = True
-            leftslot._parent = newnode._parent
-            rightslot = ATree("@SLOT@", [])
-            rightslot.is_open = True
-            rightslot._parent = newnode._parent
+            leftslot = ATree("@SLOT@", [], is_open=True)
+            leftslot.parent = newnode.parent
 
             if x.label() in orderless:
-                x[:] = [leftbracket, leftslot, newnode, rightbracket]
+                x[:] = [leftslot, newnode]
             else:
-                x[:] = [leftbracket, leftslot, newnode, rightslot, rightbracket]
+                rightslot = ATree("@SLOT@", [], is_open=True)
+                rightslot.parent = newnode.parent
+                x[:] = [leftslot, newnode, rightslot]
     return x
 
 
@@ -304,7 +281,7 @@ def uncomplete_tree_parallel(x:ATree, orderless=None):
     # region 1. initialize annotations
     fl = x
 
-    fl._parent = None
+    fl.parent = None
     add_descendants_ancestors(fl)
 
     # region 2.
@@ -366,10 +343,11 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=Fals
     * mask specifying which elements in reduced FL tree are terminated
     * 2D gold that specifies whether a token/action is in gold for every position (compatibility with MML!)
     """
-    orderless = {"op:and", "SW:concat"}
+    # orderless = {"op:and", "SW:concat"}
+    orderless = {}      # WARNING! orderless should not be used yet, need to consider discrepancy between orderful parents and orderless aligned parents!!
 
     ds = OvernightDatasetLoader().load(domain=domain, trainonvalid=trainonvalid)
-    ds = ds.map(lambda x: (x[0], add_parentheses(ATree("@START@", [x[1]])), x[2]))
+    ds = ds.map(lambda x: (x[0], ATree("@START@", [x[1]]), x[2]))
 
     vocab = Vocab(padid=0, startid=2, endid=3, unkid=1)
     vocab.add_token("@START@", seen=np.infty)
