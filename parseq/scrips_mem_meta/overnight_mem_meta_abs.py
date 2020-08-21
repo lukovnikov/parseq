@@ -282,30 +282,36 @@ def load_ds(traindomains=("restaurants",),
         domains[domain] = domainexamples
 
     alltrainex = []
-    nl_split = lambda x: x.split()      # TODO replace this with spacy tokenizer
+    # nl_split = lambda x: x.split()      # TODO replace this with spacy tokenizer
+
+    def nl_split(x: str) -> List[str]:
+        doc = nlp(x)
+        # posseq = [tok.tag_ for tok in doc]
+        return [tok.text.lower() for tok in doc]
+
     for domain in domains:
-        domains[domain] = [(nl_split(a), tokenize_and_add_start(b, domain, general_tokens=general_tokens), c)
+        domains[domain] = [(nl_split(a), tokenize_and_add_start(b, domain, general_tokens=general_tokens), c, a)
                            for a, b, c in domains[domain]]
-        alltrainex += [(a, b, c, domain) for a, b, c in domains[domain]]
+        alltrainex += [(a, b, c, domain, d) for a, b, c, d in domains[domain]] # d is the actual text without tokenization
 
     if True or supportsetting == "min" or supportsetting == "train":
         for domain, domainexamples in domains.items():
             print(domain)
             loadedex = [a for a in alltrainex if a[3] == domain and a[2] == "support"]
             loadedex += [a for a in alltrainex if (a[3] != domain and a[2] == "train")]
-            mindomainexamples = get_maximum_spanning_examples([(a, b, c) for a, b, c in domainexamples if c == "train"],
+            mindomainexamples = get_maximum_spanning_examples([(a, b, c, d) for a, b, c, d in domainexamples if c == "train"],
                                           mincoverage=mincoverage, #loadedex=None)
                                           loadedex=loadedex)
-            domains[domain] = domains[domain] + [(a, b, "support") for a, b, c in mindomainexamples]
+            domains[domain] = domains[domain] + [(a, b, "support", d) for a, b, c, d in mindomainexamples]
 
     allex = []
     for domain in domains:
-        allex += [(a, b, c, domain) for a, b, c in domains[domain]]
+        allex += [(a, b, c, domain, d) for a, b, c, d in domains[domain]]
     ds = Dataset(allex)
 
     lfat = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples, general_tokens=general_tokens)
     nlat = get_nl_abstract_transform(ds[lambda x: x[3] != testdomain].examples)
-    ds = ds.map(lambda x: (nlat(x[0]), x[1], lfat(x[1]), x[2], x[3]))
+    ds = ds.map(lambda x: (nlat(x[0]), x[1], lfat(x[1]), x[2], x[3], x[4]))
 
     seqenc_vocab = Vocab(padid=0, unkid=1, startid=2, endid=3)
     seqenc_vocab.add_token("@ABS@", seen=np.infty)
@@ -375,14 +381,15 @@ def load_ds(traindomains=("restaurants",),
         """
 
         if add_pos:
-            doc = nlp(x[0])
+            doc = nlp(x[5])
             posseq = [tok.tag_ for tok in doc]
-            nlseq = [tok.text.lower() for tok in doc]
+            # nlseq = [tok.text.lower() for tok in doc]
 
             # ##
             # Instead of giving str (x[0]) to encode, we can also give a List[str],
             # tokenized by spacy, to keep in correspondance with the POS tags.
             # ##
+            # TODO: CHANGE THIS LOGIC
             ret = (nl_tok_f(x[0]),
                    seqenc.convert(posseq, return_what="tensor", add_start_token=True),
                    seqenc.convert(x[1], return_what="tensor"),
@@ -434,7 +441,8 @@ def pack_loaded_ds(allex, traindomains, testdomain, add_pos: bool):
     def supportretriever(x, add_pos: bool, domain_mems=None):
         lf_exact_index = 1 if not add_pos else 2
         lf_abs_index = 2 if not add_pos else 3
-        domainex = domain_mems[x[4]]
+
+        domainex = domain_mems[x[5] if add_pos else x[4]]
         mem = [(x[0], x[lf_exact_index]) for x in domainex]
         mem = autocollate(mem)
         if add_pos:
@@ -445,6 +453,7 @@ def pack_loaded_ds(allex, traindomains, testdomain, add_pos: bool):
         return ret
 
     trainds = trainds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
+
     validds = validds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
     testds = testds.map(partial(supportretriever, add_pos=add_pos, domain_mems=supportex)).cache()
     # trainds[0]
@@ -460,7 +469,7 @@ def load_data(traindomains=("restaurants",),
               add_pos: bool = False
               ):
 
-    # add_pos = True
+    add_pos = True
 
     allex, nltok, flenc, tokenmasks = \
         load_ds(traindomains=traindomains,
@@ -471,30 +480,39 @@ def load_data(traindomains=("restaurants",),
 
     trainds, validds, testds = pack_loaded_ds(allex, traindomains, testdomain, add_pos)
 
-    def collatefn(x, pad_value=0):
-        """ TODO: When is this called? POS Addition might lead to problems here. """
+    def collatefn(x,add_pos: bool, pad_value=0):
+        """ """
+
+        ind_ques = 0
+        ind_lf_dom = 3 if add_pos else 2
+        ind_lf_abs = 4 if add_pos else 3
 
         y = list(zip(*x))
         for i, yi in enumerate(y):
-            if isinstance(yi[0], torch.LongTensor):
-                if yi[0].dim() == 1:
+            if isinstance(yi[ind_ques], torch.LongTensor):
+                if yi[ind_ques].dim() == 1:
                     y[i] = q.pad_tensors(yi, 0, pad_value)
-                elif yi[0].dim() == 2:
+                elif yi[ind_ques].dim() == 2:
                     y[i] = q.pad_tensors(yi, (0, 1), pad_value)
+
         for i, yi in enumerate(y):
-            if isinstance(yi[0], torch.Tensor):
+            if isinstance(yi[ind_ques], torch.Tensor):
                 y[i] = torch.stack(yi, 0)
-        supmask_source = y[2][:, :, 0] == y[2][0, 0, 0]
-        supmask_target = y[3][:, :, 0] == y[3][0, 0, 0]
+
+        supmask_source = y[ind_lf_dom][:, :, 0] == y[ind_lf_dom][0, 0, 0]
+        supmask_target = y[ind_lf_abs][:, :, 0] == y[ind_lf_abs][0, 0, 0]
         assert (torch.allclose(supmask_source.float(), supmask_target.float()))
-        y[2][:, :, 0] = y[2][0, 0, 0]
-        y[3][:, :, 0] = y[3][0, 0, 0]
+
+        y[ind_lf_dom][:, :, 0] = y[ind_lf_dom][0, 0, 0]
+        y[ind_lf_abs][:, :, 0] = y[ind_lf_abs][0, 0, 0]
         y.append(supmask_target)
+
         return y
 
-    traindl = DataLoader(trainds, batsize, shuffle=True, num_workers=numworkers, collate_fn=collatefn)
-    validdl = DataLoader(validds, batsize, shuffle=True, num_workers=numworkers, collate_fn=collatefn)
-    testdl = DataLoader(testds, batsize, shuffle=True, num_workers=numworkers, collate_fn=collatefn)
+    traindl = DataLoader(trainds, batsize, shuffle=True, num_workers=numworkers,
+                         collate_fn=partial(collatefn, add_pos=add_pos))
+    validdl = DataLoader(validds, batsize, shuffle=True, num_workers=numworkers, collate_fn=partial(collatefn, add_pos=add_pos))
+    testdl = DataLoader(testds, batsize, shuffle=True, num_workers=numworkers, collate_fn=partial(collatefn, add_pos=add_pos))
 
     return traindl, validdl, testdl, nltok, flenc, tokenmasks
 # endregion

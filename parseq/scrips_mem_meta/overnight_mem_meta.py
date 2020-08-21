@@ -481,7 +481,7 @@ def load_data(traindomains=("restaurants",),
     trainds, validds, testds = pack_loaded_ds(allex, traindomains, testdomain, add_pos)
 
     def collatefn(x, pad_value=0):
-        """ TODO: When is this called? POS Addition might lead to problems here. """
+        """ TODO: Needs to be fixed. """
 
         y = list(zip(*x))
         for i, yi in enumerate(y):
