@@ -152,7 +152,7 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
 
 def get_lf_abstract_transform(examples, general_tokens=None):
     """
-    Receives examples from different domains in the format (_, out_tokens, split, domain).
+    Receives examples from a domain including its support set in the format (_, out_tokens, split, domain).
     Returns a function that transforms a sequence of domain-specific output tokens
         into a sequence of domain-independent tokens, abstracting domain-specific tokens/subtrees.
     :param examples:
@@ -290,12 +290,10 @@ def load_ds(traindomains=("restaurants",),
             loadedex = [a for a in alltrainex if a[3] == domain and a[2] == "support"]
             loadedex += [a for a in alltrainex if (a[3] != domain and a[2] == "train")]
             '''
-            get_maximum_spanning_examples is mechanism to find a set of examples (from other domain i.e. not restaurant) such that all the tokens 
-            of a given domain (restaurant for argument sake) are present in this set of examples (returned from 
-            get_maximum_spanning_examples).
-            
-            
-            @ask denis. 
+            get_maximum_spanning_examples is mechanism to find a set of examples
+            (from other domain i.e. not restaurant + all the lexicons of restaurant) 
+            such that all the tokens of a given domain (restaurant for argument sake) are present in this
+            set of examples (returned from get_maximum_spanning_examples).
             '''
             mindomainexamples = get_maximum_spanning_examples([(a, b, c) for a, b, c in domainexamples if c == "train"],
                                           mincoverage=mincoverage, #loadedex=None)
@@ -306,7 +304,7 @@ def load_ds(traindomains=("restaurants",),
     for domain in domains:
         allex += [(a, b, c, domain) for a, b, c in domains[domain]]
     ds = Dataset(allex)
-# @TODO: pick up from here.
+
     et = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples, general_tokens=general_tokens)
     ds = ds.map(lambda x: (x[0], x[1], et(x[1]), x[2], x[3]))
 
@@ -398,8 +396,6 @@ def pack_loaded_ds(allex, traindomains, testdomain):
     trainds = trainds.map(partial(supportretriever, domain_mems=supportex)).cache()
     validds = validds.map(partial(supportretriever, domain_mems=supportex)).cache()
     testds = testds.map(partial(supportretriever, domain_mems=supportex)).cache()
-    trainds[0]
-    trainds[0]
     return trainds, validds, testds
 
 
