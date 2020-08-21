@@ -469,8 +469,6 @@ def load_data(traindomains=("restaurants",),
               add_pos: bool = False
               ):
 
-    add_pos = True
-
     allex, nltok, flenc, tokenmasks = \
         load_ds(traindomains=traindomains,
                 testdomain=testdomain,
