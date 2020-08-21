@@ -122,7 +122,7 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
     return out
 
 
-def get_lf_abstract_transform(examples, general_tokens=None):
+def get_lf_abstract_transform(examples, general_tokens=None, testdomain=None):
     """
     Receives examples from different domains in the format (_, out_tokens, split, domain).
     Returns a function that transforms a sequence of domain-specific output tokens
@@ -161,9 +161,45 @@ def get_lf_abstract_transform(examples, general_tokens=None):
     def example_transform(x):
         abslf = [xe if xe in sharedtokens else replacement for xe in x]
         abslf = ["@ABSSTART@"] + abslf[1:]
-        return abslf
+        _abslf = []
+        prevabs = False
+        for abslf_token in abslf:
+            if abslf_token == "@ABS@":
+                if not prevabs:
+                    _abslf.append(abslf_token)
+                prevabs = True
+            else:
+                prevabs = False
+                _abslf.append(abslf_token)
+        return _abslf
 
     return example_transform
+
+
+def get_nl_abstract_transform(examples):
+    cutoff = .66     # word must occur in at least this fraction of present domains
+    nl_token_domains = {}
+    alldomains = set()
+    for example in examples:
+        for word in example[0]:
+            if word not in nl_token_domains:
+                nl_token_domains[word] = set()
+            nl_token_domains[word].add(example[3])
+        alldomains.add(example[3])
+
+    general_words = set()
+    for token in nl_token_domains:
+        if len(nl_token_domains[token]) > len(alldomains) * cutoff:
+            general_words.add(token)
+
+    print(len(general_words))
+
+    def transform(x:List[str]):
+        ret = [xe if xe in general_words else "@UNK@" for xe in x]
+        return ret
+
+    return transform
+
 
 
 def tokenize_and_add_start(t, _domain, general_tokens=None):
@@ -215,7 +251,7 @@ def load_ds(traindomains=("restaurants",),
 
     if supportsetting == "lex":
         if mincoverage > 1:
-            print(f"Changing mincoverage to 1 because supportsetting=='{lex}', mincoverage was {mincoverage}.")
+            print(f"Changing mincoverage to 1 because supportsetting=='lex', mincoverage was {mincoverage}.")
             mincoverage = 1
 
     general_tokens = {
@@ -240,8 +276,9 @@ def load_ds(traindomains=("restaurants",),
         domains[domain] = domainexamples
 
     alltrainex = []
+    nl_split = lambda x: x.split()      # TODO replace this with spacy tokenizer
     for domain in domains:
-        domains[domain] = [(a, tokenize_and_add_start(b, domain, general_tokens=general_tokens), c)
+        domains[domain] = [(nl_split(a), tokenize_and_add_start(b, domain, general_tokens=general_tokens), c)
                            for a, b, c in domains[domain]]
         alltrainex += [(a, b, c, domain) for a, b, c in domains[domain]]
 
@@ -260,8 +297,9 @@ def load_ds(traindomains=("restaurants",),
         allex += [(a, b, c, domain) for a, b, c in domains[domain]]
     ds = Dataset(allex)
 
-    et = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples, general_tokens=general_tokens)
-    ds = ds.map(lambda x: (x[0], x[1], et(x[1]), x[2], x[3]))
+    lfat = get_lf_abstract_transform(ds[lambda x: x[3] != testdomain].examples, general_tokens=general_tokens)
+    nlat = get_nl_abstract_transform(ds[lambda x: x[3] != testdomain].examples)
+    ds = ds.map(lambda x: (nlat(x[0]), x[1], lfat(x[1]), x[2], x[3]))
 
     seqenc_vocab = Vocab(padid=0, unkid=1, startid=2, endid=3)
     seqenc_vocab.add_token("@ABS@", seen=np.infty)
@@ -304,7 +342,7 @@ def load_ds(traindomains=("restaurants",),
     tokenmasks["_special"] = specialmask
 
     if nl_mode == "basic":
-        nl_tokenizer = SequenceEncoder(tokenizer=lambda x: x.split(),
+        nl_tokenizer = SequenceEncoder(tokenizer=lambda x: x,
                                  add_start_token=True, add_end_token=True)
         for example in ds.examples:
             nl_tokenizer.inc_build_vocab(example[0], seen=example[3] in ("train", "support") if example[4] != testdomain else example[3] == "support")
@@ -339,11 +377,11 @@ def pack_loaded_ds(allex, traindomains, testdomain):
             if ex[4] == testdomain:
                 if ex[3] == "test":
                     testex.append(ex)
-            elif ex[4] in traindomains:
-                if ex[3] == "train":
-                    trainex.append(ex)
                 elif ex[3] == "valid":
                     validex.append(ex)
+            elif ex[4] in traindomains:
+                if ex[3] == "train" or ex[3] == "valid":
+                    trainex.append(ex)
                 elif ex[3] == "test":
                     pass
     trainds = Dataset(trainex)
@@ -354,14 +392,15 @@ def pack_loaded_ds(allex, traindomains, testdomain):
         domainex = domain_mems[x[4]]
         mem = [(x[0], x[1]) for x in domainex]
         mem = autocollate(mem)
-        ret = (x[0], x[1],) + tuple(mem)
+        ret = (x[0], x[2],) + tuple(mem)
+        # ret = (x[0], x[1],) + tuple(mem)
         return ret
 
     trainds = trainds.map(partial(supportretriever, domain_mems=supportex)).cache()
     validds = validds.map(partial(supportretriever, domain_mems=supportex)).cache()
     testds = testds.map(partial(supportretriever, domain_mems=supportex)).cache()
-    trainds[0]
-    trainds[0]
+    # trainds[0]
+    # trainds[0]
     return trainds, validds, testds
 
 
@@ -476,7 +515,7 @@ class DecoderInputLayer(torch.nn.Module):
         ids = self.mapper[ids]
 
         emb = self.emb(ids)
-        out = torch.cat([emb, torch.zeros_like(prev_inp_summ)], 1)
+        out = torch.cat([emb, prev_inp_summ], 1)
         return out
 
 
@@ -533,28 +572,28 @@ class DecoderOutputLayer(torch.nn.Module):
             memmask = torch.ones_like(memids).float()
         # compute
         # TODO: use only summary
-        query = torch.cat([embsumm, torch.zeros_like(encsumm), enc], -1)
-        attvector_mask = torch.sigmoid(self.attvectormasker(query))
-        query = query * attvector_mask
-        keys = torch.cat([memembsumm, torch.zeros_like(memencsumm), memencs], -1)
-
-        # compute probs from memory
-        probs_mem = torch.zeros(query.size(0), self.vocsize, device=query.device)
-            # (batsize, vocsize)
-
-        # compute attentions to memory
-        # query = self.bilinear_lin(query)
-        mem_weights = torch.einsum("bd,bmzd->bmz", query, keys)
-        mem_weights = mem_weights + torch.log(memmask.float())
-        # mem_weights_size = mem_weights.size()
-        mem_weights = mem_weights.view(mem_weights.size(0), -1)
-        mem_alphas = torch.softmax(mem_weights, -1) # (batsize, memsize*memseqlen)
-        mem_enc_summ = mem_alphas[:, :, None] * memencs.contiguous().view(memencs.size(0), memencs.size(1) * memencs.size(2), -1)
-        mem_enc_summ = mem_enc_summ.sum(1)
-        # mem_key_summ = mem_alphas[:, :, None] * memkeys.contiguous().view(memkeys.size(0), memkeys.size(1) * memkeys.size(2), -1)
-        # mem_key_summ = mem_key_summ.sum(1)
-        mem_toks = memids.contiguous().view(memids.size(0), -1)  # (batsize, memsize*memseqlen)
-        probs_mem = probs_mem.scatter_add(1, mem_toks, mem_alphas)
+        # query = torch.cat(z[embsumm, torch.zeros_like(encsumm), enc], -1)
+        # attvector_mask = torch.sigmoid(self.attvectormasker(query))
+        # query = query * attvector_mask
+        # keys = torch.cat([memembsumm, torch.zeros_like(memencsumm), memencs], -1)
+        #
+        # # compute probs from memory
+        # probs_mem = torch.zeros(query.size(0), self.vocsize, device=query.device)
+        #     # (batsize, vocsize)
+        #
+        # # compute attentions to memory
+        # # query = self.bilinear_lin(query)
+        # mem_weights = torch.einsum("bd,bmzd->bmz", query, keys)
+        # mem_weights = mem_weights + torch.log(memmask.float())
+        # # mem_weights_size = mem_weights.size()
+        # mem_weights = mem_weights.view(mem_weights.size(0), -1)
+        # mem_alphas = torch.softmax(mem_weights, -1) # (batsize, memsize*memseqlen)
+        # mem_enc_summ = mem_alphas[:, :, None] * memencs.contiguous().view(memencs.size(0), memencs.size(1) * memencs.size(2), -1)
+        # mem_enc_summ = mem_enc_summ.sum(1)
+        # # mem_key_summ = mem_alphas[:, :, None] * memkeys.contiguous().view(memkeys.size(0), memkeys.size(1) * memkeys.size(2), -1)
+        # # mem_key_summ = mem_key_summ.sum(1)
+        # mem_toks = memids.contiguous().view(memids.size(0), -1)  # (batsize, memsize*memseqlen)
+        # probs_mem = probs_mem.scatter_add(1, mem_toks, mem_alphas)
 
         h = torch.cat([encsumm, enc], -1)
         logits_gen = self.outlin(h)
@@ -568,7 +607,8 @@ class DecoderOutputLayer(torch.nn.Module):
 
         mix = self.mixer(h)
         mix = torch.softmax(mix, -1)
-        probs = mix[:, 0:1] * probs_gen + mix[:, 1:2] * probs_mem
+        # probs = mix[:, 0:1] * probs_gen + mix[:, 1:2] * probs_mem
+        probs = probs_gen
 
         # prevent naningrad
         _probs = torch.stack([torch.zeros_like(probs),
@@ -576,7 +616,8 @@ class DecoderOutputLayer(torch.nn.Module):
         probs = _probs.gather(0, (probs != 0).long()[None])[0]
 
         # probs = probs.clamp_min(1e-4)
-        return probs, mem_enc_summ
+        # return probs, mem_enc_summ
+        return probs, None
 
 
 class InnerLSTMDecoderCell(TransitionModel):
@@ -1262,7 +1303,7 @@ def run(traindomains="ALL",
     # wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
     #            reinit=True, config=settings)
     if traindomains == "ALL":
-        alldomains = {"recipes", "restaurants", "calendar", "housing", "publications"}  # blocks
+        alldomains = {"recipes", "restaurants", "calendar", "housing", "publications", "blocks"}  # blocks
         traindomains = alldomains - {domain, }
     else:
         traindomains = set(traindomains.split("+"))
@@ -1355,8 +1396,8 @@ def run(traindomains="ALL",
                                         on_end=[lambda: lr_schedule.step()])
 
     validepoch = partial(q.test_epoch, model=testm,
-                                       losses=xmetrics,
-                                       dataloader=testdl,
+                                       losses=vmetrics,
+                                       dataloader=validdl,
                                        device=device,
                                        on_end=[lambda: eyt.on_epoch_end()])
 
