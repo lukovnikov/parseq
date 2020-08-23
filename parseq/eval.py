@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import partial
-from typing import Union, Dict, Callable
+from typing import Union, Dict, Callable, List
 
 import nltk
 import qelos as q
@@ -302,7 +302,7 @@ class TreeAccuracy(Metric):
             ret = [float(are_equal_trees(gold_tree, pred_tree, orderless=self.orderless, unktoken=self.unktoken))
                    for gold_tree, pred_tree in zip(_gold_trees, pred_trees)]
             return ret
-        if predactions.dim() == 3:      # beam states
+        if isinstance(predactions, torch.Tensor) and predactions.dim() == 3:      # beam states
             # assert(isinstance(x, BeamState))
             # golds = x.bstates.get(0).get_gold()
             gold_trees = [self.tensor2tree(goldse) for goldse in golds]
@@ -321,7 +321,7 @@ class TreeAccuracy(Metric):
             r[f"{self.name}_at_last"] = sum(acc_cum[:, -1]) / batsize
             return r
         else:
-            assert(predactions.dim() == 2)
+            # assert(predactions.dim() == 2)
             # golds = x.get_gold()
             # _gold_trees = x.gold_trees
             gold_trees = [self.tensor2tree(goldse) for goldse in golds]

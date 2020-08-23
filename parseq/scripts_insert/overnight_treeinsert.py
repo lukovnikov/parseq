@@ -2,7 +2,7 @@ import random
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from functools import partial
-from typing import Tuple, Iterable, List
+from typing import Tuple, Iterable, List, Dict
 
 import numpy as np
 import torch
@@ -11,7 +11,8 @@ from torch.utils.data import DataLoader
 
 import qelos as q
 from parseq.datasets import OvernightDatasetLoader, autocollate
-from parseq.grammar import tree_to_lisp_tokens, tree_to_prolog
+from parseq.eval import TreeAccuracy
+from parseq.grammar import tree_to_lisp_tokens, tree_to_prolog, are_equal_trees
 from parseq.vocab import Vocab, SequenceEncoder
 from transformers import BertTokenizer
 
@@ -50,11 +51,6 @@ def all_terminated(x:ATree):
     return not x.is_open and all([all_terminated(xe) for xe in x])
 
 
-def compute_gold_actions(x:ATree):
-    """ x must be an aligned tree.
-        this method will assign to every non-terminated node in this tree the gold actions according to one of the possible alignments """
-
-
 def add_descendants_ancestors(x:ATree, ancestors:Iterable[ATree]=tuple()):
     x._ancestors = ancestors
     x._descendants = []
@@ -86,6 +82,8 @@ def assign_gold_actions(x:ATree):
             x.is_open = False
             x.gold_actions = []
         elif x.label() == "@SLOT@":
+            if len(x.parent) == 1:
+                raise Exception()
             # get this slots's siblings
             x.gold_actions = []
             xpos = child_number_of(x)
@@ -114,7 +112,6 @@ def assign_gold_actions(x:ATree):
                 x.gold_actions = ["@CLOSE@"]
         else:       # not a sibling slot ("@SLOT@"), not a "(" or ")"
             x.gold_actions = []
-            # TODO: reimplement based on ancestors of children
             if len(x) == 0:
                 x.gold_actions = list(x.align._descendants)
             else:
@@ -154,7 +151,7 @@ def mark_for_execution(x:ATree, mode:str="single"):
         for node in nodes_with_actions:
             if node is not selected:
                 node._chosen_action = None
-    elif mode == "all":
+    elif mode == "all" or mode == "parallel:100%":
         pass
     return x
 
@@ -193,9 +190,9 @@ def execute_chosen_actions(x:ATree):
             x.parent.insert(child_number_of(x), leftslot)
             x.parent.insert(child_number_of(x)+1, rightslot)
 
-            slot = ATree("@SLOT@", [], is_open=True)
-            slot.parent = x
-            x[:] = []
+            # slot = ATree("@SLOT@", [], is_open=True)
+            # slot.parent = x
+            # x[:] = []
     else:
         iterr = list(x)
         for xe in iterr:
@@ -245,8 +242,8 @@ def uncomplete_tree_parallel(x:ATree):
     y.is_open = True
 
     i = 0
-    choices = [deepcopy(y)]         # !! can't cache because different choices !
     y = assign_gold_actions(y)
+    choices = [deepcopy(y)]         # !! can't cache because different choices !
     while not all_terminated(y):
         y = mark_for_execution(y, mode="single")
         y = execute_chosen_actions(y)
@@ -254,7 +251,7 @@ def uncomplete_tree_parallel(x:ATree):
         choices.append(deepcopy(y))
         i += 1
 
-    ret = random.choice(choices)
+    ret = random.choice(choices[:-1])
     return ret
 
 
@@ -287,7 +284,10 @@ def extract_info(x:ATree, onlytokens=False, nogold=False):
                 golds.append(gold)
             queueprefix = []
             for fc in first:
-                queueprefix += ["(", fc, ")"]
+                if len(fc) == 0:
+                    queueprefix.append(fc)
+                else:
+                    queueprefix += ["(", fc, ")"]
 
             queue = queueprefix + queue
 
@@ -397,7 +397,7 @@ class TreeInsertionTagger(ABC, torch.nn.Module):
         and produces distributions over tree modification actions for every (non-terminated) token.
     """
     @abstractmethod
-    def forward(self, tokens:torch.Tensor, openmask:torch.Tensor, **kw):
+    def forward(self, tokens:torch.Tensor, openmask:torch.Tensor=None, **kw):
         """
         :param tokens:      (batsize, seqlen)
         :param openmask:    (batsize,) - True if token is terminated
@@ -406,9 +406,9 @@ class TreeInsertionTagger(ABC, torch.nn.Module):
         pass
 
     @abstractmethod
-    def get_init_state(self, **kw):
+    def get_init_state(self, **kw)-> Tuple[ATree, Dict]:
         """ Run encoding on context etc.
-        Return a dictionary that will be used as the kwargs in .forward() of the tagger during decoding."""
+        Return starting trees and a dictionary of context variables that that will be used as the kwargs in .forward() of the tagger during decoding."""
         pass
 
 
@@ -465,7 +465,7 @@ class Recall(torch.nn.Module):
 
         zeromask = (golds.sum(-1) != 0).float()
         extragolds = torch.zeros_like(golds)
-        extragolds[:, :, 0] = 1
+        extragolds[:, :, 0] = 1     # make padding available as gold if gold is all-zero
         golds = golds * (zeromask.unsqueeze(-1)) + extragolds * (1 - zeromask.unsqueeze(-1))
 
         _, best = probs.max(-1)
@@ -516,22 +516,32 @@ def build_atree(x:Iterable[str], open:Iterable[bool]=None, chosen_actions:Iterab
     print(x)
     open = [False for _ in x] if open is None else open
     chosen_actions = [None for _ in x] if chosen_actions is None else chosen_actions
-    nodes = [ATree(xe, [], is_open=opene) for xe, opene in zip(x, open)]
-    for node, chosen_action in zip(nodes, chosen_actions):
-        node._chosen_action = chosen_action
+    nodes = []
+    for xe, opene, chosen_action in zip(x, open, chosen_actions):
+        if xe == "(" or xe == ")":
+            nodes.append(xe)
+            assert(opene == False)
+            # assert(chosen_action is None)
+        else:
+            a = ATree(xe, [], is_open=opene)
+            a._chosen_action = chosen_action
+            nodes.append(a)
 
     buffer = list(nodes)
     stack = []
     keepgoing = len(buffer) > 0
     while keepgoing:
-        if len(stack) > 0 and stack[-1].label() == ")":    # closing -> create subtree and push to stack
-            # find opening tag
-            acc = [stack.pop(-1)]
-            while not acc[-1].label() == "(":
-                acc.append(stack.pop(-1))
-            node = stack.pop(-1)
-            node[:] = acc[::-1]
-            stack.append(node)
+        if len(stack) > 0 and stack[-1] == ")":
+                stack.pop(-1)
+                acc = []
+                while len(acc) == 0 or not stack[-1] == "(":
+                    acc.append(stack.pop(-1))
+                stack.pop(-1)
+                node = acc.pop(-1)
+                node[:] = reversed(acc)
+                for nodechild in node:
+                    nodechild.parent = node
+                stack.append(node)
         else:
             if len(buffer) == 0:
                 keepgoing = False
@@ -569,21 +579,19 @@ def test_tensors_to_tree():
              zip(list(batch[1]), list(batch[2]), list(batch[3].max(-1)[1]))]
 
 
-
-
-class TreeInsertionModel(torch.nn.Module):
+class TreeInsertionTaggerModel(torch.nn.Module):
     """ A tree insertion model used for training and inference.
         Receives both input to the tagging model as well as gold.
         Computes loss during training.
         Performs decoding during testing.
     """
     def __init__(self, tagger:TreeInsertionTagger, **kw):
-        super(TreeInsertionModel, self).__init__(**kw)
+        super(TreeInsertionTaggerModel, self).__init__(**kw)
         self.tagger = tagger
         self.ce = MultiCELoss()
         self.recall = Recall()
 
-    def forward(self, tokens:torch.Tensor, openmask:torch.Tensor, gold:torch.Tensor, **kw):
+    def forward(self, inpseq:torch.Tensor=None, tokens:torch.Tensor=None, openmask:torch.Tensor=None, gold:torch.Tensor=None, **kw):
         """
         Used only to train and test the tagger (this is one step of the decoding process)
         :param tokens:      (batsize, seqlen) - token ids
@@ -591,48 +599,174 @@ class TreeInsertionModel(torch.nn.Module):
         :param gold:        (batsize, seqlen, vocsize) - which of the possible actions are gold at every token.
         :return:
         """
-        initstate = self.tagger.get_init_state(**kw["context"])
-        probs = self.tagger(**initstate)    # (batsize, seqlen, vocsize)
+        _, ctx = self.tagger.get_init_state(inpseqs=inpseq)
+        probs = self.tagger(tokens, openmask=openmask, **ctx)    # (batsize, seqlen, vocsize)
 
         ce = self.ce(probs, gold, mask=openmask)
         elemrecall, seqrecall = self.recall(probs, gold, mask=openmask)
         return {"loss": ce, "ce": ce, "elemrecall": elemrecall, "seqrecall": seqrecall}
 
-    def decode(self, batsize, mode="parallel:100%", maxsteps=100, **kw):
+
+def try_tree_insertion_model_tagger(batsize=10):
+    tt = q.ticktock()
+    tt.tick("loading")
+    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants")
+    tt.tock("loaded")
+
+    tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=collate_fn)
+    batch = next(iter(tdl))
+
+    class DummyTreeInsertionTagger(TreeInsertionTagger):
+        exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@SLOT@", "(", ")"}
+        def __init__(self, vocab:Vocab, **kw):
+            super(DummyTreeInsertionTagger, self).__init__(**kw)
+            self.vocab = vocab
+            self.vocabsize = self.vocab.number_of_ids()
+            vocab_mask = torch.ones(self.vocabsize)
+            for excl_token in self.exclude:
+                if excl_token in self.vocab:
+                    vocab_mask[self.vocab[excl_token]] = 0
+            self.register_buffer("vocab_mask", vocab_mask)
+
+        def forward(self, tokens:torch.Tensor, openmask:torch.Tensor, **kw):
+            print(tokens)
+            ret = torch.randn(tokens.size(0), tokens.size(1), self.vocabsize, device=tokens.device)
+            ret = ret + torch.log(self.vocab_mask[None, None, :])
+            ret = torch.softmax(ret, -1)
+            return ret
+
+        def get_init_state(self, inpseqs=None, y_in=None):
+            batsize = inpseqs.size(0)
+            trees = [ATree("@START@", [])] * batsize
+            return trees, {}
+
+    cell = DummyTreeInsertionTagger(flenc.vocab)
+    m = TreeInsertionTaggerModel(cell)
+
+    m(batch[0], batch[1], batch[2], batch[3])
+
+
+ORDERLESS = {"op:and", "SW:concat"}
+
+
+def simplify_tree_for_eval(x:Tree):   # removes @SLOT@'s and @START@
+    children = [simplify_tree_for_eval(xe) for xe in x]
+    children = [child for child in children if child is not None]
+    x[:] = children
+    if x.label() == "@SLOT@":
+        return None
+    else:
+        return x
+
+
+class TreeInsertionDecoder(torch.nn.Module):
+    def __init__(self, tagger:TreeInsertionTagger, maxsteps:int=100,
+                 mode:str="parallel:100%", seqenc:SequenceEncoder=None, **kw):
+        super(TreeInsertionDecoder, self).__init__(**kw)
+        self.tagger = tagger
+        self.treeacc = TreeAccuracy(tensor2tree=simplify_tree_for_eval, orderless=ORDERLESS)
+        self.maxsteps = maxsteps
+        self.mode = mode
+        self.seqenc = seqenc
+
+    def forward(self, inpseqs:torch.Tensor=None, y_in:torch.Tensor=None, gold:torch.Tensor=None,
+                mode:str=None, maxsteps:int=None, **kw):
         """
-        Generates a tree using the trained tagging model.
-        Used for testing.
-        :param mode:    string specifying how to decode
+
         """
-        initstate = self.tagger.get_init_state(**kw["context"])
-        trees = [ATree("@START@", [])] * batsize
+        maxsteps = maxsteps if maxsteps is not None else self.maxsteps
+        mode = mode if mode is not None else self.mode
 
-        # go from tree to tensors,
-        tensors = []
-        masks = []
-        for tree in trees:
-            fltoks, openmask = extract_info(tree, onlytokens=True)
-            seq = self.seqenc.convert(fltoks, return_what="tensor")
-            tensors.append(seq)
-            masks.append(openmask)
-        seq = torch.stack(q.pad_tensors(tensors, 0), 0)
-        openmask = torch.stack(q.pad_tensors(masks, 0, False), 0)
+        trees, context = self.tagger.get_init_state(inpseqs=inpseqs, y_in=y_in)
 
-        #  feed to tagger,
-        probs = self.tagger(seq, openmask=openmask)
+        i = 0
+        while not all([all_terminated(tree) for tree in trees]) and i < maxsteps:
+            # go from tree to tensors,
+            tensors = []
+            masks = []
+            for tree in trees:
+                fltoks, openmask = extract_info(tree, nogold=True)
+                seq = self.seqenc.convert(fltoks, return_what="tensor")
+                tensors.append(seq)
+                masks.append(torch.tensor(openmask))
+            seq = torch.stack(q.pad_tensors(tensors, 0), 0)
+            openmask = torch.stack(q.pad_tensors(masks, 0, False), 0)
 
-        #  get best predictions,
-        _, best = probs.max(-1)
+            #  feed to tagger,
+            probs = self.tagger(seq, openmask=openmask, **context)
 
-        # TODO
-        #  convert to trees
-        trees = [tensors_to_tree(seqe, openmask=openmaske, actions=beste, D=self.seqenc.vocab)
-                 for seqe, openmaske, beste
-                 in zip(list(seq), list(openmask), list(best))]
-        #  and execute,
-        #  then repeat until all terminated
+            #  get best predictions,
+            _, best = probs.max(-1)
+
+            #  convert to trees,
+            trees = [tensors_to_tree(seqe, openmask=openmaske, actions=beste, D=self.seqenc.vocab)
+                     for seqe, openmaske, beste
+                     in zip(list(seq), list(openmask), list(best))]
+
+            #  and execute,
+            trees_ = []
+            for tree in trees:
+                tree = mark_for_execution(tree, mode=mode)
+                tree = execute_chosen_actions(tree)
+                trees_.append(tree)
+
+            trees = trees_
+            i += 1
+            #  then repeat until all terminated
+
+        # after done decoding, if gold is given, run losses, else return just predictions
+
+        ret = {"prediction": trees}
+
+        if gold is not None:
+            goldtrees = [tensors_to_tree(seqe, D=self.seqenc.vocab) for seqe in list(gold)]
+            goldtrees = [simplify_tree_for_eval(x) for x in goldtrees]
+            predtrees = [simplify_tree_for_eval(x) for x in trees]
+            ret["treeacc"] = [float(are_equal_trees(gold_tree, pred_tree,
+                            orderless=ORDERLESS, unktoken="@UNK@"))
+                   for gold_tree, pred_tree in zip(goldtrees, predtrees)]
+            ret["treeacc"] = sum(ret["treeacc"]) / len(ret["treeacc"])
+
+        return ret
 
 
+def try_tree_insertion_model_decode(batsize=10):
+    tt = q.ticktock()
+    tt.tick("loading")
+    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants")
+    tt.tock("loaded")
+
+    tdl = DataLoader(tds_seq, batch_size=batsize, shuffle=True, collate_fn=autocollate)
+    batch = next(iter(tdl))
+
+    class DummyTreeInsertionTagger(TreeInsertionTagger):
+        exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@SLOT@", "(", ")"}
+        def __init__(self, vocab:Vocab, **kw):
+            super(DummyTreeInsertionTagger, self).__init__(**kw)
+            self.vocab = vocab
+            self.vocabsize = self.vocab.number_of_ids()
+            vocab_mask = torch.ones(self.vocabsize)
+            for excl_token in self.exclude:
+                if excl_token in self.vocab:
+                    vocab_mask[self.vocab[excl_token]] = 0
+            self.register_buffer("vocab_mask", vocab_mask)
+
+        def forward(self, tokens:torch.Tensor, openmask:torch.Tensor, **kw):
+            print(tokens)
+            ret = torch.randn(tokens.size(0), tokens.size(1), self.vocabsize, device=tokens.device)
+            ret = ret + torch.log(self.vocab_mask[None, None, :])
+            ret = torch.softmax(ret, -1)
+            return ret
+
+        def get_init_state(self, inpseqs=None, y_in=None):
+            batsize = inpseqs.size(0)
+            trees = [ATree("@START@", [])] * batsize
+            return trees, {}
+
+    cell = DummyTreeInsertionTagger(flenc.vocab)
+    m = TreeInsertionDecoder(cell, seqenc=flenc)
+
+    m(batch[0], None, batch[1], maxsteps=3)
 
 
 def run(lr=0.001,
@@ -661,4 +795,6 @@ def run(lr=0.001,
 if __name__ == '__main__':
     # test_multi_celoss()
     # test_tensors_to_tree()
-    q.argprun(run)
+    # try_tree_insertion_model_decode()
+    try_tree_insertion_model_tagger()
+    # q.argprun(run)

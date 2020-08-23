@@ -303,7 +303,7 @@ class ActionTree(ParentedTree):
             if child._label in self.singlechildcollapse and len(child) == 2:
                 self[i] = child[0]
         for child in self:
-            child.simplify()
+            child.simplify_tree_for_eval()
 
     @classmethod
     def convert(cls, tree):
