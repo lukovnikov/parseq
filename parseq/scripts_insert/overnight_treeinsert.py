@@ -1,3 +1,4 @@
+import json
 import random
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -11,10 +12,11 @@ from torch.utils.data import DataLoader
 
 import qelos as q
 from parseq.datasets import OvernightDatasetLoader, autocollate
-from parseq.eval import TreeAccuracy
-from parseq.grammar import tree_to_lisp_tokens, tree_to_prolog, are_equal_trees
+from parseq.eval import TreeAccuracy, make_array_of_metrics
+from parseq.grammar import tree_to_lisp_tokens, tree_to_prolog, are_equal_trees, tree_size
+from parseq.transformer import TransformerConfig, TransformerModel, TransformerStack
 from parseq.vocab import Vocab, SequenceEncoder
-from transformers import BertTokenizer
+from transformers import BertTokenizer, BertModel
 
 
 class ATree(Tree):
@@ -319,6 +321,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=Fals
     vocab.add_token("@CLOSE@", seen=np.infty)        # only here for the action of closing an open position, will not be seen at input
     vocab.add_token("@OPEN@", seen=np.infty)         # only here for the action of opening a closed position, will not be seen at input
     vocab.add_token("@REMOVE@", seen=np.infty)       # only here for deletion operations, won't be seen at input
+    vocab.add_token("@REMOVESUBTREE@", seen=np.infty)       # only here for deletion operations, won't be seen at input
     vocab.add_token("@SLOT@", seen=np.infty)         # will be seen at input, can't be produced!
 
     nl_tokenizer = BertTokenizer.from_pretrained(nl_mode)
@@ -413,10 +416,10 @@ class TreeInsertionTagger(ABC, torch.nn.Module):
 
 
 class MultiCELoss(torch.nn.Module):
-    def __init__(self, aggmode:str="mean", mode:str="logits", **kw):
+    def __init__(self, seqaggmode:str="mean", mode:str="logits", **kw):
         super(MultiCELoss, self).__init__(**kw)
         self.mode = mode
-        self.aggmode = aggmode
+        self.seqaggmode = seqaggmode
 
     def forward(self, probs, golds, mask=None):
         """
@@ -440,20 +443,16 @@ class MultiCELoss(torch.nn.Module):
         selectedloss = -torch.log(selectedprobs.clamp_min(1e-4))
         selectedloss = selectedloss * zeromask * mask.float()
 
-        if self.aggmode == "mean":
-            a = selectedloss.sum()
-            b = (zeromask * mask.float()).sum()
+        if self.seqaggmode == "mean":
+            a = selectedloss.sum(-1)
+            b = (zeromask * mask.float()).sum(-1).clamp_min(1e-6)
             loss = a/b
         else:
-            raise Exception("unknown aggmode")
+            raise Exception("unknown seqaggmode")
         return loss
 
 
 class Recall(torch.nn.Module):
-    def __init__(self, aggmode:str="mean", **kw):
-        super(Recall, self).__init__(**kw)
-        self.aggmode = aggmode
-
     def forward(self, probs, golds, mask=None):
         """
         :param probs:       (batsize, seqlen, vocsize) - distributions over tokens
@@ -473,15 +472,12 @@ class Recall(torch.nn.Module):
         # (batsize, seqlen)
 
         _mask = zeromask * mask.float()
-        elemrecall = bestingold.sum()
-        seqrecall = ((bestingold >= 1) | ~(_mask >= 1)).all(-1).float()
-        b = _mask.sum()
-        if self.aggmode == "mean":
-            elemrecall = elemrecall / b
-            seqrecall = seqrecall.mean()
-        else:
-            raise Exception("unknown aggmode")
 
+        seqrecall = ((bestingold >= 1) | ~(_mask >= 1)).all(-1).float()
+
+        elemrecall = bestingold.sum(-1)
+        b = _mask.sum(-1).clamp_min(1e-6)
+        elemrecall = elemrecall / b
         return elemrecall, seqrecall
 
 
@@ -604,7 +600,7 @@ class TreeInsertionTaggerModel(torch.nn.Module):
 
         ce = self.ce(probs, gold, mask=openmask)
         elemrecall, seqrecall = self.recall(probs, gold, mask=openmask)
-        return {"loss": ce, "ce": ce, "elemrecall": elemrecall, "seqrecall": seqrecall}
+        return {"loss": ce, "ce": ce, "elemrecall": elemrecall, "seqrecall": seqrecall}, probs
 
 
 def try_tree_insertion_model_tagger(batsize=10):
@@ -617,7 +613,7 @@ def try_tree_insertion_model_tagger(batsize=10):
     batch = next(iter(tdl))
 
     class DummyTreeInsertionTagger(TreeInsertionTagger):
-        exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@SLOT@", "(", ")"}
+        exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@REMOVESUBTREE@", "@SLOT@", "(", ")"}
         def __init__(self, vocab:Vocab, **kw):
             super(DummyTreeInsertionTagger, self).__init__(**kw)
             self.vocab = vocab
@@ -660,12 +656,13 @@ def simplify_tree_for_eval(x:Tree):   # removes @SLOT@'s and @START@
 
 
 class TreeInsertionDecoder(torch.nn.Module):
-    def __init__(self, tagger:TreeInsertionTagger, maxsteps:int=100,
-                 mode:str="parallel:100%", seqenc:SequenceEncoder=None, **kw):
+    def __init__(self, tagger:TreeInsertionTagger, seqenc:SequenceEncoder=None,
+                 maxsteps:int=50, max_tree_size:int=100,
+                 mode:str="parallel:100%", **kw):
         super(TreeInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
-        self.treeacc = TreeAccuracy(tensor2tree=simplify_tree_for_eval, orderless=ORDERLESS)
         self.maxsteps = maxsteps
+        self.max_tree_size = max_tree_size
         self.mode = mode
         self.seqenc = seqenc
 
@@ -706,8 +703,9 @@ class TreeInsertionDecoder(torch.nn.Module):
             #  and execute,
             trees_ = []
             for tree in trees:
-                tree = mark_for_execution(tree, mode=mode)
-                tree = execute_chosen_actions(tree)
+                if tree_size(tree) < self.max_tree_size:
+                    tree = mark_for_execution(tree, mode=mode)
+                    tree = execute_chosen_actions(tree)
                 trees_.append(tree)
 
             trees = trees_
@@ -716,7 +714,7 @@ class TreeInsertionDecoder(torch.nn.Module):
 
         # after done decoding, if gold is given, run losses, else return just predictions
 
-        ret = {"prediction": trees}
+        ret = {}
 
         if gold is not None:
             goldtrees = [tensors_to_tree(seqe, D=self.seqenc.vocab) for seqe in list(gold)]
@@ -727,7 +725,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                    for gold_tree, pred_tree in zip(goldtrees, predtrees)]
             ret["treeacc"] = sum(ret["treeacc"]) / len(ret["treeacc"])
 
-        return ret
+        return ret, trees
 
 
 def try_tree_insertion_model_decode(batsize=10):
@@ -740,7 +738,7 @@ def try_tree_insertion_model_decode(batsize=10):
     batch = next(iter(tdl))
 
     class DummyTreeInsertionTagger(TreeInsertionTagger):
-        exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@SLOT@", "(", ")"}
+        exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@","@REMOVESUBTREE@", "@SLOT@", "(", ")"}
         def __init__(self, vocab:Vocab, **kw):
             super(DummyTreeInsertionTagger, self).__init__(**kw)
             self.vocab = vocab
@@ -769,8 +767,115 @@ def try_tree_insertion_model_decode(batsize=10):
     m(batch[0], None, batch[1], maxsteps=3)
 
 
+class TransformerTagger(TreeInsertionTagger):
+    exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@REMOVESUBTREE@", "@SLOT@", "(", ")"}
+    def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
+        super(TransformerTagger, self).__init__(**kw)
+        self.vocab = vocab
+        self.vocabsize = vocab.number_of_ids()
+        self.dim = dim
+        config = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
+                                   num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
+
+        self.emb = torch.nn.Embedding(config.vocab_size, config.d_model)
+        self.posemb = torch.nn.Embedding(maxpos, config.d_model)
+        decoder_config = deepcopy(config)
+        decoder_config.is_decoder = True
+        decoder_config.use_causal_mask = False
+        self.decoder = TransformerStack(decoder_config)
+
+        self.out = torch.nn.Linear(self.dim, self.vocabsize)
+
+        vocab_mask = torch.ones(self.vocabsize)
+        for excl_token in self.exclude:
+            if excl_token in self.vocab:
+                vocab_mask[self.vocab[excl_token]] = 0
+        self.register_buffer("vocab_mask", vocab_mask)
+
+        self.bertname = bertname
+        self.bert_model = BertModel.from_pretrained(self.bertname)
+
+        self.adapter = None
+        if self.bert_model.config.hidden_size != decoder_config.d_model:
+            self.adapter = torch.nn.Linear(self.bert_model.config.hidden_size, decoder_config.d_model, bias=False)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        pass
+        # self.posemb.weight.fill_(0.)
+
+    def forward(self, tokens:torch.Tensor=None, openmask:torch.Tensor=None,
+                enc=None, encmask=None):
+        padmask = (tokens != 0)
+        embs = self.emb(tokens)
+        posembs = self.posemb(torch.arange(tokens.size(1)))[None]
+        embs = embs + posembs
+        ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
+                     encoder_hidden_states=enc,
+                     encoder_attention_mask=encmask)
+        logits = self.out(ret[0])
+        logits = logits + torch.log(self.vocab_mask[None, None, :])
+        return logits
+
+    def get_init_state(self, inpseqs=None, y_in=None) -> Tuple[ATree, Dict]:
+        """ Encodes inpseqs and creates new states """
+        assert(y_in is None)    # starting decoding from non-vanilla is not supported yet
+        # encode inpseqs
+        encmask = (inpseqs != 0)
+        encs = self.bert_model(inpseqs)[0]
+        if self.adapter is not None:
+            encs = self.adapter(encs)
+
+        # create trees
+        batsize = inpseqs.size(0)
+        trees = [ATree("@START@", [])] * batsize
+        return trees, {"enc": encs, "encmask": encmask}
+
+
+def try_real_tree_insertion_model_tagger(batsize=10):
+    tt = q.ticktock()
+    tt.tick("loading")
+    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants")
+    tt.tock("loaded")
+
+    tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=collate_fn)
+    batch = next(iter(tdl))
+
+    cell = TransformerTagger(512, flenc.vocab)
+    m = TreeInsertionTaggerModel(cell)
+
+    m(batch[0], batch[1], batch[2], batch[3])
+
+
 def run(lr=0.001,
-        batsize=10):
+        enclrmul=0.1,
+        hdim=512,
+        numlayers=4,
+        numheads=8,
+        dropout=0.1,
+        wreg=1e-6,
+        batsize=10,
+        epochs=100,
+        warmup=0,
+        sustain=0,
+        cosinelr=False,
+        gradacc=1,
+        gradnorm=100,
+        patience=5,
+        validinter=3,
+        seed=87646464,
+        gpu=-1,
+        ):
+    settings = locals().copy()
+    print(json.dumps(settings, indent=4))
+
+    random.seed(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
+
     tt = q.ticktock("script")
     tt.tick("loading")
     tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants")
@@ -784,17 +889,97 @@ def run(lr=0.001,
     vdl_seq = DataLoader(vds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
-    tt.tick("creating one batch")
-    example = next(iter(tdl))
-    tt.tock("created one batch")
-    print(example)
+    # model
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
+    tagmodel = TreeInsertionTaggerModel(tagger)
+    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=10, max_tree_size=200)
 
-    print(next(iter(tdl_seq)))
+    # batch = next(iter(tdl))
+    # out = tagmodel(*batch)
+
+    tmetrics = make_array_of_metrics("loss", "elemrecall", "seqrecall", reduction="mean")
+    tseqmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    vmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    xmetrics = make_array_of_metrics("treeacc", reduction="mean")
+
+    # region parameters
+    def get_parameters(m, _lr, _enclrmul):
+        bertparams = []
+        otherparams = []
+        for k, v in m.named_parameters():
+            if "bert_model." in k:
+                bertparams.append(v)
+            else:
+                otherparams.append(v)
+        if len(bertparams) == 0:
+            raise Exception("No encoder parameters found!")
+        paramgroups = [{"params": bertparams, "lr": _lr * _enclrmul},
+                       {"params": otherparams}]
+        return paramgroups
+    # endregion
+
+    def get_optim(_m, _lr, _enclrmul, _wreg=0):
+        paramgroups = get_parameters(_m, _lr=lr, _enclrmul=_enclrmul)
+        optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=_wreg)
+        return optim
+
+    def clipgradnorm(_m=None, _norm=None):
+        torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
+
+    eyt = q.EarlyStopper(vmetrics[0], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
+    # def wandb_logger():
+    #     d = {}
+    #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
+    #         d["train_"+name] = loss.get_epoch_error()
+    #     for name, loss in zip(["seq_acc", "tree_acc"], vmetrics):
+    #         d["valid_"+name] = loss.get_epoch_error()
+    #     wandb.log(d)
+    t_max = epochs
+    optim = get_optim(tagger, lr, enclrmul, wreg)
+    print(f"Total number of updates: {t_max} .")
+    if cosinelr:
+        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
+    else:
+        lr_schedule = q.sched.Linear(steps=warmup) >> 1.
+    lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
+
+    trainbatch = partial(q.train_batch, gradient_accumulation_steps=gradacc,
+                                        on_before_optim_step=[lambda : clipgradnorm(_m=tagger, _norm=gradnorm)])
+
+    trainepoch = partial(q.train_epoch, model=tagmodel,
+                                        dataloader=tdl,
+                                        optim=optim,
+                                        losses=tmetrics,
+                                        device=device,
+                                        _train_batch=trainbatch,
+                                        on_end=[lambda: lr_schedule.step()])
+
+    trainseqepoch = partial(q.test_epoch,
+                         model=decodermodel,
+                         losses=tseqmetrics,
+                         dataloader=tdl_seq,
+                         device=device)
+
+    validepoch = partial(q.test_epoch,
+                         model=decodermodel,
+                         losses=vmetrics,
+                         dataloader=vdl_seq,
+                         device=device,
+                         on_end=[lambda: eyt.on_epoch_end()])
+
+    tt.tick("training")
+    q.run_training(run_train_epoch=trainepoch,
+                   run_valid_epoch=[trainseqepoch, validepoch],
+                   max_epochs=epochs,
+                   check_stop=[lambda: eyt.check_stop()],
+                   validinter=validinter)
+    tt.tock("done training")
 
 
 if __name__ == '__main__':
     # test_multi_celoss()
     # test_tensors_to_tree()
     # try_tree_insertion_model_decode()
-    try_tree_insertion_model_tagger()
-    # q.argprun(run)
+    # try_tree_insertion_model_tagger()
+    # try_real_tree_insertion_model_tagger()
+    q.argprun(run)

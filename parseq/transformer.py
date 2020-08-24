@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
+from transformers import PretrainedConfig
 from transformers.configuration_t5 import T5Config
 from transformers.file_utils import DUMMY_INPUTS, DUMMY_MASK, add_start_docstrings, add_start_docstrings_to_callable
 from transformers.modeling_utils import PreTrainedModel, prune_linear_layer
@@ -24,6 +25,91 @@ logger = logging.getLogger(__name__)
 # - torch.nn.Module for the layers and
 # - PreTrainedModel for the models (it-self a sub-class of torch.nn.Module)
 ####################################################
+
+
+class TransformerConfig(PretrainedConfig):
+    r"""
+        :class:`~transformers.T5Config` is the configuration class to store the configuration of a
+        `T5Model`.
+
+
+        Arguments:
+            vocab_size_or_config_json_file: Vocabulary size of `inputs_ids` in `T5Model`.
+            hidden_size: Size of the encoder layers and the pooler layer.
+            num_hidden_layers: Number of hidden layers in the Transformer encoder.
+            num_attention_heads: Number of attention heads for each attention layer in
+                the Transformer encoder.
+            intermediate_size: The size of the "intermediate" (i.e., feed-forward)
+                layer in the Transformer encoder.
+            hidden_act: The non-linear activation function (function or string) in the
+                encoder and pooler. If string, "gelu", "relu", "swish" and "gelu_new" are supported.
+            hidden_dropout_prob: The dropout probabilitiy for all fully connected
+                layers in the embeddings, encoder, and pooler.
+            attention_probs_dropout_prob: The dropout ratio for the attention
+                probabilities.
+            max_position_embeddings: The maximum sequence length that this model might
+                ever be used with. Typically set this to something large just in case
+                (e.g., 512 or 1024 or 2048).
+            type_vocab_size: The vocabulary size of the `token_type_ids` passed into
+                `T5Model`.
+            initializer_factor: A factor for initializing all weight matrices (should be kept to 1.0, used for initialization testing).
+            layer_norm_eps: The epsilon used by LayerNorm.
+    """
+    # pretrained_config_archive_map = T5_PRETRAINED_CONFIG_ARCHIVE_MAP
+    model_type = "transformer"
+
+    def __init__(
+        self,
+        vocab_size=32128,
+        n_positions=512,
+        d_model=512,
+        d_kv=64,
+        d_ff=2048,
+        num_layers=6,
+        num_heads=8,
+        relative_attention_num_buckets=32,
+        dropout_rate=0.1,
+        layer_norm_epsilon=1e-6,
+        initializer_factor=1.0,
+        is_encoder_decoder=True,
+        pad_token_id=0,
+        eos_token_id=1,
+        use_causal_mask=True,       # use causal mask in decoder blocks
+        **kwargs
+    ):
+        super().__init__(
+            pad_token_id=pad_token_id, eos_token_id=eos_token_id, is_encoder_decoder=is_encoder_decoder, **kwargs,
+        )
+        self.vocab_size = vocab_size
+        self.n_positions = n_positions
+        self.d_model = d_model
+        self.d_kv = d_kv
+        self.d_ff = d_ff
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.relative_attention_num_buckets = relative_attention_num_buckets
+        self.dropout_rate = dropout_rate
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self.initializer_factor = initializer_factor
+        self.use_causal_mask = use_causal_mask
+
+    @property
+    def max_position_embeddings(self):
+        return self.n_positions
+
+    @property
+    def hidden_size(self):
+        return self.d_model
+
+    @property
+    def num_attention_heads(self):
+        return self.num_heads
+
+    @property
+    def num_hidden_layers(self):
+        return self.num_layers
+
+
 FACTOR = 1.
 
 
@@ -49,6 +135,7 @@ class TransformerLayerNorm(nn.Module):
 class TransformerDenseReluDense(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.config = config
         self.wi = nn.Linear(config.d_model, config.d_ff, bias=False)
         self.wo = nn.Linear(config.d_ff, config.d_model, bias=False)
         self.dropout = nn.Dropout(config.dropout_rate)
@@ -88,6 +175,7 @@ class TransformerLayerFF(nn.Module):
 class TransformerAttention(nn.Module):
     def __init__(self, config: TransformerConfig, has_relative_attention_bias=False):
         super().__init__()
+        self.config = config
         self.is_decoder = config.is_decoder
         self.has_relative_attention_bias = has_relative_attention_bias
 
@@ -465,7 +553,9 @@ class TransformerPreTrainedModel(PreTrainedModel):
         a simple interface for downloading and loading pretrained models.
     """
 
-    config_class = TransformerConfig
+    config_class = T5Config
+    # pretrained_model_archive_map = T5_PRETRAINED_MODEL_ARCHIVE_MAP
+    # load_tf_weights = load_tf_weights_in_t5
     base_model_prefix = "transformer"
 
     @property
@@ -484,10 +574,10 @@ class TransformerPreTrainedModel(PreTrainedModel):
         factor = self.config.initializer_factor  # Used for testing weights initialization
         if isinstance(module, TransformerLayerNorm):
             module.weight.data.fill_(factor * 1.0)
-        elif isinstance(module, (TransformerModel, T5ForConditionalGeneration)):
-            # Mesh TensorFlow embeddings initialization
-            # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L1624
-            module.shared.weight.data.normal_(mean=0.0, std=factor * 1.0)
+        # elif isinstance(module, (TransformerModel, T5ForConditionalGeneration)):
+        # #     Mesh TensorFlow embeddings initialization
+        #     # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L1624
+        #     module.shared.weight.data.normal_(mean=0.0, std=factor * 1.0)
         elif isinstance(module, TransformerDenseReluDense):
             # Mesh TensorFlow FF initialization
             # See https://github.com/tensorflow/mesh/blob/master/mesh_tensorflow/transformer/transformer_layers.py#L56
@@ -675,6 +765,49 @@ class TransformerStack(TransformerPreTrainedModel):
             outputs = outputs + (all_attentions,)
         return outputs  # last-layer hidden state, (presents,) (all hidden states), (all attentions)
 
+    def get_extended_attention_mask(self, attention_mask: torch.Tensor, input_shape: tuple, device: torch.device):
+        """Makes broadcastable attention mask and causal mask so that future and maked tokens are ignored.
+
+        Arguments:
+            attention_mask: torch.Tensor with 1 indicating tokens to ATTEND to
+            input_shape: tuple, shape of input_ids
+            device: torch.Device, usually self.device
+
+        Returns:
+            torch.Tensor with dtype of attention_mask.dtype
+        """
+        # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
+        # ourselves in which case we just need to make it broadcastable to all heads.
+        if attention_mask.dim() == 3:
+            extended_attention_mask = attention_mask[:, None, :, :]
+        elif attention_mask.dim() == 2:
+            # Provided a padding mask of dimensions [batch_size, seq_length]
+            # - if the model is a decoder, apply a causal mask in addition to the padding mask
+            # - if the model is an encoder, make the mask broadcastable to [batch_size, num_heads, seq_length, seq_length]
+            if self.config.is_decoder and self.config.use_causal_mask:
+                batch_size, seq_length = input_shape
+                seq_ids = torch.arange(seq_length, device=device)
+                causal_mask = seq_ids[None, None, :].repeat(batch_size, seq_length, 1) <= seq_ids[None, :, None]
+                # causal and attention masks must have same type with pytorch version < 1.3
+                causal_mask = causal_mask.to(attention_mask.dtype)
+                extended_attention_mask = causal_mask[:, None, :, :] * attention_mask[:, None, None, :]
+            else:
+                extended_attention_mask = attention_mask[:, None, None, :]
+        else:
+            raise ValueError(
+                "Wrong shape for input_ids (shape {}) or attention_mask (shape {})".format(
+                    input_shape, attention_mask.shape
+                )
+            )
+
+        # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
+        # masked positions, this operation will create a tensor which is 0.0 for
+        # positions we want to attend and -10000.0 for masked positions.
+        # Since we are adding it to the raw scores before the softmax, this is
+        # effectively the same as removing these entirely.
+        extended_attention_mask = extended_attention_mask.to(dtype=self.dtype)  # fp16 compatibility
+        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+        return extended_attention_mask
 
 T5_START_DOCSTRING = r"""    The T5 model was proposed in
     `Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer`_
@@ -867,3 +1000,195 @@ class TransformerModel(TransformerPreTrainedModel):
 
         return decoder_outputs + encoder_outputs
 
+#
+# @add_start_docstrings("""T5 Model with a `language modeling` head on top. """, T5_START_DOCSTRING)
+# class T5ForConditionalGeneration(T5PreTrainedModel):
+#     def __init__(self, config):
+#         super().__init__(config)
+#         self.model_dim = config.d_model
+#
+#         self.shared = nn.Embedding(config.vocab_size, config.d_model)
+#
+#         encoder_config = copy.deepcopy(config)
+#         self.encoder = TransformerStack(encoder_config, self.shared)
+#
+#         decoder_config = copy.deepcopy(config)
+#         decoder_config.is_decoder = True
+#         self.decoder = TransformerStack(decoder_config, self.shared)
+#
+#         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
+#
+#         self.init_weights()
+#
+#     def get_input_embeddings(self):
+#         return self.shared
+#
+#     def set_input_embeddings(self, new_embeddings):
+#         self.shared = new_embeddings
+#         self.encoder.set_input_embeddings(new_embeddings)
+#         self.decoder.set_input_embeddings(new_embeddings)
+#
+#     def get_output_embeddings(self):
+#         return self.lm_head
+#
+#     def get_encoder(self):
+#         return self.encoder
+#
+#     def get_decoder(self):
+#         return self.decoder
+#
+#     @add_start_docstrings_to_callable(T5_INPUTS_DOCSTRING)
+#     def forward(
+#         self,
+#         input_ids=None,
+#         attention_mask=None,
+#         encoder_outputs=None,
+#         decoder_input_ids=None,
+#         decoder_attention_mask=None,
+#         decoder_past_key_value_states=None,
+#         use_cache=True,
+#         lm_labels=None,
+#         inputs_embeds=None,
+#         decoder_inputs_embeds=None,
+#         head_mask=None,
+#     ):
+#         r"""
+#         lm_labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`, defaults to :obj:`None`):
+#                 Labels for computing the sequence classification/regression loss.
+#                 Indices should be in :obj:`[-100, 0, ..., config.vocab_size - 1]`.
+#                 All labels set to ``-100`` are ignored (masked), the loss is only
+#                 computed for labels in ``[0, ..., config.vocab_size]``
+#
+#     Returns:
+#         :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.T5Config`) and inputs.
+#         loss (:obj:`torch.FloatTensor` of shape :obj:`(1,)`, `optional`, returned when :obj:`lm_label` is provided):
+#             Classification loss (cross entropy).
+#         prediction_scores (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length, config.vocab_size)`)
+#             Prediction scores of the language modeling head (scores for each vocabulary token before SoftMax).
+#             If `past_key_value_states` is used only the last prediction_scores of the sequences of shape :obj:`(batch_size, 1, hidden_size)` is output.
+#         decoder_past_key_value_states (:obj:`tuple(tuple(torch.FloatTensor))` of length :obj:`config.n_layers` with each tuple having 4 tensors of shape :obj:`(batch_size, num_heads, sequence_length, embed_size_per_head)`, `optional`, returned when ``use_cache=True``):
+#             Contains pre-computed key and value hidden-states of the attention blocks.
+#             Can be used to speed up sequential decoding (see `decoder_past_key_value_states` input).
+#             Note that when using `decoder_past_key_value_states`, the model only outputs the last `prediction_score` of the sequence of shape :obj:`(batch_size, 1, config.vocab_size)`.
+#         hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_hidden_states=True``):
+#             Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
+#             of shape :obj:`(batch_size, sequence_length, hidden_size)`.
+#             Hidden-states of the model at the output of each layer plus the initial embedding outputs.
+#         attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_attentions=True``):
+#             Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
+#             :obj:`(batch_size, num_heads, sequence_length, sequence_length)`.
+#             Attentions weights after the attention softmax, used to compute the weighted average in the self-attention.
+#
+#     Examples::
+#
+#         from transformers import T5Tokenizer, T5ForConditionalGeneration
+#
+#         tokenizer = T5Tokenizer.from_pretrained('t5-small')
+#         model = T5ForConditionalGeneration.from_pretrained('t5-small')
+#         input_ids = tokenizer.encode("Hello, my dog is cute", return_tensors="pt")  # Batch size 1
+#         outputs = model(input_ids=input_ids, decoder_input_ids=input_ids, lm_labels=input_ids)
+#         loss, prediction_scores = outputs[:2]
+#
+#         tokenizer = T5Tokenizer.from_pretrained('t5-small')
+#         model = T5ForConditionalGeneration.from_pretrained('t5-small')
+#         input_ids = tokenizer.encode("summarize: Hello, my dog is cute", return_tensors="pt")  # Batch size 1
+#         outputs = model.generate(input_ids)
+#         """
+#
+#         # Encode if needed (training, first prediction pass)
+#         if encoder_outputs is None:
+#             # Convert encoder inputs in embeddings if needed
+#             encoder_outputs = self.encoder(
+#                 input_ids=input_ids, attention_mask=attention_mask, inputs_embeds=inputs_embeds, head_mask=head_mask
+#             )
+#
+#         hidden_states = encoder_outputs[0]
+#
+#         if lm_labels is not None and decoder_input_ids is None and decoder_inputs_embeds is None:
+#             # get decoder inputs from shifting lm labels to the right
+#             decoder_input_ids = self._shift_right(lm_labels)
+#
+#         # If decoding with past key value states, only the last tokens
+#         # should be given as an input
+#         if decoder_past_key_value_states is not None:
+#             assert lm_labels is None, "Decoder should not use cached key value states when training."
+#             if decoder_input_ids is not None:
+#                 decoder_input_ids = decoder_input_ids[:, -1:]
+#             if decoder_inputs_embeds is not None:
+#                 decoder_inputs_embeds = decoder_inputs_embeds[:, -1:]
+#
+#         # Decode
+#         decoder_outputs = self.decoder(
+#             input_ids=decoder_input_ids,
+#             attention_mask=decoder_attention_mask,
+#             inputs_embeds=decoder_inputs_embeds,
+#             past_key_value_states=decoder_past_key_value_states,
+#             encoder_hidden_states=hidden_states,
+#             encoder_attention_mask=attention_mask,
+#             head_mask=head_mask,
+#             use_cache=use_cache,
+#         )
+#
+#         # insert decoder past at right place
+#         # to speed up decoding
+#         if use_cache is True:
+#             past = ((encoder_outputs, decoder_outputs[1]),)
+#             decoder_outputs = decoder_outputs[:1] + past + decoder_outputs[2:]
+#
+#         sequence_output = decoder_outputs[0]
+#         # Rescale output before projecting on vocab
+#         # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/transformer.py#L586
+#         sequence_output = sequence_output * (self.model_dim ** -0.5)
+#         lm_logits = self.lm_head(sequence_output)
+#
+#         decoder_outputs = (lm_logits,) + decoder_outputs[1:]  # Add hidden states and attention if they are here
+#         if lm_labels is not None:
+#             loss_fct = CrossEntropyLoss(ignore_index=-100)
+#             loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), lm_labels.view(-1))
+#             # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
+#             decoder_outputs = (loss,) + decoder_outputs
+#
+#         return decoder_outputs + encoder_outputs
+#
+#     def prepare_inputs_for_generation(self, input_ids, past, attention_mask, use_cache, **kwargs):
+#         assert past is not None, "past has to be defined for encoder_outputs"
+#
+#         # first step
+#         if len(past) < 2:
+#             encoder_outputs, decoder_past_key_value_states = past, None
+#         else:
+#             encoder_outputs, decoder_past_key_value_states = past[0], past[1]
+#
+#         return {
+#             "decoder_input_ids": input_ids,
+#             "decoder_past_key_value_states": decoder_past_key_value_states,
+#             "encoder_outputs": encoder_outputs,
+#             "attention_mask": attention_mask,
+#             "use_cache": use_cache,
+#         }
+#
+#     def _reorder_cache(self, past, beam_idx):
+#         # if decoder past is not included in output
+#         # speedy decoding is disabled and no need to reorder
+#         if len(past) < 2:
+#             logger.warning("You might want to consider setting `use_cache=True` to speed up decoding")
+#             return past
+#
+#         decoder_past = past[1]
+#         past = (past[0],)
+#         reordered_decoder_past = ()
+#         for layer_past_states in decoder_past:
+#             # get the correct batch idx from layer past batch dim
+#             # batch dim of `past` is at 2nd position
+#             reordered_layer_past_states = ()
+#             for layer_past_state in layer_past_states:
+#                 # need to set correct `past` for each of the four key / value states
+#                 reordered_layer_past_states = reordered_layer_past_states + (
+#                     layer_past_state.index_select(0, beam_idx),
+#                 )
+#
+#             assert reordered_layer_past_states[0].shape == layer_past_states[0].shape
+#             assert len(reordered_layer_past_states) == len(layer_past_states)
+#
+#             reordered_decoder_past = reordered_decoder_past + (reordered_layer_past_states,)
+#         return past + (reordered_decoder_past,)
