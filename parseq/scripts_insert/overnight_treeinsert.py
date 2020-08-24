@@ -658,7 +658,7 @@ def simplify_tree_for_eval(x:Tree):   # removes @SLOT@'s and @START@
 class TreeInsertionDecoder(torch.nn.Module):
     def __init__(self, tagger:TreeInsertionTagger, seqenc:SequenceEncoder=None,
                  maxsteps:int=50, max_tree_size:int=100,
-                 mode:str="parallel:100%", **kw):
+                 mode:str="parallel:100%", device=None, **kw):
         super(TreeInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
         self.maxsteps = maxsteps
@@ -673,6 +673,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         """
         maxsteps = maxsteps if maxsteps is not None else self.maxsteps
         mode = mode if mode is not None else self.mode
+        device = next(self.parameters()).device
 
         trees, context = self.tagger.get_init_state(inpseqs=inpseqs, y_in=y_in)
 
@@ -686,8 +687,8 @@ class TreeInsertionDecoder(torch.nn.Module):
                 seq = self.seqenc.convert(fltoks, return_what="tensor")
                 tensors.append(seq)
                 masks.append(torch.tensor(openmask))
-            seq = torch.stack(q.pad_tensors(tensors, 0), 0)
-            openmask = torch.stack(q.pad_tensors(masks, 0, False), 0)
+            seq = torch.stack(q.pad_tensors(tensors, 0), 0).to(device)
+            openmask = torch.stack(q.pad_tensors(masks, 0, False), 0).to(device)
 
             #  feed to tagger,
             probs = self.tagger(seq, openmask=openmask, **context)
@@ -810,7 +811,7 @@ class TransformerTagger(TreeInsertionTagger):
                 enc=None, encmask=None):
         padmask = (tokens != 0)
         embs = self.emb(tokens)
-        posembs = self.posemb(torch.arange(tokens.size(1)))[None]
+        posembs = self.posemb(torch.arange(tokens.size(1)))[None].to(tokens.device)
         embs = embs + posembs
         ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
