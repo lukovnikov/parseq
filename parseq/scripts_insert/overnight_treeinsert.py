@@ -731,7 +731,7 @@ class TreeInsertionDecoder(torch.nn.Module):
             ret["treeacc"] = [float(are_equal_trees(gold_tree, pred_tree,
                             orderless=ORDERLESS, unktoken="@UNK@"))
                    for gold_tree, pred_tree in zip(goldtrees, predtrees)]
-            ret["treeacc"] = sum(ret["treeacc"]) / len(ret["treeacc"])
+            ret["treeacc"] = torch.tensor(ret["treeacc"]).to(device)
 
         return ret, trees
 
