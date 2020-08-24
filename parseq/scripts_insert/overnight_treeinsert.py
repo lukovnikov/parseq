@@ -828,8 +828,8 @@ class TransformerTagger(TreeInsertionTagger):
                 enc=None, encmask=None):
         padmask = (tokens != 0)
         embs = self.emb(tokens)
-        posembs = self.posemb(torch.arange(tokens.size(1), device=tokens.device))[None]
-        embs = embs + posembs
+        # posembs = self.posemb(torch.arange(tokens.size(1), device=tokens.device))[None]
+        # embs = embs + posembs
         ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask)
