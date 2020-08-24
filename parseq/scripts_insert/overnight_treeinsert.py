@@ -158,11 +158,11 @@ def mark_for_execution(x:ATree, mode:str="single"):
     return x
 
 
-def execute_chosen_actions(x:ATree):
+def execute_chosen_actions(x:ATree, _budget=[np.infty]):
     if x._chosen_action is None or not x.is_open:
         iterr = list(x)
         for xe in iterr:
-            execute_chosen_actions(xe)
+            execute_chosen_actions(xe, _budget=_budget)
         return x
     if x.label() == "(":    # insert a parent before current parent
         pass
@@ -172,9 +172,12 @@ def execute_chosen_actions(x:ATree):
         if x._chosen_action == "@CLOSE@":
             del x.parent[child_number_of(x)]
             # if parentheses became empty, remove
+            _budget[0] += 1
             if len(x.parent) == 2 and x.parent[0].label() == "(" and x.parent[1].label() == ")":
                 x.parent[:] = []
         else:
+            if _budget[0] <= 0:
+                return x
             if isinstance(x._chosen_action, Tree):
                 x.set_label(x._chosen_action.label())
             else:
@@ -192,13 +195,17 @@ def execute_chosen_actions(x:ATree):
             x.parent.insert(child_number_of(x), leftslot)
             x.parent.insert(child_number_of(x)+1, rightslot)
 
+            _budget[0] -= 2
+
             # slot = ATree("@SLOT@", [], is_open=True)
             # slot.parent = x
             # x[:] = []
     else:
         iterr = list(x)
         for xe in iterr:
-            execute_chosen_actions(xe)
+            execute_chosen_actions(xe, _budget=_budget)
+        if _budget[0] <= 0:
+            return x
         if x._chosen_action == "@CLOSE@":
             x.is_open = False       # this node can't generate children anymore
         else:
@@ -226,6 +233,7 @@ def execute_chosen_actions(x:ATree):
             rightslot = ATree("@SLOT@", [], is_open=True)
             rightslot.parent = newnode.parent
             x[:] = [leftslot, newnode, rightslot]
+            _budget[0] -= 3
     return x
 
 
@@ -508,8 +516,6 @@ def test_losses():
 
 
 def build_atree(x:Iterable[str], open:Iterable[bool]=None, chosen_actions:Iterable[str]=None):
-    # TODO: update code to build normal trees
-    print(x)
     open = [False for _ in x] if open is None else open
     chosen_actions = [None for _ in x] if chosen_actions is None else chosen_actions
     nodes = []
@@ -706,7 +712,8 @@ class TreeInsertionDecoder(torch.nn.Module):
             for tree in trees:
                 if tree_size(tree) < self.max_tree_size:
                     tree = mark_for_execution(tree, mode=mode)
-                    tree = execute_chosen_actions(tree)
+                    budget = [self.max_tree_size - tree_size(tree)]
+                    tree = execute_chosen_actions(tree, _budget=budget)
                 trees_.append(tree)
 
             trees = trees_
@@ -727,6 +734,16 @@ class TreeInsertionDecoder(torch.nn.Module):
             ret["treeacc"] = sum(ret["treeacc"]) / len(ret["treeacc"])
 
         return ret, trees
+
+
+class TreeInsertionDecoderTrainModel(torch.nn.Module):
+    def __init__(self, model:TreeInsertionDecoder, **kw):
+        super(TreeInsertionDecoderTrainModel, self).__init__(**kw)
+        self.model = model
+
+    def forward(self, inpseqs:torch.Tensor=None, gold:torch.Tensor=None, **kw):
+        ret = self.model(inpseqs, None, gold)
+        return ret
 
 
 def try_tree_insertion_model_decode(batsize=10):
@@ -893,7 +910,8 @@ def run(lr=0.001,
     # model
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
     tagmodel = TreeInsertionTaggerModel(tagger)
-    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=10, max_tree_size=200)
+    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=100)
+    decodermodel = TreeInsertionDecoderTrainModel(decodermodel)
 
     # batch = next(iter(tdl))
     # out = tagmodel(*batch)
@@ -967,6 +985,8 @@ def run(lr=0.001,
                          dataloader=vdl_seq,
                          device=device,
                          on_end=[lambda: eyt.on_epoch_end()])
+
+    validepoch()        # TODO: remove this after debugging
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
