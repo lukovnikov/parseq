@@ -361,20 +361,23 @@ class TransformerAttention(nn.Module):
 
         scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
 
-        if position_bias is None:
-            if not self.has_relative_attention_bias:
-                raise ValueError("No position_bias provided and no weights to compute position_bias")
-            position_bias = self.compute_bias(real_qlen, klen)
+        if position_bias == False:
+            pass
+        else:
+            if position_bias is None:
+                if not self.has_relative_attention_bias:
+                    raise ValueError("No position_bias provided and no weights to compute position_bias")
+                position_bias = self.compute_bias(real_qlen, klen)
 
-            # if key and values are already calculated
-            # we want only the last query position bias
-            if past_key_value_state is not None:
-                position_bias = position_bias[:, :, -1:, :]
+                # if key and values are already calculated
+                # we want only the last query position bias
+                if past_key_value_state is not None:
+                    position_bias = position_bias[:, :, -1:, :]
 
-            if mask is not None:
-                position_bias = position_bias + mask  # (bs, n_heads, qlen, klen)
+                if mask is not None:
+                    position_bias = position_bias + mask  # (bs, n_heads, qlen, klen)
 
-        scores += position_bias
+            scores += position_bias
         weights = F.softmax(scores.float(), dim=-1).type_as(scores)  # (bs, n_heads, qlen, klen)
         weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
 
@@ -450,7 +453,7 @@ class TransformerLayerCrossAttention(nn.Module):
             norm_x,
             mask=attention_mask,
             kv=kv,
-            position_bias=position_bias,
+            position_bias=False,
             head_mask=head_mask,
             past_key_value_state=past_key_value_state,
             use_cache=use_cache,
