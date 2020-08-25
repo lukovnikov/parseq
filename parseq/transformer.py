@@ -285,7 +285,7 @@ class TransformerAttention(nn.Module):
         relative_position = memory_position - context_position  # shape (qlen, klen)
         rp_bucket = self._relative_position_bucket(
             relative_position,  # shape (qlen, klen)
-            bidirectional=not self.is_decoder,
+            bidirectional=not (self.is_decoder and self.config.use_causal_mask),
             num_buckets=self.relative_attention_num_buckets,
         )
         rp_bucket = rp_bucket.to(self.relative_attention_bias.weight.device)
