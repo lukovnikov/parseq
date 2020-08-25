@@ -74,7 +74,9 @@ class TransformerConfig(PretrainedConfig):
         is_encoder_decoder=True,
         pad_token_id=0,
         eos_token_id=1,
+        use_position_bias=False,
         use_causal_mask=True,       # use causal mask in decoder blocks
+        use_relative_position=False,
         **kwargs
     ):
         super().__init__(
@@ -91,7 +93,9 @@ class TransformerConfig(PretrainedConfig):
         self.dropout_rate = dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.initializer_factor = initializer_factor
+        self.use_position_bias = use_position_bias
         self.use_causal_mask = use_causal_mask
+        self.use_relative_position = use_relative_position
 
     @property
     def max_position_embeddings(self):
@@ -113,25 +117,6 @@ class TransformerConfig(PretrainedConfig):
 FACTOR = 1.
 
 
-class TransformerLayerNorm(nn.Module):
-    def __init__(self, hidden_size, eps=1e-6):
-        """ Construct a layernorm module in the T5 style
-            No bias and no substraction of mean.
-        """
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size))
-        self.variance_epsilon = eps
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        self.weight.data.fill_(FACTOR * 1.0)
-
-    def forward(self, x):
-        variance = x.pow(2).mean(-1, keepdim=True)
-        x = x / torch.sqrt(variance + self.variance_epsilon)
-        return self.weight * x
-
-
 class TransformerDenseReluDense(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -149,7 +134,6 @@ class TransformerDenseReluDense(nn.Module):
         if hasattr(self.wo, "bias") and self.wo.bias is not None:
             self.wo.bias.data.zero_()
 
-
     def forward(self, hidden_states):
         h = self.wi(hidden_states)
         h = F.relu(h)
@@ -162,7 +146,7 @@ class TransformerLayerFF(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.DenseReluDense = TransformerDenseReluDense(config)
-        self.layer_norm = TransformerLayerNorm(config.d_model, eps=config.layer_norm_epsilon)
+        self.layer_norm = torch.nn.LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
 
     def forward(self, hidden_states):
@@ -177,6 +161,8 @@ class TransformerAttention(nn.Module):
         super().__init__()
         self.config = config
         self.is_decoder = config.is_decoder
+        self.use_position_bias = config.use_position_bias
+        self.use_relative_position = config.use_relative_position
         self.has_relative_attention_bias = has_relative_attention_bias
 
         self.output_attentions = config.output_attentions
@@ -195,6 +181,10 @@ class TransformerAttention(nn.Module):
 
         if self.has_relative_attention_bias:
             self.relative_attention_bias = nn.Embedding(self.relative_attention_num_buckets, self.n_heads)
+
+        if self.use_relative_position:
+            self.relative_position_embedding = nn.Embedding(self.relative_attention_num_buckets, self.d_model)
+
         self.pruned_heads = set()
 
         self.reset_parameters()
@@ -293,6 +283,40 @@ class TransformerAttention(nn.Module):
         values = values.permute([2, 0, 1]).unsqueeze(0)  # shape (1, num_heads, qlen, klen)
         return values
 
+    def compute_relative_position_scores(self, q, klen):
+        """
+        :param q:   (batsize, numheads, qlen, headdim)
+        :param klen:
+        :return:
+        """
+        qlen = q.size(2)
+        bs = q.size(0)
+        relposembs = self.relative_position_embedding.weight
+        relposembs = self.k(relposembs)
+        relposembs = relposembs.view(-1, self.n_heads, self.d_kv).transpose(0, 1)
+        # (numheads, numrelpos, dim_per_head)
+
+        # compute the relative position based score using the queries
+        relposscores = torch.einsum("bhsd,hzd->bhsz", q, relposembs)
+        # (batsize, numheads, qlen, numrelpos)
+
+        # compute relative positions in buckets
+        context_position = torch.arange(qlen, dtype=torch.long)[:, None]
+        memory_position = torch.arange(klen, dtype=torch.long)[None, :]
+        relative_position = memory_position - context_position  # shape (qlen, klen)
+        rp_bucket = self._relative_position_bucket(
+            relative_position,  # shape (qlen, klen)
+            bidirectional=not (self.is_decoder and self.config.use_causal_mask),
+            num_buckets=self.relative_attention_num_buckets,
+        )
+        rp_bucket = rp_bucket.to(self.relative_position_embedding.weight.device)
+        # (qlen, klen)
+        rp_bucket = rp_bucket[None, None].repeat(bs, self.n_heads, 1, 1)
+
+        scores = relposscores.gather(-1, rp_bucket)
+        return scores
+
+
     def forward(
         self,
         input,
@@ -362,7 +386,7 @@ class TransformerAttention(nn.Module):
 
         scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
 
-        if use_position_bias:
+        if use_position_bias and self.use_position_bias:
             if position_bias is None:
                 if not self.has_relative_attention_bias:
                     raise ValueError("No position_bias provided and no weights to compute position_bias")
@@ -377,6 +401,15 @@ class TransformerAttention(nn.Module):
                     position_bias = position_bias + mask  # (bs, n_heads, qlen, klen)
 
             scores += position_bias
+
+        if use_position_bias and self.use_relative_position:    # only use rel pos if not cross-attention
+            relative_position_scores = self.compute_relative_position_scores(q, klen)
+            if past_key_value_state is not None:
+                relative_position_scores = relative_position_scores[:, :, -1:, :]
+            if mask is not None:
+                relative_position_scores = relative_position_scores + mask
+            scores += relative_position_scores
+
         weights = F.softmax(scores.float(), dim=-1).type_as(scores)  # (bs, n_heads, qlen, klen)
         weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
 
@@ -402,7 +435,7 @@ class TransformerLayerSelfAttention(nn.Module):
     def __init__(self, config, has_relative_attention_bias=False):
         super().__init__()
         self.SelfAttention = TransformerAttention(config, has_relative_attention_bias=has_relative_attention_bias)
-        self.layer_norm = TransformerLayerNorm(config.d_model, eps=config.layer_norm_epsilon)
+        self.layer_norm = torch.nn.LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
 
     def forward(
@@ -433,7 +466,7 @@ class TransformerLayerCrossAttention(nn.Module):
     def __init__(self, config, has_relative_attention_bias=False):
         super().__init__()
         self.EncDecAttention = TransformerAttention(config, has_relative_attention_bias=has_relative_attention_bias)
-        self.layer_norm = TransformerLayerNorm(config.d_model, eps=config.layer_norm_epsilon)
+        self.layer_norm = torch.nn.LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
 
     def forward(
@@ -575,34 +608,34 @@ class TransformerPreTrainedModel(PreTrainedModel):
     def _init_weights(self, module):
         """ Initialize the weights """
         factor = self.config.initializer_factor  # Used for testing weights initialization
-        if isinstance(module, TransformerLayerNorm):
-            module.weight.data.fill_(factor * 1.0)
+        # if isinstance(module, torch.nn.LayerNorm):
+        #     module.weight.data.fill_(factor * 1.0)
         # elif isinstance(module, (TransformerModel, T5ForConditionalGeneration)):
         # #     Mesh TensorFlow embeddings initialization
         #     # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L1624
         #     module.shared.weight.data.normal_(mean=0.0, std=factor * 1.0)
-        elif isinstance(module, TransformerDenseReluDense):
-            # Mesh TensorFlow FF initialization
-            # See https://github.com/tensorflow/mesh/blob/master/mesh_tensorflow/transformer/transformer_layers.py#L56
-            # and https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L89
-            module.wi.weight.data.normal_(mean=0.0, std=factor * ((self.config.d_model) ** -0.5))
-            if hasattr(module.wi, "bias") and module.wi.bias is not None:
-                module.wi.bias.data.zero_()
-            module.wo.weight.data.normal_(mean=0.0, std=factor * ((self.config.d_ff) ** -0.5))
-            if hasattr(module.wo, "bias") and module.wo.bias is not None:
-                module.wo.bias.data.zero_()
-        elif isinstance(module, TransformerAttention):
-            # Mesh TensorFlow attention initialization to avoid scaling before softmax
-            # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/attention.py#L136
-            d_model = self.config.d_model
-            d_kv = self.config.d_kv
-            n_heads = self.config.num_heads
-            module.q.weight.data.normal_(mean=0.0, std=factor * ((d_model * d_kv) ** -0.5))
-            module.k.weight.data.normal_(mean=0.0, std=factor * (d_model ** -0.5))
-            module.v.weight.data.normal_(mean=0.0, std=factor * (d_model ** -0.5))
-            module.o.weight.data.normal_(mean=0.0, std=factor * ((n_heads * d_kv) ** -0.5))
-            if module.has_relative_attention_bias:
-                module.relative_attention_bias.weight.data.normal_(mean=0.0, std=factor * ((d_model) ** -0.5))
+        # if isinstance(module, TransformerDenseReluDense):
+        #     # Mesh TensorFlow FF initialization
+        #     # See https://github.com/tensorflow/mesh/blob/master/mesh_tensorflow/transformer/transformer_layers.py#L56
+        #     # and https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L89
+        #     module.wi.weight.data.normal_(mean=0.0, std=factor * ((self.config.d_model) ** -0.5))
+        #     if hasattr(module.wi, "bias") and module.wi.bias is not None:
+        #         module.wi.bias.data.zero_()
+        #     module.wo.weight.data.normal_(mean=0.0, std=factor * ((self.config.d_ff) ** -0.5))
+        #     if hasattr(module.wo, "bias") and module.wo.bias is not None:
+        #         module.wo.bias.data.zero_()
+        # elif isinstance(module, TransformerAttention):
+        #     # Mesh TensorFlow attention initialization to avoid scaling before softmax
+        #     # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/attention.py#L136
+        #     d_model = self.config.d_model
+        #     d_kv = self.config.d_kv
+        #     n_heads = self.config.num_heads
+        #     module.q.weight.data.normal_(mean=0.0, std=factor * ((d_model * d_kv) ** -0.5))
+        #     module.k.weight.data.normal_(mean=0.0, std=factor * (d_model ** -0.5))
+        #     module.v.weight.data.normal_(mean=0.0, std=factor * (d_model ** -0.5))
+        #     module.o.weight.data.normal_(mean=0.0, std=factor * ((n_heads * d_kv) ** -0.5))
+        #     if module.has_relative_attention_bias:
+        #         module.relative_attention_bias.weight.data.normal_(mean=0.0, std=factor * ((d_model) ** -0.5))
 
     def _shift_right(self, input_ids):
         decoder_start_token_id = self.config.decoder_start_token_id
@@ -638,10 +671,10 @@ class TransformerStack(TransformerPreTrainedModel):
         self.block = nn.ModuleList(
             [TransformerBlock(config, has_relative_attention_bias=bool(i == 0)) for i in range(config.num_layers)]
         )
-        self.final_layer_norm = TransformerLayerNorm(config.d_model, eps=config.layer_norm_epsilon)
+        self.final_layer_norm = torch.nn.LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
 
-        self.init_weights()
+        # self.init_weights()
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -663,7 +696,7 @@ class TransformerStack(TransformerPreTrainedModel):
         past_key_value_states=None,
         use_cache=False,
     ):
-
+        # assert(use_cache == False)
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
@@ -811,6 +844,7 @@ class TransformerStack(TransformerPreTrainedModel):
         extended_attention_mask = extended_attention_mask.to(dtype=self.dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         return extended_attention_mask
+
 
 T5_START_DOCSTRING = r"""    The T5 model was proposed in
     `Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer`_

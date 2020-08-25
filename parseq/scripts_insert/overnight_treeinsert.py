@@ -794,7 +794,8 @@ class TransformerTagger(TreeInsertionTagger):
         self.vocabsize = vocab.number_of_ids()
         self.dim = dim
         config = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
-                                   num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
+                                   num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
+                                   use_relative_position=True)
 
         self.emb = torch.nn.Embedding(config.vocab_size, config.d_model)
         self.posemb = torch.nn.Embedding(maxpos, config.d_model)
@@ -832,7 +833,7 @@ class TransformerTagger(TreeInsertionTagger):
         # embs = embs + posembs
         ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
-                     encoder_attention_mask=encmask)
+                     encoder_attention_mask=encmask, use_cache=False)
         logits = self.out(ret[0])
         logits = logits + torch.log(self.vocab_mask[None, None, :])
         return logits
