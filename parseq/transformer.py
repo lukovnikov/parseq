@@ -303,6 +303,7 @@ class TransformerAttention(nn.Module):
         head_mask=None,
         query_length=None,
         use_cache=False,
+        use_position_bias=True,
     ):
         """
         Self-attention (if kv is None) or attention over source sentence (provided by kv).
@@ -361,9 +362,7 @@ class TransformerAttention(nn.Module):
 
         scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
 
-        if position_bias == False:
-            pass
-        else:
+        if use_position_bias:
             if position_bias is None:
                 if not self.has_relative_attention_bias:
                     raise ValueError("No position_bias provided and no weights to compute position_bias")
@@ -453,11 +452,12 @@ class TransformerLayerCrossAttention(nn.Module):
             norm_x,
             mask=attention_mask,
             kv=kv,
-            position_bias=False,
+            position_bias=position_bias,
             head_mask=head_mask,
             past_key_value_state=past_key_value_state,
             use_cache=use_cache,
             query_length=query_length,
+            use_position_bias=False,
         )
         y = attention_output[0]
         layer_output = hidden_states + self.dropout(y)
