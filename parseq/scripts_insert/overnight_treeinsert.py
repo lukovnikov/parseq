@@ -137,7 +137,7 @@ def assign_gold_actions(x:ATree):
     return x
 
 
-def mark_for_execution(x:ATree, mode:str="single"):
+def mark_for_execution(x:ATree, mode:str="single"):     # "all", "parallel:100%", "single", "ltr"
     """ Marks only a selection of all nodes in the given tree for execution
         by setting ._chosen_action of other nodes to None """
     nodes_with_actions = []
@@ -153,7 +153,21 @@ def mark_for_execution(x:ATree, mode:str="single"):
         for node in nodes_with_actions:
             if node is not selected:
                 node._chosen_action = None
-    elif mode == "all" or mode == "parallel:100%":
+    elif mode == "ltr":
+        queue = [x]
+        nextnode = None
+        while len(queue) > 0:
+            first = queue.pop(0)
+            if first.is_open:
+                if len(first) == 0 and first.label() != "@SLOT@":     # if leaf but not closed --> this is the next real actions
+                    nextnode = first
+            else:
+                first._chosen_action = None
+            if nextnode is not None:
+                first._chosen_action = None
+
+            queue = first[:] + queue
+    elif mode == "full" or mode == "all" or mode == "parallel:100%":
         pass
     return x
 
@@ -237,7 +251,7 @@ def execute_chosen_actions(x:ATree, _budget=[np.infty]):
     return x
 
 
-def uncomplete_tree_parallel(x:ATree):
+def uncomplete_tree_parallel(x:ATree, mode="full"):
     """ Input is tuple (nl, fl, split)
         Output is a randomly uncompleted tree,
             every node annotated whether it's terminated and what actions are good at that node
@@ -255,7 +269,7 @@ def uncomplete_tree_parallel(x:ATree):
     y = assign_gold_actions(y)
     choices = [deepcopy(y)]         # !! can't cache because different choices !
     while not all_terminated(y):
-        y = mark_for_execution(y, mode="single")
+        y = mark_for_execution(y, mode=mode)
         y = execute_chosen_actions(y)
         y = assign_gold_actions(y)
         choices.append(deepcopy(y))
@@ -309,7 +323,7 @@ def extract_info(x:ATree, onlytokens=False, nogold=False):
         return tokens, openmask, golds
 
 
-def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=False):
+def load_ds(domain="restaurants", mode="full", nl_mode="bert-base-uncased", trainonvalid=False):
     """
     Creates a dataset of examples which have
     * NL question and tensor
@@ -355,7 +369,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=Fals
 
     def mapper(x):
         nl = x[0]
-        fl = uncomplete_tree_parallel(x[1])
+        fl = uncomplete_tree_parallel(x[1], mode=mode)
         fltoks, openmask, gold_sets = extract_info(fl)
 
         seq = seqenc.convert(fltoks, return_what="tensor")
@@ -886,6 +900,7 @@ def run(lr=0.001,
         validinter=3,
         seed=87646464,
         gpu=-1,
+        datamode="full",    # "full", "ltr" (left to right)
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -897,7 +912,7 @@ def run(lr=0.001,
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants")
+    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants", mode=datamode)
     tt.tock("loaded")
 
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=collate_fn)
