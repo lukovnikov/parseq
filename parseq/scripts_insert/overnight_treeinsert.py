@@ -208,11 +208,11 @@ def mark_for_execution(x:ATree, mode:str="single"):     # "all", "parallel:100%"
     return x
 
 
-def execute_chosen_actions(x:ATree, _budget=[np.infty]):
+def execute_chosen_actions(x:ATree, _budget=[np.infty], mode="full"):
     if x._chosen_action is None or not x.is_open:
         iterr = list(x)
         for xe in iterr:
-            execute_chosen_actions(xe, _budget=_budget)
+            execute_chosen_actions(xe, _budget=_budget, mode=mode)
         return x
     if x.label() == "(":    # insert a parent before current parent
         pass
@@ -242,18 +242,17 @@ def execute_chosen_actions(x:ATree, _budget=[np.infty]):
             rightslot = ATree("@SLOT@", [], is_open=True)
             rightslot.parent = x.parent
 
-            x.parent.insert(child_number_of(x), leftslot)
+            if mode != "ltr":
+                x.parent.insert(child_number_of(x), leftslot)
+                _budget[0] -= 1
+
             x.parent.insert(child_number_of(x)+1, rightslot)
+            _budget[0] -= 1
 
-            _budget[0] -= 2
-
-            # slot = ATree("@SLOT@", [], is_open=True)
-            # slot.parent = x
-            # x[:] = []
     else:
         iterr = list(x)
         for xe in iterr:
-            execute_chosen_actions(xe, _budget=_budget)
+            execute_chosen_actions(xe, _budget=_budget, mode=mode)
         if _budget[0] <= 0:
             return x
         if x._chosen_action == "@CLOSE@":
@@ -268,6 +267,8 @@ def execute_chosen_actions(x:ATree, _budget=[np.infty]):
                 newnode = ATree(x._chosen_action, [])
 
             newnode.is_open = True
+            if mode == "ltr":
+                x.is_open = False
 
             if isinstance(x._chosen_action, Tree):
                 newnode.align = x._chosen_action
@@ -282,8 +283,13 @@ def execute_chosen_actions(x:ATree, _budget=[np.infty]):
 
             rightslot = ATree("@SLOT@", [], is_open=True)
             rightslot.parent = newnode.parent
-            x[:] = [leftslot, newnode, rightslot]
-            _budget[0] -= 3
+
+            if mode != "ltr":
+                x[:] = [leftslot, newnode, rightslot]
+                _budget[0] -= 3
+            else:
+                x[:] = [newnode, rightslot]
+                _budget[0] -= 2
     return x
 
 
@@ -306,7 +312,7 @@ def uncomplete_tree_parallel(x:ATree, mode="full"):
     choices = [deepcopy(y)]         # !! can't cache because different choices !
     while not all_terminated(y):
         y = mark_for_execution(y, mode=mode)
-        y = execute_chosen_actions(y)
+        y = execute_chosen_actions(y, mode=mode)
         y = assign_gold_actions(y, mode=mode)
         y = adjust_gold(y, mode=mode)
         choices.append(deepcopy(y))
@@ -715,7 +721,7 @@ def simplify_tree_for_eval(x:Tree):   # removes @SLOT@'s and @START@
 class TreeInsertionDecoder(torch.nn.Module):
     def __init__(self, tagger:TreeInsertionTagger, seqenc:SequenceEncoder=None,
                  maxsteps:int=50, max_tree_size:int=100,
-                 mode:str="parallel:100%", device=None, **kw):
+                 mode:str="full", device=None, **kw):
         super(TreeInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
         self.maxsteps = maxsteps
@@ -764,7 +770,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                 if tree_size(tree) < self.max_tree_size:
                     tree = mark_for_execution(tree, mode=mode)
                     budget = [self.max_tree_size - tree_size(tree)]
-                    tree = execute_chosen_actions(tree, _budget=budget)
+                    tree = execute_chosen_actions(tree, _budget=budget, mode=mode)
                 trees_.append(tree)
 
             trees = trees_
