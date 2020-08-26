@@ -73,10 +73,15 @@ def child_number_of(x:ATree):
     return None     # not a child
 
 
-def assign_gold_actions(x:ATree):
+def assign_gold_actions(x:ATree, mode="default"):
+    """
+    :param x:
+    :param mode:    "default" (all) or "ltr" (only first one)
+    :return:
+    """
     """ assigns actions that can be taken at every node of the given tree """
     for xe in x:
-        assign_gold_actions(xe)
+        assign_gold_actions(xe, mode=mode)
     if not x.is_open:
         x.gold_actions = []
     else:
@@ -94,7 +99,7 @@ def assign_gold_actions(x:ATree):
                 leftsibling_nr = None
             else:
                 leftsibling = x.parent[xpos - 1]
-                leftsibling_nr = child_number_of(leftsibling.align) + 1
+                leftsibling_nr = child_number_of(leftsibling.align)
             if xpos == len(x.parent) - 1:
                 rightsibling = None
                 rightsibling_nr = None
@@ -105,17 +110,24 @@ def assign_gold_actions(x:ATree):
             if leftsibling is None and rightsibling is None:
                 # slot is only child, can use any descendant
                 x.gold_actions = x.parent.align.descendants
+                if mode == "ltr" and len(x.gold_actions) > 0:
+                    x.gold_actions = [x.gold_actions[0]]
                 assert(False)   # should not happen if deletion actions are not used
             else:
                 p = leftsibling.align.parent if leftsibling is not None else rightsibling.align.parent
-                slicer = slice(leftsibling_nr, rightsibling_nr)
+                slicefrom = leftsibling_nr + 1 if leftsibling_nr is not None else None
+                slicer = slice(slicefrom, rightsibling_nr)
                 x.gold_actions = p[slicer]
+                if mode == "ltr" and len(x.gold_actions) > 0:
+                    x.gold_actions = [x.gold_actions[0]]
             if len(x.gold_actions) == 0:
                 x.gold_actions = ["@CLOSE@"]
         else:       # not a sibling slot ("@SLOT@"), not a "(" or ")"
             x.gold_actions = []
             if len(x) == 0:
                 x.gold_actions = list(x.align._descendants)
+                if mode == "ltr" and len(x.gold_actions) > 0:
+                    x.gold_actions = [x.gold_actions[0]]
             else:
                 realchildren = [xe for xe in x if xe.label() != "@SLOT@"]
                 childancestors = realchildren[0].align._ancestors[::-1]
@@ -126,6 +138,8 @@ def assign_gold_actions(x:ATree):
                         break
                     else:
                         x.gold_actions.append(ancestor)
+                if mode == "ltr" and len(x.gold_actions) > 0:
+                    x.gold_actions = [x.gold_actions[0]]
         if len(x.gold_actions) == 0 and x.is_open:
             x.gold_actions = ["@CLOSE@"]
 
@@ -134,6 +148,27 @@ def assign_gold_actions(x:ATree):
         x._chosen_action = random.choice(x.gold_actions)
     else:
         x._chosen_action = None
+    return x
+
+
+def adjust_gold(x:ATree, mode:str="single"):
+    if mode == "ltr":
+        queue = [x]
+        nextnode = None
+        while len(queue) > 0:
+            first = queue.pop(0)
+            if nextnode is not None:
+                first.gold_actions = []
+            else:
+                if first.is_open:
+                    if len(
+                            first) == 0 and first.label() != "@SLOT@":  # if leaf but not closed --> this is the next real actions
+                        nextnode = first
+                else:
+                    assert(first.gold_actions == [])
+                    first.gold_actions = []
+
+            queue = first[:] + queue
     return x
 
 
@@ -158,13 +193,14 @@ def mark_for_execution(x:ATree, mode:str="single"):     # "all", "parallel:100%"
         nextnode = None
         while len(queue) > 0:
             first = queue.pop(0)
-            if first.is_open:
-                if len(first) == 0 and first.label() != "@SLOT@":     # if leaf but not closed --> this is the next real actions
-                    nextnode = first
-            else:
-                first._chosen_action = None
             if nextnode is not None:
                 first._chosen_action = None
+            else:
+                if first.is_open:
+                    if len(first) == 0 and first.label() != "@SLOT@":     # if leaf but not closed --> this is the next real actions
+                        nextnode = first
+                else:
+                    first._chosen_action = None
 
             queue = first[:] + queue
     elif mode == "full" or mode == "all" or mode == "parallel:100%":
@@ -266,12 +302,13 @@ def uncomplete_tree_parallel(x:ATree, mode="full"):
     y.is_open = True
 
     i = 0
-    y = assign_gold_actions(y)
+    y = assign_gold_actions(y, mode=mode)
     choices = [deepcopy(y)]         # !! can't cache because different choices !
     while not all_terminated(y):
         y = mark_for_execution(y, mode=mode)
         y = execute_chosen_actions(y)
-        y = assign_gold_actions(y)
+        y = assign_gold_actions(y, mode=mode)
+        y = adjust_gold(y, mode=mode)
         choices.append(deepcopy(y))
         i += 1
 
@@ -926,7 +963,8 @@ def run(lr=0.001,
     # model
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
     tagmodel = TreeInsertionTaggerModel(tagger)
-    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=100)
+    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=100,
+                                        mode=datamode)
     decodermodel = TreeInsertionDecoderTrainModel(decodermodel)
 
     # batch = next(iter(tdl))
