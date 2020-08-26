@@ -871,6 +871,10 @@ class TransformerTagger(TreeInsertionTagger):
 
         self.bertname = bertname
         self.bert_model = BertModel.from_pretrained(self.bertname)
+        def set_dropout(m:torch.nn.Module):
+            if isinstance(m, torch.nn.Dropout):
+                m.p = dropout
+        self.bert_model.apply(set_dropout)
 
         self.adapter = None
         if self.bert_model.config.hidden_size != decoder_config.d_model:
