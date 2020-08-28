@@ -19,7 +19,7 @@ FACTOR = 1.
 
 
 class TransformerAttentionConv(MessagePassing):
-    def __init__(self, config: TransformerConfig, use_edge_features=False):
+    def __init__(self, config: TransformerConfig):
         super().__init__(node_dim=0)
         self.config = config
         # self.is_decoder = config.is_decoder
@@ -40,10 +40,6 @@ class TransformerAttentionConv(MessagePassing):
         self.dropout = torch.nn.Dropout(config.dropout_rate)
         self.attn_dropout = torch.nn.Dropout(config.attention_dropout_rate)
 
-        self.use_edge_features = use_edge_features
-        if use_edge_features:
-            pass    # TODO: initialize gatedcatmaps for key and values
-
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -55,13 +51,11 @@ class TransformerAttentionConv(MessagePassing):
         self.v.weight.data.normal_(mean=0.0, std=FACTOR * (d_model ** -0.5))
         self.o.weight.data.normal_(mean=0.0, std=FACTOR * ((n_heads * d_kv) ** -0.5))
 
-    def forward(self, edge_index: Adj, x:torch.Tensor=None, kv:torch.Tensor=None, edge_features:torch.Tensor=None):
+    def forward(self, edge_index: Adj, x:torch.Tensor=None, kv:torch.Tensor=None):
         H, C = self.n_heads, self.d_kv
 
         assert x.dim() == 2, 'Static graphs not supported in `GATConv`.'
         assert kv.dim() == 2
-        if self.use_edge_features == False and edge_features is not None:
-            print("WARNING: edge features are not used!")
 
         q = self.layer_norm(x)
 
@@ -84,13 +78,84 @@ class TransformerAttentionConv(MessagePassing):
                 k_j: Tensor,    # query
                 v_j: Tensor,    # value
                 edge_index_i: Tensor,
+                edge_index_j: Tensor) -> Tensor:
+        attention_scores = (q_i * k_j).sum(-1)
+        alpha = softmax(attention_scores, edge_index_i)
+        alpha = self.attn_dropout(alpha)
+        ret = v_j * alpha.unsqueeze(-1)  # weigh the incoming states by alphas
+        return ret
+
+
+class RelationalTransformerAttentionConv(MessagePassing):
+    def __init__(self, config: TransformerConfig):
+        super().__init__(node_dim=0)
+        self.config = config
+        # self.is_decoder = config.is_decoder
+
+        self.d_model = config.d_model
+        self.d_kv = config.d_kv
+        self.n_heads = config.num_heads
+        self.dropout = config.dropout_rate
+        self.inner_dim = self.n_heads * self.d_kv
+
+        # Mesh TensorFlow initialization to avoid scaling before softmax
+        self.q = torch.nn.Linear(self.d_model, self.inner_dim, bias=False)
+
+        # TODO: initialize gatedcatmaps together with the k's and v's ??
+        self.k = torch.nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.v = torch.nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.o = torch.nn.Linear(self.inner_dim, self.d_model, bias=False)
+
+        self.layer_norm = torch.nn.LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
+        self.dropout = torch.nn.Dropout(config.dropout_rate)
+        self.attn_dropout = torch.nn.Dropout(config.attention_dropout_rate)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        d_model = self.config.d_model
+        d_kv = self.config.d_kv
+        n_heads = self.config.num_heads
+        self.q.weight.data.normal_(mean=0.0, std=FACTOR * ((d_model * d_kv) ** -0.5))
+        self.k.weight.data.normal_(mean=0.0, std=FACTOR * (d_model ** -0.5))
+        self.v.weight.data.normal_(mean=0.0, std=FACTOR * (d_model ** -0.5))
+        self.o.weight.data.normal_(mean=0.0, std=FACTOR * ((n_heads * d_kv) ** -0.5))
+
+    def forward(self, edge_index: Adj, x:torch.Tensor=None, kv:torch.Tensor=None,
+                edge_features:torch.Tensor=None):
+        H, C = self.n_heads, self.d_kv
+
+        assert x.dim() == 2, 'Static graphs not supported in `GATConv`.'
+        assert kv.dim() == 2
+        if self.use_edge_features == False and edge_features is not None:
+            print("WARNING: edge features are not used!")
+
+        q = self.layer_norm(x)
+
+        q = self.q(q).view(q.size(0), H, C)
+        # TODO: do k and v mappings in message after/during edge features?
+        k = self.k(kv).view(kv.size(0), H, C)
+        v = self.v(kv).view(kv.size(0), H, C)
+
+        # propagate_type: (x: OptPairTensor, alpha: OptPairTensor)
+        out = self.propagate(edge_index, q=(None, q), k=(k, None), v=(v, None), edge_features=edge_features)
+
+        out = out.view(-1, self.n_heads * self.d_kv)
+
+        out = self.o(out)
+
+        out = x + self.dropout(out)
+        return out
+
+    def message(self,
+                q_i: Tensor,    # key
+                k_j: Tensor,    # query
+                v_j: Tensor,    # value
+                edge_index_i: Tensor,
                 edge_index_j: Tensor,
                 edge_features: torch.Tensor=None) -> Tensor:
-        if self.use_edge_features:
-            assert edge_features is not None, "'edge_features' can not be None if self.use_edge_features is True."
-            pass    # TODO: merge edge features into k_j's and v_j's before attention computation
-        else:
-            assert edge_features is None, "'edge_features' are given but not used because self.use_edge_features is False. "
+        assert edge_features is not None, "'edge_features' can not be None if self.use_edge_features is True."
+        pass    # TODO: merge edge features into k_j's and v_j's before attention computation
         attention_scores = (q_i * k_j).sum(-1)
         alpha = softmax(attention_scores, edge_index_i)
         alpha = self.attn_dropout(alpha)
@@ -101,15 +166,44 @@ class TransformerAttentionConv(MessagePassing):
 class TransformerConv(MessagePassing):
     def __init__(self,
                  config:TransformerConfig,
-                 use_self_edge_features=False,
-                 use_ctx_edge_features=False,
                  **kw):
         super().__init__()
         self.is_decoder = config.is_decoder
         self.layer = torch.nn.ModuleList()
-        self.layer.append(TransformerAttentionConv(config, use_edge_features=use_self_edge_features))
+        self.layer.append(TransformerAttentionConv(config))
         if self.is_decoder:
-            self.layer.append(TransformerAttentionConv(config, use_edge_features=use_ctx_edge_features))
+            self.layer.append(TransformerAttentionConv(config))
+
+        self.layer.append(TransformerLayerFF(config))
+
+    def forward(self,
+                states: torch.Tensor,
+                edge_index: Adj,
+                ctx_states=None,
+                ctx_edge_index: Adj=None,
+                **kwargs):
+
+        self_attn_out = self.layer[0](edge_index, x=states, kv=states)
+        states = self_attn_out
+        if self.is_decoder:
+            assert(ctx_states is not None and ctx_edge_index is not None)
+            ctx_attn_out = self.layer[1](ctx_edge_index, x=states, kv=ctx_states)
+            states = ctx_attn_out
+
+        states = self.layer[-1](states)
+        return states
+
+
+class RelationalTransformerConv(MessagePassing):
+    def __init__(self,
+                 config:TransformerConfig,
+                 **kw):
+        super().__init__()
+        self.is_decoder = config.is_decoder
+        self.layer = torch.nn.ModuleList()
+        self.layer.append(RelationalTransformerAttentionConv(config))
+        if self.is_decoder:
+            self.layer.append(TransformerAttentionConv(config))
 
         self.layer.append(TransformerLayerFF(config))
 
@@ -119,10 +213,9 @@ class TransformerConv(MessagePassing):
                 edge_features: torch.Tensor=None,
                 ctx_states=None,
                 ctx_edge_index: Adj=None,
-                ctx_edge_features: torch.Tensor=None,
                 **kwargs):
 
-        self_attn_out = self.layer[0](edge_index, x=states, kv=states)
+        self_attn_out = self.layer[0](edge_index, x=states, kv=states, edge_features=edge_features)
         states = self_attn_out
         if self.is_decoder:
             assert(ctx_states is not None and ctx_edge_index is not None)
