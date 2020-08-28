@@ -69,6 +69,7 @@ class TransformerConfig(PretrainedConfig):
         num_heads=8,
         relative_attention_num_buckets=32,
         dropout_rate=0.1,
+        attention_dropout_rate=0.0,
         layer_norm_epsilon=1e-6,
         initializer_factor=1.0,
         is_encoder_decoder=True,
@@ -91,6 +92,7 @@ class TransformerConfig(PretrainedConfig):
         self.num_heads = num_heads
         self.relative_attention_num_buckets = relative_attention_num_buckets
         self.dropout_rate = dropout_rate
+        self.attention_dropout_rate = attention_dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.initializer_factor = initializer_factor
         self.use_position_bias = use_position_bias
@@ -170,7 +172,7 @@ class TransformerAttention(nn.Module):
         self.d_model = config.d_model
         self.d_kv = config.d_kv
         self.n_heads = config.num_heads
-        self.dropout = config.dropout_rate
+        self.dropout = config.attention_dropout_rate
         self.inner_dim = self.n_heads * self.d_kv
 
         # Mesh TensorFlow initialization to avoid scaling before softmax
