@@ -966,7 +966,7 @@ def run(lr=0.001,
     # model
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
     tagmodel = TreeInsertionTaggerModel(tagger)
-    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=100,
+    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=20,
                                         mode=datamode)
     decodermodel = TreeInsertionDecoderTrainModel(decodermodel)
 
