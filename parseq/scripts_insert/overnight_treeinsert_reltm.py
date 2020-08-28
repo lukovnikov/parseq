@@ -766,15 +766,21 @@ class TreeInsertionDecoder(torch.nn.Module):
                      in zip(list(seq), list(openmask), list(best))]
 
             #  and execute,
+            anysmaller = False
             trees_ = []
             for tree in trees:
                 if tree_size(tree) < self.max_tree_size:
+                    anysmaller = True
                     tree = mark_for_execution(tree, mode=mode)
                     budget = [self.max_tree_size - tree_size(tree)]
                     tree = execute_chosen_actions(tree, _budget=budget, mode=mode)
                 trees_.append(tree)
 
             trees = trees_
+
+            if not anysmaller:
+                break
+
             i += 1
             #  then repeat until all terminated
 
@@ -966,7 +972,7 @@ def run(lr=0.001,
     # model
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
     tagmodel = TreeInsertionTaggerModel(tagger)
-    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=20,
+    decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=30,
                                         mode=datamode)
     decodermodel = TreeInsertionDecoderTrainModel(decodermodel)
 
@@ -1043,7 +1049,7 @@ def run(lr=0.001,
                          device=device,
                          on_end=[lambda: eyt.on_epoch_end()])
 
-    # validepoch()        # TODO: remove this after debugging
+    validepoch()        # TODO: remove this after debugging
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
