@@ -947,7 +947,7 @@ def run(lr=0.001,
         validinter=3,
         seed=87646464,
         gpu=-1,
-        datamode="full",    # "full", "ltr" (left to right)
+        datamode="full",    # "full", "ltr" (left to right), "single"
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
