@@ -539,11 +539,12 @@ class Recall(torch.nn.Module):
         _mask = zeromask * mask.float()
 
         seqrecall = ((bestingold >= 1) | ~(_mask >= 1)).all(-1).float()
+        anyrecall = ((bestingold >= 1) & (_mask >= 1)).any(-1).float()
 
         elemrecall = bestingold.sum(-1)
         b = _mask.sum(-1).clamp_min(1e-6)
         elemrecall = elemrecall / b
-        return elemrecall, seqrecall
+        return elemrecall, seqrecall, anyrecall
 
 
 def test_losses():
@@ -662,8 +663,8 @@ class TreeInsertionTaggerModel(torch.nn.Module):
         probs = self.tagger(tokens, openmask=openmask, **ctx)    # (batsize, seqlen, vocsize)
 
         ce = self.ce(probs, gold, mask=openmask)
-        elemrecall, seqrecall = self.recall(probs, gold, mask=openmask)
-        return {"loss": ce, "ce": ce, "elemrecall": elemrecall, "seqrecall": seqrecall}, probs
+        elemrecall, seqrecall, anyrecall = self.recall(probs, gold, mask=openmask)
+        return {"loss": ce, "ce": ce, "elemrecall": elemrecall, "allrecall": seqrecall, "anyrecall": anyrecall}, probs
 
 
 def try_tree_insertion_model_tagger(batsize=10):
@@ -980,7 +981,7 @@ def run(lr=0.001,
     # batch = next(iter(tdl))
     # out = tagmodel(*batch)
 
-    tmetrics = make_array_of_metrics("loss", "elemrecall", "seqrecall", reduction="mean")
+    tmetrics = make_array_of_metrics("loss", "elemrecall", "allrecall", "anyrecall", reduction="mean")
     tseqmetrics = make_array_of_metrics("treeacc", reduction="mean")
     vmetrics = make_array_of_metrics("treeacc", reduction="mean")
     xmetrics = make_array_of_metrics("treeacc", reduction="mean")
