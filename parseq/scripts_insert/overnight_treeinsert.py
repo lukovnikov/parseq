@@ -172,7 +172,7 @@ def adjust_gold(x:ATree, mode:str="single"):
     return x
 
 
-def mark_for_execution(x:ATree, mode:str="single"):     # "all", "parallel:100%", "single", "ltr"
+def mark_for_execution(x:ATree, mode:str="single"):     # "all", "parallel:100%", "single", "ltr", "entropy-single"
     """ Marks only a selection of all nodes in the given tree for execution
         by setting ._chosen_action of other nodes to None """
     nodes_with_actions = []
@@ -185,6 +185,11 @@ def mark_for_execution(x:ATree, mode:str="single"):     # "all", "parallel:100%"
 
     if mode == "single":    # leave only one node for execution
         selected = random.choice(nodes_with_actions)
+        for node in nodes_with_actions:
+            if node is not selected:
+                node._chosen_action = None
+    elif mode == "entropy-single":
+        selected = sorted(nodes_with_actions, key=lambda x: x._entropy)[0]
         for node in nodes_with_actions:
             if node is not selected:
                 node._chosen_action = None
@@ -573,11 +578,12 @@ def test_losses():
     print(l)
 
 
-def build_atree(x:Iterable[str], open:Iterable[bool]=None, chosen_actions:Iterable[str]=None):
+def build_atree(x:Iterable[str], open:Iterable[bool]=None, chosen_actions:Iterable[str]=None, entropies=None):
     open = [False for _ in x] if open is None else open
     chosen_actions = [None for _ in x] if chosen_actions is None else chosen_actions
+    entropies = [0 for _ in x] if entropies is None else entropies
     nodes = []
-    for xe, opene, chosen_action in zip(x, open, chosen_actions):
+    for xe, opene, chosen_action, entropy in zip(x, open, chosen_actions, entropies):
         if xe == "(" or xe == ")":
             nodes.append(xe)
             assert(opene == False)
@@ -585,6 +591,7 @@ def build_atree(x:Iterable[str], open:Iterable[bool]=None, chosen_actions:Iterab
         else:
             a = ATree(xe, [], is_open=opene)
             a._chosen_action = chosen_action
+            a._entropy = entropy
             nodes.append(a)
 
     buffer = list(nodes)
@@ -611,7 +618,7 @@ def build_atree(x:Iterable[str], open:Iterable[bool]=None, chosen_actions:Iterab
     return stack[0]
 
 
-def tensors_to_tree(x, openmask=None, actions=None, D:Vocab=None):
+def tensors_to_tree(x, openmask=None, actions=None, D:Vocab=None, entropies=None):
     # x: 1D int tensor
     x = list(x.detach().cpu().numpy())
     x = [D(xe) for xe in x]
@@ -623,8 +630,10 @@ def tensors_to_tree(x, openmask=None, actions=None, D:Vocab=None):
         actions = list(actions.detach().cpu().numpy())
         actions = [D(xe) for xe in actions]
         actions = [xe for xe in actions if xe != D.padtoken]
+    if entropies is not None:
+        entropies = list(entropies.detach().cpu().numpy())
 
-    tree = build_atree(x, open=openmask, chosen_actions=actions)
+    tree = build_atree(x, open=openmask, chosen_actions=actions, entropies=entropies)
     return tree
 
 
@@ -759,11 +768,13 @@ class TreeInsertionDecoder(torch.nn.Module):
 
             #  get best predictions,
             _, best = probs.max(-1)
+            entropies = torch.softmax(probs, -1).clamp_min(1e-6)
+            entropies = - (entropies * torch.log(entropies)).sum(-1)
 
             #  convert to trees,
-            trees = [tensors_to_tree(seqe, openmask=openmaske, actions=beste, D=self.seqenc.vocab)
-                     for seqe, openmaske, beste
-                     in zip(list(seq), list(openmask), list(best))]
+            trees = [tensors_to_tree(seqe, openmask=openmaske, actions=beste, D=self.seqenc.vocab, entropies=entropies_e)
+                     for seqe, openmaske, beste, entropies_e
+                     in zip(list(seq), list(openmask), list(best), list(entropies))]
 
             #  and execute,
             trees_ = []
@@ -948,11 +959,11 @@ def run(lr=0.001,
         validinter=3,
         seed=87646464,
         gpu=-1,
-        mode="full",    # "full", "ltr" (left to right), "single"
+        datamode="single",
+        decodemode="single",    # "full", "ltr" (left to right), "single", "entropy-single"
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
-    datamode = "single" if mode in ("full", "single") else mode
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -976,7 +987,7 @@ def run(lr=0.001,
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
     tagmodel = TreeInsertionTaggerModel(tagger)
     decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=30,
-                                        mode=mode)
+                                        mode=decodemode)
     decodermodel = TreeInsertionDecoderTrainModel(decodermodel)
 
     # batch = next(iter(tdl))
