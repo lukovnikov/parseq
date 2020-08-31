@@ -1084,7 +1084,7 @@ def run(lr=0.001,
             question = " ".join(nltok.convert_ids_to_tokens(inps[0][i][j]))
             out_toks = flenc.vocab.tostr(inps[1][i][j].detach().cpu().numpy()).split(" ")
 
-            iscorrect = False
+            iscorrect = True
 
             lines = []
             for k, out_tok in enumerate(out_toks):
