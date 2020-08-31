@@ -1070,8 +1070,8 @@ def run(lr=0.001,
     doexit = False
     for i in range(len(inps[0])):
         for j in range(len(inps[0][i])):
-            ui = input("next? >>>")
-            if ui == "q":
+            ui = input("next? (ENTER for next/anything else to exit)>>>")
+            if ui != "":
                 doexit = True
                 break
             print(" ".join(nltok.convert_ids_to_tokens(inps[0][i][j])))
