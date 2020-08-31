@@ -948,10 +948,11 @@ def run(lr=0.001,
         validinter=3,
         seed=87646464,
         gpu=-1,
-        datamode="full",    # "full", "ltr" (left to right), "single"
+        mode="full",    # "full", "ltr" (left to right), "single"
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
+    datamode = "single" if mode in ("full", "single") else mode
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -975,7 +976,7 @@ def run(lr=0.001,
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
     tagmodel = TreeInsertionTaggerModel(tagger)
     decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=50, max_tree_size=30,
-                                        mode=datamode)
+                                        mode=mode)
     decodermodel = TreeInsertionDecoderTrainModel(decodermodel)
 
     # batch = next(iter(tdl))
@@ -1060,6 +1061,42 @@ def run(lr=0.001,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
     tt.tock("done training")
+
+    # inspect predictions
+    inps, outs = q.eval_loop(tagmodel, vdl, device=device)
+
+    # print(outs)
+
+    doexit = False
+    for i in range(len(inps[0])):
+        for j in range(len(inps[0][i])):
+            ui = input("next? >>>")
+            if ui == "q":
+                doexit = True
+                break
+            print(" ".join(nltok.convert_ids_to_tokens(inps[0][i][j])))
+            out_toks = flenc.vocab.tostr(inps[1][i][j].detach().cpu().numpy()).split(" ")
+
+            for k, out_tok in enumerate(out_toks):
+                gold_toks_for_k = inps[3][i][j][k].detach().cpu().nonzero()[:, 0]
+                if len(gold_toks_for_k) > 0:
+                    gold_toks_for_k = flenc.vocab.tostr(gold_toks_for_k).split(" ")
+                else:
+                    gold_toks_for_k = [""]
+
+                isopen = inps[2][i][j][k]
+                isopen = isopen.detach().cpu().item()
+
+                pred_tok = outs[1][i][j][k].max(-1)[1].detach().cpu().item()
+                pred_tok = flenc.vocab(pred_tok)
+
+                entropy = outs[1][i][j][k].clamp_min(1e-6)
+                entropy = -(entropy * torch.log(entropy)).sum().item()
+                print(f"{out_tok:25} [{isopen:1}] >> {pred_tok:25} ({entropy:.3f}) [{','.join(gold_toks_for_k)}]")
+
+        if doexit:
+            break
+
 
 
 if __name__ == '__main__':
