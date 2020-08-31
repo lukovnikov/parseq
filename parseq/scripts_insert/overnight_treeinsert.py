@@ -983,8 +983,9 @@ def run(lr=0.001,
     # out = tagmodel(*batch)
 
     tmetrics = make_array_of_metrics("loss", "elemrecall", "allrecall", "anyrecall", reduction="mean")
+    vmetrics = make_array_of_metrics("loss", "elemrecall", "allrecall", "anyrecall", reduction="mean")
     tseqmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    vmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    vseqmetrics = make_array_of_metrics("treeacc", reduction="mean")
     xmetrics = make_array_of_metrics("treeacc", reduction="mean")
 
     # region parameters
@@ -1011,7 +1012,7 @@ def run(lr=0.001,
     def clipgradnorm(_m=None, _norm=None):
         torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
 
-    eyt = q.EarlyStopper(vmetrics[0], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
+    eyt = q.EarlyStopper(vseqmetrics[0], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
     # def wandb_logger():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
@@ -1047,7 +1048,7 @@ def run(lr=0.001,
 
     validepoch = partial(q.test_epoch,
                          model=decodermodel,
-                         losses=vmetrics,
+                         losses=vseqmetrics,
                          dataloader=vdl_seq,
                          device=device,
                          on_end=[lambda: eyt.on_epoch_end()])
@@ -1063,6 +1064,12 @@ def run(lr=0.001,
     tt.tock("done training")
 
     # inspect predictions
+    validepoch = partial(q.test_epoch,
+                            model=tagmodel,
+                            losses=vmetrics,
+                            dataloader=vdl,
+                            device=device)
+    print(validepoch())
     inps, outs = q.eval_loop(tagmodel, vdl, device=device)
 
     # print(outs)
@@ -1090,7 +1097,7 @@ def run(lr=0.001,
                 pred_tok = outs[1][i][j][k].max(-1)[1].detach().cpu().item()
                 pred_tok = flenc.vocab(pred_tok)
 
-                entropy = outs[1][i][j][k].clamp_min(1e-6)
+                entropy = torch.softmax(outs[1][i][j][k], -1).clamp_min(1e-6)
                 entropy = -(entropy * torch.log(entropy)).sum().item()
                 print(f"{out_tok:25} [{isopen:1}] >> {pred_tok:25} ({entropy:.3f}) [{','.join(gold_toks_for_k)}]")
 
