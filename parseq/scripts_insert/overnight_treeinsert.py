@@ -1081,9 +1081,12 @@ def run(lr=0.001,
             if ui != "":
                 doexit = True
                 break
-            print(" ".join(nltok.convert_ids_to_tokens(inps[0][i][j])))
+            question = " ".join(nltok.convert_ids_to_tokens(inps[0][i][j]))
             out_toks = flenc.vocab.tostr(inps[1][i][j].detach().cpu().numpy()).split(" ")
 
+            iscorrect = False
+
+            lines = []
             for k, out_tok in enumerate(out_toks):
                 gold_toks_for_k = inps[3][i][j][k].detach().cpu().nonzero()[:, 0]
                 if len(gold_toks_for_k) > 0:
@@ -1097,9 +1100,17 @@ def run(lr=0.001,
                 pred_tok = outs[1][i][j][k].max(-1)[1].detach().cpu().item()
                 pred_tok = flenc.vocab(pred_tok)
 
+                pred_tok_correct = pred_tok in gold_toks_for_k or not isopen
+                if not pred_tok_correct:
+                    iscorrect = False
+
                 entropy = torch.softmax(outs[1][i][j][k], -1).clamp_min(1e-6)
                 entropy = -(entropy * torch.log(entropy)).sum().item()
-                print(f"{out_tok:25} [{isopen:1}] >> {pred_tok:25} ({entropy:.3f}) [{','.join(gold_toks_for_k)}]")
+                lines.append(f"{out_tok:25} [{isopen:1}] >> {f'{pred_tok} ({entropy:.3f})':35} {'!!' if not pred_tok_correct else '  '} [{','.join(gold_toks_for_k) if isopen else ''}]")
+
+            print(f"{question} {'!!WRONG!!' if not iscorrect else ''}")
+            for line in lines:
+                print(line)
 
         if doexit:
             break
