@@ -179,7 +179,7 @@ def mark_for_execution(x:ATree, mode:str="single"):     # "all", "parallel:100%"
     queue = [x]
     while len(queue) > 0:
         head = queue.pop(0)
-        if hasattr(head, "_chosen_action") and head._chosen_action is not None:
+        if head.is_open and hasattr(head, "_chosen_action") and head._chosen_action is not None:
             nodes_with_actions.append(head)
         queue += head[:]
 
