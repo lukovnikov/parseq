@@ -715,7 +715,7 @@ def try_tree_insertion_model_tagger(batsize=10):
 
         def get_init_state(self, inpseqs=None, y_in=None):
             batsize = inpseqs.size(0)
-            trees = [ATree("@START@", [])] * batsize
+            trees = [ATree("@START@", []) for _ in range(batsize)]
             return trees, {}
 
     cell = DummyTreeInsertionTagger(flenc.vocab)
@@ -854,7 +854,7 @@ def try_tree_insertion_model_decode(batsize=10):
 
         def get_init_state(self, inpseqs=None, y_in=None):
             batsize = inpseqs.size(0)
-            trees = [ATree("@START@", [])] * batsize
+            trees = [ATree("@START@", []) for _ in range(batsize)]
             return trees, {}
 
     cell = DummyTreeInsertionTagger(flenc.vocab)
@@ -931,7 +931,7 @@ class TransformerTagger(TreeInsertionTagger):
 
         # create trees
         batsize = inpseqs.size(0)
-        trees = [ATree("@START@", [])] * batsize
+        trees = [ATree("@START@", []) for _ in range(batsize)]
         return trees, {"enc": encs, "encmask": encmask}
 
 
