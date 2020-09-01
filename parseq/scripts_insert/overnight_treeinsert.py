@@ -183,6 +183,9 @@ def mark_for_execution(x:ATree, mode:str="single"):     # "all", "parallel:100%"
             nodes_with_actions.append(head)
         queue += head[:]
 
+    if len(nodes_with_actions) == 0:
+        return x
+
     if mode == "single":    # leave only one node for execution
         selected = random.choice(nodes_with_actions)
         for node in nodes_with_actions:
@@ -1070,7 +1073,7 @@ def run(lr=0.001,
                          device=device,
                          on_end=[lambda: eyt.on_epoch_end()])
 
-    # validepoch()        # TODO: remove this after debugging
+    validepoch()        # TODO: remove this after debugging
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
