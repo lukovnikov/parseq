@@ -120,7 +120,7 @@ def adjust_gold(x:ATree, mode:str="single"):
     return x
 
 
-def mark_for_execution(x:ATree, mode:str="random"):     # "all", "parallel:100%", "single", "ltr", "entropy-single"
+def mark_for_execution(x:ATree, mode:str="random", uniformfactor=0.3, entropylimit=0.01):     # "all", "parallel:100%", "single", "ltr", "entropy-single"
     """ Marks only a selection of all nodes in the given tree for execution
         by setting ._chosen_action of other nodes to None """
     nodes_with_actions = []
@@ -140,16 +140,38 @@ def mark_for_execution(x:ATree, mode:str="random"):     # "all", "parallel:100%"
             if node is not selected:
                 node._chosen_action = None
     elif mode == "leastentropy":
-        selected = sorted(nodes_with_actions, key=lambda x: x._entropy)[0]
+        selected = []
+        if entropylimit > 0.:
+            selected = [node for node in nodes_with_actions if node._entropy < entropylimit]
+        if len(selected) == 0:
+            selected = [sorted(nodes_with_actions, key=lambda x: x._entropy)[0]]
         for node in nodes_with_actions:
-            if node is not selected:
+            node_in_selected = False
+            for othernode in selected:
+                if node is othernode:
+                    node_in_selected = True
+                    break
+            if not node_in_selected:
                 node._chosen_action = None
     elif mode == "train-leastentropy":
-        entropies = torch.tensor([node._entropy for node in nodes_with_actions]).detach().cpu()
-        selected = torch.multinomial(1/entropies, 1).item()
-        selected = nodes_with_actions[selected]
+        selected = []
+        if entropylimit > 0.:
+            selected = [node for node in nodes_with_actions if node._entropy < entropylimit]
+        if len(selected) == 0:
+            do_random = random.random() < uniformfactor
+            if do_random:
+                selected = [random.choice(nodes_with_actions)]
+            else:
+                entropies = torch.tensor([node._entropy for node in nodes_with_actions]).detach().cpu()
+                selected = torch.multinomial(1/entropies, 1).item()
+                selected = [nodes_with_actions[selected]]
         for node in nodes_with_actions:
-            if node is not selected:
+            node_in_selected = False
+            for othernode in selected:
+                if node is othernode:
+                    node_in_selected = True
+                    break
+            if not node_in_selected:
                 node._chosen_action = None
     return x
 
@@ -409,6 +431,8 @@ class TreeInsertionDecoder(torch.nn.Module):
         self.ce = MultiCELoss()
         self.recall = Recall()
 
+        self.entropylimit = 0.
+
     def attach_info_to_tree(self, x:ATree, **kw):
         queue = ["(", x, ")"]
         i = 0
@@ -444,10 +468,13 @@ class TreeInsertionDecoder(torch.nn.Module):
                 trees[i].align = goldtrees[i]
 
         i = 0
-        # TODO: debug in test mode
+
         if self.training:
             trees = [assign_gold_actions(tree, mode=mode) for tree in trees]
         # choices = [deepcopy(trees)]
+        numsteps = [0 for _ in range(len(trees))]
+        treesizes = [0 for _ in range(len(trees))]
+        seqlens = [0 for _ in range(len(trees))]
         allmetrics = {}
         allmetrics["loss"] = []
         allmetrics["ce"] = []
@@ -461,16 +488,21 @@ class TreeInsertionDecoder(torch.nn.Module):
             seq = []
             openmask = []
             stepgold = []
-            for tree in trees:
+            for j, tree in enumerate(trees):
+                if not all_terminated(tree):
+                    numsteps[j] += 1
+                treesizes[j] = tree_size(tree)
+
                 fltoks, openmask_e, stepgold_e = extract_info(tree)
+                seqlens[j] = len(fltoks)
                 seq_e = self.seqenc.convert(fltoks, return_what="tensor")
                 seq.append(seq_e)
                 openmask.append(torch.tensor(openmask_e))
                 if self.training:
                     stepgold_e_tensor = torch.zeros(seq_e.size(0), self.seqenc.vocab.number_of_ids())
-                    for i, stepgold_e_i in enumerate(stepgold_e):
+                    for j, stepgold_e_i in enumerate(stepgold_e):
                         for golde in stepgold_e_i:
-                            stepgold_e_tensor[i, self.seqenc.vocab[golde]] = 1
+                            stepgold_e_tensor[j, self.seqenc.vocab[golde]] = 1
                     stepgold.append(stepgold_e_tensor)
             seq = torch.stack(q.pad_tensors(seq, 0, 0), 0).to(device)
             openmask = torch.stack(q.pad_tensors(openmask, 0, False), 0).to(device)
@@ -535,7 +567,7 @@ class TreeInsertionDecoder(torch.nn.Module):
             for tree in trees:
                 if tree_size(tree) < self.max_tree_size:
                     markmode = mode if not self.training else "train-"+mode
-                    tree = mark_for_execution(tree, mode=markmode)
+                    tree = mark_for_execution(tree, mode=markmode, entropylimit=self.entropylimit)
                     budget = [self.max_tree_size - tree_size(tree)]
                     if self.training:
                         tree, _ = convert_chosen_actions_from_str_to_node(tree)
@@ -551,6 +583,10 @@ class TreeInsertionDecoder(torch.nn.Module):
         # after done decoding, if gold is given, run losses, else return just predictions
 
         ret = {}
+
+        ret["seqlens"] = torch.tensor(seqlens)
+        ret["treesizes"] = torch.tensor(treesizes)
+        ret["numsteps"] = torch.tensor(numsteps)
 
         if self.training:
             assert(len(examplemasks) > 0)
@@ -669,6 +705,7 @@ def run(lr=0.001,
         gpu=-1,
         mode="leastentropy",
         trainonvalid=False,
+        entropylimit=0.,
         # datamode="single",
         # decodemode="single",    # "full", "ltr" (left to right), "single", "entropy-single"
         ):
@@ -692,13 +729,15 @@ def run(lr=0.001,
     # model
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
     decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=70, max_tree_size=30, mode=mode)
+    decodermodel.entropylimit = entropylimit
 
     # batch = next(iter(tdl))
     # out = tagmodel(*batch)
 
     tmetrics = make_array_of_metrics("loss", "elemrecall", "allrecall", "lowestentropyrecall", reduction="mean")
-    tvmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    vmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    tvmetrics = make_array_of_metrics("treesizes", "seqlens", "numsteps", "treeacc", reduction="mean")
+    vmetrics = make_array_of_metrics("treesizes", "seqlens", "numsteps", "treeacc", reduction="mean")
+    xmetrics = make_array_of_metrics("treesizes", "seqlens", "numsteps", "treeacc", reduction="mean")
 
     # region parameters
     def get_parameters(m, _lr, _enclrmul):
@@ -774,6 +813,33 @@ def run(lr=0.001,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
     tt.tock("done training")
+
+    if eyt.remembered is not None:
+        decodermodel.tagger = eyt.remembered
+    tt.msg("reloaded best")
+
+    # tt.tick("trying different entropy limits")
+    # vmetrics2 = make_array_of_metrics("treesizes", "seqlens", "numsteps", "treeacc", reduction="mean")
+    # validepoch = partial(q.test_epoch,
+    #                      model=decodermodel,
+    #                      losses=vmetrics2,
+    #                      dataloader=vdl_seq,
+    #                      device=device)
+    # entropylimits = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 10][::-1]
+    # for _entropylimit in entropylimits:
+    #     tt.msg(f"entropy limit {_entropylimit}")
+    #     decodermodel.entropylimit = _entropylimit
+    #     tt.msg(validepoch())
+    # tt.tock("done trying entropy limits")
+
+    tt.tick("testing on test")
+    testepoch = partial(q.test_epoch,
+                         model=decodermodel,
+                         losses=xmetrics,
+                         dataloader=xdl_seq,
+                         device=device,)
+    print(testepoch())
+    tt.tock("tested on test")
 
 
 
