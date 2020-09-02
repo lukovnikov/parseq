@@ -668,6 +668,7 @@ def run(lr=0.001,
         seed=87646464,
         gpu=-1,
         mode="leastentropy",
+        trainonvalid=False,
         # datamode="single",
         # decodemode="single",    # "full", "ltr" (left to right), "single", "entropy-single"
         ):
@@ -681,7 +682,7 @@ def run(lr=0.001,
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants")
+    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants", trainonvalid=trainonvalid)
     tt.tock("loaded")
 
     tdl_seq = DataLoader(tds_seq, batch_size=batsize, shuffle=True, collate_fn=autocollate)
