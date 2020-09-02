@@ -444,6 +444,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                 trees[i].align = goldtrees[i]
 
         i = 0
+        # TODO: debug in test mode
         if self.training:
             trees = [assign_gold_actions(tree, mode=mode) for tree in trees]
         # choices = [deepcopy(trees)]
@@ -761,7 +762,7 @@ def run(lr=0.001,
                          device=device,
                          on_end=[lambda: eyt.on_epoch_end()])
 
-    # validepoch()        # TODO: remove this after debugging
+    validepoch()        # TODO: remove this after debugging
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
