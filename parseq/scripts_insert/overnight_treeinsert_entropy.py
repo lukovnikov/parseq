@@ -648,6 +648,7 @@ class TransformerTagger(TreeInsertionTagger):
 
 
 def run(lr=0.001,
+        minlr=0.000001,
         enclrmul=0.1,
         hdim=768,
         numlayers=8,
@@ -657,8 +658,9 @@ def run(lr=0.001,
         batsize=10,
         epochs=100,
         warmup=0,
-        sustain=0,
         cosinelr=False,
+        sustain=0,
+        cooldown=0,
         gradacc=1,
         gradnorm=100,
         patience=5,
@@ -733,7 +735,7 @@ def run(lr=0.001,
     optim = get_optim(tagger, lr, enclrmul, wreg)
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
-        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
+        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Constant(1., steps=sustain) >> q.sched.Cosine(low=minlr, high=lr, steps=t_max-warmup-sustain-cooldown) >> q.sched.Constant(minlr, steps=cooldown)
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
