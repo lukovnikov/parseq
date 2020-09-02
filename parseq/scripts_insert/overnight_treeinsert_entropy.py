@@ -752,7 +752,7 @@ def run(lr=0.001,
     trainvalidepoch = partial(q.test_epoch,
                          model=decodermodel,
                          losses=tvmetrics,
-                         dataloader=vdl_seq,
+                         dataloader=tdl_seq,
                          device=device,)
 
     validepoch = partial(q.test_epoch,
@@ -762,7 +762,7 @@ def run(lr=0.001,
                          device=device,
                          on_end=[lambda: eyt.on_epoch_end()])
 
-    validepoch()        # TODO: remove this after debugging
+    # validepoch()        # TODO: remove this after debugging
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
