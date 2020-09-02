@@ -584,9 +584,9 @@ class TreeInsertionDecoder(torch.nn.Module):
 
         ret = {}
 
-        ret["seqlens"] = torch.tensor(seqlens)
-        ret["treesizes"] = torch.tensor(treesizes)
-        ret["numsteps"] = torch.tensor(numsteps)
+        ret["seqlens"] = torch.tensor(seqlens).float()
+        ret["treesizes"] = torch.tensor(treesizes).float()
+        ret["numsteps"] = torch.tensor(numsteps).float()
 
         if self.training:
             assert(len(examplemasks) > 0)
