@@ -818,19 +818,19 @@ def run(lr=0.001,
         decodermodel.tagger = eyt.remembered
     tt.msg("reloaded best")
 
-    # tt.tick("trying different entropy limits")
-    # vmetrics2 = make_array_of_metrics("treesizes", "seqlens", "numsteps", "treeacc", reduction="mean")
-    # validepoch = partial(q.test_epoch,
-    #                      model=decodermodel,
-    #                      losses=vmetrics2,
-    #                      dataloader=vdl_seq,
-    #                      device=device)
-    # entropylimits = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 10][::-1]
-    # for _entropylimit in entropylimits:
-    #     tt.msg(f"entropy limit {_entropylimit}")
-    #     decodermodel.entropylimit = _entropylimit
-    #     tt.msg(validepoch())
-    # tt.tock("done trying entropy limits")
+    tt.tick("trying different entropy limits")
+    vmetrics2 = make_array_of_metrics("treesizes", "seqlens", "numsteps", "treeacc", reduction="mean")
+    validepoch = partial(q.test_epoch,
+                         model=decodermodel,
+                         losses=vmetrics2,
+                         dataloader=vdl_seq,
+                         device=device)
+    entropylimits = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 10][::-1]
+    for _entropylimit in entropylimits:
+        tt.msg(f"entropy limit {_entropylimit}")
+        decodermodel.entropylimit = _entropylimit
+        tt.msg(validepoch())
+    tt.tock("done trying entropy limits")
 
     tt.tick("testing on test")
     testepoch = partial(q.test_epoch,
