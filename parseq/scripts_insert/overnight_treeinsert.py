@@ -647,7 +647,7 @@ def tensors_to_tree(x, openmask=None, actions=None, D:Vocab=None, entropies=None
 
 
 def test_tensors_to_tree():
-    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants")
+    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants", trainonvalid=False)
     tdl = DataLoader(tds, batch_size=5, shuffle=True, collate_fn=collate_fn)
 
     batch = next(iter(tdl))
@@ -970,6 +970,7 @@ def run(lr=0.001,
         gpu=-1,
         datamode="single",
         decodemode="single",    # "full", "ltr" (left to right), "single", "entropy-single"
+        trainonvalid=False,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -981,7 +982,7 @@ def run(lr=0.001,
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants", mode=datamode)
+    tds, vds, xds, tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants", mode=datamode, trainonvalid=trainonvalid)
     tt.tock("loaded")
 
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=collate_fn)
