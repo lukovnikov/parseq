@@ -551,10 +551,12 @@ class MultilingualGeoqueryDatasetLoader(object):
     def __init__(self,
                  p="../../datasets/geo880_multiling/geoquery",
                  validfrac=0.2,
+                 trainonvalid=False,
                  **kw):
         super(MultilingualGeoqueryDatasetLoader, self).__init__(**kw)
         self.p = p
         self.validfrac = validfrac
+        self.trainonvalid = trainonvalid
 
     def load(self, sourcelang: Union[str,List[str]] = "en", targetlang="en"):
         data = {}
@@ -580,10 +582,18 @@ class MultilingualGeoqueryDatasetLoader(object):
                   + [False] * (int(round(numtrain * self.validfrac)))
         random.shuffle(istrain)
         i = 0
-        for x in data:
-            if x["split"] == "train":
-                x["split"] = "valid" if istrain[i] is False else "train"
-                i += 1
+
+        if self.trainonvalid:
+            testdata = [x for x in data if x["split"] == "test"]
+            for x in data:
+                if x["split"] == "test":
+                    x["split"] = "valid"
+            data = data + testdata
+        else:
+            for x in data:
+                if x["split"] == "train":
+                    x["split"] = "valid" if istrain[i] is False else "train"
+                    i += 1
         return Dataset(data)
 
 
@@ -626,7 +636,7 @@ def load_multilingual_geoquery(sourcelang:str="en", targetlang:str="en",
         nltok - tokenizer from huggingface transformers used to tokenize and index the NL
         flenc - SequenceEncoder used to index the FL side (flenc.vocab.D gives the dict of the dictionary)
     """
-    ds = MultilingualGeoqueryDatasetLoader(p=p, validfrac=validfrac)\
+    ds = MultilingualGeoqueryDatasetLoader(p=p, validfrac=validfrac, trainonvalid=trainonvalid)\
         .load(sourcelang, targetlang)
     nl_tok = AutoTokenizer.from_pretrained(nltok_name)
 

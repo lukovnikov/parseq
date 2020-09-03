@@ -83,14 +83,28 @@ class BartGeneratorTrain(torch.nn.Module):
 
         self.metrics = [self.ce, self.accs, self.treeacc]
 
-    def forward(self, input_ids, _, output_ids, *args, **kwargs):
-        ret = self.model(input_ids,
-                         attention_mask=input_ids!=self.model.encoderconfig.pad_token_id,
+    def forward(self, input_ids_src, input_ids_tgt, output_ids, *args, **kwargs):
+
+        ret = self.model(input_ids_src,
+                         attention_mask=input_ids_src!=self.model.encoderconfig.pad_token_id,
                          decoder_input_ids=output_ids)
-        probs = ret[0]
-        _, predactions = probs.max(-1)
-        outputs = [metric(probs, predactions, output_ids[:, 1:]) for metric in self.metrics]
-        outputs = merge_metric_dicts(*outputs)
+        probs_src, states_src = ret[0], ret[-1]
+        _, predactions = probs_src.max(-1)
+        outputs = [metric(probs_src, predactions, output_ids[:, 1:]) for metric in self.metrics]
+        outputs_src = merge_metric_dicts(*outputs)
+
+        ret = self.model(input_ids_tgt,
+                         attention_mask=input_ids_tgt != self.model.encoderconfig.pad_token_id,
+                         decoder_input_ids=output_ids)
+        probs_tgt, states_tgt = ret[0], ret[-1]
+        _, predactions = probs_tgt.max(-1)
+        outputs = [metric(probs_tgt, predactions, output_ids[:, 1:]) for metric in self.metrics]
+        outputs_tgt = merge_metric_dicts(*outputs)
+
+        outputs = {k: (outputs_src[k] + outputs_tgt[k])/2 for k in outputs_src}
+
+        
+
         return outputs, ret
 
 
