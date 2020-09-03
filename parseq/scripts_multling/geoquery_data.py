@@ -606,7 +606,8 @@ def remove_literals(x:Tree, literalparents=("placeid", "countryid", "riverid", "
         return x
 
 
-def load_multilingual_geoquery(sourcelang:str="en", targetlang:str="en", nltok_name:str="bert-base-uncased",
+def load_multilingual_geoquery(sourcelang:str="en", targetlang:str="en",
+                  nltok_name:str="bert-base-uncased",
                   validfrac=0.2,
                   top_k:int=np.infty, min_freq:int=0,
                   p:str="../../datasets/geo880_multiling/geoquery",

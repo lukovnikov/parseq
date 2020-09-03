@@ -117,11 +117,11 @@ class BartGeneratorTest(BartGeneratorTrain):
         return outputs, ret
 
 
-def create_model(encoder_name="bert-base-uncased",
+def create_model(encoder_name="xlm-roberta-base",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0., dropoutdec=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
-    if encoder_name != "bert-base-uncased":
-        raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
+    # if encoder_name != "bert-base-uncased":
+    #     raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
     encoder = pretrained
 
@@ -222,7 +222,7 @@ def run(sourcelang="en",
         patience=5,
         gpu=-1,
         seed=123456789,
-        encoder="bert-base-uncased",
+        encoder="xlm-roberta-base",
         numlayers=6,
         hdim=600,
         numheads=8,
