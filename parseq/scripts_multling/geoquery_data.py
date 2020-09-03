@@ -556,10 +556,28 @@ class MultilingualGeoqueryDatasetLoader(object):
         self.p = p
         self.validfrac = validfrac
 
-    def load(self, lang: str = "en"):
-        with open(os.path.join(self.p, f"geo-{lang}.json")) as f:
-            data = json.load(f)
-        print(f"{len(data)} examples loaded for language {lang}")
+    def load(self, lang: Union[str,List[str]] = "en"):
+        data = {}
+        lang = [lang] if isinstance(lang, str) else lang
+        for lange in lang:
+            with open(os.path.join(self.p, f"geo-{lange}.json")) as f:
+                data[lange] = json.load(f)
+            print(f"{len(data[lange])} examples loaded for language {lange}")
+        # merge
+        _data = {}
+        for i in range(len(data[lang[0]])):
+            for lange in lang:
+                if data[lange][i]["id"] not in _data:
+                    _data[data[lange][i]["id"]] = {
+                        lange: data[lange][i]["nl"],
+                        "fl": data[lange][i]["mrl"],
+                        "split": data[lange][i]["split"]
+                    }
+                else:
+                    _data[data[lange][i]["id"]][lange] = data[lange][i]["nl"]
+
+        data = [v for k, v in _data.items()]
+
         numtrain = len([x for x in data if x["split"] == "train"])
         istrain = [True] * (int(round(numtrain * (1 - self.validfrac)))) \
                   + [False] * (int(round(numtrain * self.validfrac)))
@@ -594,7 +612,8 @@ def remove_literals(x:Tree, literalparents=("placeid", "countryid", "riverid", "
 def load_multilingual_geoquery(lang:str="en", nltok_name:str="bert-base-uncased",
                   validfrac=0.2,
                   top_k:int=np.infty, min_freq:int=0,
-                  p:str="../../datasets/geo880_multiling/geoquery"):
+                  p:str="../../datasets/geo880_multiling/geoquery",
+                               trainonvalid=False):
     """
     :param lang:        one of the following language codes: "de", "en", "el", "fa", "id", "sv", "th", "zh"
     :param nltok_name:  what tokenizer from huggingface transformers to use
@@ -609,34 +628,35 @@ def load_multilingual_geoquery(lang:str="en", nltok_name:str="bert-base-uncased"
         nltok - tokenizer from huggingface transformers used to tokenize and index the NL
         flenc - SequenceEncoder used to index the FL side (flenc.vocab.D gives the dict of the dictionary)
     """
+    lang = [lang] if isinstance(lang, str) else lang
     ds = MultilingualGeoqueryDatasetLoader(p=p, validfrac=validfrac)\
         .load(lang)
-    bert_tok = AutoTokenizer.from_pretrained(nltok_name)
+    nl_tok = AutoTokenizer.from_pretrained(nltok_name)
 
-    ds = ds.map(lambda x: (bert_tok.encode(x["nl"], return_tensors="pt")[0],
-                           tree_to_lisp_tokens(
+    ds = ds.map(lambda x: tuple([nl_tok.encode(x[nl], return_tensors="pt")[0] for nl in lang])
+                          + (tree_to_lisp_tokens(
                                remove_literals(
-                                   prolog_to_tree(x["mrl"]))),
+                                   prolog_to_tree(x["fl"]))),
                            x["split"]))
 
     flenc = SequenceEncoder(lambda x: x, add_start_token=True, add_end_token=True)
-    for _, fltoks, split in ds.examples:
-        flenc.inc_build_vocab(fltoks, seen=split=="train")
+    for xe in ds.examples:
+        flenc.inc_build_vocab(xe[-2], seen=xe[-1]=="train")
 
     flenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
 
-    ds = ds.map(lambda x: (x[0], flenc.convert(x[1]), x[2]))
+    ds = ds.map(lambda x: x[:-2] + (flenc.convert(x[-2]), x[-1]))
 
-    trainds = ds.filter(lambda x: x[2] == "train").map(lambda x: (x[0], x[1])).cache()
-    validds = ds.filter(lambda x: x[2] == "valid").map(lambda x: (x[0], x[1])).cache()
-    testds = ds.filter(lambda x: x[2] == "test").map(lambda x: (x[0], x[1])).cache()
+    trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).cache()
+    validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).cache()
+    testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).cache()
 
-    return trainds, validds, testds, bert_tok, flenc
+    return trainds, validds, testds, nl_tok, flenc
 
 
 def try_multilingual_geoquery_dataset_loader():
     # region example usage
-    tds, vds, xds, nltok, flenc = load_multilingual_geoquery("en")
+    tds, vds, xds, nltok, flenc = load_multilingual_geoquery(["en", "de"])
     dl = DataLoader(tds, batch_size=5, shuffle=True, collate_fn=autocollate)
     # endregion
 
@@ -648,7 +668,8 @@ def try_multilingual_geoquery_dataset_loader():
 
     print(batch)
     print(nltok.convert_tokens_to_string(nltok.convert_ids_to_tokens(batch[0][4])))
-    print(flenc.vocab.tostr(batch[1][4]))
+    print(nltok.convert_tokens_to_string(nltok.convert_ids_to_tokens(batch[1][4])))
+    print(flenc.vocab.tostr(batch[-1][4]))
 
 
 if __name__ == '__main__':
