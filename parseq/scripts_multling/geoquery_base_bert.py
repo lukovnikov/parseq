@@ -296,6 +296,9 @@ def run(lang="en",
     optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=wreg)
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
+
+
+    eyt = q.EarlyStopper(vmetrics[-1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
     # def wandb_logger():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
@@ -314,11 +317,16 @@ def run(lang="en",
     trainbatch = partial(q.train_batch, on_before_optim_step=[clipgradnorm])
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
-    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device)#, on_end=[lambda: wandb_logger()])
+    validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])#, on_end=[lambda: wandb_logger()])
 
     tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
+    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, check_stop=[lambda: eyt.check_stop()])
     tt.tock("done training")
+
+    if eyt.remembered is not None:
+        trainm.model = eyt.remembered
+        testm.model = eyt.remembered
+    tt.msg("reloaded best")
 
     tt.tick("testing")
     validresults = q.test_epoch(model=testm, dataloader=vdl, losses=vmetrics, device=device)
