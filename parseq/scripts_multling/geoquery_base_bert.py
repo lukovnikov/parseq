@@ -82,7 +82,7 @@ class BartGeneratorTrain(torch.nn.Module):
 
         self.metrics = [self.ce, self.accs, self.treeacc]
 
-    def forward(self, input_ids, output_ids, *args, **kwargs):
+    def forward(self, input_ids, _, output_ids, *args, **kwargs):
         ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=output_ids)
         probs = ret[0]
         _, predactions = probs.max(-1)
@@ -106,7 +106,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 
         self.metrics = [self.accs, self.treeacc]
 
-    def forward(self, input_ids, output_ids, *args, **kwargs):
+    def forward(self, _, input_ids, output_ids, *args, **kwargs):
         ret = self.model.generate(input_ids,
                                   decoder_input_ids=output_ids[:, 0:1],
                                   attention_mask=input_ids!=self.model.config.pad_token_id,
@@ -117,7 +117,7 @@ class BartGeneratorTest(BartGeneratorTrain):
         return outputs, ret
 
 
-def create_model(encoder_name="bert-base-uncased", lang="en",
+def create_model(encoder_name="bert-base-uncased",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0., dropoutdec=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
     if encoder_name != "bert-base-uncased":
@@ -205,7 +205,8 @@ def _tensor2tree(x, D:Vocab=None):
     return tree
 
 
-def run(lang="en",
+def run(sourcelang="en",
+        targetlang="en",
         lr=0.001,
         enclrmul=0.1,
         numbeam=1,
@@ -242,9 +243,8 @@ def run(lang="en",
 
     tt.tick("loading data")
 
-    lang = lang.split(",")
     nltok_name = encoder
-    tds, vds, xds, nltok, flenc = load_multilingual_geoquery(lang, nltok_name=nltok_name, trainonvalid=trainonvalid)
+    tds, vds, xds, nltok, flenc = load_multilingual_geoquery(sourcelang, targetlang, nltok_name=nltok_name, trainonvalid=trainonvalid)
     tt.msg(f"{len(tds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(vds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(xds)/(len(tds) + len(vds) + len(xds)):.2f} ({len(tds)}/{len(vds)}/{len(xds)}) train/valid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
@@ -253,7 +253,6 @@ def run(lang="en",
 
     tt.tick("creating model")
     trainm, testm = create_model(encoder_name=encoder,
-                                 lang=lang,
                                  dec_vocabsize=flenc.vocab.number_of_ids(),
                                  dec_layers=numlayers,
                                  dec_dim=hdim,
@@ -286,8 +285,8 @@ def run(lang="en",
         trainable_params = [(k, v) for k, v in trainable_params if k not in exclude_params]
 
     tt.msg("different param groups")
-    encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder")]
-    otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder")]
+    encparams = [v for k, v in trainable_params if k.startswith("model.model.encoder.model")]
+    otherparams = [v for k, v in trainable_params if not k.startswith("model.model.encoder.model")]
     if len(encparams) == 0:
         raise Exception("No encoder parameters found!")
     paramgroups = [{"params": encparams, "lr": lr * enclrmul},
@@ -412,7 +411,7 @@ def run_experiments(lang="en", gpu=-1):
                       lang=lang, gpu=gpu)
 
 
-def run_experiments_seed(lang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
+def run_experiments_seed(sourcelang="en", targetlang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
                          smoothing=0.2, numbeam=1, trainonvalid=False, cosinelr=False):
     ranges = {
         "lr": [0.0001],
@@ -449,7 +448,7 @@ def run_experiments_seed(lang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1
         ranges["enclrmul"] = [enclrmul]
     if epochs >= 0:
         ranges["epochs"] = [epochs]
-    p = __file__ + f".{lang}"
+    p = __file__ + f".{sourcelang}-{targetlang}"
     def check_config(x):
         effectiveenclr = x["enclrmul"] * x["lr"]
         # if effectiveenclr < 0.000005:
@@ -460,7 +459,7 @@ def run_experiments_seed(lang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      lang=lang, gpu=gpu, smoothing=smoothing, numbeam=numbeam,
+                      sourcelang=sourcelang, targetlang=targetlang, gpu=gpu, smoothing=smoothing, numbeam=numbeam,
                       trainonvalid=trainonvalid)
 
 
