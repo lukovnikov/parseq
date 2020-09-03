@@ -3,7 +3,7 @@ import os
 import re
 import random
 from abc import abstractmethod, ABC
-from copy import copy
+from copy import copy, deepcopy
 from typing import List, Tuple, Callable, Union
 
 import torch
@@ -584,7 +584,7 @@ class MultilingualGeoqueryDatasetLoader(object):
         i = 0
 
         if self.trainonvalid:
-            testdata = [x for x in data if x["split"] == "test"]
+            testdata = [deepcopy(x) for x in data if x["split"] == "test"]
             for x in data:
                 if x["split"] == "test":
                     x["split"] = "valid"
