@@ -282,8 +282,8 @@ def run(sourcelang="en",
         localtest=False,
         printtest=False,
         trainonvalid=False,
-        statesimweight=0.1,
-        probsimweight=0.1,
+        statesimweight=0.,
+        probsimweight=0.,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
