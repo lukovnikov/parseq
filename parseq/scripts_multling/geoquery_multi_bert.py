@@ -103,8 +103,6 @@ class BartGeneratorTrain(torch.nn.Module):
 
         outputs = {k: (outputs_src[k] + outputs_tgt[k])/2 for k in outputs_src}
 
-        
-
         return outputs, ret
 
 
