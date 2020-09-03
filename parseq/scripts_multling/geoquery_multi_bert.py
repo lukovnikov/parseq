@@ -70,8 +70,8 @@ class BartGeneratorTrain(torch.nn.Module):
                  smoothing=0.,
                  tensor2tree:Callable=None,
                  orderless:Set[str]=set(),
-                 statesimweight=0.1,
-                 probsimweight=0.1,
+                 statesimweight=0.,
+                 probsimweight=0.,
                  **kw):
         super(BartGeneratorTrain, self).__init__(**kw)
         self.model = model
@@ -468,7 +468,8 @@ def run_experiments(lang="en", gpu=-1):
 
 
 def run_experiments_seed(sourcelang="en", targetlang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
-                         smoothing=0., numbeam=1, trainonvalid=False, cosinelr=False):
+                         smoothing=0., numbeam=1, trainonvalid=False, cosinelr=False,
+                         statesimweight=0., probsimweight=0.):
     ranges = {
         "lr": [0.0001],
         "batsize": [20],
@@ -516,7 +517,7 @@ def run_experiments_seed(sourcelang="en", targetlang="en", lr=-1., batsize=-1, p
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       sourcelang=sourcelang, targetlang=targetlang, gpu=gpu, smoothing=smoothing, numbeam=numbeam,
-                      trainonvalid=trainonvalid)
+                      trainonvalid=trainonvalid, statesimweight=statesimweight, probsimweight=probsimweight)
 
 
 if __name__ == '__main__':
