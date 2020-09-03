@@ -60,7 +60,7 @@ class BartGenerator(BartForConditionalGeneration):
             use_cache=use_cache,
         )
         lm_logits = self.outlin(outputs[0])
-        outputs = (lm_logits,) + outputs[1:] + outputs[0:1]  # Add hidden states and attention if they are here
+        outputs = (lm_logits,) + outputs  # Add hidden states and attention if they are here
         return outputs
 
 
@@ -82,7 +82,7 @@ class BartGeneratorTrain(torch.nn.Module):
 
         self.metrics = [self.ce, self.accs, self.treeacc]
 
-    def forward(self, input_ids, output_ids, *args, **kwargs):
+    def forward(self, input_ids_src, input_ids_tgt, output_ids, *args, **kwargs):
         ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=output_ids)
         probs = ret[0]
         _, predactions = probs.max(-1)
@@ -106,7 +106,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 
         self.metrics = [self.accs, self.treeacc]
 
-    def forward(self, input_ids, output_ids, *args, **kwargs):
+    def forward(self, input_ids_src, input_ids_tgt, output_ids, *args, **kwargs):
         ret = self.model.generate(input_ids,
                                   decoder_input_ids=output_ids[:, 0:1],
                                   attention_mask=input_ids!=self.model.config.pad_token_id,
@@ -117,7 +117,7 @@ class BartGeneratorTest(BartGeneratorTrain):
         return outputs, ret
 
 
-def create_model(encoder_name="bert-base-uncased", lang="en",
+def create_model(encoder_name="bert-base-uncased", sourcelang="en", targetlang="de",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0., dropoutdec=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
     if encoder_name != "bert-base-uncased":
