@@ -1033,7 +1033,7 @@ def run(lr=0.001,
     def clipgradnorm(_m=None, _norm=None):
         torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
 
-    eyt = q.EarlyStopper(vseqmetrics[0], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
+    eyt = q.EarlyStopper(vseqmetrics[-1], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
     # def wandb_logger():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
@@ -1083,6 +1083,20 @@ def run(lr=0.001,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
     tt.tock("done training")
+
+    tt.msg("reloading best")
+    if eyt.remembered is not None:
+        decodermodel.model.tagger = eyt.remembered
+        tagmodel.tagger = eyt.remembered
+
+    tt.tick("running test")
+    testepoch = partial(q.test_epoch,
+                        model=decodermodel,
+                        losses=xmetrics,
+                        dataloader=xdl_seq,
+                        device=device)
+    print(testepoch())
+    tt.tock()
 
     # inspect predictions
     validepoch = partial(q.test_epoch,
