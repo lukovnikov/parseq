@@ -35,8 +35,9 @@ DATA_RESTORE_REVERSE = False
 
 
 class BartGenerator(BartForConditionalGeneration):
-    def __init__(self, config:BartConfig):
+    def __init__(self, config:BartConfig, encoderconfig=None):
         super(BartGenerator, self).__init__(config)
+        self.encoderconfig = encoderconfig
         self.outlin = torch.nn.Linear(config.d_model, config.vocab_size)
 
     def forward(
@@ -83,7 +84,9 @@ class BartGeneratorTrain(torch.nn.Module):
         self.metrics = [self.ce, self.accs, self.treeacc]
 
     def forward(self, input_ids, _, output_ids, *args, **kwargs):
-        ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=output_ids)
+        ret = self.model(input_ids,
+                         attention_mask=input_ids!=self.model.encoderconfig.pad_token_id,
+                         decoder_input_ids=output_ids)
         probs = ret[0]
         _, predactions = probs.max(-1)
         outputs = [metric(probs, predactions, output_ids[:, 1:]) for metric in self.metrics]
@@ -109,7 +112,7 @@ class BartGeneratorTest(BartGeneratorTrain):
     def forward(self, _, input_ids, output_ids, *args, **kwargs):
         ret = self.model.generate(input_ids,
                                   decoder_input_ids=output_ids[:, 0:1],
-                                  attention_mask=input_ids!=self.model.config.pad_token_id,
+                                  attention_mask=input_ids!=self.model.encoderconfig.pad_token_id,
                                   max_length=self.maxlen,
                                   num_beams=self.numbeam)
         outputs = [metric(None, ret[:, 1:], output_ids[:, 1:]) for metric in self.metrics]
@@ -155,7 +158,7 @@ def create_model(encoder_name="xlm-roberta-base",
                                 encoder_layers=dec_layers,
                                 encoder_ffn_dim=dec_dim*4,
                                 )
-    model = BartGenerator(decoder_config)
+    model = BartGenerator(decoder_config, encoder.model.config)
     model.model.encoder = encoder
 
     orderless = {"op:and", "SW:concat"}
@@ -205,6 +208,15 @@ def _tensor2tree(x, D:Vocab=None):
     return tree
 
 
+def collate_fn(x, pad_value_nl=0, pad_value_fl=0):
+    y = list(zip(*x))
+    assert(len(y) == 3)
+    y[0] = torch.stack(q.pad_tensors(y[0], 0, pad_value_nl), 0)
+    y[1] = torch.stack(q.pad_tensors(y[1], 0, pad_value_nl), 0)
+    y[2] = torch.stack(q.pad_tensors(y[2], 0, pad_value_fl), 0)
+    return tuple(y)
+
+
 def run(sourcelang="en",
         targetlang="en",
         lr=0.001,
@@ -246,9 +258,9 @@ def run(sourcelang="en",
     nltok_name = encoder
     tds, vds, xds, nltok, flenc = load_multilingual_geoquery(sourcelang, targetlang, nltok_name=nltok_name, trainonvalid=trainonvalid)
     tt.msg(f"{len(tds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(vds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(xds)/(len(tds) + len(vds) + len(xds)):.2f} ({len(tds)}/{len(vds)}/{len(xds)}) train/valid/test")
-    tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
-    vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    xdl = DataLoader(xds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(collate_fn, pad_value_nl=nltok.pad_token_id))
+    vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=partial(collate_fn, pad_value_nl=nltok.pad_token_id))
+    xdl = DataLoader(xds, batch_size=batsize, shuffle=False, collate_fn=partial(collate_fn, pad_value_nl=nltok.pad_token_id))
     tt.tock("data loaded")
 
     tt.tick("creating model")

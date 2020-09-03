@@ -24,7 +24,6 @@ from parseq.datasets import OvernightDatasetLoader, pad_and_default_collate, aut
 from parseq.decoding import merge_metric_dicts
 from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELoss
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
-from parseq.scripts_multling.geoquery_base_bert import BartGenerator, _tensor2tree
 from parseq.scripts_multling.geoquery_data import load_multilingual_geoquery
 from parseq.vocab import SequenceEncoder, Vocab
 from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration
@@ -33,6 +32,37 @@ from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartFo
 UNKID = 3
 
 DATA_RESTORE_REVERSE = False
+
+
+class BartGenerator(BartForConditionalGeneration):
+    def __init__(self, config:BartConfig, encoderconfig=None):
+        super(BartGenerator, self).__init__(config)
+        self.encoderconfig = encoderconfig
+        self.outlin = torch.nn.Linear(config.d_model, config.vocab_size)
+
+    def forward(
+        self,
+        input_ids,
+        attention_mask=None,
+        encoder_outputs=None,
+        decoder_input_ids=None,
+        decoder_attention_mask=None,
+        decoder_cached_states=None,
+        use_cache=False,
+        **unused
+    ):
+        outputs = self.model(
+            input_ids,
+            attention_mask=attention_mask,
+            decoder_input_ids=decoder_input_ids,
+            encoder_outputs=encoder_outputs,
+            decoder_attention_mask=decoder_attention_mask,
+            decoder_cached_states=decoder_cached_states,
+            use_cache=use_cache,
+        )
+        lm_logits = self.outlin(outputs[0])
+        outputs = (lm_logits,) + outputs[1:] + outputs[0:1]  # Add hidden states and attention if they are here
+        return outputs
 
 
 class BartGeneratorTrain(torch.nn.Module):
@@ -54,7 +84,9 @@ class BartGeneratorTrain(torch.nn.Module):
         self.metrics = [self.ce, self.accs, self.treeacc]
 
     def forward(self, input_ids, _, output_ids, *args, **kwargs):
-        ret = self.model(input_ids, attention_mask=input_ids!=self.model.config.pad_token_id, decoder_input_ids=output_ids)
+        ret = self.model(input_ids,
+                         attention_mask=input_ids!=self.model.encoderconfig.pad_token_id,
+                         decoder_input_ids=output_ids)
         probs = ret[0]
         _, predactions = probs.max(-1)
         outputs = [metric(probs, predactions, output_ids[:, 1:]) for metric in self.metrics]
@@ -80,7 +112,7 @@ class BartGeneratorTest(BartGeneratorTrain):
     def forward(self, _, input_ids, output_ids, *args, **kwargs):
         ret = self.model.generate(input_ids,
                                   decoder_input_ids=output_ids[:, 0:1],
-                                  attention_mask=input_ids!=self.model.config.pad_token_id,
+                                  attention_mask=input_ids!=self.model.encoderconfig.pad_token_id,
                                   max_length=self.maxlen,
                                   num_beams=self.numbeam)
         outputs = [metric(None, ret[:, 1:], output_ids[:, 1:]) for metric in self.metrics]
@@ -126,7 +158,7 @@ def create_model(encoder_name="xlm-roberta-base",
                                 encoder_layers=dec_layers,
                                 encoder_ffn_dim=dec_dim*4,
                                 )
-    model = BartGenerator(decoder_config)
+    model = BartGenerator(decoder_config, encoder.model.config)
     model.model.encoder = encoder
 
     orderless = {"op:and", "SW:concat"}
@@ -134,6 +166,55 @@ def create_model(encoder_name="xlm-roberta-base",
     trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
     testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
     return trainmodel, testmodel
+
+
+def _tensor2tree(x, D:Vocab=None):
+    # x: 1D int tensor
+    x = list(x.detach().cpu().numpy())
+    x = [D(xe) for xe in x]
+    x = [xe for xe in x if xe != D.padtoken]
+
+    # find first @END@ and cut off
+    parentheses_balance = 0
+    for i in range(len(x)):
+        if x[i] ==D.endtoken:
+            x = x[:i]
+            break
+        elif x[i] == "(" or x[i][-1] == "(":
+            parentheses_balance += 1
+        elif x[i] == ")":
+            parentheses_balance -= 1
+        else:
+            pass
+
+    # balance parentheses
+    while parentheses_balance > 0:
+        x.append(")")
+        parentheses_balance -= 1
+    i = len(x) - 1
+    while parentheses_balance < 0 and i > 0:
+        if x[i] == ")":
+            x.pop(i)
+            parentheses_balance += 1
+        else:
+            break
+        i -= 1
+
+    # convert to nltk.Tree
+    try:
+        tree, parsestate = lisp_to_tree(" ".join(x), None)
+    except Exception as e:
+        tree = None
+    return tree
+
+
+def collate_fn(x, pad_value_nl=0, pad_value_fl=0):
+    y = list(zip(*x))
+    assert(len(y) == 3)
+    y[0] = torch.stack(q.pad_tensors(y[0], 0, pad_value_nl), 0)
+    y[1] = torch.stack(q.pad_tensors(y[1], 0, pad_value_nl), 0)
+    y[2] = torch.stack(q.pad_tensors(y[2], 0, pad_value_fl), 0)
+    return tuple(y)
 
 
 def run(sourcelang="en",
@@ -177,9 +258,9 @@ def run(sourcelang="en",
     nltok_name = encoder
     tds, vds, xds, nltok, flenc = load_multilingual_geoquery(sourcelang, targetlang, nltok_name=nltok_name, trainonvalid=trainonvalid)
     tt.msg(f"{len(tds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(vds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(xds)/(len(tds) + len(vds) + len(xds)):.2f} ({len(tds)}/{len(vds)}/{len(xds)}) train/valid/test")
-    tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
-    vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    xdl = DataLoader(xds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(collate_fn, pad_value_nl=nltok.pad_token_id))
+    vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=partial(collate_fn, pad_value_nl=nltok.pad_token_id))
+    xdl = DataLoader(xds, batch_size=batsize, shuffle=False, collate_fn=partial(collate_fn, pad_value_nl=nltok.pad_token_id))
     tt.tock("data loaded")
 
     tt.tick("creating model")
