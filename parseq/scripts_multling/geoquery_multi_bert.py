@@ -66,9 +66,16 @@ class BartGenerator(BartForConditionalGeneration):
 
 
 class BartGeneratorTrain(torch.nn.Module):
-    def __init__(self, model:BartGenerator, smoothing=0., tensor2tree:Callable=None, orderless:Set[str]=set(), **kw):
+    def __init__(self, model:BartGenerator,
+                 smoothing=0.,
+                 tensor2tree:Callable=None,
+                 orderless:Set[str]=set(),
+                 statesimweight=0.1,
+                 probsimweight=0.1,
+                 **kw):
         super(BartGeneratorTrain, self).__init__(**kw)
         self.model = model
+        self.statesimweight, self.probsimweight = statesimweight, probsimweight
 
         # CE loss
         self.ce = CELoss(ignore_index=model.config.pad_token_id, smoothing=smoothing)
@@ -80,6 +87,8 @@ class BartGeneratorTrain(torch.nn.Module):
 
         self.treeacc = TreeAccuracy(tensor2tree=tensor2tree,
                                     orderless=orderless)
+
+        self.kldiv = torch.nn.KLDivLoss(reduction="none")
 
         self.metrics = [self.ce, self.accs, self.treeacc]
 
@@ -103,6 +112,24 @@ class BartGeneratorTrain(torch.nn.Module):
 
         outputs = {k: (outputs_src[k] + outputs_tgt[k])/2 for k in outputs_src}
 
+        # penalties:
+        if self.statesimweight > 0:
+            statediff = (states_src - states_tgt).abs()
+            statediff = torch.norm(statediff, 2, -1)
+            # TODO: mean/sum over seqlen with decoder mask
+            statediff = statediff.mean()
+            outputs["statediff"] = statediff
+            outputs["loss"] = outputs["loss"] + statediff * self.statesimweight
+
+        if self.probsimweight > 0:
+            m = (torch.softmax(probs_src, -1) + torch.softmax(probs_tgt, -1)) / 2.
+            a = self.kldiv(torch.log_softmax(probs_src, -1), m).sum(-1)
+            b = self.kldiv(torch.log_softmax(probs_tgt, -1), m).sum(-1)
+            probdiff = (a + b) / 2.
+            # TODO: mean/sum over seqlen with decoder mask
+            probdiff = probdiff.mean()
+            outputs["probdiff"] = probdiff
+            outputs["loss"] = outputs["loss"] + probdiff * self.probsimweight
         return outputs, ret
 
 
@@ -134,7 +161,8 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 def create_model(encoder_name="xlm-roberta-base",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0., dropoutdec=0.,
-                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
+                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None,
+                 statesimweight=0., probsimweight=0.):
     # if encoder_name != "bert-base-uncased":
     #     raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -175,7 +203,7 @@ def create_model(encoder_name="xlm-roberta-base",
 
     orderless = {"op:and", "SW:concat"}
 
-    trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless)
+    trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless, statesimweight=statesimweight, probsimweight=probsimweight)
     testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
     return trainmodel, testmodel
 
@@ -254,6 +282,8 @@ def run(sourcelang="en",
         localtest=False,
         printtest=False,
         trainonvalid=False,
+        statesimweight=0.1,
+        probsimweight=0.1,
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -286,7 +316,9 @@ def run(sourcelang="en",
                                  smoothing=smoothing,
                                  maxlen=maxlen,
                                  numbeam=numbeam,
-                                 tensor2tree=partial(_tensor2tree, D=flenc.vocab)
+                                 tensor2tree=partial(_tensor2tree, D=flenc.vocab),
+                                 statesimweight=statesimweight,
+                                 probsimweight=probsimweight,
                                  )
     tt.tock("model created")
 
@@ -436,7 +468,7 @@ def run_experiments(lang="en", gpu=-1):
 
 
 def run_experiments_seed(sourcelang="en", targetlang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
-                         smoothing=0.2, numbeam=1, trainonvalid=False, cosinelr=False):
+                         smoothing=0., numbeam=1, trainonvalid=False, cosinelr=False):
     ranges = {
         "lr": [0.0001],
         "batsize": [20],

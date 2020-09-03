@@ -424,7 +424,7 @@ def run_experiments(lang="en", gpu=-1):
 
 
 def run_experiments_seed(sourcelang="en", targetlang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
-                         smoothing=0.2, numbeam=1, trainonvalid=False, cosinelr=False):
+                         smoothing=0., numbeam=1, trainonvalid=False, cosinelr=False):
     ranges = {
         "lr": [0.0001],
         "batsize": [20],
