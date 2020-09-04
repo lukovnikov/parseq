@@ -157,6 +157,7 @@ def create_model(encoder_name="xlm-roberta-base",
                                 encoder_attention_heads=dec_heads,
                                 encoder_layers=dec_layers,
                                 encoder_ffn_dim=dec_dim*4,
+                                relative_position=True,
                                 )
     model = BartGenerator(decoder_config, encoder.model.config)
     model.model.encoder = encoder

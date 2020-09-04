@@ -197,6 +197,7 @@ def create_model(encoder_name="xlm-roberta-base",
                                 encoder_attention_heads=dec_heads,
                                 encoder_layers=dec_layers,
                                 encoder_ffn_dim=dec_dim*4,
+                                relative_position=True,
                                 )
     model = BartGenerator(decoder_config, encoder.model.config)
     model.model.encoder = encoder
@@ -374,6 +375,7 @@ def run(sourcelang="en",
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device, on_end=[lambda: eyt.on_epoch_end()])#, on_end=[lambda: wandb_logger()])
 
+    # validepoch()        # TODO comment out after debugging
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs, check_stop=[lambda: eyt.check_stop()])
     tt.tock("done training")
