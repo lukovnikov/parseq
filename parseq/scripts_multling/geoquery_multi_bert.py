@@ -123,12 +123,13 @@ class BartGeneratorTrain(torch.nn.Module):
             outputs["loss"] = outputs["loss"] + statediff * self.statesimweight
 
         if self.probsimweight > 0:
-            probdiff = (probs_src - probs_tgt)
-            probdiff = torch.norm(probdiff, 2, -1)
-            # m = (torch.softmax(probs_src, -1) + torch.softmax(probs_tgt, -1)) / 2.
-            # a = self.kldiv(torch.log_softmax(probs_src, -1), m).sum(-1)
-            # b = self.kldiv(torch.log_softmax(probs_tgt, -1), m).sum(-1)
-            # probdiff = (a + b) / 2.
+            # probdiff = (probs_src - probs_tgt)
+            # probdiff = torch.norm(probdiff, 2, -1)
+            m = (torch.softmax(probs_src, -1) + torch.softmax(probs_tgt, -1)) / 2.
+            a = self.kldiv(torch.log_softmax(probs_src, -1), m).sum(-1)
+            b = self.kldiv(torch.log_softmax(probs_tgt, -1), m).sum(-1)
+            probdiff = (a + b) / 2.
+
             probdiff = (probdiff * outmask).sum(-1) / outmask.sum(-1)   # mean/sum over seqlen with decoder mask
             probdiff = probdiff.mean()
             outputs["probdiff"] = probdiff
