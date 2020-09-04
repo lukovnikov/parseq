@@ -113,10 +113,11 @@ class BartGeneratorTrain(torch.nn.Module):
         outputs = {k: (outputs_src[k] + outputs_tgt[k])/2 for k in outputs_src}
 
         # penalties:
+        outmask = (output_ids != self.accs.padid).float()
         if self.statesimweight > 0:
             statediff = (states_src - states_tgt).abs()
             statediff = torch.norm(statediff, 2, -1)
-            # TODO: mean/sum over seqlen with decoder mask
+            statediff = (statediff * outmask).sum(-1) / outmask.sum(-1) # mean/sum over seqlen with decoder mask
             statediff = statediff.mean()
             outputs["statediff"] = statediff
             outputs["loss"] = outputs["loss"] + statediff * self.statesimweight
@@ -126,7 +127,7 @@ class BartGeneratorTrain(torch.nn.Module):
             a = self.kldiv(torch.log_softmax(probs_src, -1), m).sum(-1)
             b = self.kldiv(torch.log_softmax(probs_tgt, -1), m).sum(-1)
             probdiff = (a + b) / 2.
-            # TODO: mean/sum over seqlen with decoder mask
+            probdiff = (probdiff * outmask).sum(-1) / outmask.sum(-1)   # mean/sum over seqlen with decoder mask
             probdiff = probdiff.mean()
             outputs["probdiff"] = probdiff
             outputs["loss"] = outputs["loss"] + probdiff * self.probsimweight
@@ -259,7 +260,8 @@ def collate_fn(x, pad_value_nl=0, pad_value_fl=0):
 
 
 def run(sourcelang="en",
-        targetlang="en",
+        supportlang="en",
+        testlang="en",
         lr=0.001,
         enclrmul=0.1,
         numbeam=1,
@@ -299,7 +301,7 @@ def run(sourcelang="en",
     tt.tick("loading data")
 
     nltok_name = encoder
-    tds, vds, xds, nltok, flenc = load_multilingual_geoquery(sourcelang, targetlang, nltok_name=nltok_name, trainonvalid=trainonvalid)
+    tds, vds, xds, nltok, flenc = load_multilingual_geoquery(sourcelang, supportlang, testlang, nltok_name=nltok_name, trainonvalid=trainonvalid)
     tt.msg(f"{len(tds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(vds)/(len(tds) + len(vds) + len(xds)):.2f}/{len(xds)/(len(tds) + len(vds) + len(xds)):.2f} ({len(tds)}/{len(vds)}/{len(xds)}) train/valid/test")
     tdl = DataLoader(tds, batch_size=batsize, shuffle=True, collate_fn=partial(collate_fn, pad_value_nl=nltok.pad_token_id))
     vdl = DataLoader(vds, batch_size=batsize, shuffle=False, collate_fn=partial(collate_fn, pad_value_nl=nltok.pad_token_id))
@@ -469,7 +471,7 @@ def run_experiments(lang="en", gpu=-1):
                       lang=lang, gpu=gpu)
 
 
-def run_experiments_seed(sourcelang="en", targetlang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
+def run_experiments_seed(sourcelang="en", supportlang="en", testlang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
                          smoothing=0., numbeam=1, trainonvalid=False, cosinelr=False,
                          statesimweight=0., probsimweight=0.):
     ranges = {
@@ -507,7 +509,7 @@ def run_experiments_seed(sourcelang="en", targetlang="en", lr=-1., batsize=-1, p
         ranges["enclrmul"] = [enclrmul]
     if epochs >= 0:
         ranges["epochs"] = [epochs]
-    p = __file__ + f".{sourcelang}-{targetlang}"
+    p = __file__ + f".{sourcelang}-{supportlang}-{testlang}"
     def check_config(x):
         effectiveenclr = x["enclrmul"] * x["lr"]
         # if effectiveenclr < 0.000005:
@@ -518,7 +520,7 @@ def run_experiments_seed(sourcelang="en", targetlang="en", lr=-1., batsize=-1, p
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      sourcelang=sourcelang, targetlang=targetlang, gpu=gpu, smoothing=smoothing, numbeam=numbeam,
+                      sourcelang=sourcelang, supportlang=supportlang, testlang=testlang, gpu=gpu, smoothing=smoothing, numbeam=numbeam,
                       trainonvalid=trainonvalid, statesimweight=statesimweight, probsimweight=probsimweight)
 
 
