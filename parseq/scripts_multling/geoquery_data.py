@@ -558,10 +558,14 @@ class MultilingualGeoqueryDatasetLoader(object):
         self.validfrac = validfrac
         self.trainonvalid = trainonvalid
 
-    def load(self, sourcelang: Union[str,List[str]] = "en", targetlang="en"):
+    def load(self, sourcelang: Union[str,List[str]] = "en",
+             supportlang="en",
+             testlang="en"):
         data = {}
 
-        for lang in [sourcelang, targetlang]:
+        supportlang = supportlang.split(",") if isinstance(supportlang, str) else supportlang
+
+        for lang in [sourcelang, testlang] + supportlang:
             with open(os.path.join(self.p, f"geo-{lang}.json")) as f:
                 data[lang] = json.load(f)
             print(f"{len(data[lang])} examples loaded for language {lang}")
@@ -573,7 +577,8 @@ class MultilingualGeoqueryDatasetLoader(object):
                 "fl": data[sourcelang][i]["mrl"],
                 "split": data[sourcelang][i]["split"]
             }
-            _data[data[targetlang][i]["id"]][targetlang] = data[targetlang][i]["nl"]
+            for lang in supportlang + [testlang]:
+                _data[data[lang][i]["id"]][lang] = data[lang][i]["nl"]
 
         data = [v for k, v in _data.items()]
 
@@ -616,7 +621,9 @@ def remove_literals(x:Tree, literalparents=("placeid", "countryid", "riverid", "
         return x
 
 
-def load_multilingual_geoquery(sourcelang:str="en", targetlang:str="en",
+def load_multilingual_geoquery(sourcelang:str="en",
+                               supportlang:str="en",
+                               testlang:str="en",
                   nltok_name:str="bert-base-uncased",
                   validfrac=0.2,
                   top_k:int=np.infty, min_freq:int=0,
@@ -637,10 +644,11 @@ def load_multilingual_geoquery(sourcelang:str="en", targetlang:str="en",
         flenc - SequenceEncoder used to index the FL side (flenc.vocab.D gives the dict of the dictionary)
     """
     ds = MultilingualGeoqueryDatasetLoader(p=p, validfrac=validfrac, trainonvalid=trainonvalid)\
-        .load(sourcelang, targetlang)
+        .load(sourcelang, supportlang, testlang)
     nl_tok = AutoTokenizer.from_pretrained(nltok_name)
 
-    ds = ds.map(lambda x: tuple([nl_tok.encode(x[nl], return_tensors="pt")[0] for nl in (sourcelang, targetlang)])
+    supportlang = supportlang.split(",") if isinstance(supportlang, str) else supportlang
+    ds = ds.map(lambda x: tuple([nl_tok.encode(x[nl], return_tensors="pt")[0] for nl in [sourcelang] + supportlang + [testlang]])
                           + (tree_to_lisp_tokens(
                                remove_literals(
                                    prolog_to_tree(x["fl"]))),
@@ -657,6 +665,15 @@ def load_multilingual_geoquery(sourcelang:str="en", targetlang:str="en",
     trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).cache()
     validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).cache()
     testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).cache()
+
+    def random_support(x):
+        numsupport = len(x) - 3
+        whichsupport = random.choice(range(numsupport))
+        return (x[0], x[whichsupport+1], x[-1])
+
+    trainds = trainds.map(random_support)     # randomly select one of the support languages
+    validds = validds.map(lambda x: (x[0], x[-2], x[-1]))
+    testds = testds.map(lambda x: (x[0], x[-2], x[-1]))
 
     return trainds, validds, testds, nl_tok, flenc
 

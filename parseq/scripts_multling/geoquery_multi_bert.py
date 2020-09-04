@@ -134,7 +134,7 @@ class BartGeneratorTrain(torch.nn.Module):
 
 
 class BartGeneratorTest(BartGeneratorTrain):
-    def __init__(self, model:BartGenerator, maxlen:int=5, numbeam:int=1,
+    def __init__(self, model:BartGenerator, maxlen:int=50, numbeam:int=1,
                  tensor2tree:Callable=None, orderless:Set[str]=set(), **kw):
         super(BartGeneratorTest, self).__init__(model, **kw)
         self.maxlen, self.numbeam = maxlen, numbeam
@@ -161,7 +161,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 def create_model(encoder_name="xlm-roberta-base",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0., dropoutdec=0.,
-                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None,
+                 maxlen=50, smoothing=0., numbeam=1, tensor2tree=None,
                  statesimweight=0., probsimweight=0.):
     # if encoder_name != "bert-base-uncased":
     #     raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
@@ -279,7 +279,7 @@ def run(sourcelang="en",
         numlayers=6,
         hdim=600,
         numheads=8,
-        maxlen=30,
+        maxlen=50,
         localtest=False,
         printtest=False,
         trainonvalid=False,
