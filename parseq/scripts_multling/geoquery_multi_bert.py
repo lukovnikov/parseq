@@ -240,8 +240,8 @@ def _tensor2tree(x, D:Vocab=None):
         if x[i] == ")":
             x.pop(i)
             parentheses_balance += 1
-        else:
-            break
+        # else:
+        #     break
         i -= 1
 
     # convert to nltk.Tree
