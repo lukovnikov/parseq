@@ -302,7 +302,8 @@ def reorder_tree(x:Tree, orderless=None):
         return x
 
 
-def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=False):
+def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
+            trainonvalid=False, noreorder=False):
     """
     Creates a dataset of examples which have
     * NL question and tensor
@@ -317,7 +318,8 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=Fals
     ds = OvernightDatasetLoader().load(domain=domain, trainonvalid=trainonvalid)
     ds = ds.map(lambda x: (x[0], ATree("@START@", [x[1]]), x[2]))
 
-    ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
+    if not noreorder:
+        ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
 
     vocab = Vocab(padid=0, startid=2, endid=3, unkid=1)
     vocab.add_token("@START@", seen=np.infty)
@@ -725,6 +727,7 @@ def run(lr=0.001,
         mode="leastentropy",
         trainonvalid=False,
         entropylimit=0.,
+        noreorder=False,
         # datamode="single",
         # decodemode="single",    # "full", "ltr" (left to right), "single", "entropy-single"
         ):
@@ -738,7 +741,7 @@ def run(lr=0.001,
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid)
+    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid, noreorder=noreorder)
     tt.tock("loaded")
 
     tdl_seq = DataLoader(tds_seq, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -827,7 +830,7 @@ def run(lr=0.001,
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=[trainvalidepoch, validepoch],
+                   run_valid_epoch=validepoch, #[trainvalidepoch, validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
