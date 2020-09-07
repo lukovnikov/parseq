@@ -409,8 +409,11 @@ def build_atree(x:Iterable[str], open:Iterable[bool]=None, chosen_actions:Iterab
                 keepgoing = False
             else:
                 stack.append(buffer.pop(0))
-    assert(len(stack) == 1)
-    return stack[0]
+    if len(stack) == 1:
+        # assert(len(stack) == 1)
+        return stack[0]
+    else:
+        return None
 
 
 def tensors_to_tree(x, openmask=None, actions=None, D:Vocab=None, entropies=None):
