@@ -374,45 +374,48 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=Fals
 
 
 def build_atree(x:Iterable[str], open:Iterable[bool]=None, chosen_actions:Iterable[str]=None, entropies=None):
-    open = [False for _ in x] if open is None else open
-    chosen_actions = [None for _ in x] if chosen_actions is None else chosen_actions
-    entropies = [0 for _ in x] if entropies is None else entropies
-    nodes = []
-    for xe, opene, chosen_action, entropy in zip(x, open, chosen_actions, entropies):
-        if xe == "(" or xe == ")":
-            nodes.append(xe)
-            assert(opene == False)
-            # assert(chosen_action is None)
-        else:
-            a = ATree(xe, [], is_open=opene)
-            a._chosen_action = chosen_action
-            a._entropy = entropy
-            nodes.append(a)
-
-    buffer = list(nodes)
-    stack = []
-    keepgoing = len(buffer) > 0
-    while keepgoing:
-        if len(stack) > 0 and stack[-1] == ")":
-                stack.pop(-1)
-                acc = []
-                while len(acc) == 0 or not stack[-1] == "(":
-                    acc.append(stack.pop(-1))
-                stack.pop(-1)
-                node = acc.pop(-1)
-                node[:] = reversed(acc)
-                for nodechild in node:
-                    nodechild.parent = node
-                stack.append(node)
-        else:
-            if len(buffer) == 0:
-                keepgoing = False
+    try:
+        open = [False for _ in x] if open is None else open
+        chosen_actions = [None for _ in x] if chosen_actions is None else chosen_actions
+        entropies = [0 for _ in x] if entropies is None else entropies
+        nodes = []
+        for xe, opene, chosen_action, entropy in zip(x, open, chosen_actions, entropies):
+            if xe == "(" or xe == ")":
+                nodes.append(xe)
+                assert(opene == False)
+                # assert(chosen_action is None)
             else:
-                stack.append(buffer.pop(0))
-    if len(stack) == 1:
-        # assert(len(stack) == 1)
-        return stack[0]
-    else:
+                a = ATree(xe, [], is_open=opene)
+                a._chosen_action = chosen_action
+                a._entropy = entropy
+                nodes.append(a)
+
+        buffer = list(nodes)
+        stack = []
+        keepgoing = len(buffer) > 0
+        while keepgoing:
+            if len(stack) > 0 and stack[-1] == ")":
+                    stack.pop(-1)
+                    acc = []
+                    while len(acc) == 0 or not stack[-1] == "(":
+                        acc.append(stack.pop(-1))
+                    stack.pop(-1)
+                    node = acc.pop(-1)
+                    node[:] = reversed(acc)
+                    for nodechild in node:
+                        nodechild.parent = node
+                    stack.append(node)
+            else:
+                if len(buffer) == 0:
+                    keepgoing = False
+                else:
+                    stack.append(buffer.pop(0))
+        if len(stack) == 1:
+            # assert(len(stack) == 1)
+            return stack[0]
+        else:
+            return None
+    except Exception as e:
         return None
 
 
