@@ -286,6 +286,22 @@ def execute_chosen_actions(x:ATree, _budget=[np.infty], mode="full"):
     return x
 
 
+def reorder_tree(x:Tree, orderless=None):
+    if orderless is None or len(orderless) == 0 or len(x) == 0:
+        return x
+    else:
+        children = [reorder_tree(xe, orderless=orderless) for xe in x]
+        if x.label() in orderless:
+            # do type first
+            types = [xe for xe in children if xe.label() == "arg:~type"]
+            types = sorted(types, key=lambda _xe: str(_xe))
+            otherchildren = [xe for xe in children if xe.label() != "arg:~type"]
+            otherchildren = sorted([xe for xe in otherchildren], key=lambda _xe: str(_xe))
+            children = types + otherchildren
+        x[:] = children
+        return x
+
+
 def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=False):
     """
     Creates a dataset of examples which have
@@ -300,6 +316,8 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased", trainonvalid=Fals
 
     ds = OvernightDatasetLoader().load(domain=domain, trainonvalid=trainonvalid)
     ds = ds.map(lambda x: (x[0], ATree("@START@", [x[1]]), x[2]))
+
+    ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
 
     vocab = Vocab(padid=0, startid=2, endid=3, unkid=1)
     vocab.add_token("@START@", seen=np.infty)
