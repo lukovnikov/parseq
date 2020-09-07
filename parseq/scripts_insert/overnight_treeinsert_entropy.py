@@ -702,6 +702,7 @@ class TransformerTagger(TreeInsertionTagger):
 
 
 def run(lr=0.001,
+        domain="restaurants",
         minlr=0.000001,
         enclrmul=0.1,
         hdim=768,
@@ -716,8 +717,8 @@ def run(lr=0.001,
         sustain=0,
         cooldown=0,
         gradacc=1,
-        gradnorm=100,
-        patience=5,
+        gradnorm=3,
+        patience=15,
         validinter=1,
         seed=87646464,
         gpu=-1,
@@ -737,7 +738,7 @@ def run(lr=0.001,
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds("restaurants", trainonvalid=trainonvalid)
+    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid)
     tt.tock("loaded")
 
     tdl_seq = DataLoader(tds_seq, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -860,6 +861,54 @@ def run(lr=0.001,
     tt.tock("tested on test")
 
 
+def run_experiments_seed(domain="restaurants", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
+                         trainonvalid=False, cosinelr=False):
+    ranges = {
+        "lr": [0.00005],
+        "batsize": [8],
+        "patience": [14],
+        "enclrmul": [0.1],
+        "warmup": [0],
+        "epochs": [50],
+        "numheads": [12],
+        "numlayers": [8],
+        "dropout": [.2],
+        "hdim": [768],
+        "cosinelr": [cosinelr],
+        "seed": [12345678, 65748390, 98387670],     # TODO: add more later
+    }
+    if lr >= 0:
+        ranges["lr"] = [lr]
+    if batsize >= 0:
+        ranges["batsize"] = [batsize]
+    if patience >= 0:
+        ranges["patience"] = [patience]
+    if hdim >= 0:
+        ranges["hdim"] = [hdim]
+    if dropout >= 0:
+        ranges["dropout"] = [dropout]
+    if numlayers >= 0:
+        ranges["numlayers"] = [numlayers]
+    if numheads >= 0:
+        ranges["numheads"] = [numheads]
+    if enclrmul >= 0:
+        ranges["enclrmul"] = [enclrmul]
+    if epochs >= 0:
+        ranges["epochs"] = [epochs]
+    p = __file__ + f".{domain}"
+    def check_config(x):
+        effectiveenclr = x["enclrmul"] * x["lr"]
+        # if effectiveenclr < 0.000005:
+        #     return False
+        dimperhead = x["hdim"] / x["numheads"]
+        if dimperhead < 20 or dimperhead > 100:
+            return False
+        return True
+
+    q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
+                      domain=domain, gpu=gpu,
+                      trainonvalid=trainonvalid)
+
 
 
 if __name__ == '__main__':
@@ -868,4 +917,5 @@ if __name__ == '__main__':
     # try_tree_insertion_model_decode()
     # try_tree_insertion_model_tagger()
     # try_real_tree_insertion_model_tagger()
-    q.argprun(run)
+    # q.argprun(run)
+    q.argprun(run_experiments_seed)
