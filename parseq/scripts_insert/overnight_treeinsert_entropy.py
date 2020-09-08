@@ -469,7 +469,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         self.seqenc = seqenc
         self.uniformfactor = 0.25
 
-        self.ce = MultiCELoss(mode="probs")
+        self.ce = MultiCELoss(mode="logits")
         self.recall = Recall()
 
         self.entropylimit = 0.
@@ -671,8 +671,8 @@ class TransformerTagger(TreeInsertionTagger):
         decoder_config.use_causal_mask = False
         self.decoder = TransformerStack(decoder_config)
 
-        # self.out = torch.nn.Linear(self.dim, self.vocabsize)
-        self.out = MOS(self.dim, self.vocabsize, K=mosk)
+        self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        # self.out = MOS(self.dim, self.vocabsize, K=mosk)
 
         vocab_mask = torch.ones(self.vocabsize)
         for excl_token in self.exclude:
@@ -706,10 +706,11 @@ class TransformerTagger(TreeInsertionTagger):
         ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=False)
-        # logits = self.out(ret[0])
-        # logits = logits + torch.log(self.vocab_mask[None, None, :])
-        probs = self.out(ret[0], self.vocab_mask[None, None, :])
-        return probs
+        logits = self.out(ret[0])
+        logits = logits + torch.log(self.vocab_mask[None, None, :])
+        return logits
+        # probs = self.out(ret[0], self.vocab_mask[None, None, :])
+        # return probs
 
     def get_init_state(self, inpseqs=None, y_in=None) -> Tuple[ATree, Dict]:
         """ Encodes inpseqs and creates new states """
