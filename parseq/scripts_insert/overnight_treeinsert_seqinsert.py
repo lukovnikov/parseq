@@ -228,7 +228,8 @@ def execute_chosen_actions(x:ATree, _budget=[np.infty], mode="full"):
 
             if isinstance(x._chosen_action, Tree):
                 x.align = x._chosen_action
-            x.is_open = True
+            # x.is_open = True
+            x.is_open = False
 
             leftslot = ATree("@SLOT@", [], is_open=True)
             leftslot.parent = x.parent
@@ -259,7 +260,8 @@ def execute_chosen_actions(x:ATree, _budget=[np.infty], mode="full"):
             else:
                 newnode = ATree(x._chosen_action, [])
 
-            newnode.is_open = True
+            # newnode.is_open = True
+            newnode.is_open = False
             if mode == "ltr":
                 x.is_open = False
 
