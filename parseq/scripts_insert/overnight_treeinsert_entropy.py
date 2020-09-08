@@ -32,11 +32,11 @@ class MOS(torch.nn.Module):
     def forward(self, x):
         mix = torch.softmax(self.mlin(x), -1)   # (batsize, K)
         h = torch.tanh(self.hlin(x))        # (batsize, K * dim)
-        h = h.view(h.size(0), self.K, self.dim)     # (batsize, K, dim)
+        h = h.view(*h.size()[:-1], self.K, self.dim)     # (batsize, K, dim)
         ys = self.outlin(h)     # (batsize, K, vocsize)
         ys = torch.softmax(ys, -1)
-        y = mix[:, :, None] * ys
-        y = y.sum(1)    # (batsize, vocsize)
+        y = mix.unsqueeze(-1) * ys
+        y = y.sum(-2)    # (batsize, vocsize)
         return y
 
 

@@ -16,6 +16,7 @@ from parseq.eval import TreeAccuracy, make_array_of_metrics
 from parseq.grammar import tree_to_lisp_tokens, tree_to_prolog, are_equal_trees, tree_size
 from parseq.scripts_insert.overnight_treeinsert import ATree, child_number_of, extract_info, collate_fn, \
     TreeInsertionTagger, MultiCELoss, Recall, add_descendants_ancestors, all_terminated
+from parseq.scripts_insert.overnight_treeinsert_entropy import MOS
 from parseq.transformer import TransformerConfig, TransformerModel, TransformerStack
 from parseq.vocab import Vocab, SequenceEncoder
 from transformers import BertTokenizer, BertModel
@@ -466,7 +467,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         self.seqenc = seqenc
         self.uniformfactor = 0.25
 
-        self.ce = MultiCELoss()
+        self.ce = MultiCELoss(mode="probs")
         self.recall = Recall()
 
         self.entropylimit = 0.
@@ -658,7 +659,7 @@ class TreeInsertionDecoder(torch.nn.Module):
 class TransformerTagger(TreeInsertionTagger):
     exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@REMOVESUBTREE@", "@SLOT@", "(", ")"}
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", mosk=5, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -674,7 +675,8 @@ class TransformerTagger(TreeInsertionTagger):
         decoder_config.use_causal_mask = False
         self.decoder = TransformerStack(decoder_config)
 
-        self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        # self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        self.out = MOS(self.dim, self.vocabsize, K=mosk)
 
         vocab_mask = torch.ones(self.vocabsize)
         for excl_token in self.exclude:
