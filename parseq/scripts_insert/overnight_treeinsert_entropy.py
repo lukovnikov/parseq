@@ -21,6 +21,25 @@ from parseq.vocab import Vocab, SequenceEncoder
 from transformers import BertTokenizer, BertModel
 
 
+class MOS(torch.nn.Module):
+    def __init__(self, dim, vocsize, K=5, **kw):
+        super(MOS, self).__init__(**kw)
+        self.dim, self.vocsize, self.K = dim, vocsize, K
+        self.outlin = torch.nn.Linear(self.dim, self.vocsize)
+        self.hlin = torch.nn.Linear(self.dim, self.dim*self.K)
+        self.mlin = torch.nn.Linear(self.dim, self.K)
+
+    def forward(self, x):
+        mix = torch.softmax(self.mlin(x), -1)   # (batsize, K)
+        h = torch.tanh(self.hlin(x))        # (batsize, K * dim)
+        h = h.view(h.size(0), self.K, self.dim)     # (batsize, K, dim)
+        ys = self.outlin(h)     # (batsize, K, vocsize)
+        ys = torch.softmax(ys, -1)
+        y = mix[:, :, None] * ys
+        y = y.sum(1)    # (batsize, vocsize)
+        return y
+
+
 def assign_gold_actions(x:ATree, mode="default"):
     """
     :param x:
@@ -448,7 +467,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         self.seqenc = seqenc
         self.uniformfactor = 0.25
 
-        self.ce = MultiCELoss()
+        self.ce = MultiCELoss(mode="probs")
         self.recall = Recall()
 
         self.entropylimit = 0.
@@ -634,7 +653,7 @@ class TreeInsertionDecoder(torch.nn.Module):
 class TransformerTagger(TreeInsertionTagger):
     exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@REMOVESUBTREE@", "@SLOT@", "(", ")"}
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", mosk=5, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -650,7 +669,8 @@ class TransformerTagger(TreeInsertionTagger):
         decoder_config.use_causal_mask = False
         self.decoder = TransformerStack(decoder_config)
 
-        self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        # self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        self.out = MOS(self.dim, self.vocabsize, K=mosk)
 
         vocab_mask = torch.ones(self.vocabsize)
         for excl_token in self.exclude:
