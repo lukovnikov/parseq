@@ -29,11 +29,13 @@ class MOS(torch.nn.Module):
         self.hlin = torch.nn.Linear(self.dim, self.dim*self.K)
         self.mlin = torch.nn.Linear(self.dim, self.K)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         mix = torch.softmax(self.mlin(x), -1)   # (batsize, K)
         h = torch.tanh(self.hlin(x))        # (batsize, K * dim)
         h = h.view(*h.size()[:-1], self.K, self.dim)     # (batsize, K, dim)
         ys = self.outlin(h)     # (batsize, K, vocsize)
+        if mask is not None:
+            ys = ys + torch.log(mask.unsqueeze(-2))
         ys = torch.softmax(ys, -1)
         y = mix.unsqueeze(-1) * ys
         y = y.sum(-2)    # (batsize, vocsize)
@@ -704,9 +706,10 @@ class TransformerTagger(TreeInsertionTagger):
         ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=False)
-        logits = self.out(ret[0])
-        logits = logits + torch.log(self.vocab_mask[None, None, :])
-        return logits
+        # logits = self.out(ret[0])
+        # logits = logits + torch.log(self.vocab_mask[None, None, :])
+        probs = self.out(ret[0], self.vocab_mask[None, None, :])
+        return probs
 
     def get_init_state(self, inpseqs=None, y_in=None) -> Tuple[ATree, Dict]:
         """ Encodes inpseqs and creates new states """

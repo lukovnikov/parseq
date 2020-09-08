@@ -710,9 +710,10 @@ class TransformerTagger(TreeInsertionTagger):
         ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=False)
-        logits = self.out(ret[0])
-        logits = logits + torch.log(self.vocab_mask[None, None, :])
-        return logits
+        # logits = self.out(ret[0])
+        # logits = logits + torch.log(self.vocab_mask[None, None, :])
+        probs = self.out(ret[0], self.vocab_mask[None, None, :])
+        return probs
 
     def get_init_state(self, inpseqs=None, y_in=None) -> Tuple[ATree, Dict]:
         """ Encodes inpseqs and creates new states """
