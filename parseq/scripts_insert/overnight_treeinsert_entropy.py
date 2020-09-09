@@ -655,7 +655,7 @@ class TreeInsertionDecoder(torch.nn.Module):
 class TransformerTagger(TreeInsertionTagger):
     exclude = {"@PAD@", "@UNK@", "@START@", "@END@", "@MASK@", "@OPEN@", "@REMOVE@", "@REMOVESUBTREE@", "@SLOT@", "(", ")"}
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", mosk=5, **kw):
+                 dropout:float=0., encdropout:float=0., maxpos=512, bertname="bert-base-uncased", mosk=5, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -684,8 +684,8 @@ class TransformerTagger(TreeInsertionTagger):
         self.bert_model = BertModel.from_pretrained(self.bertname)
         def set_dropout(m:torch.nn.Module):
             if isinstance(m, torch.nn.Dropout):
-                m.p = dropout
-        # self.bert_model.apply(set_dropout)
+                m.p = encdropout
+        self.bert_model.apply(set_dropout)
 
         self.adapter = None
         if self.bert_model.config.hidden_size != decoder_config.d_model:
@@ -735,6 +735,7 @@ def run(lr=0.001,
         numlayers=8,
         numheads=12,
         dropout=0.1,
+        encdropout=0.1,
         wreg=0.,
         batsize=10,
         epochs=100,
@@ -773,7 +774,7 @@ def run(lr=0.001,
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, encdropout=encdropout)
     decodermodel = TreeInsertionDecoder(tagger, seqenc=flenc, maxsteps=70, max_tree_size=30, mode=mode)
     decodermodel.entropylimit = entropylimit
 
@@ -888,7 +889,9 @@ def run(lr=0.001,
     tt.tock("tested on test")
 
 
-def run_experiments_seed(domain="restaurants", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
+def run_experiments_seed(domain="restaurants", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1,
+                         dropout=-1., encdropout=-1.,
+                         numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
                          trainonvalid=False, cosinelr=False):
     ranges = {
         "lr": [0.00005],
@@ -900,6 +903,7 @@ def run_experiments_seed(domain="restaurants", lr=-1., batsize=-1, patience=-1, 
         "numheads": [12],
         "numlayers": [8],
         "dropout": [.2],
+        "encdropout": [.1],
         "hdim": [768],
         "cosinelr": [cosinelr],
         "seed": [12345678, 65748390, 98387670],     # TODO: add more later
@@ -914,6 +918,8 @@ def run_experiments_seed(domain="restaurants", lr=-1., batsize=-1, patience=-1, 
         ranges["hdim"] = [hdim]
     if dropout >= 0:
         ranges["dropout"] = [dropout]
+    if encdropout >= 0.:
+        ranges["encdropout"] = [encdropout]
     if numlayers >= 0:
         ranges["numlayers"] = [numlayers]
     if numheads >= 0:
