@@ -854,7 +854,7 @@ def run(lr=0.001,
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=validepoch, #[trainvalidepoch, validepoch],
+                   run_valid_epoch=[trainvalidepoch, validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
