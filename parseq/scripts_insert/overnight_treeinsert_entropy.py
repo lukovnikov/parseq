@@ -685,7 +685,7 @@ class TransformerTagger(TreeInsertionTagger):
         def set_dropout(m:torch.nn.Module):
             if isinstance(m, torch.nn.Dropout):
                 m.p = dropout
-        self.bert_model.apply(set_dropout)
+        # self.bert_model.apply(set_dropout)
 
         self.adapter = None
         if self.bert_model.config.hidden_size != decoder_config.d_model:
@@ -854,7 +854,7 @@ def run(lr=0.001,
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=[trainvalidepoch, validepoch],
+                   run_valid_epoch=validepoch, #[trainvalidepoch, validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
