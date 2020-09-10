@@ -828,6 +828,7 @@ def run(lr=0.001,
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     bert_lr_schedule = q.sched.Constant(0., steps=unfreezebertafter) >> 1.
+    bert_lr_schedule = bert_lr_schedule * lr_schedule
     lr_schedule = LambdaLR(optim, (bert_lr_schedule, lr_schedule))
 
     trainbatch = partial(q.train_batch, gradient_accumulation_steps=gradacc,
