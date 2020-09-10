@@ -8,6 +8,7 @@ from typing import Tuple, Iterable, List, Dict
 import numpy as np
 import torch
 from nltk import Tree
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
 import qelos as q
@@ -743,6 +744,7 @@ def run(lr=0.001,
         cosinelr=False,
         sustain=0,
         cooldown=0,
+        unfreezebertafter=10,
         gradacc=1,
         gradnorm=3,
         patience=15,
@@ -825,18 +827,19 @@ def run(lr=0.001,
         lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Constant(1., steps=sustain) >> q.sched.Cosine(low=minlr/lr, high=1., steps=t_max-warmup-sustain-cooldown) >> q.sched.Constant(minlr/lr, steps=cooldown)
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
-    lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
+    bert_lr_schedule = q.sched.Constant(0., steps=unfreezebertafter) >> 1.
+    lr_schedule = LambdaLR(optim, (bert_lr_schedule, lr_schedule))
 
     trainbatch = partial(q.train_batch, gradient_accumulation_steps=gradacc,
                                         on_before_optim_step=[lambda : clipgradnorm(_m=tagger, _norm=gradnorm)])
 
     trainepoch = partial(q.train_epoch, model=decodermodel,
-                                        dataloader=tdl_seq,
-                                        optim=optim,
-                                        losses=tmetrics,
-                                        device=device,
-                                        _train_batch=trainbatch,
-                                        on_end=[lambda: lr_schedule.step()])
+                         dataloader=tdl_seq,
+                         optim=optim,
+                         losses=tmetrics,
+                         device=device,
+                         _train_batch=trainbatch,
+                         on_end=[lambda: lr_schedule.step()])
 
     trainvalidepoch = partial(q.test_epoch,
                          model=decodermodel,
