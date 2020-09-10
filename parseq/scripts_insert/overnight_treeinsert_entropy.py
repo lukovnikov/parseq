@@ -822,7 +822,7 @@ def run(lr=0.001,
     optim = get_optim(tagger, lr, enclrmul, wreg)
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
-        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Constant(1., steps=sustain) >> q.sched.Cosine(low=minlr, high=lr, steps=t_max-warmup-sustain-cooldown) >> q.sched.Constant(minlr, steps=cooldown)
+        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Constant(1., steps=sustain) >> q.sched.Cosine(low=minlr/lr, high=1., steps=t_max-warmup-sustain-cooldown) >> q.sched.Constant(minlr/lr, steps=cooldown)
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
