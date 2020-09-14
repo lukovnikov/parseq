@@ -183,7 +183,7 @@ def create_model(encoder_name="xlm-roberta-base",
 
         @classmethod
         def create_proj(cls, indim, outdim, mode="simple"):
-            if mode == "simple":
+            if mode == "simple" or mode == "simpleshared":
                 proj = torch.nn.Linear(indim, outdim, bias=False)
             elif mode == "twolayer":
                 proj = torch.nn.Sequential(
@@ -219,10 +219,13 @@ def create_model(encoder_name="xlm-roberta-base",
                                 )
     model = BartGenerator(decoder_config, encoder.model.config)
     model.model.encoder = encoder
-    model2 = q.copy(model)
-    model2.model = q.copy(model.model)
-    model2.model.encoder = q.copy(model.model.encoder)
-    model2.model.encoder.proj = BertEncoderWrapper.create_proj(pretrained.config.hidden_size, dec_dim, mode=projmode)
+    if "shared" in projmode:
+        model2 = model
+    else:
+        model2 = q.copy(model)
+        model2.model = q.copy(model.model)
+        model2.model.encoder = q.copy(model.model.encoder)
+        model2.model.encoder.proj = BertEncoderWrapper.create_proj(pretrained.config.hidden_size, dec_dim, mode=projmode)
 
     orderless = {"op:and", "SW:concat"}
 
