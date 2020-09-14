@@ -8,7 +8,7 @@ A script for running the following experiments:
 import json
 import random
 import string
-from copy import deepcopy
+from copy import deepcopy, copy
 from functools import partial
 from typing import Callable, Set
 
@@ -67,6 +67,7 @@ class BartGenerator(BartForConditionalGeneration):
 
 class BartGeneratorTrain(torch.nn.Module):
     def __init__(self, model:BartGenerator,
+                 model2:BartGenerator,
                  smoothing=0.,
                  tensor2tree:Callable=None,
                  orderless:Set[str]=set(),
@@ -75,6 +76,7 @@ class BartGeneratorTrain(torch.nn.Module):
                  **kw):
         super(BartGeneratorTrain, self).__init__(**kw)
         self.model = model
+        self.model2 = model2
         self.statesimweight, self.probsimweight = statesimweight, probsimweight
 
         # CE loss
@@ -102,8 +104,8 @@ class BartGeneratorTrain(torch.nn.Module):
         outputs = [metric(probs_src, predactions, output_ids[:, 1:]) for metric in self.metrics]
         outputs_src = merge_metric_dicts(*outputs)
 
-        ret = self.model(input_ids_tgt,
-                         attention_mask=input_ids_tgt != self.model.encoderconfig.pad_token_id,
+        ret = self.model2(input_ids_tgt,
+                         attention_mask=input_ids_tgt != self.model2.encoderconfig.pad_token_id,
                          decoder_input_ids=output_ids)
         probs_tgt, states_tgt = ret[0], ret[-1]
         _, predactions = probs_tgt.max(-1)
@@ -138,9 +140,9 @@ class BartGeneratorTrain(torch.nn.Module):
 
 
 class BartGeneratorTest(BartGeneratorTrain):
-    def __init__(self, model:BartGenerator, maxlen:int=50, numbeam:int=1,
+    def __init__(self, model:BartGenerator, model2:BartGenerator, maxlen:int=50, numbeam:int=1,
                  tensor2tree:Callable=None, orderless:Set[str]=set(), **kw):
-        super(BartGeneratorTest, self).__init__(model, **kw)
+        super(BartGeneratorTest, self).__init__(model, model2, **kw)
         self.maxlen, self.numbeam = maxlen, numbeam
         # accuracies
         self.accs = SeqAccuracies()
@@ -153,9 +155,9 @@ class BartGeneratorTest(BartGeneratorTrain):
         self.metrics = [self.accs, self.treeacc]
 
     def forward(self, _, input_ids, output_ids, *args, **kwargs):
-        ret = self.model.generate(input_ids,
+        ret = self.model2.generate(input_ids,
                                   decoder_input_ids=output_ids[:, 0:1],
-                                  attention_mask=input_ids!=self.model.encoderconfig.pad_token_id,
+                                  attention_mask=input_ids!=self.model2.encoderconfig.pad_token_id,
                                   max_length=self.maxlen,
                                   num_beams=self.numbeam)
         outputs = [metric(None, ret[:, 1:], output_ids[:, 1:]) for metric in self.metrics]
@@ -166,7 +168,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 def create_model(encoder_name="xlm-roberta-base",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0., dropoutdec=0.,
                  maxlen=50, smoothing=0., numbeam=1, tensor2tree=None,
-                 statesimweight=0., probsimweight=0.):
+                 statesimweight=0., probsimweight=0., projmode="simple"):
     # if encoder_name != "bert-base-uncased":
     #     raise NotImplemented(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -176,13 +178,25 @@ def create_model(encoder_name="xlm-roberta-base",
         def __init__(self, model, dropout=0., **kw):
             super(BertEncoderWrapper, self).__init__(**kw)
             self.model = model
-            self.proj = torch.nn.Linear(pretrained.config.hidden_size, dec_dim, bias=False)
+            self.proj = self.create_proj(pretrained.config.hidden_size, dec_dim, mode=projmode)
             self.dropout = torch.nn.Dropout(dropout)
+
+        @classmethod
+        def create_proj(cls, indim, outdim, mode="simple"):
+            if mode == "simple":
+                proj = torch.nn.Linear(indim, outdim, bias=False)
+            elif mode == "twolayer":
+                proj = torch.nn.Sequential(
+                    torch.nn.Linear(indim, indim * 4),
+                    torch.nn.LeakyReLU(0.1),
+                    torch.nn.Linear(indim * 4, outdim)
+                )
+            return proj
 
         def forward(self, input_ids, attention_mask=None):
             ret, _ = self.model(input_ids, attention_mask=attention_mask)
-            if pretrained.config.hidden_size != dec_dim:
-                ret = self.proj(ret)
+            # if pretrained.config.hidden_size != dec_dim:
+            ret = self.proj(ret)
             # ret = self.dropout(ret)
             ret = (ret, None, None)
             return ret
@@ -205,11 +219,15 @@ def create_model(encoder_name="xlm-roberta-base",
                                 )
     model = BartGenerator(decoder_config, encoder.model.config)
     model.model.encoder = encoder
+    model2 = q.copy(model)
+    model2.model = q.copy(model.model)
+    model2.model.encoder = q.copy(model.model.encoder)
+    model2.model.encoder.proj = BertEncoderWrapper.create_proj(pretrained.config.hidden_size, dec_dim, mode=projmode)
 
     orderless = {"op:and", "SW:concat"}
 
-    trainmodel = BartGeneratorTrain(model, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless, statesimweight=statesimweight, probsimweight=probsimweight)
-    testmodel = BartGeneratorTest(model, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
+    trainmodel = BartGeneratorTrain(model, model2, smoothing=smoothing, tensor2tree=tensor2tree, orderless=orderless, statesimweight=statesimweight, probsimweight=probsimweight)
+    testmodel = BartGeneratorTest(model, model2, maxlen=maxlen, numbeam=numbeam, tensor2tree=tensor2tree, orderless=orderless)
     return trainmodel, testmodel
 
 
@@ -290,6 +308,7 @@ def run(sourcelang="en",
         trainonvalid=False,
         statesimweight=0.,
         probsimweight=0.,
+        projmode="simple",
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -325,6 +344,7 @@ def run(sourcelang="en",
                                  tensor2tree=partial(_tensor2tree, D=flenc.vocab),
                                  statesimweight=statesimweight,
                                  probsimweight=probsimweight,
+                                 projmode=projmode,
                                  )
     tt.tock("model created")
 
@@ -359,7 +379,8 @@ def run(sourcelang="en",
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
 
-    eyt = q.EarlyStopper(vmetrics[-1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
+    eyt = q.EarlyStopper(vmetrics[-1], patience=patience, min_epochs=10, more_is_better=True,
+                         remember_f=lambda: (deepcopy(trainm.model), deepcopy(trainm.model2)))
     # def wandb_logger():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
@@ -386,8 +407,10 @@ def run(sourcelang="en",
     tt.tock("done training")
 
     if eyt.remembered is not None:
-        trainm.model = eyt.remembered
-        testm.model = eyt.remembered
+        trainm.model = eyt.remembered[0]
+        trainm.model2 = eyt.remembered[1]
+        testm.model = eyt.remembered[0]
+        testm.model2 = eyt.remembered[1]
     tt.msg("reloaded best")
 
     tt.tick("testing")
@@ -398,7 +421,7 @@ def run(sourcelang="en",
     tt.tock("tested")
 
     if printtest:
-        predm = testm.model
+        predm = testm.model2
         predm.to(device)
         c, t = 0, 0
         for testbatch in iter(xdl):
@@ -476,7 +499,7 @@ def run_experiments(lang="en", gpu=-1):
 
 def run_experiments_seed(sourcelang="en", supportlang="en", testlang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
                          smoothing=0., numbeam=1, trainonvalid=False, cosinelr=False,
-                         statesimweight=0., probsimweight=0.):
+                         statesimweight=0., probsimweight=0., projmode="simple"):
     ranges = {
         "lr": [0.0001],
         "batsize": [20],
@@ -485,7 +508,7 @@ def run_experiments_seed(sourcelang="en", supportlang="en", testlang="en", lr=-1
         "warmup": [0],
         "epochs": [50],
         "numheads": [12],
-        "numlayers": [3],
+        "numlayers": [5],
         "dropout": [.1],
         "dropoutdec": [.1],
         "hdim": [768],
@@ -524,7 +547,7 @@ def run_experiments_seed(sourcelang="en", supportlang="en", testlang="en", lr=-1
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       sourcelang=sourcelang, supportlang=supportlang, testlang=testlang, gpu=gpu, smoothing=smoothing, numbeam=numbeam,
-                      trainonvalid=trainonvalid, statesimweight=statesimweight, probsimweight=probsimweight)
+                      trainonvalid=trainonvalid, statesimweight=statesimweight, probsimweight=probsimweight, projmode=projmode)
 
 
 if __name__ == '__main__':
