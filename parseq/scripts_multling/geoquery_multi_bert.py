@@ -308,7 +308,7 @@ def run(sourcelang="en",
         trainonvalid=False,
         statesimweight=0.,
         probsimweight=0.,
-        projmode="simple",
+        projmode="simple",      # "simple" or "twolayer"
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
@@ -499,7 +499,7 @@ def run_experiments(lang="en", gpu=-1):
 
 def run_experiments_seed(sourcelang="en", supportlang="en", testlang="en", lr=-1., batsize=-1, patience=-1, enclrmul=-1., hdim=-1, dropout=-1., dropoutdec=-1., numlayers=-1, numheads=-1, gpu=-1, epochs=-1,
                          smoothing=0., numbeam=1, trainonvalid=False, cosinelr=False,
-                         statesimweight=0., probsimweight=0., projmode="simple"):
+                         statesimweight=0., probsimweight=0., projmode="simple", seed=-1):
     ranges = {
         "lr": [0.0001],
         "batsize": [20],
@@ -535,6 +535,8 @@ def run_experiments_seed(sourcelang="en", supportlang="en", testlang="en", lr=-1
         ranges["enclrmul"] = [enclrmul]
     if epochs >= 0:
         ranges["epochs"] = [epochs]
+    if seed >= 0:
+        ranges["seed"] = [seed]
     p = __file__ + f".{sourcelang}-{supportlang}-{testlang}"
     def check_config(x):
         effectiveenclr = x["enclrmul"] * x["lr"]
