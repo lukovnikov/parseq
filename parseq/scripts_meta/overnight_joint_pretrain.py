@@ -370,6 +370,7 @@ def create_model(encoder_name="bert-base-uncased",
                                 encoder_layers=dec_layers,
                                 encoder_ffn_dim=dec_dim*4,
                                 )
+    decoder_config.relative_position = False
     model = BartGenerator(decoder_config)
     model.model.encoder = encoder
 
