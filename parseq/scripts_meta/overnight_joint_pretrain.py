@@ -432,6 +432,7 @@ def run(traindomains="ALL",
         pretrainbatsize=100,
         epochs=100,
         pretrainepochs=100,
+        minpretrainepochs=10,
         dropout=0.1,
         wreg=1e-9,
         gradnorm=3,
@@ -525,7 +526,8 @@ def run(traindomains="ALL",
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
-    eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=10, more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
+    eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=minpretrainepochs,
+                         more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
     # def wandb_logger():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
@@ -549,7 +551,8 @@ def run(traindomains="ALL",
 
     if not nopretrain:
         tt.tick("pretraining")
-        q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=pretrainepochs, check_stop=[lambda: eyt.check_stop()])
+        q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=pretrainepochs,
+                       check_stop=[lambda: eyt.check_stop()])
         tt.tock("done pretraining")
 
     if eyt.get_remembered() is not None:
@@ -582,9 +585,6 @@ def run(traindomains="ALL",
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
-    eyt = q.EarlyStopper(ftvmetrics[1], patience=1000, min_epochs=10, more_is_better=True,
-                         remember_f=lambda: deepcopy(trainm.model))
-
     # def wandb_logger_ft():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], ftmetrics):
@@ -605,17 +605,16 @@ def run(traindomains="ALL",
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=ftdl, optim=ftoptim, losses=ftmetrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=fvdl, losses=ftvmetrics, device=device,
-                         on_end=[lambda: eyt.on_epoch_end()])#, lambda: wandb_logger_ft()])
+                         on_end=[])#, lambda: wandb_logger_ft()])
 
-    tt.tick("training")
-    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs,
-                   check_stop=[lambda: eyt.check_stop()])
-    tt.tock("done training")
+    tt.tick("finetuning")
+    q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
+    tt.tock("done finetuning")
 
-    if eyt.get_remembered() is not None:
-        tt.msg("reloaded")
-        trainm.model = eyt.get_remembered()
-        testm.model = eyt.get_remembered()
+    # if eyt.get_remembered() is not None:
+    #     tt.msg("reloaded")
+    #     trainm.model = eyt.get_remembered()
+    #     testm.model = eyt.get_remembered()
 
     # endregion
 
@@ -695,14 +694,15 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, pretrainbatsize=100,
-                         nopretrain=False, numbeam=1, onlyabstract=False, pretrainsetting="all", finetunesetting="min"):
+                         nopretrain=False, numbeam=1, onlyabstract=False, pretrainsetting="all", finetunesetting="min",
+                         epochs=67, pretrainepochs=60, minpretrainepochs=10):
     ranges = {
         "lr": [0.0001],
         "ftlr": [0.0001],
         "enclrmul": [0.1],
         "warmup": [2],
-        "epochs": [67],
-        "pretrainepochs": [60],
+        "epochs": [epochs],
+        "pretrainepochs": [pretrainepochs],
         "numheads": [numheads],
         "numlayers": [numlayers],
         "dropout": [dropout],
@@ -727,7 +727,7 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
                       gpu=gpu, patience=patience, cosinelr=cosinelr,
                       domainstart=domainstart, pretrainbatsize=pretrainbatsize,
                       pretrainsetting=pretrainsetting, finetunesetting=finetunesetting,
-                      nopretrain=nopretrain, onlyabstract=onlyabstract)
+                      nopretrain=nopretrain, onlyabstract=onlyabstract, minpretrainepochs=minpretrainepochs)
 
 
 
