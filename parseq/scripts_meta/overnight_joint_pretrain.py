@@ -449,8 +449,8 @@ def run(traindomains="ALL",
         domainstart=False,
         nopretrain=False,
         onlyabstract=False,
-        pretrainsetting="all+lex",  # "all", "all+lex", "lex"
-        finetunesetting="lex",      # "lex", "all", "min"
+        pretrainsetting="all",  # "all", "all+lex", "lex"
+        finetunesetting="min",      # "lex", "all", "min"
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
