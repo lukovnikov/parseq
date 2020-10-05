@@ -472,7 +472,6 @@ class SpecialEmbedding(torch.nn.Embedding):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # metarare_targets are 1 for domain-specific tokens
         base_emb = super(SpecialEmbedding, self).forward(input)
-        metarare_emb = self.metarare_emb(torch.zeros_like(input))
         extra_emb = self.extra_emb(input)
         switch = self.metarare_targets[input].float()
         emb = switch[:, :, None] * extra_emb + (1 - switch[:, :, None]) * base_emb
@@ -507,7 +506,6 @@ class SpecialOutlin(torch.nn.Linear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         base_logits = super(SpecialOutlin, self).forward(input)
         extra_logits = self.extra_lin(input)
-        metarare_logits = self.metarare_lin(input)
         switch = self.metarare_targets[None, None, :].float()
 
         logits = switch * extra_logits + (1 - switch) * base_logits
