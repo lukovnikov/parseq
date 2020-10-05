@@ -73,7 +73,8 @@ def get_maximum_spanning_examples(examples, mincoverage=1, loadedex=None):
 
     if loadedex is not None:
         for i, example in enumerate(loadedex):
-            exampletokens = set(get_labels_from_tree(example[1]))
+            exampletokens = set(example[1])
+            # exampletokens = set(get_labels_from_tree(example[1]))
             for token in exampletokens:
                 if token in selectiontokencounts:
                     selectiontokencounts[token] += 1
