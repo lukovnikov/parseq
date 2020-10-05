@@ -687,11 +687,12 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
                       gpu=gpu, patience=patience, cosinelr=cosinelr, mincoverage=mincoverage)
 
 
-def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
+def run_experiments_seed(domain="default", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, pretrainbatsize=100,
                          nopretrain=False, numbeam=1, onlyabstract=False, pretrainsetting="all", finetunesetting="min",
                          epochs=67, pretrainepochs=60, minpretrainepochs=10):
     ranges = {
+        "domain": ["recipes", "restaurants", "blocks", "calendar", "housing", "publications"],
         "lr": [0.0001],
         "ftlr": [0.0001],
         "enclrmul": [0.1],
@@ -708,6 +709,8 @@ def run_experiments_seed(domain="restaurants", gpu=-1, patience=10, cosinelr=Fal
         "seed": [12345678, 65748390, 98387670, 23655798, 66453829],     # TODO: add more later
     }
     p = __file__ + f".{domain}"
+    if domain != "default":
+        ranges["domain"] = [domain]
     def check_config(x):
         effectiveenclr = x["enclrmul"] * x["lr"]
         if effectiveenclr < 0.000005:
