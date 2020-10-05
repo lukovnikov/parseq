@@ -858,6 +858,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 def run_experiments_seed(domain="default", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
                          smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, pretrainbatsize=100,
+                         resetmode="none",
                          nopretrain=False, numbeam=1, onlyabstract=False, pretrainsetting="all", finetunesetting="min",
                          epochs=67, pretrainepochs=60, minpretrainepochs=10):
     ranges = {
@@ -890,7 +891,7 @@ def run_experiments_seed(domain="default", gpu=-1, patience=10, cosinelr=False, 
         return True
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
-                      domain=domain, fullsimplify=fullsimplify,
+                      domain=domain, fullsimplify=fullsimplify, resetmode=resetmode,
                       gpu=gpu, patience=patience, cosinelr=cosinelr, pretrainbatsize=pretrainbatsize,
                       pretrainsetting=pretrainsetting, finetunesetting=finetunesetting,
                       nopretrain=nopretrain, onlyabstract=onlyabstract, minpretrainepochs=minpretrainepochs)
