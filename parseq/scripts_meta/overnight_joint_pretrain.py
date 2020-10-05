@@ -611,11 +611,6 @@ def run(traindomains="ALL",
     q.run_training(run_train_epoch=trainepoch, run_valid_epoch=validepoch, max_epochs=epochs)
     tt.tock("done finetuning")
 
-    # if eyt.get_remembered() is not None:
-    #     tt.msg("reloaded")
-    #     trainm.model = eyt.get_remembered()
-    #     testm.model = eyt.get_remembered()
-
     # endregion
 
     tt.tick("testing")
