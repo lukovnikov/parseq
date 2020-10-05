@@ -714,7 +714,7 @@ def run(traindomains="ALL",
     trainepoch = partial(q.train_epoch, model=trainm, dataloader=tdl, optim=optim, losses=metrics,
                          _train_batch=trainbatch, device=device, on_end=[lambda: lr_schedule.step()])
     validepoch = partial(q.test_epoch, model=testm, dataloader=vdl, losses=vmetrics, device=device,
-                         on_end=[lambda: eyt.on_epoch_end(), reinit()])#, lambda: wandb_logger()])
+                         on_end=[lambda: eyt.on_epoch_end(), lambda: reinit()])#, lambda: wandb_logger()])
 
     if not nopretrain:
         tt.tick("pretraining")
