@@ -29,6 +29,7 @@ from parseq.eval import SeqAccuracies, TreeAccuracy, make_array_of_metrics, CELo
 from parseq.grammar import tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
 from transformers import AutoTokenizer, AutoModel, BartConfig, BartModel, BartForConditionalGeneration
+from transformers.modeling_bart import SinusoidalPositionalEmbedding
 
 UNKID = 3
 
@@ -148,7 +149,6 @@ def load_ds(traindomains=("restaurants",),
             top_k=np.infty,
             nl_mode="bert-base-uncased",
             fullsimplify=False,
-            add_domain_start=True,
             onlyabstract=False,
             pretrainsetting="all+lex",    # "all", "lex" or "all+lex"
             finetunesetting="lex",        # "lex", "all", "min"
@@ -173,15 +173,17 @@ def load_ds(traindomains=("restaurants",),
                             ! Validation is over a fraction of training data
     :return:
     """
+    general_tokens = {
+        "(", ")", "arg:~type", "arg:type", "op:and", "SW:concat", "cond:has",
+        "arg:<=", "arg:<", "arg:>=", "arg:>", "arg:!=", "arg:=", "SW:superlative",
+        "SW:CNT-arg:min", "SW:CNT-arg:<", "SW:CNT-arg:<=", "SW:CNT-arg:>=", "SW:CNT-arg:>",
+        "SW:CNT-arg:max", "SW:CNT-arg:=", "arg:max",
+    }
 
-    def tokenize_and_add_start(t, _domain, lexical=False):
+    def tokenize_and_add_start(t):
         tokens = tree_to_lisp_tokens(t)
-        if not lexical:
-            starttok = f"@START/{_domain}@" if add_domain_start else "@START@"
-            tokens = [starttok] + tokens
-        else:
-            starttok = f"@LEX/{_domain}@" if add_domain_start else "@LEX@"
-            tokens = [starttok] + tokens
+        starttok = "@START@"
+        tokens = [starttok] + tokens
         return tokens
 
     sourceex = []
@@ -198,23 +200,23 @@ def load_ds(traindomains=("restaurants",),
 
     pretrainex = []
     if "all" in pretrainsetting.split("+"):
-        pretrainex += [(a, tokenize_and_add_start(b, d), "pretrain", d) for a, b, c, d in sourceex if c == "train"]
+        pretrainex += [(a, tokenize_and_add_start(b), "pretrain", d) for a, b, c, d in sourceex if c == "train"]
     if "lex" in pretrainsetting.split("+"):
-        pretrainex += [(a, tokenize_and_add_start(b, None, lexical=True), "pretrain", d) for a, b, c, d in sourceex if c == "lexicon"]
+        pretrainex += [(a, tokenize_and_add_start(b), "pretrain", d) for a, b, c, d in sourceex if c == "lexicon"]
 
-    pretrainvalidex = [(a, tokenize_and_add_start(b, d), "pretrainvalid", d) for a, b, c, d in sourceex if c == "valid"]
+    pretrainvalidex = [(a, tokenize_and_add_start(b), "pretrainvalid", d) for a, b, c, d in sourceex if c == "valid"]
 
     if finetunesetting == "all":
-        finetunetrainex = [(a, tokenize_and_add_start(b, d), "fttrain", d) for a, b, c, d in targetex if c == "train"]
+        finetunetrainex = [(a, tokenize_and_add_start(b), "fttrain", d) for a, b, c, d in targetex if c == "train"]
     elif finetunesetting == "lex":
-        finetunetrainex = [(a, tokenize_and_add_start(b, None, lexical=True), "fttrain", d) for a, b, c, d in targetex if c == "lexicon"]
+        finetunetrainex = [(a, tokenize_and_add_start(b), "fttrain", d) for a, b, c, d in targetex if c == "lexicon"]
     elif finetunesetting == "min":
         finetunetrainex = get_maximum_spanning_examples([(a, b, c, d) for a, b, c, d in targetex if c == "train"],
                                       mincoverage=mincoverage,
                                       loadedex=[e for e in sourceex if e[2] == "pretrain"])
-        finetunetrainex = [(a, tokenize_and_add_start(b, d), "fttrain", d) for a, b, c, d in finetunetrainex]
-    finetunevalidex = [(a, tokenize_and_add_start(b, d), "ftvalid", d) for a, b, c, d in targetex if c == "valid"]
-    finetunetestex = [(a, tokenize_and_add_start(b, d), "fttest", d) for a, b, c, d in targetex if c == "test"]
+        finetunetrainex = [(a, tokenize_and_add_start(b), "fttrain", d) for a, b, c, d in finetunetrainex]
+    finetunevalidex = [(a, tokenize_and_add_start(b), "ftvalid", d) for a, b, c, d in targetex if c == "valid"]
+    finetunetestex = [(a, tokenize_and_add_start(b), "fttest", d) for a, b, c, d in targetex if c == "test"]
     print(f"Using mode \"{finetunesetting}\" for finetuning data: "
           f"\n\t{len(finetunetrainex)} training examples")
 
@@ -234,6 +236,11 @@ def load_ds(traindomains=("restaurants",),
         seqenc.inc_build_vocab(query, seen=example[2] in ("pretrain", "fttrain"))
     seqenc.finalize_vocab(min_freq=min_freq, top_k=top_k)
 
+    generaltokenmask = torch.zeros(seqenc_vocab.number_of_ids(), dtype=torch.long)
+    for token, tokenid in seqenc_vocab.D.items():
+        if token in general_tokens:
+            generaltokenmask[tokenid] = 1
+
     nl_tokenizer = AutoTokenizer.from_pretrained(nl_mode)
     def tokenize(x):
         ret = (nl_tokenizer.encode(x[0], return_tensors="pt")[0],
@@ -246,13 +253,19 @@ def load_ds(traindomains=("restaurants",),
                           ds[(None, None, "pretrainvalid", None)].map(tokenize), \
                           ds[(None, None, "ftvalid", None)].map(tokenize), \
                           ds[(None, None, "fttest", None)].map(tokenize)
-    return tds, ftds, vds, fvds, xds, nl_tokenizer, seqenc
+    return tds, ftds, vds, fvds, xds, nl_tokenizer, seqenc, generaltokenmask
 
 
 class BartGenerator(BartForConditionalGeneration):
-    def __init__(self, config:BartConfig):
-        super(BartGenerator, self).__init__(config)
-        self.outlin = torch.nn.Linear(config.d_model, config.vocab_size)
+    def __init__(self, config:BartConfig, emb=None, outlin=None, **kw):
+        super(BartGenerator, self).__init__(config, **kw)
+        if emb is not None:
+            self.model.shared = emb
+            self.model.decoder.embed_tokens = emb
+        if outlin is not None:
+            self.outlin = outlin
+        else:
+            self.outlin = torch.nn.Linear(config.d_model, config.vocab_size)
 
     def forward(
         self,
@@ -332,9 +345,9 @@ class BartGeneratorTest(BartGeneratorTrain):
         return outputs, ret
 
 
-def create_model(encoder_name="bert-base-uncased",
+def create_model(encoder_name="bert-base-uncased", resetmode="none",
                  dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
-                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None):
+                 maxlen=20, smoothing=0., numbeam=1, tensor2tree=None, generaltokenmask=None):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
     pretrained = AutoModel.from_pretrained(encoder_name)
@@ -371,7 +384,19 @@ def create_model(encoder_name="bert-base-uncased",
                                 encoder_ffn_dim=dec_dim*4,
                                 )
     decoder_config.relative_position = False
-    model = BartGenerator(decoder_config)
+
+    if resetmode == "none":
+        emb, outlin = None, None
+    else:
+        emb = SpecialEmbedding(decoder_config.vocab_size,
+                               decoder_config.d_model,
+                               decoder_config.pad_token_id,
+                               metarare_targets=generaltokenmask)
+        outlin = SpecialOutlin(decoder_config.d_model,
+                               decoder_config.vocab_size,
+                               metarare_targets=generaltokenmask)
+
+    model = BartGenerator(decoder_config, emb, outlin)
     model.model.encoder = encoder
 
     orderless = {"op:and", "SW:concat"}
@@ -419,6 +444,123 @@ def _tensor2tree(x, D:Vocab=None):
     return tree
 
 
+class SpecialEmbedding(torch.nn.Embedding):
+    def __init__(self, num_embeddings, embedding_dim, padding_idx=None,
+                 metarare_targets=None, init_std=0.02):
+        super(SpecialEmbedding, self).__init__(num_embeddings, embedding_dim, padding_idx=padding_idx)
+        self.register_buffer("metarare_targets", metarare_targets)
+        # self.metarare = self.weight[self.metarare_source, :]
+        # self.base_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
+        self.extra_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
+        self.init_std = init_std
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        std = self.init_std
+        if isinstance(module, torch.nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, SinusoidalPositionalEmbedding):
+            pass
+        elif isinstance(module, torch.nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        # metarare_targets are 1 for domain-specific tokens
+        base_emb = super(SpecialEmbedding, self).forward(input)
+        metarare_emb = self.metarare_emb(torch.zeros_like(input))
+        extra_emb = self.extra_emb(input)
+        switch = self.metarare_targets[input].float()
+        emb = switch[:, :, None] * extra_emb + (1 - switch[:, :, None]) * base_emb
+        return emb
+
+
+class SpecialOutlin(torch.nn.Linear):
+    def __init__(self, dim, vocsize, metarare_targets=None, bias=True, init_std=0.02):
+        super(SpecialOutlin, self).__init__(dim, vocsize, bias=bias)
+        self.register_buffer("metarare_targets", metarare_targets)
+        # self.metarare = self.weight[self.metarare_source, :]
+        # self.base_emb = torch.nn.Embedding(num_embeddings, embedding_dim, padding_idx)
+        self.extra_lin = torch.nn.Linear(dim, vocsize, bias=bias)
+        self.init_std = init_std
+        self.apply(self._init_weights)
+        # self.extra_lin.weight.data.fill_(0)
+        # self.extra_lin.bias.data.fill_(0)
+
+    def _init_weights(self, module):
+        std = self.init_std
+        if isinstance(module, torch.nn.Linear):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, SinusoidalPositionalEmbedding):
+            pass
+        elif isinstance(module, torch.nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=std)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        base_logits = super(SpecialOutlin, self).forward(input)
+        extra_logits = self.extra_lin(input)
+        metarare_logits = self.metarare_lin(input)
+        switch = self.metarare_targets[None, None, :].float()
+
+        logits = switch * extra_logits + (1 - switch) * base_logits
+        return logits
+
+
+class Reinitializer(object):
+    def __init__(self, model, resetafter=-1, resetevery=-1, numresets=0, resetgeneral=False, resetothers=tuple(), **kw):
+        super(Reinitializer, self).__init__(**kw)
+        self.model = model
+        self.resetafter, self.resetevery, self.numresets = resetafter, resetevery, numresets
+        self.count = 0
+        self.counted_resets = 0
+        self.resetgeneral = resetgeneral
+        self.resetothers = resetothers
+
+    def __call__(self):
+        doreset = False
+        if self.numresets > 0 and self.count >= self.resetafter:
+            if self.count == self.resetafter:
+                doreset = True
+                self.counted_resets += 1
+            elif self.counted_resets < self.numresets and (self.count - self.resetafter) % self.resetevery == 0:
+                doreset = True
+                self.counted_resets += 1
+        if doreset:
+            print("reinitializing domain-specific part of model")
+            reset_special_inner(self.model, resetgeneral=self.resetgeneral)
+            for resetother in self.resetothers:
+                resetother.reset()
+        self.count += 1 # advance counter
+
+
+def reset_special_inner(m, resetgeneral=False):
+    if resetgeneral:
+        if isinstance(m, SpecialEmbedding):
+            m.apply(m._init_weights)
+        elif isinstance(m, SpecialOutlin):
+            m.apply(m._init_weights)
+        else:
+            pass
+        for child in m.children():
+            reset_special_inner(child, resetgeneral=resetgeneral)
+    else:
+        if isinstance(m, SpecialEmbedding):
+            m.extra_emb.apply(m._init_weights)
+        elif isinstance(m, SpecialOutlin):
+            m.extra_lin.apply(m._init_weights)
+        else:
+            pass
+        for child in m.children():
+            reset_special_inner(child, resetgeneral=resetgeneral)
+
+
 def run(traindomains="ALL",
         domain="recipes",
         mincoverage=2,
@@ -431,6 +573,7 @@ def run(traindomains="ALL",
         batsize=30,
         pretrainbatsize=100,
         epochs=100,
+        resetmode="none",
         pretrainepochs=100,
         minpretrainepochs=10,
         dropout=0.1,
@@ -448,7 +591,6 @@ def run(traindomains="ALL",
         localtest=False,
         printtest=False,
         fullsimplify=True,
-        domainstart=False,
         nopretrain=False,
         onlyabstract=False,
         pretrainsetting="all",  # "all", "all+lex", "lex"
@@ -456,6 +598,25 @@ def run(traindomains="ALL",
         ):
     settings = locals().copy()
     print(json.dumps(settings, indent=4))
+
+    numresets, resetafter, resetevery = 0, 0, 0
+    if resetmode == "none":
+        pass
+    elif resetmode == "once":
+        resetafter = 15
+        resetevery = 5
+        numresets = 1
+    elif resetmode == "more":
+        resetafter = 15
+        resetevery = 5
+        numresets = 3
+    elif resetmode == "forever":
+        resetafter = 15
+        resetevery = 5
+        numresets = 1000
+
+    print(f'Resetting: "{resetmode}": {numresets} times, first after {resetafter} epochs, then every {resetevery} epochs')
+
     # wandb.init(project=f"overnight_joint_pretrain_fewshot_{pretrainsetting}-{finetunesetting}-{domain}",
     #            reinit=True, config=settings)
     if traindomains == "ALL":
@@ -468,9 +629,9 @@ def run(traindomains="ALL",
     device = torch.device("cpu") if gpu < 0 else torch.device(gpu)
 
     tt.tick("loading data")
-    tds, ftds, vds, fvds, xds, nltok, flenc = \
+    tds, ftds, vds, fvds, xds, nltok, flenc, generaltokenmask = \
         load_ds(traindomains=traindomains, testdomain=domain, nl_mode=encoder, mincoverage=mincoverage,
-                fullsimplify=fullsimplify, add_domain_start=domainstart, onlyabstract=onlyabstract,
+                fullsimplify=fullsimplify, onlyabstract=onlyabstract,
                 pretrainsetting=pretrainsetting, finetunesetting=finetunesetting)
     tt.msg(f"{len(tds)/(len(tds) + len(vds)):.2f}/{len(vds)/(len(tds) + len(vds)):.2f} ({len(tds)}/{len(vds)}) train/valid")
     tt.msg(f"{len(ftds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(fvds)/(len(ftds) + len(fvds) + len(xds)):.2f}/{len(xds)/(len(ftds) + len(fvds) + len(xds)):.2f} ({len(ftds)}/{len(fvds)}/{len(xds)}) fttrain/ftvalid/test")
@@ -491,7 +652,9 @@ def run(traindomains="ALL",
                                  smoothing=smoothing,
                                  maxlen=maxlen,
                                  numbeam=numbeam,
-                                 tensor2tree=partial(_tensor2tree, D=flenc.vocab)
+                                 tensor2tree=partial(_tensor2tree, D=flenc.vocab),
+                                 generaltokenmask=generaltokenmask,
+                                 resetmode=resetmode
                                  )
     tt.tock("model created")
 
@@ -526,8 +689,13 @@ def run(traindomains="ALL",
 
     clipgradnorm = lambda: torch.nn.utils.clip_grad_norm_(trainm.parameters(), gradnorm)
 
+    if resetmode != "none":
+        minpretrainepochs = resetafter + (numresets - 1) * resetevery
     eyt = q.EarlyStopper(vmetrics[1], patience=patience, min_epochs=minpretrainepochs,
                          more_is_better=True, remember_f=lambda: deepcopy(trainm.model))
+
+    reinit = Reinitializer(trainm.model, resetafter=resetafter, resetevery=resetevery, numresets=numresets, resetothers=[eyt])
+
     # def wandb_logger():
     #     d = {}
     #     for name, loss in zip(["loss", "elem_acc", "seq_acc", "tree_acc"], metrics):
