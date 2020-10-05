@@ -213,7 +213,7 @@ def load_ds(traindomains=("restaurants",),
     elif finetunesetting == "min":
         finetunetrainex = get_maximum_spanning_examples([(a, b, c, d) for a, b, c, d in targetex if c == "train"],
                                       mincoverage=mincoverage,
-                                      loadedex=[e for e in sourceex if e[2] == "pretrain"])
+                                      loadedex=[e for e in pretrainex if e[2] == "pretrain"])
         finetunetrainex = [(a, tokenize_and_add_start(b), "fttrain", d) for a, b, c, d in finetunetrainex]
     finetunevalidex = [(a, tokenize_and_add_start(b), "ftvalid", d) for a, b, c, d in targetex if c == "valid"]
     finetunetestex = [(a, tokenize_and_add_start(b), "fttest", d) for a, b, c, d in targetex if c == "test"]
@@ -856,7 +856,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 
 def run_experiments_seed(domain="default", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
-                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, domainstart=False, pretrainbatsize=100,
+                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, pretrainbatsize=100,
                          nopretrain=False, numbeam=1, onlyabstract=False, pretrainsetting="all", finetunesetting="min",
                          epochs=67, pretrainepochs=60, minpretrainepochs=10):
     ranges = {
@@ -890,8 +890,7 @@ def run_experiments_seed(domain="default", gpu=-1, patience=10, cosinelr=False, 
 
     q.run_experiments(run, ranges, path_prefix=p, check_config=check_config,
                       domain=domain, fullsimplify=fullsimplify,
-                      gpu=gpu, patience=patience, cosinelr=cosinelr,
-                      domainstart=domainstart, pretrainbatsize=pretrainbatsize,
+                      gpu=gpu, patience=patience, cosinelr=cosinelr, pretrainbatsize=pretrainbatsize,
                       pretrainsetting=pretrainsetting, finetunesetting=finetunesetting,
                       nopretrain=nopretrain, onlyabstract=onlyabstract, minpretrainepochs=minpretrainepochs)
 
