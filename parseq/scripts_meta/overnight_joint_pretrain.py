@@ -347,7 +347,7 @@ class BartGeneratorTest(BartGeneratorTrain):
 
 
 def create_model(encoder_name="bert-base-uncased", resetmode="none",
-                 dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0.,
+                 dec_vocabsize=None, dec_layers=6, dec_dim=640, dec_heads=8, dropout=0., decoderdropout=0.,
                  maxlen=20, smoothing=0., numbeam=1, tensor2tree=None, generaltokenmask=None):
     if encoder_name != "bert-base-uncased":
         raise NotImplementedError(f"encoder '{encoder_name}' not supported yet.")
@@ -377,7 +377,7 @@ def create_model(encoder_name="bert-base-uncased", resetmode="none",
                                 vocab_size=dec_vocabsize,
                                 decoder_attention_heads=dec_heads//2,
                                 decoder_layers=dec_layers,
-                                dropout=dropout,
+                                dropout=decoderdropout,
                                 attention_dropout=min(0.1, dropout/2),
                                 decoder_ffn_dim=dec_dim*4,
                                 encoder_attention_heads=dec_heads,
@@ -470,10 +470,10 @@ class SpecialEmbedding(torch.nn.Embedding):
                 module.weight.data[module.padding_idx].zero_()
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        # metarare_targets are 1 for domain-specific tokens
+        # metarare_targets are 1 for domain-general tokens
         base_emb = super(SpecialEmbedding, self).forward(input)
         extra_emb = self.extra_emb(input)
-        switch = self.metarare_targets[input].float()
+        switch = (1-self.metarare_targets[input]).float()
         emb = switch[:, :, None] * extra_emb + (1 - switch[:, :, None]) * base_emb
         return emb
 
@@ -506,7 +506,7 @@ class SpecialOutlin(torch.nn.Linear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         base_logits = super(SpecialOutlin, self).forward(input)
         extra_logits = self.extra_lin(input)
-        switch = self.metarare_targets[None, None, :].float()
+        switch = (1 - self.metarare_targets[None, None, :]).float()
 
         logits = switch * extra_logits + (1 - switch) * base_logits
         return logits
@@ -576,6 +576,7 @@ def run(traindomains="ALL",
         pretrainepochs=100,
         minpretrainepochs=10,
         dropout=0.1,
+        decoderdropout=0.5,
         wreg=1e-9,
         gradnorm=3,
         smoothing=0.,
@@ -648,6 +649,7 @@ def run(traindomains="ALL",
                                  dec_dim=hdim,
                                  dec_heads=numheads,
                                  dropout=dropout,
+                                 decoderdropout=decoderdropout,
                                  smoothing=smoothing,
                                  maxlen=maxlen,
                                  numbeam=numbeam,
@@ -855,7 +857,7 @@ def run_experiments(domain="restaurants", gpu=-1, patience=10, cosinelr=False, m
 
 
 def run_experiments_seed(domain="default", gpu=-1, patience=10, cosinelr=False, fullsimplify=True, batsize=50,
-                         smoothing=0.2, dropout=.1, numlayers=3, numheads=12, hdim=768, pretrainbatsize=100,
+                         smoothing=0.2, dropout=.1, decoderdropout=0.5, numlayers=3, numheads=12, hdim=768, pretrainbatsize=100,
                          resetmode="none",
                          nopretrain=False, numbeam=1, onlyabstract=False, pretrainsetting="all", finetunesetting="min",
                          epochs=67, pretrainepochs=60, minpretrainepochs=10):
@@ -870,6 +872,7 @@ def run_experiments_seed(domain="default", gpu=-1, patience=10, cosinelr=False, 
         "numheads": [numheads],
         "numlayers": [numlayers],
         "dropout": [dropout],
+        "decoderdropout": [decoderdropout],
         "smoothing": [smoothing],
         "hdim": [hdim],
         "numbeam": [numbeam],
