@@ -21,7 +21,8 @@ from tqdm import tqdm
 
 from parseq.grammar import lisp_to_pas, pas_to_tree, tree_size, tree_to_lisp, tree_to_lisp_tokens, lisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
-from transformers import BartTokenizer
+
+import multiprocessing as mp
 
 
 class Dataset(object):
@@ -76,7 +77,7 @@ class Dataset(object):
 
     def filter(self, f):
         ret = []
-        for ex in self._examples:
+        for i, ex in enumerate(self._examples):
             if self._example_fits_filter(ex, f):
                 ret.append(ex)
         ret = Dataset(ret)
@@ -105,9 +106,11 @@ class CachedDataset(object):
         self._examples_cache = {}
         self.baseds = None
 
-    def cache(self):
+    def cache(self, compute_now=False):
         """ Enable cache at this level. """
         self.enable_cache()
+        if compute_now:
+            [self[i] for i in range(len(self))]
         return self
 
     def clear_cache(self):
