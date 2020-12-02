@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 import qelos as q
 
 from parseq.datasets import OvernightDatasetLoader, autocollate
-from parseq.grammar import tree_to_lisp_tokens
+from parseq.grammar import tree_to_lisp_tokens, are_equal_trees, lisp_to_tree
 from parseq.scripts_insert.overnight_treeinsert import extract_info
 from parseq.scripts_insert.util import reorder_tree, flatten_tree
 from parseq.transformer import TransformerConfig, TransformerStack
@@ -18,9 +18,12 @@ from parseq.vocab import Vocab, SequenceEncoder
 from transformers import BertTokenizer, BertModel
 
 
+ORDERLESS = {"op:and", "SW:concat"}
+
+
 def tree_to_seq(x:Tree):
     xstr = tree_to_lisp_tokens(x)
-    xstr = ["@BOS@"] + xstr + ["@EOS@"]
+    # xstr = ["@BOS@"] + xstr + ["@EOS@"]
     return xstr
 
 
@@ -132,6 +135,13 @@ class TransformerTagger(SeqInsertionTagger):
 
         self.reset_parameters()
 
+    def encode_source(self, x):
+        encmask = (x != 0)
+        encs = self.bert_model(x)[0]
+        if self.adapter is not None:
+            encs = self.adapter(encs)
+        return encs, encmask
+
     def reset_parameters(self):
         pass
         # self.posemb.weight.fill_(0.)
@@ -149,20 +159,28 @@ class TransformerTagger(SeqInsertionTagger):
         c = torch.cat([ret[:, 1:], ret[:, :-1]], -1)
         logits = self.out(c)
         # logits = logits + torch.log(self.vocab_mask[None, None, :])
-        return logits, padmask
+        return logits
         # probs = self.out(ret[0], self.vocab_mask[None, None, :])
         # return probs
 
 
 class SeqInsertionDecoder(torch.nn.Module):
     def __init__(self, tagger:SeqInsertionTagger,
-                 max_steps:int=50,
+                 vocab=None,
+                 termination_mode="slot",
+                 max_steps:int=20,
                  max_size:int=100,
                  **kw):
         super(SeqInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
+        self.vocab = vocab
         self.max_steps = max_steps
         self.max_size = max_size
+        self.kldiv = torch.nn.KLDivLoss(reduction="none")
+        self.logsm = torch.nn.LogSoftmax(-1)
+
+        self.termination_mode = termination_mode
+        self.decode_mode = "parallel"
 
     def forward(self, x, y):
         if self.training:
@@ -171,37 +189,250 @@ class SeqInsertionDecoder(torch.nn.Module):
             return self.test_forward(x, y)
 
     @abstractmethod
-    def train_forward(self, x, y):  # --> implement one step training of tagger
-        # extract a training example from y: different for different versions
-        # run through tagger: the same for all versions
-        # compute loss: different versions do different masking and different targets
+    def extract_training_example(self, x, y):
         pass
 
-    @abstractmethod
-    def test_forward(self, x, y):   # --> implement how decoder operates end-to-end
-        pass
+    def compute_loss(self, logits, tgt, mask=None):
+        """
+        :param logits:      (batsize, seqlen, vocsize)
+        :param tgt:         (batsize, seqlen, vocsize)
+        :param mask:        (batsize, seqlen)
+        :return:
+        """
+        logprobs = self.logsm(logits)
+        kl = self.kldiv(logprobs, tgt)      # (batsize, seqlen, vocsize)
+        kl = kl.sum(-1)                     # (batsize, seqlen)
+        if mask is not None:
+            kl = kl * mask
+        kl = kl.sum(-1)
+        return kl
+
+    def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
+        # extract a training example from y:
+        x, newy, tgt, tgtmask = self.extract_training_example(x, y)
+        enc, encmask = self.tagger.encode_source(x)
+        # run through tagger: the same for all versions
+        logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
+        # compute loss: different versions do different masking and different targets
+        loss = self.compute_loss(logits, tgt[:, :-1], mask=tgtmask[:, :-1])
+        return {"loss": loss}
+
+    def get_prediction(self, x:torch.Tensor):
+        # initialize empty ys:
+        y = torch.zeros(x.size(0), 2, device=x.device, dtype=torch.long)
+        y[:, 0] = self.vocab["@BOS@"]
+        y[:, 1] = self.vocab["@EOS@"]
+
+        # run encoder
+        enc, encmask = self.tagger.encode_source(x)
+
+        step = 0
+        newy = None
+        while step < self.max_steps and (newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
+            y = newy if newy is not None else y
+            # run tagger
+            logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
+            _, preds = logits.max(-1)
+            newy = torch.zeros(y.size(0), min(self.max_size, y.size(1) * 2), device=y.device, dtype=torch.long)
+            # update sequences
+            for i in range(len(y)):
+                k = 0
+                for j in range(len(y[i])):
+                    if k >= newy.size(1):
+                        break
+                    newy[i, k] = y[i, j]
+                    k += 1
+                    y_ij = y[i, j].cpu().item()
+                    if y_ij == self.vocab["@EOS@"]:
+                        break  # stop
+                    p_ij = preds[i, j].cpu().item()
+                    if p_ij == self.vocab["@END@"]:
+                        pass  # don't insert anything
+                    else:  # insert what was predicted
+                        if k >= newy.size(1):
+                            break
+                        newy[i, k] = preds[i, j]
+                        k += 1
+            maxlen = (newy != 0).long().sum(-1).max()
+            newy = newy[:, :maxlen]
+            step += 1
+
+        preds = newy
+        return preds
+
+    def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
+        preds = self.get_prediction(x)
+
+        def tensor_to_trees(x, vocab:Vocab):
+            xstrs = [vocab.tostr(x[i]).replace("@BOS@", "").replace("@EOS@", "") for i in range(len(x))]
+            trees = []
+            for xstr in xstrs:
+                try:
+                    tree = lisp_to_tree(xstr)
+                    if isinstance(tree, tuple) and len(tree) == 2 and tree[0] is None:
+                        tree = None
+                except Exception as e:
+                    tree = None
+                trees.append(tree)
+            return trees
+
+        # compute loss and metrics
+        gold_trees = tensor_to_trees(gold, vocab=self.vocab)
+        pred_trees = tensor_to_trees(preds, vocab=self.vocab)
+        treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
+                    for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
+        ret = {"treeacc": torch.tensor(treeaccs).to(x.device)}
+        return ret
 
 
 class SeqInsertionDecoderUniform(SeqInsertionDecoder):
-    def __init__(self, tagger:SeqInsertionTagger,
-                 **kw):
-        super(SeqInsertionDecoderUniform, self).__init__(**kw)
-        # TODO
+    def get_slot_value_probs(self, slotvalues):     # uniform
+        probs = [1./len(slotvalues) for _ in slotvalues]
+        return probs
+
+    def extract_training_example(self, x: torch.Tensor, y: torch.Tensor):
+        # y: (batsize, seqlen) ids, padded with zeros
+        ymask = (y != 0).float()
+        ytotallens = ymask.sum(1)
+        ylens = torch.rand(ytotallens.size(), device=ytotallens.device)
+        ylens = (ylens * ytotallens).round().long()
+        _ylens = ylens.cpu().numpy()
+        # ylens contains the sampled lengths
+
+        # for LTR: take 'ylens' leftmost tokens
+        # for Uniform/Binary: randomly select 'ylens' tokens
+        newy = torch.zeros(y.size(0), y.size(1) + 2, device=y.device).long()
+        newy[:, 0] = self.vocab["@BOS@"]
+        tgt = torch.zeros(y.size(0), y.size(1) + 2, self.vocab.number_of_ids(), device=y.device)
+        # 'tgt' contains target distributions
+        for i in range(newy.size(0)):
+            perm = torch.randperm(ytotallens[i].long().cpu().item())
+            perm = perm[:ylens[i].long().cpu().item()]
+            select, _ = perm.sort(-1)
+            select = list(select.cpu().numpy())
+            k = 1  # k is where in the new sampled sequence we're at
+
+            slotvalues = []
+            for j in range(int(ytotallens[i].cpu().item())):
+                y_ij = y[i, j].cpu().item()
+                if k <= len(select) and j == select[k - 1]:  # if j-th token in y should be k-th in newy
+                    newy[i, k] = y[i, j]
+                    if len(slotvalues) == 0:
+                        tgt[i, k - 1, self.vocab["@END@"]] = 1
+                    else:
+                        for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
+                            tgt[i, k - 1, slotvalue] = float(valueprob)
+                    slotvalues = []
+                    k += 1
+                else:  # otherwise, add
+                    slotvalues.append(y_ij)
+                    # tgt[i, k - 1, y_ij] = 1
+
+            if len(slotvalues) == 0:
+                tgt[i, k - 1, self.vocab["@END@"]] = 1
+            else:
+                for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
+                    tgt[i, k - 1, slotvalue] = float(valueprob)
+
+            newy[i, k] = self.vocab["@EOS@"]
+
+        # normalize
+        tgt = tgt / tgt.sum(-1).clamp_min(1e-6)[:, :, None]
+        tgtmask = (tgt.sum(-1) != 0).float()
+        # make uniform for masked positions
+        newymask = (newy != 0).float()
+        uniform_tgt = torch.ones_like(tgt) / tgt.size(-1)
+        tgt = torch.where(newymask[:, :, None].bool(), tgt, uniform_tgt)
+        # cut unnecessary padded elements from the right of newy
+        newlen = newymask.sum(-1).max()
+        newy = newy[:, :int(newlen)]
+        tgt = tgt[:, :int(newlen)]
+        tgtmask = tgtmask[:, :int(newlen)]
+
+        return x, newy, tgt, tgtmask
 
 
 class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
     """ Differs from Uniform only in computing and using non-uniform weights for gold output distributions """
     def __init__(self, tagger:SeqInsertionTagger,
+                 vocab=None,
+                 termination_mode="slot",
+                 max_steps:int=20,
+                 max_size:int=100,
+                 tau=1.,
                  **kw):
-        super(SeqInsertionDecoderBinary, self).__init__(**kw)
-        # TODO
+        super(SeqInsertionDecoderBinary, self).__init__(tagger, vocab=vocab,
+                                                        termination_mode=termination_mode,
+                                                        max_steps=max_steps,
+                                                        max_size=max_size, **kw)
+        self.tau = tau
+
+    def get_slot_value_probs(self, slotvalues):
+        center = len(slotvalues) / 2 - 0.5
+        distances = [abs(x - center) for x in range(len(slotvalues))]
+        distances = torch.tensor(distances)
+        probs = torch.softmax(-distances/self.tau, -1)
+        probs = probs.numpy()
+        return probs
 
 
 class SeqInsertionDecoderLTR(SeqInsertionDecoder):
-    def __init__(self, tagger:SeqInsertionTagger,
-                 **kw):
-        super(SeqInsertionDecoderLTR, self).__init__(**kw)
-        # TODO
+    def extract_training_example(self, x, y):
+        # y: (batsize, seqlen) ids, padded with zeros
+        ymask = (y != 0).float()
+        ytotallens = ymask.sum(1)
+        ylens = torch.rand(ytotallens.size(), device=ytotallens.device)
+        ylens = (ylens * ytotallens).round().long()
+        _ylens = ylens.cpu().numpy()
+        # ylens contains the sampled lengths
+
+        z = torch.arange(y.size(1))
+        _y = torch.where(z[None, :] < ylens[:, None], y, torch.zeros_like(y))
+        newy = torch.cat([torch.ones_like(y[:, 0:1]) * self.vocab["@BOS@"], _y], 1)
+
+        _y = torch.cat([y, torch.zeros_like(y[:, 0:1])], 1)
+        golds = _y.gather(1, ylens[:, None]).squeeze(1)       # (batsize,)
+        golds = torch.where(golds != 0, golds, torch.ones_like(golds) * self.vocab["@EOS@"])        # when full sequence has been fed, and mask is what remains, make sure that we have @EOS@ instead
+        tgt = torch.zeros(newy.size(0), newy.size(1), self.vocab.number_of_ids(), device=newy.device)
+
+        for i, tgt_pos, tgt_val in zip(range(len(ylens)), ylens, golds):
+            tgt[i, tgt_pos, tgt_val] = 1
+
+        # normalize
+        tgt = tgt / tgt.sum(-1).clamp_min(1e-6)[:, :, None]
+        tgtmask = (tgt.sum(-1) != 0).float()
+        # make uniform for masked positions
+        newymask = (newy != 0).float()
+        uniform_tgt = torch.ones_like(tgt) / tgt.size(-1)
+        tgt = torch.where(tgtmask[:, :, None].bool(), tgt, uniform_tgt)
+        # cut unnecessary padded elements from the right of newy
+        newlen = newymask.sum(-1).max()
+        newy = newy[:, :int(newlen)]
+        tgt = tgt[:, :int(newlen)]
+        tgtmask = tgtmask[:, :int(newlen)]
+
+        return x, newy, tgt, tgtmask
+
+    def get_prediction(self, x:torch.Tensor):
+        # initialize empty ys:
+        y = torch.zeros(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@BOS@"]
+
+        # run encoder
+        enc, encmask = self.tagger.encode_source(x)
+
+        step = 0
+        newy = None
+        ended = torch.zeros_like(y[:, 0:1]).bool()
+        while step < self.max_steps and torch.all(ended):
+            y = newy if newy is not None else y
+            # run tagger
+            logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
+            _, preds = logits.max(-1)
+            preds = preds[:, -1]
+            newy = torch.cat([y, preds[:, None]], 1)
+            ended = ended | (preds == self.vocab["@EOS@"])
+        preds = newy
+        return preds
 
 
 def run(lr=0.001,
@@ -224,10 +455,15 @@ def run(lr=0.001,
 
     # model
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
+    decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab)
+    # decoder = SeqInsertionDecoderLTR(tagger, flenc.vocab)
 
     # test run
     batch = next(iter(tdl_seq))
     out = tagger(batch[1])
+    out = decoder(*batch)
+    decoder.train(False)
+    out = decoder(*batch)
 
 
 # TODO: EOS balancing ?!

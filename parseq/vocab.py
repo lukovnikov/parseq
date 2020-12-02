@@ -121,7 +121,7 @@ class Vocab(_Vocab):
 
     def tostr(self, x:Union[np.ndarray, torch.Tensor], return_tokens=False):
         """
-        :param x:   2D LongTensor or array
+        :param x:   1D LongTensor or array
         :param return_tokens:
         :return:
         """

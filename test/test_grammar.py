@@ -95,13 +95,13 @@ class Test_lisp_to_pas(TestCase):
 
 class TestEqualTrees(TestCase):
     def test_it(self):
-        a = lisp_to_tree("(and (wife BO) (spouse BO))")
+        a = lisp_to_tree("( and ( wife BO ) ( spouse BO ) )")
         b = lisp_to_tree("(and (spouse BO) (wife BO))")
         c = lisp_to_tree("(and (wife BO) (wife BO))")
 
-        print(are_equal_trees(a, a))        # should be True
-        print(are_equal_trees(a, b))        # should be True
-        print(are_equal_trees(a, c))        # should be False
+        print(are_equal_trees(a, a))  # should be True
+        print(are_equal_trees(a, b))  # should be True
+        print(are_equal_trees(a, c))  # should be False
         self.assertTrue(are_equal_trees(a, a))
         self.assertTrue(are_equal_trees(a, b))
         self.assertFalse(are_equal_trees(a, c))
@@ -111,5 +111,25 @@ class TestEqualTrees(TestCase):
         b = lisp_to_tree("(and (wife BO) (spouse @UNK@))")
         print(are_equal_trees(a, b))
         print(are_equal_trees(b, b))
-        self.assertFalse(are_equal_trees(b, b))
         self.assertFalse(are_equal_trees(a, b))
+        self.assertFalse(are_equal_trees(b, b))
+
+    def test_ordered(self):
+        a = lisp_to_tree("(nand (wife BO) (spouse BO))")
+        b = lisp_to_tree("(nand (wife BO) (spouse BO) (child BO))")
+        print(are_equal_trees(a, b))
+        self.assertFalse(are_equal_trees(a, b))
+
+    def test_unordered_twolevel(self):
+        a = lisp_to_tree("(and  (or (wife BO) (spouse BO))  (or (wife BR) (spouse BR))  ) ")
+        b = lisp_to_tree("(and (or (spouse BR) (wife BR))  (or (spouse BO) (wife BO))  )")
+        print(are_equal_trees(a, b))
+        self.assertTrue(are_equal_trees(a, b))
+
+    def test_unordered_duplicate(self):
+        a = lisp_to_tree("(and (wife BO) (wife BR) (wife BO))")
+        b = lisp_to_tree("(and (wife BO) (wife BR) (wife BR))")
+        print(are_equal_trees(a, b))
+        self.assertFalse(are_equal_trees(a, b))
+
+
