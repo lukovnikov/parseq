@@ -17,6 +17,7 @@ from parseq.grammar import tree_to_lisp_tokens, tree_to_prolog, are_equal_trees,
 from parseq.scripts_insert.overnight_treeinsert import ATree, child_number_of, extract_info, collate_fn, \
     TreeInsertionTagger, MultiCELoss, Recall, add_descendants_ancestors, all_terminated
 from parseq.scripts_insert.overnight_treeinsert_entropy import MOS
+from parseq.scripts_insert.util import reorder_tree, flatten_tree
 from parseq.transformer import TransformerConfig, TransformerModel, TransformerStack
 from parseq.vocab import Vocab, SequenceEncoder
 from transformers import BertTokenizer, BertModel
@@ -287,31 +288,6 @@ def execute_chosen_actions(x:ATree, _budget=[np.infty], mode="full"):
                 x[:] = [newnode, rightslot]
                 _budget[0] -= 2
     return x
-
-
-def reorder_tree(x:Tree, orderless=None):
-    if orderless is None or len(orderless) == 0 or len(x) == 0:
-        return x
-    else:
-        children = [reorder_tree(xe, orderless=orderless) for xe in x]
-        if x.label() in orderless:
-            # do type first
-            types = [xe for xe in children if xe.label() == "arg:~type"]
-            types = sorted(types, key=lambda _xe: str(_xe))
-            otherchildren = [xe for xe in children if xe.label() != "arg:~type"]
-            otherchildren = sorted([xe for xe in otherchildren], key=lambda _xe: str(_xe))
-            children = types + otherchildren
-        x[:] = children
-        return x
-
-
-def flatten_tree(x: Tree):
-    assert(x.label() == "@START@")
-    assert(len(x) == 1)
-    xstr = tree_to_lisp_tokens(x[0])
-    nodes = [Tree(xe if xe not in "()" else "|"+xe, []) for xe in xstr]
-    y = Tree(x.label(), nodes)
-    return y
 
 
 def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
