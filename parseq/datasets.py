@@ -496,7 +496,7 @@ class OvernightDatasetLoader(object):
                  pcache="../datasets/overnightCache/",
                  usecache=False,
                  validfrac=.2,
-                 simplify_mode="full",
+                 simplify_mode="full",      # or "none"
                  simplify_blocks=False,
                  restore_reverse=False,
                  **kw):
@@ -714,7 +714,16 @@ class OvernightDatasetLoader(object):
             else:
                 return t
 
+        def simplify_sw(t:Tree)->Tree:
+            if t.label().startswith("edu.stanford.nlp.sempre.overnight.SimpleWorld."):
+                t.set_label("SW:" + t.label()[len("edu.stanford.nlp.sempre.overnight.SimpleWorld."):])
+            t[:] = [simplify_sw(te) for te in t]
+            return t
+
         lf = ztree
+        if self.simplify_mode == "none":
+            lf = simplify_sw(lf)
+            return lf
         if self.simplify_mode != "none":
             lf = simplify_tree(lf)
             lf = simplify_further(lf)

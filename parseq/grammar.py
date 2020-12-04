@@ -14,7 +14,7 @@ def pas_to_str(x):
         return x
 
 
-class TreeStrParser(ABC):
+class TreeStrParser(ABC):           # TODO: what if multiple trees in one string?
     def __init__(self, x:str=None, brackets="()"):
         super(TreeStrParser, self).__init__()
         self.stack = [[]]
