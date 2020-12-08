@@ -132,10 +132,10 @@ class TransformerTagger(SeqInsertionTagger):
 
         self.bertname = bertname
         self.bert_model = BertModel.from_pretrained(self.bertname)
-        def set_dropout(m:torch.nn.Module):
-            if isinstance(m, torch.nn.Dropout):
-                m.p = dropout
-        self.bert_model.apply(set_dropout)
+        # def set_dropout(m:torch.nn.Module):
+        #     if isinstance(m, torch.nn.Dropout):
+        #         m.p = dropout
+        # self.bert_model.apply(set_dropout)
 
         self.adapter = None
         if self.bert_model.config.hidden_size != decoder_config.d_model:
@@ -506,7 +506,7 @@ def run(domain="restaurants",
         hdim=366,
         numlayers=6,
         numheads=6,
-        dropout=0.,
+        dropout=0.1,
         noreorder=False,
         trainonvalid=False,
         seed=87646464,
