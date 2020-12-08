@@ -6,6 +6,7 @@ from functools import partial
 from typing import Dict
 
 import torch
+import wandb
 from nltk import Tree
 import numpy as np
 from torch.utils.data import DataLoader
@@ -499,6 +500,7 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
 
 
 def run(domain="restaurants",
+        mode="baseline",
         lr=0.0001,
         enclrmul=0.1,
         batsize=50,
@@ -522,7 +524,9 @@ def run(domain="restaurants",
         ):
 
     settings = locals().copy()
-    print(json.dumps(settings, indent=4))
+    q.pp_dict(settings)
+    method = "baseline"
+    wandb.init(project=f"seqinsert_overnight", config=settings, reinit=True)
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -584,6 +588,16 @@ def run(domain="restaurants",
         patience = epochs
     eyt = q.EarlyStopper(vmetrics[-1], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
 
+    def wandb_logger():
+        d = {}
+        for name, loss in zip(["CE"], tloss):
+            d["train_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["tree_acc"], tmetrics):
+            d["train_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["tree_acc"], vmetrics):
+            d["valid_"+name] = loss.get_epoch_error()
+        wandb.log(d)
+
     t_max = epochs
     optim = get_optim(tagger, lr, enclrmul)
     print(f"Total number of updates: {t_max} .")
@@ -610,12 +624,14 @@ def run(domain="restaurants",
                          dataloader=tdl_seq,
                          device=device)
 
+    on_end_v = [lambda: eyt.on_epoch_end(), lambda: wandb_logger()]
+
     validepoch = partial(q.test_epoch,
                          model=decoder,
                          losses=vmetrics,
                          dataloader=vdl_seq,
                          device=device,
-                         on_end=[lambda: eyt.on_epoch_end()])
+                         on_end=on_end_v)
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
@@ -636,11 +652,90 @@ def run(domain="restaurants",
                          losses=xmetrics,
                          dataloader=xdl_seq,
                          device=device)
-    print(testepoch())
+    testres = testepoch()
+    print(f"Test results: {testres}")
     tt.tock()
+
+    settings.update({"train_CE": tloss[0].get_epoch_error()})
+    settings.update({"train_tree_acc": tmetrics[0].get_epoch_error()})
+    settings.update({"valid_tree_acc": vmetrics[0].get_epoch_error()})
+    settings.update({"test_tree_acc": xmetrics[0].get_epoch_error()})
+
+    wandb.config.update(settings)
+    q.pp_dict(settings)
 
 # TODO: EOS balancing ?!
 
 
+def run_experiment(domain="restaurants",
+                   mode="baseline",
+        lr=-1.,
+        enclrmul=-1.,
+        batsize=-1,
+        epochs=-1,
+        hdim=-1,
+        numlayers=-1,
+        numheads=-1,
+        dropout=-1.,
+        noreorder=False,
+        trainonvalid=False,
+        seed=-1,
+        gpu=-1,
+        patience=-1,
+        gradacc=1,
+        cosinelr=False,
+        warmup=-1,
+        gradnorm=3.,
+        validinter=-1,
+        maxsteps=75,        # TODO: stop insertion decoding when max size is reached
+        maxsize=75,
+        ):
+
+    settings = locals().copy()
+
+    ranges = {
+        "dropout": [0.0, 0.1, 0.2, 0.3, 0.4],
+        "epochs": [100],
+        "batsize": [50],
+        "hdim": [366, 768],
+        "numheads": [6, 12],
+        "numlayers": [6, 8, 12],
+        "lr": [0.0001, 0.000025],
+        "enclrmul": [1., 0.1],
+        "seed": [87646464],
+        "patience": [-1],
+        "warmup": [20],
+        "validinter": [15],
+
+    }
+
+    if True:        # baseline
+        ranges["valindinter"] = [5]
+
+    for k in ranges:
+        if k in settings:
+            if isinstance(settings[k], str) and settings[k] != "default":
+                ranges[k] = [settings[k]]
+            elif isinstance(settings[k], (int, float)) and settings[k] >= 0:
+                ranges[k] = [settings[k]]
+            else:
+                pass
+                # raise Exception(f"something wrong with setting '{k}'")
+            del settings[k]
+
+    def checkconfig(spec):
+        if spec["hdim"] == 366 and spec["numheads"] != 6:
+            return False
+        if spec["hdim"] == 768 and spec["numheads"] != 12:
+            return False
+        return True
+
+    print(__file__)
+    p = __file__ + f".baseline.{domain}"
+    q.run_experiments_random(
+        run, ranges, path_prefix=p, check_config=checkconfig, **settings)
+
+
+
 if __name__ == '__main__':
-    q.argprun(run)
+    q.argprun(run_experiment)
