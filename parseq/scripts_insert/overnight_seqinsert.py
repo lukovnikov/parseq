@@ -699,7 +699,7 @@ def run_experiment(domain="restaurants",
 
     ranges = {
         "dropout": [0.0, 0.1, 0.2, 0.3, 0.4],
-        "epochs": [100],
+        "epochs": [121],
         "batsize": [50],
         "hdim": [366, 768],
         "numheads": [6, 12],
