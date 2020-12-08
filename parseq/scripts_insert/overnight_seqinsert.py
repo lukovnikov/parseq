@@ -625,8 +625,8 @@ def run(domain="restaurants",
                    validinter=validinter)
     tt.tock("done training")
 
-    tt.msg("reloading best")
-    if eyt.remembered is not None:
+    if eyt.remembered is not None and not trainonvalid:
+        tt.msg("reloading best")
         decoder.tagger = eyt.remembered
         tagger = eyt.remembered
 
