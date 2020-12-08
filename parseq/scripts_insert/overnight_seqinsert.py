@@ -710,7 +710,7 @@ def run_experiment(domain="restaurants",
     }
 
     if True:        # baseline
-        ranges["valindinter"] = [5]
+        ranges["validinter"] = [5]
 
     for k in ranges:
         if k in settings:
