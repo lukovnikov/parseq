@@ -759,8 +759,12 @@ class OvernightDatasetLoader(object):
     def lines_to_examples(self, lines:List[str]):
         maxsize_before = 0
         avgsize_before = []
+        maxsize_before_brackets = 0
+        avgsize_before_brackets = []
         maxsize_after = 0
         avgsize_after = []
+        maxsize_after_brackets = 0
+        avgsize_after_brackets = []
 
         ret = []
         ltp = None
@@ -772,8 +776,10 @@ class OvernightDatasetLoader(object):
                 question = z[1][0][1][0][1:-1]
                 ztree = pas_to_tree(z[1][2][1][0])
 
-                maxsize_before = max(maxsize_before, tree_length(ztree))
-                avgsize_before.append(tree_length(ztree))
+                maxsize_before = max(maxsize_before, tree_length(ztree, count_brackets=False))
+                avgsize_before.append(tree_length(ztree, count_brackets=False))
+                maxsize_before_brackets = max(maxsize_before_brackets, tree_length(ztree, count_brackets=True))
+                avgsize_before_brackets.append(tree_length(ztree, count_brackets=True))
 
                 lf = self._ztree_to_lf(ztree)
 
@@ -781,8 +787,10 @@ class OvernightDatasetLoader(object):
                 # print(ret[-1][0])
                 # print(ret[-1][1])
                 ltp = None
-                maxsize_after = max(maxsize_after, tree_length(lf))
-                avgsize_after.append(tree_length(lf))
+                maxsize_after = max(maxsize_after, tree_length(lf, count_brackets=False))
+                avgsize_after.append(tree_length(lf, count_brackets=False))
+                maxsize_after_brackets = max(maxsize_after_brackets, tree_length(lf, count_brackets=True))
+                avgsize_after_brackets.append(tree_length(lf, count_brackets=True))
 
                 # print(pas_to_tree(z[1][2][1][0]))
                 # print()
@@ -790,10 +798,13 @@ class OvernightDatasetLoader(object):
 
         avgsize_before = sum(avgsize_before) / len(avgsize_before)
         avgsize_after = sum(avgsize_after) / len(avgsize_after)
+        avgsize_before_brackets = sum(avgsize_before_brackets) / len(avgsize_before_brackets)
+        avgsize_after_brackets = sum(avgsize_after_brackets) / len(avgsize_after_brackets)
+
 
         print(f"Simplification results ({j} examples):")
-        print(f"\t Max, Avg size before: {maxsize_before}, {avgsize_before}")
-        print(f"\t Max, Avg size after: {maxsize_after}, {avgsize_after}")
+        print(f"\t Max, Avg size before: {maxsize_before}, {avgsize_before} (with brackets: {maxsize_before_brackets}, {avgsize_before_brackets})")
+        print(f"\t Max, Avg size after: {maxsize_after}, {avgsize_after} (with brackets: {maxsize_after_brackets}, {avgsize_after_brackets})")
 
         return ret
 

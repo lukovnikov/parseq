@@ -101,11 +101,12 @@ class SeqInsertionTagger(torch.nn.Module):
 
 class TransformerTagger(SeqInsertionTagger):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", baseline=False, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
         self.dim = dim
+        self.baseline = baseline
         config = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
                                    num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
                                    use_relative_position=False)
@@ -114,10 +115,13 @@ class TransformerTagger(SeqInsertionTagger):
         self.posemb = torch.nn.Embedding(maxpos, config.d_model)
         decoder_config = deepcopy(config)
         decoder_config.is_decoder = True
-        decoder_config.use_causal_mask = False
+        decoder_config.use_causal_mask = baseline
         self.decoder = TransformerStack(decoder_config)
 
-        self.out = torch.nn.Linear(self.dim * 2, self.vocabsize)
+        if baseline:
+            self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        else:
+            self.out = torch.nn.Linear(self.dim * 2, self.vocabsize)
         # self.out = MOS(self.dim, self.vocabsize, K=mosk)
 
         vocab_mask = torch.ones(self.vocabsize)
@@ -152,7 +156,8 @@ class TransformerTagger(SeqInsertionTagger):
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None):
         padmask = (tokens != 0)
-        padmask = padmask[:, 1:]
+        if not self.baseline:
+            padmask = padmask[:, 1:]
         embs = self.emb(tokens)
         posembs = self.posemb(torch.arange(tokens.size(1), device=tokens.device))[None]
         embs = embs + posembs
@@ -160,7 +165,10 @@ class TransformerTagger(SeqInsertionTagger):
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=False)
         ret = ret[0]
-        c = torch.cat([ret[:, 1:], ret[:, :-1]], -1)
+        if self.baseline:
+            c = ret
+        else:
+            c = torch.cat([ret[:, 1:], ret[:, :-1]], -1)
         logits = self.out(c)
         # logits = logits + torch.log(self.vocab_mask[None, None, :])
         return logits
@@ -276,7 +284,7 @@ class SeqInsertionDecoder(torch.nn.Module):
                 xstr = xstr[0]
                 # add an opening parentheses if not there
                 xstr = xstr.strip()
-                if xstr[0] != "(":
+                if len(xstr) == 0 or xstr[0] != "(":
                     xstr = "(" + xstr
                 # balance closing parentheses
                 parenthese_imbalance = xstr.count("(") - xstr.count(")")
@@ -392,7 +400,38 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
 
 
 class SeqInsertionDecoderLTR(SeqInsertionDecoder):
+    def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
+        # extract a training example from y:
+        x, newy, tgt, tgtmask = self.extract_training_example(x, y)
+        enc, encmask = self.tagger.encode_source(x)
+        # run through tagger: the same for all versions
+        logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
+        # compute loss: different versions do different masking and different targets
+        loss = self.compute_loss(logits, tgt, mask=tgtmask)
+        return {"loss": loss}, logits
+
     def extract_training_example(self, x, y):
+        return self.baseline_extract_training_example(x, y)
+
+    def baseline_extract_training_example(self, x, y):
+        ymask = (y != 0).float()
+        ylens = ymask.sum(1).long()
+        newy = y
+        newy = torch.cat([torch.ones_like(newy[:, 0:1]) * self.vocab["@BOS@"], newy], 1)
+        newy = torch.cat([newy, torch.zeros_like(newy[:, 0:1])], 1)       # append some zeros
+        # append EOS
+        for i, ylen in zip(range(len(ylens)), ylens):
+            newy[i, ylen+1] = self.vocab["@END@"]
+
+        goldy = newy[:, 1:]
+        tgt = torch.zeros(goldy.size(0), goldy.size(1), self.vocab.number_of_ids(), device=goldy.device)
+        tgt = tgt.scatter(2, goldy[:, :, None], 1.)
+        tgtmask = (goldy != 0).float()
+
+        newy = newy[:, :-1]
+        return x, newy, tgt, tgtmask
+
+    def ltr_extract_training_example(self, x, y):
         # y: (batsize, seqlen) ids, padded with zeros
         ymask = (y != 0).float()
         ytotallens = ymask.sum(1)
@@ -437,7 +476,7 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
     def get_prediction(self, x:torch.Tensor):
         # initialize empty ys:
         y = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@BOS@"]
-        yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
+        # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
 
         # run encoder
         enc, encmask = self.tagger.encode_source(x)
@@ -448,8 +487,8 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
         while step < self.max_size and not torch.all(ended):
             y = newy if newy is not None else y
             # run tagger
-            _y = torch.cat([y, yend], 1)
-            logits = self.tagger(tokens=_y, enc=enc, encmask=encmask)
+            # y = torch.cat([y, yend], 1)
+            logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
             _, preds = logits.max(-1)
             preds = preds[:, -1]
             newy = torch.cat([y, preds[:, None]], 1)
@@ -464,10 +503,10 @@ def run(domain="restaurants",
         enclrmul=0.1,
         batsize=50,
         epochs=1000,
-        hdim=768,
+        hdim=366,
         numlayers=6,
-        numheads=12,
-        dropout=0.1,
+        numheads=6,
+        dropout=0.,
         noreorder=False,
         trainonvalid=False,
         seed=87646464,
@@ -479,7 +518,7 @@ def run(domain="restaurants",
         gradnorm=3,
         validinter=10,
         maxsteps=20,
-        maxsize=50,
+        maxsize=75,
         ):
 
     settings = locals().copy()
@@ -500,7 +539,7 @@ def run(domain="restaurants",
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, baseline=True)
     # decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
     decoder = SeqInsertionDecoderLTR(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
 
