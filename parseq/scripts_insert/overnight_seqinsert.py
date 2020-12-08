@@ -635,7 +635,7 @@ def run(domain="restaurants",
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=[trainevalepoch, validepoch],
+                   run_valid_epoch=[validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
@@ -650,6 +650,11 @@ def run(domain="restaurants",
         validres = validepoch()
         print(f"Validation results: {validres}")
 
+    tt.tick("running train")
+    trainres = trainevalepoch()
+    print(f"Train tree acc: {trainres}")
+    tt.tock()
+
     tt.tick("running test")
     testepoch = partial(q.test_epoch,
                          model=decoder,
@@ -657,7 +662,7 @@ def run(domain="restaurants",
                          dataloader=xdl_seq,
                          device=device)
     testres = testepoch()
-    print(f"Test results: {testres}")
+    print(f"Test tree acc: {testres}")
     tt.tock()
 
     settings.update({"final_train_CE": tloss[0].get_epoch_error()})
