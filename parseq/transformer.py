@@ -415,6 +415,9 @@ class TransformerAttention(nn.Module):
         weights = F.softmax(scores.float(), dim=-1).type_as(scores)  # (bs, n_heads, qlen, klen)
         weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
 
+        if mask is not None:
+            weights = weights + mask
+
         # Mask heads if we want to
         if head_mask is not None:
             weights = weights * head_mask
