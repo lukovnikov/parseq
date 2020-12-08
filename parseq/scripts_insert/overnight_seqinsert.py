@@ -646,6 +646,10 @@ def run(domain="restaurants",
         decoder.tagger = eyt.remembered
         tagger = eyt.remembered
 
+        tt.tick("rerunning validation")
+        validres = validepoch()
+        print(f"Validation results: {validres}")
+
     tt.tick("running test")
     testepoch = partial(q.test_epoch,
                          model=decoder,
@@ -656,10 +660,10 @@ def run(domain="restaurants",
     print(f"Test results: {testres}")
     tt.tock()
 
-    settings.update({"train_CE": tloss[0].get_epoch_error()})
-    settings.update({"train_tree_acc": tmetrics[0].get_epoch_error()})
-    settings.update({"valid_tree_acc": vmetrics[0].get_epoch_error()})
-    settings.update({"test_tree_acc": xmetrics[0].get_epoch_error()})
+    settings.update({"final_train_CE": tloss[0].get_epoch_error()})
+    settings.update({"final_train_tree_acc": tmetrics[0].get_epoch_error()})
+    settings.update({"final_valid_tree_acc": vmetrics[0].get_epoch_error()})
+    settings.update({"final_test_tree_acc": xmetrics[0].get_epoch_error()})
 
     wandb.config.update(settings)
     q.pp_dict(settings)
