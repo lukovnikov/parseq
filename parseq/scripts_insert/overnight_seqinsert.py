@@ -501,8 +501,7 @@ class SeqDecoderBaseline(SeqInsertionDecoder):
             ended = ended | _ended
             step += 1
             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
-        preds = newy
-        return preds, steps_used.float()
+        return newy, steps_used.float()
 
 
 class SeqInsertionDecoderLTR(SeqInsertionDecoder):
@@ -807,7 +806,7 @@ def run_experiment(domain="default",    #
     settings = locals().copy()
 
     ranges = {
-        "domain": ["calendar", "blocks", "housing", "recipes"], #["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"],
+        "domain": ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"],
         "dropout": [0.0, 0.1, 0.2, 0.3, 0.4],
         "epochs": [121],
         "batsize": [50],
