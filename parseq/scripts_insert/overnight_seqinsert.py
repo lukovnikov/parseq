@@ -834,6 +834,9 @@ def run_experiment(domain="default",    #
         ranges["epochs"] = [501]
         ranges["validinter"] = [25]
         ranges["gradacc"] = [10]
+        ranges["hdim"] = [768]
+        ranges["numlayers"] = [6]
+        ranges["numheads"] = [12]
 
     for k in ranges:
         if k in settings:
