@@ -600,6 +600,7 @@ def run(domain="restaurants",
         validinter=10,
         maxsteps=20,
         maxsize=75,
+        testcode=False,
         ):
 
     settings = locals().copy()
@@ -633,11 +634,12 @@ def run(domain="restaurants",
         decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
 
     # test run
-    batch = next(iter(tdl_seq))
-    # out = tagger(batch[1])
-    # out = decoder(*batch)
-    decoder.train(False)
-    out = decoder(*batch)
+    if testcode:
+        batch = next(iter(tdl_seq))
+        # out = tagger(batch[1])
+        # out = decoder(*batch)
+        decoder.train(False)
+        out = decoder(*batch)
 
     tloss = make_array_of_metrics("loss", reduction="mean")
     tmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
@@ -787,6 +789,7 @@ def run_experiment(domain="default",    #
         validinter=-1,
         maxsteps=75,        # TODO: stop insertion decoding when max size is reached
         maxsize=75,
+                   testcode=False,
         ):
 
     settings = locals().copy()
