@@ -247,20 +247,21 @@ class SeqInsertionDecoder(torch.nn.Module):
 
         step = 0
         newy = None
+        steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
         while step < self.max_steps and (newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
             y = newy if newy is not None else y
             # run tagger
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
-            predprobs, preds = logits.max(-1)
-            predprobs = torch.softmax(predprobs, -1)
-            predprobs, preds = predprobs.cpu().numpy(), preds.cpu().numpy()
-            _y = y.cpu().numpy()
+            probs = torch.softmax(logits, -1)
+            predprobs, preds = probs.max(-1)
+            predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
+            _y = y.cpu().detach().numpy()
             newy = torch.zeros(y.size(0), min(self.max_size, y.size(1) * 2), device=y.device, dtype=torch.long)
             # update sequences
             for i in range(len(y)):
                 k = 0
-                pp_mask = preds != self.vocab["@END@"]
                 p_i = preds[i]
+                pp_mask = p_i != self.vocab["@END@"]
                 pp_i = predprobs[i] * pp_mask
                 prob_thresh = min(self.prob_threshold, max(pp_i))
                 for j in range(len(y[i])):
@@ -284,12 +285,16 @@ class SeqInsertionDecoder(torch.nn.Module):
             maxlen = (newy != 0).long().sum(-1).max()
             newy = newy[:, :maxlen]
             step += 1
-
-        preds = newy
-        return preds
+            stays_same = torch.all(newy == y, -1)
+            steps_used = torch.min(steps_used, stays_same * step)
+            lens = (newy != 0).long().sum(-1)
+            maxlenreached = (lens == self.max_size)
+            if torch.all(maxlenreached):
+                break
+        return newy, steps_used
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-        preds = self.get_prediction(x)
+        preds, stepsused = self.get_prediction(x)
 
         def tensor_to_trees(x, vocab:Vocab):
             xstrs = [vocab.tostr(x[i]).replace("@BOS@", "").replace("@EOS@", "") for i in range(len(x))]
@@ -320,7 +325,7 @@ class SeqInsertionDecoder(torch.nn.Module):
         pred_trees = tensor_to_trees(preds, vocab=self.vocab)
         treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
-        ret = {"treeacc": torch.tensor(treeaccs).to(x.device)}
+        ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
         return ret, pred_trees
 
 
@@ -462,6 +467,7 @@ class SeqDecoderBaseline(SeqInsertionDecoder):
         return x, newy, tgt, tgtmask
 
     def get_prediction(self, x:torch.Tensor):
+        steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
         # initialize empty ys:
         y = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@BOS@"]
         # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
@@ -480,10 +486,12 @@ class SeqDecoderBaseline(SeqInsertionDecoder):
             _, preds = logits.max(-1)
             preds = preds[:, -1]
             newy = torch.cat([y, preds[:, None]], 1)
-            ended = ended | (preds == self.vocab["@END@"])
+            _ended = (preds == self.vocab["@END@"])
+            ended = ended | _ended
             step += 1
+            steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
         preds = newy
-        return preds
+        return preds, steps_used
 
 
 class SeqInsertionDecoderLTR(SeqInsertionDecoder):
@@ -543,6 +551,7 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
         return x, newy, tgt, tgtmask
 
     def get_prediction(self, x:torch.Tensor):
+        steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
         # initialize empty ys:
         y = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@BOS@"]
         # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
@@ -561,10 +570,11 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
             _, preds = logits.max(-1)
             preds = preds[:, -1]
             newy = torch.cat([y, preds[:, None]], 1)
-            ended = ended | (preds == self.vocab["@END@"])
+            _ended = (preds == self.vocab["@END@"])
+            ended = ended | _ended
             step += 1
-        preds = newy
-        return preds
+            steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
+        return newy, steps_used
 
 
 def run(domain="restaurants",
@@ -623,16 +633,16 @@ def run(domain="restaurants",
         decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
 
     # test run
-    # batch = next(iter(tdl_seq))
+    batch = next(iter(tdl_seq))
     # out = tagger(batch[1])
     # out = decoder(*batch)
-    # decoder.train(False)
-    # out = decoder(*batch)
+    decoder.train(False)
+    out = decoder(*batch)
 
     tloss = make_array_of_metrics("loss", reduction="mean")
-    tmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    vmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    xmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    tmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
+    vmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
+    xmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
 
 
     # region parameters
@@ -667,9 +677,9 @@ def run(domain="restaurants",
         d = {}
         for name, loss in zip(["CE"], tloss):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], tmetrics):
+        for name, loss in zip(["tree_acc", "stepsused"], tmetrics):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], vmetrics):
+        for name, loss in zip(["tree_acc", "stepsused"], vmetrics):
             d["valid_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
@@ -744,6 +754,9 @@ def run(domain="restaurants",
     settings.update({"final_train_tree_acc": tmetrics[0].get_epoch_error()})
     settings.update({"final_valid_tree_acc": vmetrics[0].get_epoch_error()})
     settings.update({"final_test_tree_acc": xmetrics[0].get_epoch_error()})
+    settings.update({"final_train_steps_used": tmetrics[1].get_epoch_error()})
+    settings.update({"final_valid_steps_used": vmetrics[1].get_epoch_error()})
+    settings.update({"final_test_steps_used": xmetrics[1].get_epoch_error()})
 
     wandb.config.update(settings)
     q.pp_dict(settings)
