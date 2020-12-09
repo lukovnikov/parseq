@@ -578,8 +578,7 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
             # run tagger
             y_ = torch.cat([y, yend], 1)
             logits = self.tagger(tokens=y_, enc=enc, encmask=encmask)
-            _, preds = logits.max(-1)
-            preds = preds[:, -1]
+            _, preds = logits[:, -1].max(-1)
             newy = torch.cat([y, preds[:, None]], 1)
             y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
             newy = torch.where(ended[:, None], y__, newy)     # prevent terminated examples from changing
