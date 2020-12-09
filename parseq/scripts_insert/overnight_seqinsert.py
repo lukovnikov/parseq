@@ -159,8 +159,8 @@ class TransformerTagger(SeqInsertionTagger):
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None):
         padmask = (tokens != 0)
-        if not self.baseline:
-            padmask = padmask[:, 1:]
+        # if not self.baseline:
+        #     padmask = padmask[:, 1:]
         embs = self.emb(tokens)
         posembs = self.posemb(torch.arange(tokens.size(1), device=tokens.device))[None]
         embs = embs + posembs
@@ -180,9 +180,12 @@ class TransformerTagger(SeqInsertionTagger):
 
 
 class SeqInsertionDecoder(torch.nn.Module):
+    # default_termination_mode = "slot"
+    # default_decode_mode = "parallel"
+
     def __init__(self, tagger:SeqInsertionTagger,
                  vocab=None,
-                 termination_mode="slot",
+                 prob_threshold=0.,
                  max_steps:int=20,
                  max_size:int=100,
                  **kw):
@@ -193,9 +196,10 @@ class SeqInsertionDecoder(torch.nn.Module):
         self.max_size = max_size
         self.kldiv = torch.nn.KLDivLoss(reduction="none")
         self.logsm = torch.nn.LogSoftmax(-1)
+        self.prob_threshold = prob_threshold
 
-        self.termination_mode = termination_mode
-        self.decode_mode = "parallel"
+        # self.termination_mode = self.default_termination_mode if termination_mode == "default" else termination_mode
+        # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
 
     def forward(self, x, y):
         if self.training:
@@ -247,27 +251,36 @@ class SeqInsertionDecoder(torch.nn.Module):
             y = newy if newy is not None else y
             # run tagger
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
-            _, preds = logits.max(-1)
+            predprobs, preds = logits.max(-1)
+            predprobs = torch.softmax(predprobs, -1)
+            predprobs, preds = predprobs.cpu().numpy(), preds.cpu().numpy()
+            _y = y.cpu().numpy()
             newy = torch.zeros(y.size(0), min(self.max_size, y.size(1) * 2), device=y.device, dtype=torch.long)
             # update sequences
             for i in range(len(y)):
                 k = 0
+                pp_mask = preds != self.vocab["@END@"]
+                p_i = preds[i]
+                pp_i = predprobs[i] * pp_mask
+                prob_thresh = min(self.prob_threshold, max(pp_i))
                 for j in range(len(y[i])):
                     if k >= newy.size(1):
                         break
                     newy[i, k] = y[i, j]
                     k += 1
-                    y_ij = y[i, j].cpu().item()
+                    y_ij = _y[i, j]
                     if y_ij == self.vocab["@EOS@"]:
                         break  # stop
-                    p_ij = preds[i, j].cpu().item()
-                    if p_ij == self.vocab["@END@"]:
-                        pass  # don't insert anything
-                    else:  # insert what was predicted
-                        if k >= newy.size(1):
-                            break
-                        newy[i, k] = preds[i, j]
-                        k += 1
+                    p_ij = p_i[j]
+                    pp_ij = pp_i[j]
+                    if pp_ij >= prob_thresh:
+                        if p_ij == self.vocab["@END@"]:
+                            pass  # don't insert anything
+                        else:  # insert what was predicted
+                            if k >= newy.size(1):
+                                break
+                            newy[i, k] = preds[i, j]
+                            k += 1
             maxlen = (newy != 0).long().sum(-1).max()
             newy = newy[:, :maxlen]
             step += 1
@@ -312,6 +325,19 @@ class SeqInsertionDecoder(torch.nn.Module):
 
 
 class SeqInsertionDecoderUniform(SeqInsertionDecoder):
+    # decode modes: "parallel", "serial" or "semiparallel":
+    #    - parallel: execute actions at all slots simultaneously
+    #           --> prob threshold = 0.
+    #    - serial: execute action with highest probability across all slots, unless the action is an @END@
+    #           --> prob threshold > 1.
+    #    - semiparallel: execute actions for all slots where the highest probability is above a certain threshold,
+    #                    unless the action is an @END@.
+    #                    if there are no slots with highest probability higher than threshold, fall back to serial mode for this decoding step
+    #           --> prob threshold between 0. and 1.
+    # --> all modes naturally terminate once all slots predict an @END@
+    # default_termination_mode = "slot"
+    # default_decode_mode = "parallel"
+
     def get_slot_value_probs(self, slotvalues):     # uniform
         probs = [1./len(slotvalues) for _ in slotvalues]
         return probs
@@ -382,15 +408,16 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
     """ Differs from Uniform only in computing and using non-uniform weights for gold output distributions """
     def __init__(self, tagger:SeqInsertionTagger,
                  vocab=None,
-                 termination_mode="slot",
+                 prob_threshold=0.,
                  max_steps:int=20,
                  max_size:int=100,
                  tau=1.,
                  **kw):
         super(SeqInsertionDecoderBinary, self).__init__(tagger, vocab=vocab,
-                                                        termination_mode=termination_mode,
                                                         max_steps=max_steps,
-                                                        max_size=max_size, **kw)
+                                                        max_size=max_size,
+                                                        prob_threshold=prob_threshold,
+                                                        **kw)
         self.tau = tau
 
     def get_slot_value_probs(self, slotvalues):
@@ -402,7 +429,10 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
         return probs
 
 
-class SeqInsertionDecoderLTR(SeqInsertionDecoder):
+class SeqDecoderBaseline(SeqInsertionDecoder):
+    # default_termination_mode = "sequence"
+    # default_decode_mode = "serial"
+
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # extract a training example from y:
         x, newy, tgt, tgtmask = self.extract_training_example(x, y)
@@ -414,9 +444,6 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
         return {"loss": loss}, logits
 
     def extract_training_example(self, x, y):
-        return self.baseline_extract_training_example(x, y)
-
-    def baseline_extract_training_example(self, x, y):
         ymask = (y != 0).float()
         ylens = ymask.sum(1).long()
         newy = y
@@ -434,7 +461,46 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
         newy = newy[:, :-1]
         return x, newy, tgt, tgtmask
 
-    def ltr_extract_training_example(self, x, y):
+    def get_prediction(self, x:torch.Tensor):
+        # initialize empty ys:
+        y = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@BOS@"]
+        # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
+
+        # run encoder
+        enc, encmask = self.tagger.encode_source(x)
+
+        step = 0
+        newy = None
+        ended = torch.zeros_like(y[:, 0]).bool()
+        while step < self.max_size and not torch.all(ended):
+            y = newy if newy is not None else y
+            # run tagger
+            # y = torch.cat([y, yend], 1)
+            logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
+            _, preds = logits.max(-1)
+            preds = preds[:, -1]
+            newy = torch.cat([y, preds[:, None]], 1)
+            ended = ended | (preds == self.vocab["@END@"])
+            step += 1
+        preds = newy
+        return preds
+
+
+class SeqInsertionDecoderLTR(SeqInsertionDecoder):
+    # default_termination_mode = "sequence"
+    # default_decode_mode = "serial"
+
+    def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
+        # extract a training example from y:
+        x, newy, tgt, tgtmask = self.extract_training_example(x, y)
+        enc, encmask = self.tagger.encode_source(x)
+        # run through tagger: the same for all versions
+        logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
+        # compute loss: different versions do different masking and different targets
+        loss = self.compute_loss(logits, tgt, mask=tgtmask)
+        return {"loss": loss}, logits
+
+    def extract_training_example(self, x, y):
         # y: (batsize, seqlen) ids, padded with zeros
         ymask = (y != 0).float()
         ytotallens = ymask.sum(1)
@@ -502,7 +568,8 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
 
 
 def run(domain="restaurants",
-        mode="baseline",
+        mode="baseline",         # "baseline", "ltr", "uniform", "binary"
+        probthreshold=0.,       # 0. --> parallel, >1. --> serial, 0.< . <= 1. --> semi-parallel
         lr=0.0001,
         enclrmul=0.1,
         batsize=50,
@@ -527,7 +594,6 @@ def run(domain="restaurants",
 
     settings = locals().copy()
     q.pp_dict(settings)
-    method = "baseline"
     wandb.init(project=f"seqinsert_overnight", config=settings, reinit=True)
 
     random.seed(seed)
@@ -545,9 +611,16 @@ def run(domain="restaurants",
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, baseline=True)
-    # decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
-    decoder = SeqInsertionDecoderLTR(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, baseline=mode=="baseline")
+
+    if mode == "baseline":
+        decoder = SeqDecoderBaseline(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
+    elif mode == "ltr":
+        decoder = SeqInsertionDecoderLTR(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
+    elif mode == "uniform":
+        decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+    elif mode == "binary":
+        decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
 
     # test run
     # batch = next(iter(tdl_seq))
@@ -678,8 +751,9 @@ def run(domain="restaurants",
 # TODO: EOS balancing ?!
 
 
-def run_experiment(domain="restaurants",
-                   mode="baseline",
+def run_experiment(domain="default",    #
+                   mode="baseline",         # "baseline", "ltr", "uniform", "binary"
+                   probthreshold=0.,
         lr=-1.,
         enclrmul=-1.,
         batsize=-1,
@@ -705,6 +779,7 @@ def run_experiment(domain="restaurants",
     settings = locals().copy()
 
     ranges = {
+        "domain": ["calendar", "blocks", "housing", "recipes"], #["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"],
         "dropout": [0.0, 0.1, 0.2, 0.3, 0.4],
         "epochs": [121],
         "batsize": [50],
