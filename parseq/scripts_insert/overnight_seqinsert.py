@@ -285,13 +285,13 @@ class SeqInsertionDecoder(torch.nn.Module):
             maxlen = (newy != 0).long().sum(-1).max()
             newy = newy[:, :maxlen]
             step += 1
-            stays_same = torch.all(newy == y, -1)
-            steps_used = torch.min(steps_used, stays_same * step)
+            _ended = torch.all(newy == y, -1)
+            steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
             lens = (newy != 0).long().sum(-1)
             maxlenreached = (lens == self.max_size)
             if torch.all(maxlenreached):
                 break
-        return newy, steps_used
+        return newy, steps_used.float()
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
         preds, stepsused = self.get_prediction(x)
@@ -491,7 +491,7 @@ class SeqDecoderBaseline(SeqInsertionDecoder):
             step += 1
             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
         preds = newy
-        return preds, steps_used
+        return preds, steps_used.float()
 
 
 class SeqInsertionDecoderLTR(SeqInsertionDecoder):
@@ -574,7 +574,7 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
             ended = ended | _ended
             step += 1
             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
-        return newy, steps_used
+        return newy, steps_used.float()
 
 
 def run(domain="restaurants",
