@@ -1,3 +1,5 @@
+from prompt_toolkit.formatted_text import PygmentsTokens
+
 import json
 import random
 from abc import abstractmethod
@@ -748,3 +750,5 @@ def run_experiment(domain="restaurants",
 
 if __name__ == '__main__':
     q.argprun(run_experiment)
+
+    # python overnight_seqinsert.py -gpu 0 -domain ? -lr 0.0001 -enclrmul 1. -hdim 768 -dropout 0.3 -numlayers 6 -numheads 12

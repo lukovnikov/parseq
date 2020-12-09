@@ -499,6 +499,7 @@ class OvernightDatasetLoader(object):
                  simplify_mode="full",      # or "none"
                  simplify_blocks=False,
                  restore_reverse=False,
+                 load_lexicon=False,
                  **kw):
         super(OvernightDatasetLoader, self).__init__(**kw)
         self._simplify_filters = True        # if True, filter expressions are converted to orderless and-expressions
@@ -510,6 +511,7 @@ class OvernightDatasetLoader(object):
         self.simplify_mode = simplify_mode      # "full" or "light"
         self.simplify_blocks = simplify_blocks
         self._restore_reverse = restore_reverse
+        self.load_lexicon = load_lexicon
 
     @property
     def full_simplify(self):
@@ -521,7 +523,8 @@ class OvernightDatasetLoader(object):
 
         # _examples = examples
         # examples = [example for example in _examples if example[2] != "train"]
-        examples += [(nl, lf, "lexicon") for nl, lf in lexicon]
+        if lexicon is not None:
+            examples += [(nl, lf, "lexicon") for nl, lf in lexicon]
         '''
         examples is a list of tuples with each tuple being nl (utterance), lf (logical form) 
         and (text/train/valid/lexicon)
@@ -744,7 +747,7 @@ class OvernightDatasetLoader(object):
             z, ltp = lisp_to_tree(line.strip(), ltp)
             if z is not None:
                 if z.label() == "rule":
-                    if z[0].label() not in {"$TypeNP", "$RelNP", "$EntityNP1", "$EntityNP2", "$VP/NP", "$VP", "$Value"}:
+                    if z[0].label() not in {"$TypeNP", "$RelNP", "$Rel0NP", "$EntityNP1", "$EntityNP2", "$VP/NP", "$VP", "$Value"}:
                         assert(False)       # unexpected lexical entry type
                     assert(z[2].label() == "ConstantFn")
                     assert(len(z[2]) == 1)
@@ -862,7 +865,10 @@ class OvernightDatasetLoader(object):
 
             trainexamples = self.lines_to_examples(trainlines)
             testexamples = self.lines_to_examples(testlines)
-            lexicon = self.grammarlines_to_lexicon(grammarlines)
+            if self.load_lexicon:
+                lexicon = self.grammarlines_to_lexicon(grammarlines)
+            else:
+                lexicon = None
 
             if self._usecache:
                 self._cache(domain, trainexamples, testexamples)

@@ -118,6 +118,8 @@ class LispToPas(TreeStrParser):
 
     def close_level(self):
         siblings = self.stack.pop(-1)
+        if len(self.stack[-1]) == 0 and siblings[0] == "lambda":
+            self.stack[-1].append("@LAMBDA@")
         self.stack[-1].append((siblings[0], siblings[1:]))
 
     def add_sibling(self, next_token):
