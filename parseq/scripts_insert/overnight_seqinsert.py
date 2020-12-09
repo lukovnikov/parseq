@@ -237,6 +237,7 @@ class SeqInsertionDecoder(torch.nn.Module):
         return {"loss": loss}, logits
 
     def get_prediction(self, x:torch.Tensor):
+        steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
         # initialize empty ys:
         y = torch.zeros(x.size(0), 2, device=x.device, dtype=torch.long)
         y[:, 0] = self.vocab["@BOS@"]
@@ -247,8 +248,8 @@ class SeqInsertionDecoder(torch.nn.Module):
 
         step = 0
         newy = None
-        steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
-        while step < self.max_steps and (newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
+        ended = torch.zeros_like(y[:, 0]).bool()
+        while step < self.max_steps and not torch.all(ended): #(newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
             y = newy if newy is not None else y
             # run tagger
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
@@ -257,6 +258,7 @@ class SeqInsertionDecoder(torch.nn.Module):
             predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
             _y = y.cpu().detach().numpy()
             newy = torch.zeros(y.size(0), min(self.max_size, y.size(1) * 2), device=y.device, dtype=torch.long)
+            _ended = torch.zeros_like(y[:, 0]).bool()
             # update sequences
             for i in range(len(y)):
                 k = 0
@@ -264,6 +266,7 @@ class SeqInsertionDecoder(torch.nn.Module):
                 pp_mask = p_i != self.vocab["@END@"]
                 pp_i = predprobs[i] * pp_mask
                 prob_thresh = min(self.prob_threshold, max(pp_i))
+                terminated = True
                 for j in range(len(y[i])):
                     if k >= newy.size(1):
                         break
@@ -282,10 +285,16 @@ class SeqInsertionDecoder(torch.nn.Module):
                                 break
                             newy[i, k] = preds[i, j]
                             k += 1
+                            terminated = False
+                _ended[i] = terminated
+
+            y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
+            newy = torch.where(ended[:, None], y__, newy)  # prevent terminated examples from changing
+
             maxlen = (newy != 0).long().sum(-1).max()
             newy = newy[:, :maxlen]
             step += 1
-            _ended = torch.all(newy == y, -1)
+            ended = ended | _ended
             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
             lens = (newy != 0).long().sum(-1)
             maxlenreached = (lens == self.max_size)
@@ -486,6 +495,8 @@ class SeqDecoderBaseline(SeqInsertionDecoder):
             _, preds = logits.max(-1)
             preds = preds[:, -1]
             newy = torch.cat([y, preds[:, None]], 1)
+            y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
+            newy = torch.where(ended[:, None], y__, newy)     # prevent terminated examples from changing
             _ended = (preds == self.vocab["@END@"])
             ended = ended | _ended
             step += 1
@@ -554,7 +565,7 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
         steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
         # initialize empty ys:
         y = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@BOS@"]
-        # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
+        yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
 
         # run encoder
         enc, encmask = self.tagger.encode_source(x)
@@ -565,11 +576,13 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
         while step < self.max_size and not torch.all(ended):
             y = newy if newy is not None else y
             # run tagger
-            # y = torch.cat([y, yend], 1)
-            logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
+            y_ = torch.cat([y, yend], 1)
+            logits = self.tagger(tokens=y_, enc=enc, encmask=encmask)
             _, preds = logits.max(-1)
             preds = preds[:, -1]
             newy = torch.cat([y, preds[:, None]], 1)
+            y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
+            newy = torch.where(ended[:, None], y__, newy)     # prevent terminated examples from changing
             _ended = (preds == self.vocab["@END@"])
             ended = ended | _ended
             step += 1
@@ -673,7 +686,7 @@ def run(domain="restaurants",
 
     if patience < 0:
         patience = epochs
-    eyt = q.EarlyStopper(vmetrics[-1], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
+    eyt = q.EarlyStopper(vmetrics[0], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
 
     def wandb_logger():
         d = {}
