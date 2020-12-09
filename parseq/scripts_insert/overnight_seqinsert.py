@@ -508,15 +508,15 @@ class SeqInsertionDecoderLTR(SeqInsertionDecoder):
     # default_termination_mode = "sequence"
     # default_decode_mode = "serial"
 
-    def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
-        # extract a training example from y:
-        x, newy, tgt, tgtmask = self.extract_training_example(x, y)
-        enc, encmask = self.tagger.encode_source(x)
-        # run through tagger: the same for all versions
-        logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
-        # compute loss: different versions do different masking and different targets
-        loss = self.compute_loss(logits, tgt, mask=tgtmask)
-        return {"loss": loss}, logits
+    # def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
+    #     # extract a training example from y:
+    #     x, newy, tgt, tgtmask = self.extract_training_example(x, y)
+    #     enc, encmask = self.tagger.encode_source(x)
+    #     # run through tagger: the same for all versions
+    #     logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
+    #     # compute loss: different versions do different masking and different targets
+    #     loss = self.compute_loss(logits, tgt, mask=tgtmask)
+    #     return {"loss": loss}, logits
 
     def extract_training_example(self, x, y):
         # y: (batsize, seqlen) ids, padded with zeros
@@ -733,7 +733,7 @@ def run(domain="restaurants",
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=[validepoch],
+                   run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
@@ -793,7 +793,7 @@ def run_experiment(domain="default",    #
         seed=-1,
         gpu=-1,
         patience=-1,
-        gradacc=1,
+        gradacc=-1,
         cosinelr=False,
         warmup=-1,
         gradnorm=3.,
@@ -819,11 +819,21 @@ def run_experiment(domain="default",    #
         "patience": [-1],
         "warmup": [20],
         "validinter": [15],
-
+        "gradacc": [1],
     }
 
-    if True:        # baseline
+    if mode == "baseline":        # baseline
         ranges["validinter"] = [5]
+    else:
+        ranges["validinter"] = [15]
+        ranges["epochs"] = [201]
+
+    if mode == "ltr":
+        ranges["lr"] = [0.0001, 0.000025]
+        ranges["warmup"] = [50]
+        ranges["epochs"] = [501]
+        ranges["validinter"] = [25]
+        ranges["gradacc"] = [10]
 
     for k in ranges:
         if k in settings:
