@@ -842,8 +842,8 @@ def run_experiment(domain="default",    #
         warmup=-1,
         gradnorm=3.,
         validinter=-1,
-        maxsteps=75,        # TODO: stop insertion decoding when max size is reached
-        maxsize=75,
+        maxsteps=90,
+        maxsize=90,
         numbered=False,
                    testcode=False,
         ):
@@ -870,11 +870,14 @@ def run_experiment(domain="default",    #
     if mode == "baseline":        # baseline
         ranges["validinter"] = [5]
     else:
-        ranges["validinter"] = [15]
-        ranges["epochs"] = [201]
+        ranges["dropout"] = [0.0, 0.1, 0.2, 0.3],
+        ranges["lr"] = [0.0001]
+        ranges["validinter"] = [20]
+        ranges["epochs"] = [301]
         ranges["hdim"] = [768]
         ranges["numlayers"] = [6]
         ranges["numheads"] = [12]
+        ranges["probthreshold"] = [0., 1.]
 
     if mode == "ltr":
         ranges["lr"] = [0.0001, 0.000025]
