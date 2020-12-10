@@ -1,3 +1,5 @@
+import re
+
 from prompt_toolkit.formatted_text import PygmentsTokens
 
 import json
@@ -5,7 +7,7 @@ import random
 from abc import abstractmethod
 from copy import deepcopy
 from functools import partial
-from typing import Dict
+from typing import Dict, List
 
 import torch
 import wandb
@@ -33,9 +35,19 @@ def tree_to_seq(x:Tree):
     # xstr = ["@BOS@"] + xstr + ["@EOS@"]
     return xstr
 
+def make_numbered_tokens(x:List[str]):
+    counts = {}
+    y = []
+    for xe in x:
+        if xe not in counts:
+            counts[xe] = 0
+        counts[xe] += 1
+        y.append(f"{xe}::{counts[xe]}")
+    return y
+
 
 def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
-            trainonvalid=False, noreorder=False):
+            trainonvalid=False, noreorder=False, numbered=False):
     """
     Creates a dataset of examples which have
     * NL question and tensor
@@ -53,6 +65,9 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
     if not noreorder:
         ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
     ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
+
+    if numbered:
+        ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
 
     vocab = Vocab(padid=0, startid=2, endid=3, unkid=1)
     vocab.add_token("@BOS@", seen=np.infty)
@@ -267,7 +282,7 @@ class SeqInsertionDecoder(torch.nn.Module):
                 pp_i = predprobs[i] * pp_mask
                 prob_thresh = min(self.prob_threshold, max(pp_i))
                 terminated = True
-                for j in range(len(y[i])):
+                for j in range(len(y[i])-1):
                     if k >= newy.size(1):
                         break
                     newy[i, k] = y[i, j]
@@ -307,6 +322,7 @@ class SeqInsertionDecoder(torch.nn.Module):
 
         def tensor_to_trees(x, vocab:Vocab):
             xstrs = [vocab.tostr(x[i]).replace("@BOS@", "").replace("@EOS@", "") for i in range(len(x))]
+            xstrs = [re.sub("::\d+", "", xstr) for xstr in xstrs]
             trees = []
             for xstr in xstrs:
                 # drop everything after @END@, if present
@@ -386,6 +402,7 @@ class SeqInsertionDecoderUniform(SeqInsertionDecoder):
                     if len(slotvalues) == 0:
                         tgt[i, k - 1, self.vocab["@END@"]] = 1
                     else:
+                        slotvalues = list(set(slotvalues))
                         for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
                             tgt[i, k - 1, slotvalue] = float(valueprob)
                     slotvalues = []
@@ -397,18 +414,19 @@ class SeqInsertionDecoderUniform(SeqInsertionDecoder):
             if len(slotvalues) == 0:
                 tgt[i, k - 1, self.vocab["@END@"]] = 1
             else:
+                slotvalues = list(set(slotvalues))
                 for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
                     tgt[i, k - 1, slotvalue] = float(valueprob)
 
             newy[i, k] = self.vocab["@EOS@"]
 
         # normalize
-        tgt = tgt / tgt.sum(-1).clamp_min(1e-6)[:, :, None]
+        tgt = tgt / tgt.sum(-1, keepdim=True).clamp_min(1e-6)
         tgtmask = (tgt.sum(-1) != 0).float()
         # make uniform for masked positions
         newymask = (newy != 0).float()
         uniform_tgt = torch.ones_like(tgt) / tgt.size(-1)
-        tgt = torch.where(newymask[:, :, None].bool(), tgt, uniform_tgt)
+        tgt = torch.where(tgtmask[:, :, None].bool(), tgt, uniform_tgt)
         # cut unnecessary padded elements from the right of newy
         newlen = newymask.sum(-1).max()
         newy = newy[:, :int(newlen)]
@@ -441,6 +459,29 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
         probs = torch.softmax(-distances/self.tau, -1)
         probs = probs.numpy()
         return probs
+
+
+class SeqInsertionDecoderAny(SeqInsertionDecoderUniform):
+    def get_slot_value_probs(self, slotvalues):     # uniform
+        probs = [1. for _ in slotvalues]
+        return probs
+
+    def compute_loss(self, logits, tgt, mask=None):
+        """
+        :param logits:
+        :param tgt:         will have a non-zero for every correct token
+        :param mask:        will be zero for positions that don't need insertion
+        :return:
+        """
+        probs = torch.softmax(logits, -1)
+        nonzero_tgt = (tgt > 0).float()
+        m = probs * nonzero_tgt
+        m = m.sum(-1)       # (batsize, seqlen)
+        loss = - torch.log(m.clamp_min(1e-6))
+        if mask is not None:
+            loss = loss * mask.float()
+        loss = loss.sum(-1)
+        return loss
 
 
 class SeqDecoderBaseline(SeqInsertionDecoder):
@@ -612,6 +653,7 @@ def run(domain="restaurants",
         maxsteps=20,
         maxsize=75,
         testcode=False,
+        numbered=False,
         ):
 
     settings = locals().copy()
@@ -625,7 +667,7 @@ def run(domain="restaurants",
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid, noreorder=noreorder)
+    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid, noreorder=noreorder, numbered=numbered)
     tt.tock("loaded")
 
     tdl_seq = DataLoader(tds_seq, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -643,6 +685,8 @@ def run(domain="restaurants",
         decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
     elif mode == "binary":
         decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+    elif mode == "any":
+        decoder = SeqInsertionDecoderAny(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
 
     # test run
     if testcode:
@@ -800,6 +844,7 @@ def run_experiment(domain="default",    #
         validinter=-1,
         maxsteps=75,        # TODO: stop insertion decoding when max size is reached
         maxsize=75,
+        numbered=False,
                    testcode=False,
         ):
 
@@ -827,6 +872,9 @@ def run_experiment(domain="default",    #
     else:
         ranges["validinter"] = [15]
         ranges["epochs"] = [201]
+        ranges["hdim"] = [768]
+        ranges["numlayers"] = [6]
+        ranges["numheads"] = [12]
 
     if mode == "ltr":
         ranges["lr"] = [0.0001, 0.000025]
