@@ -282,7 +282,7 @@ class SeqInsertionDecoder(torch.nn.Module):
                 pp_i = predprobs[i] * pp_mask
                 prob_thresh = min(self.prob_threshold, max(pp_i))
                 terminated = True
-                for j in range(len(y[i])-1):
+                for j in range(len(y[i])):
                     if k >= newy.size(1):
                         break
                     newy[i, k] = y[i, j]
@@ -290,6 +290,8 @@ class SeqInsertionDecoder(torch.nn.Module):
                     y_ij = _y[i, j]
                     if y_ij == self.vocab["@EOS@"]:
                         break  # stop
+                    if j >= len(p_i):
+                        break
                     p_ij = p_i[j]
                     pp_ij = pp_i[j]
                     if pp_ij >= prob_thresh:
