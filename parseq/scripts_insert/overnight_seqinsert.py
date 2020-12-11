@@ -910,7 +910,7 @@ def run_experiment(domain="default",    #
     if mode == "baseline":        # baseline
         ranges["validinter"] = [5]
     else:
-        ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
+        # ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
         # ranges["domain"] = ["calendar", "publications", "recipes"]
         ranges["batsize"] = [30]
         ranges["dropout"] = [0.0, 0.1, 0.2]     # use 0.
