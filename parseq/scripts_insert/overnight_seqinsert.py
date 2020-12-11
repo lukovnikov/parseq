@@ -825,7 +825,7 @@ def run(domain="restaurants",
 
 def run_experiment(domain="default",    #
                    mode="baseline",         # "baseline", "ltr", "uniform", "binary"
-                   probthreshold=0.,
+                   probthreshold=-1.,
         lr=-1.,
         enclrmul=-1.,
         batsize=-1,
@@ -872,7 +872,7 @@ def run_experiment(domain="default",    #
     if mode == "baseline":        # baseline
         ranges["validinter"] = [5]
     else:
-        ranges["dropout"] = [0.0, 0.1, 0.2, 0.3]
+        ranges["dropout"] = [0.0, 0.1, 0.3]
         ranges["lr"] = [0.0001]
         ranges["validinter"] = [20]
         ranges["epochs"] = [301]
