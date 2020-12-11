@@ -282,27 +282,27 @@ class SeqInsertionDecoder(torch.nn.Module):
                 pp_i = predprobs[i] * pp_mask
                 prob_thresh = min(self.prob_threshold, max(pp_i))
                 terminated = True
-                for j in range(len(y[i])):
+                for j in range(len(y[i])):          # loop, advance j = j+1
                     if k >= newy.size(1):
                         break
-                    newy[i, k] = y[i, j]
-                    k += 1
+                    newy[i, k] = y[i, j]            # copy from previous target sequence
+                    k += 1                          # advance newy pointer to next position
                     y_ij = _y[i, j]
-                    if y_ij == self.vocab["@EOS@"]:
+                    if y_ij == self.vocab["@EOS@"]: # if token was EOS, terminate generation
                         break  # stop
-                    if j >= len(p_i):
+                    if j >= len(p_i):               # if we reached beyond the length of predictions, terminate
                         break
-                    p_ij = p_i[j]
-                    pp_ij = pp_i[j]
-                    if pp_ij >= prob_thresh:
-                        if p_ij == self.vocab["@END@"]:
+                    p_ij = p_i[j]                   # token predicted between j-th and j+1-st position in previous sequence
+                    pp_ij = pp_i[j]                 # probability assigned to that token
+                    if pp_ij >= prob_thresh:        # skip if probability was lower than threshold
+                        if p_ij == self.vocab["@END@"]:         # if predicted token is @END@, do nothing
                             pass  # don't insert anything
                         else:  # insert what was predicted
                             if k >= newy.size(1):
                                 break
                             newy[i, k] = preds[i, j]
-                            k += 1
-                            terminated = False
+                            k += 1                  # advance newy pointer to next position
+                            terminated = False      # sequence changed so don't terminate
                 _ended[i] = terminated
 
             y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
@@ -484,6 +484,29 @@ class SeqInsertionDecoderAny(SeqInsertionDecoderUniform):
             loss = loss * mask.float()
         loss = loss.sum(-1)
         return loss
+
+
+class SeqInsertionDecoderAnyPredictive(SeqInsertionDecoderAny):
+    def train_forward(self, x:torch.Tensor, gold:torch.Tensor):
+        enc, encmask = self.tagger.encode_source(x)
+
+        y = torch.zeros(x.size(0), 2, device=x.device, dtype=torch.long)
+        y[:, 0] = self.vocab["@BOS@"]
+        y[:, 1] = self.vocab["@EOS@"]
+
+        ylens = (y != 0).sum(-1)
+        goldlens = (gold != 0).sum(-1)
+
+        newy = None
+
+        while torch.any(ylens < goldlens):
+            # make newy the previous y
+            y = newy if newy is not None else y
+            # run tagger on y
+            logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
+            probs = torch.softmax(logits, -1)
+            predprobs, preds = probs.max(-1)
+            predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
 
 
 class SeqDecoderBaseline(SeqInsertionDecoder):
@@ -779,7 +802,8 @@ def run(domain="restaurants",
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
+                   # run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
+                   run_valid_epoch=[validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
@@ -817,11 +841,25 @@ def run(domain="restaurants",
     settings.update({"final_valid_steps_used": vmetrics[1].get_epoch_error()})
     settings.update({"final_test_steps_used": xmetrics[1].get_epoch_error()})
 
+    # run different prob_thresholds:
+    # thresholds = [0., 0.3, 0.5, 0.6, 0.75, 0.85, 0.9, 0.95,  1.]
+    thresholds = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 0.95, 0.975, 0.99, 1.]
+    for threshold in thresholds:
+        tt.tick("running test for threshold " + str(threshold))
+        decoder.prob_threshold = threshold
+        testres = testepoch()
+        print(f"Test tree acc for threshold {threshold}: testres: {testres}")
+        settings.update({f"_thr{threshold}_acc": xmetrics[0].get_epoch_error()})
+        settings.update({f"_thr{threshold}_len": xmetrics[1].get_epoch_error()})
+        tt.tock("done")
+
+
     wandb.config.update(settings)
     q.pp_dict(settings)
 
 # TODO: EOS balancing ?!
 
+# TODO: model that follows predictive distribution during training and uses AnyToken loss
 
 def run_experiment(domain="default",    #
                    mode="baseline",         # "baseline", "ltr", "uniform", "binary"
@@ -861,7 +899,7 @@ def run_experiment(domain="default",    #
         "numheads": [6, 12],
         "numlayers": [6, 8, 12],
         "lr": [0.0001, 0.000025],
-        "enclrmul": [1., 0.1],
+        "enclrmul": [1., 0.1],                  # use 1.
         "seed": [87646464],
         "patience": [-1],
         "warmup": [20],
@@ -872,14 +910,18 @@ def run_experiment(domain="default",    #
     if mode == "baseline":        # baseline
         ranges["validinter"] = [5]
     else:
-        ranges["dropout"] = [0.0, 0.1, 0.3]
-        ranges["lr"] = [0.0001]
+        ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
+        # ranges["domain"] = ["calendar", "publications", "recipes"]
+        ranges["batsize"] = [30]
+        ranges["dropout"] = [0.0, 0.1, 0.2]     # use 0.
+        # ranges["lr"] = [0.0001]                 # use 0.000025
         ranges["validinter"] = [20]
         ranges["epochs"] = [301]
         ranges["hdim"] = [768]
         ranges["numlayers"] = [6]
         ranges["numheads"] = [12]
-        ranges["probthreshold"] = [0., 1.]
+        ranges["probthreshold"] = [0.]
+        ranges["lr"] = [0.000025]
 
     if mode == "ltr":
         ranges["lr"] = [0.0001, 0.000025]
