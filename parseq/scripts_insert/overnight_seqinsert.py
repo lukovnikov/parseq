@@ -511,26 +511,123 @@ class SeqInsertionDecoderAny(SeqInsertionDecoderUniform):
 class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
     def train_forward(self, x:torch.Tensor, gold:torch.Tensor):
         enc, encmask = self.tagger.encode_source(x)
+        goldlens = (gold != 0).sum(-1)
 
         y = torch.zeros(x.size(0), 2, device=x.device, dtype=torch.long)
         y[:, 0] = self.vocab["@BOS@"]
         y[:, 1] = self.vocab["@EOS@"]
-
         ylens = (y != 0).sum(-1)
+
+        gold = torch.cat([y[:, 0:1], gold, torch.zeros_like(y[:, 1:2])], 1)
+        gold = gold.scatter(1, goldlens[:, None]+1, self.vocab["@EOS@"])
         goldlens = (gold != 0).sum(-1)
 
-        newy = None
+        yalign = torch.zeros_like(y)
+        yalign[:, 0] = 0
+        yalign[:, 1] = goldlens - 1
 
+        lossacc = torch.zeros(y.size(0), device=y.device)
+
+        newy = None
+        ended = torch.zeros_like(y[:, 0]).bool()
         while torch.any(ylens < goldlens):
             # make newy the previous y
             y = newy if newy is not None else y
+
+            # region TRAIN
+            # compute target distribution and mask
+            tgt = torch.zeros(y.size(0), y.size(1), self.vocab.number_of_ids(),
+                              device=y.device)
+            _y = y.cpu().detach().numpy()
+            _yalign = yalign.cpu().detach().numpy()
+            _gold = gold.cpu().detach().numpy()
+            for i in range(len(_y)):
+                for j in range(len(_y[i])):
+                    slotvalues = []
+                    if _y[i, j] == self.vocab["@EOS@"]:
+                        break
+                    # y_ij = _y[i, j]
+                    k = _yalign[i, j]   # this is where in the gold we're at
+                    k = k + 1
+                    while k < _yalign[i, j + 1]:
+                        slotvalues.append(_gold[i, k])
+                        k += 1
+                    if len(slotvalues) == 0:
+                        tgt[i, j, self.vocab["@END@"]] = 1
+                    else:
+                        slotvalues = list(set(slotvalues))
+                        for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
+                            tgt[i, j, slotvalue] = float(valueprob)
+            tgtmask = (tgt.sum(-1) != 0).float()
+            uniform_tgt = torch.ones_like(tgt) / tgt.size(-1)
+            tgt = torch.where(tgtmask[:, :, None].bool(), tgt, uniform_tgt)
             # run tagger on y
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
-            probs = torch.softmax(logits, -1)
+            # do loss and backward
+            loss = self.compute_loss(logits, tgt[:, :-1], tgtmask[:, :-1])
+            loss.mean().backward(retain_graph=True)
+
+            lossacc = lossacc + loss.detach()
+            # endregion
+
+            # region STEP
             # get argmax predicted token to insert at every slot
-            predprobs, preds = probs.max(-1)
+            predprobs, preds = logits.max(-1)
             predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
+
+            newy = torch.zeros(y.size(0), y.size(1) + 1, device=y.device).long()
+            _ended = torch.zeros_like(y[:, 0]).bool()
+            for i in range(len(y)):
+                k = 0
+                p_i = preds[i]
+                pp_mask = p_i != self.vocab["@END@"]
+                pp_i = predprobs[i] * pp_mask
+                pp_mask = _y[i] == self.vocab["@EOS@"]
+                pp_mask = np.cumsum(pp_mask, -1)
+                pp_i = pp_i * (pp_mask[:-1] == 0)
+                pp_i = (pp_i > 0) * np.random.rand(*pp_i.shape)
+                prob_thresh = max(pp_i)
+                terminated = True
+                for j in range(len(y[i])):
+                    if k >= newy.size(1):
+                        break
+                    newy[i, k] = y[i, j]        # copy
+                    k += 1
+                    y_ij = _y[i, j]
+                    if y_ij == self.vocab["@EOS@"]:  # if token was EOS, terminate generation
+                        break  # stop
+                    if j >= len(p_i):  # if we reached beyond the length of predictions, terminate
+                        break
+                    p_ij = p_i[j]  # token predicted between j-th and j+1-st position in previous sequence
+                    pp_ij = pp_i[j]  # probability assigned to that token
+                    if pp_ij >= prob_thresh:  # skip if probability was lower than threshold
+                        if p_ij == self.vocab["@END@"]:  # if predicted token is @END@, do nothing
+                            pass  # don't insert anything
+                        else:  # insert what was predicted
+                            if k >= newy.size(1):
+                                break
+                            newy[i, k] = preds[i, j]
+                            k += 1  # advance newy pointer to next position
+                            terminated = False  # sequence changed so don't terminate
+                _ended[i] = terminated
+
+            y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
+            newy = torch.where(ended[:, None], y__, newy)  # prevent terminated examples from changing
+
+            maxlen = (newy != 0).long().sum(-1).max()
+            newy = newy[:, :maxlen]
+            step += 1
+            ended = ended | _ended
+            steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
+            lens = (newy != 0).long().sum(-1)
+            maxlenreached = (lens == self.max_size)
+            if torch.all(maxlenreached):
+                break
+
+            # select a random slot by using mask
             # find the most central token that is the same as predicted token for every slot and advance state
+
+            # endregion
 
 #
 # class SeqInsertionDecoderBinaryPredictive(SeqInsertionDecoderPredictive, SeqInsertionDecoderBinary): pass
@@ -739,6 +836,8 @@ def run(domain="restaurants",
         decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
     elif mode == "binary":
         decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+    elif mode == "predictivebinary":
+        decoder = SeqInsertionDecoderPredictiveBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
     elif mode == "any":
         decoder = SeqInsertionDecoderAny(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
 
