@@ -1234,3 +1234,7 @@ class TransformerModel(TransformerPreTrainedModel):
 #
 #             reordered_decoder_past = reordered_decoder_past + (reordered_layer_past_states,)
 #         return past + (reordered_decoder_past,)
+
+
+
+# GNN BASED TRANSFORMER IMPLEMENTATION

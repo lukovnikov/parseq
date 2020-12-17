@@ -3,7 +3,7 @@ from nltk import Tree
 from parseq.grammar import tree_to_lisp_tokens
 
 
-def reorder_tree(x:Tree, orderless=None):
+def reorder_tree(x:Tree, orderless=None, typestr="arg:~type"):
     """
     Reorders given tree 'x' such that if a parent label is in 'orderless', the order of the children is always as follows:
     - arg:~type goes first
@@ -16,9 +16,9 @@ def reorder_tree(x:Tree, orderless=None):
         children = [reorder_tree(xe, orderless=orderless) for xe in x]
         if x.label() in orderless:
             # do type first
-            types = [xe for xe in children if xe.label() == "arg:~type"]
+            types = [xe for xe in children if xe.label() == typestr]
             types = sorted(types, key=lambda _xe: str(_xe))
-            otherchildren = [xe for xe in children if xe.label() != "arg:~type"]
+            otherchildren = [xe for xe in children if xe.label() != typestr]
             otherchildren = sorted([xe for xe in otherchildren], key=lambda _xe: str(_xe))
             children = types + otherchildren
         x[:] = children

@@ -215,7 +215,6 @@ class SeqInsertionDecoder(torch.nn.Module):
                  prob_threshold=0.,
                  max_steps:int=20,
                  max_size:int=100,
-                 end_offset=0.,
                  **kw):
         super(SeqInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
@@ -225,7 +224,6 @@ class SeqInsertionDecoder(torch.nn.Module):
         self.kldiv = torch.nn.KLDivLoss(reduction="none")
         self.logsm = torch.nn.LogSoftmax(-1)
         self.prob_threshold = prob_threshold
-        self.end_offset = end_offset
 
         # self.termination_mode = self.default_termination_mode if termination_mode == "default" else termination_mode
         # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
@@ -282,11 +280,7 @@ class SeqInsertionDecoder(torch.nn.Module):
             y = newy if newy is not None else y
             # run tagger
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
-            # logprobs = torch.log_softmax(logits, -1)
-            # logprobs[:, :, self.vocab["@END@"]] = logprobs[:, :, self.vocab["@END@"]] - self.end_offset
-            # probs = torch.exp(logprobs)
             probs = torch.softmax(logits, -1)
-            probs[:, :, self.vocab["@END@"]] = probs[:, :, self.vocab["@END@"]] - self.end_offset
             predprobs, preds = probs.max(-1)
             predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
             _y = y.cpu().detach().numpy()
@@ -298,10 +292,6 @@ class SeqInsertionDecoder(torch.nn.Module):
                 p_i = preds[i]
                 pp_mask = p_i != self.vocab["@END@"]
                 pp_i = predprobs[i] * pp_mask
-                pp_mask = _y[i] == self.vocab["@EOS@"]
-                pp_mask = np.cumsum(pp_mask, -1)
-                pp_i = pp_i * (pp_mask[:-1] == 0)
-                # pp_i = (pp_i > 0) * np.random.rand(*pp_i.shape)
                 prob_thresh = min(self.prob_threshold, max(pp_i))
                 terminated = True
                 for j in range(len(y[i])):          # loop, advance j = j+1
@@ -508,7 +498,7 @@ class SeqInsertionDecoderAny(SeqInsertionDecoderUniform):
         return loss
 
 
-class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
+class SeqInsertionDecoderAnyPredictive(SeqInsertionDecoderAny):
     def train_forward(self, x:torch.Tensor, gold:torch.Tensor):
         enc, encmask = self.tagger.encode_source(x)
 
@@ -527,14 +517,8 @@ class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
             # run tagger on y
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
             probs = torch.softmax(logits, -1)
-            # get argmax predicted token to insert at every slot
             predprobs, preds = probs.max(-1)
             predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
-            # find the most central token that is the same as predicted token for every slot and advance state
-
-#
-# class SeqInsertionDecoderBinaryPredictive(SeqInsertionDecoderPredictive, SeqInsertionDecoderBinary): pass
-# class SeqInsertionDecoderUniformPredictive(SeqInsertionDecoderPredictive, SeqInsertionDecoderUniform): pass
 
 
 class SeqDecoderBaseline(SeqInsertionDecoder):
@@ -845,7 +829,7 @@ def run(domain="restaurants",
 
         tt.tick("rerunning validation")
         validres = validepoch()
-        tt.tock(f"Validation results: {validres}")
+        print(f"Validation results: {validres}")
 
     tt.tick("running train")
     trainres = trainevalepoch()
@@ -870,44 +854,17 @@ def run(domain="restaurants",
     settings.update({"final_valid_steps_used": vmetrics[1].get_epoch_error()})
     settings.update({"final_test_steps_used": xmetrics[1].get_epoch_error()})
 
-    if mode != "baseline":
-        calibrate_end = False
-        if calibrate_end:
-            # calibrate END offset
-            tt.tick("running termination calibration")
-            end_offsets = [0., 0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
-            decoder.prob_threshold = 1.
-
-            end_offset_values = []
-
-            best_offset = 0.
-            best_offset_value = 0.
-            for end_offset in end_offsets:
-                tt.tick("rerunning validation")
-                decoder.end_offset = end_offset
-                validres = validepoch()
-                tt.tock(f"Validation results: {validres}")
-                end_offset_values.append(vmetrics[0].get_epoch_error())
-                if vmetrics[0].get_epoch_error() > best_offset_value:
-                    best_offset = end_offset
-                    best_offset_value = vmetrics[0].get_epoch_error()
-                tt.tock("done")
-            print(f"offset results: {dict(zip(end_offsets, end_offset_values))}")
-            print(f"best offset: {best_offset}")
-
-            decoder.end_offset = best_offset
-
-        # run different prob_thresholds:
-        # thresholds = [0., 0.3, 0.5, 0.6, 0.75, 0.85, 0.9, 0.95,  1.]
-        thresholds = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 0.95, 0.975, 0.99, 1.]
-        for threshold in thresholds:
-            tt.tick("running test for threshold " + str(threshold))
-            decoder.prob_threshold = threshold
-            testres = testepoch()
-            print(f"Test tree acc for threshold {threshold}: testres: {testres}")
-            settings.update({f"_thr{threshold}_acc": xmetrics[0].get_epoch_error()})
-            settings.update({f"_thr{threshold}_len": xmetrics[1].get_epoch_error()})
-            tt.tock("done")
+    # run different prob_thresholds:
+    # thresholds = [0., 0.3, 0.5, 0.6, 0.75, 0.85, 0.9, 0.95,  1.]
+    thresholds = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 0.95, 0.975, 0.99, 1.]
+    for threshold in thresholds:
+        tt.tick("running test for threshold " + str(threshold))
+        decoder.prob_threshold = threshold
+        testres = testepoch()
+        print(f"Test tree acc for threshold {threshold}: testres: {testres}")
+        settings.update({f"_thr{threshold}_acc": xmetrics[0].get_epoch_error()})
+        settings.update({f"_thr{threshold}_len": xmetrics[1].get_epoch_error()})
+        tt.tock("done")
 
 
     wandb.config.update(settings)

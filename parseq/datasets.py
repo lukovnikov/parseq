@@ -723,9 +723,56 @@ class OvernightDatasetLoader(object):
             t[:] = [simplify_sw(te) for te in t]
             return t
 
+        def simplify_call(t:Tree) -> Tree:
+            if t.label() == "call":     # remove call, make first arg of it the parent of the other args
+                assert(len(t[0]) == 0)
+                # if not t[0].label().startswith("SW."):
+                #     print(t)
+                # assert(t[0].label().startswith("SW."))
+                t.set_label(f"call-{t[0].label()}")
+                del t[0]
+
+            t[:] = [simplify_call(tc) for tc in t]
+            return t
+
+        def simplify_filters(t:Tree)->Tree:
+            if t.label() == "call-SW:filter" and self._simplify_filters is True:
+                if len(t) not in (2, 4):
+                    raise Exception(f"filter expression should have 2 or 4 children, got {len(t)}")
+                children = [simplify_filters(tc) for tc in t]
+                startset = children[0]
+                if len(children) == 2:
+                    condition = Tree("condition", [children[1]])
+                elif len(children) == 4:
+                    condition = Tree(f"condition", [children[1], children[2], children[3]])
+                conditions = [condition]
+                if startset.label() == "filter":
+                    conditions = startset[:] + conditions
+                else:
+                    conditions = [startset] + conditions
+                # check for same conditions:
+                i = 0
+                while i < len(conditions) - 1:
+                    j = i + 1
+                    while j < len(conditions):
+                        if conditions[i] == conditions[j]:
+                            # print(f"SAME!: {conditions[i]}, {conditions[j]}")
+                            del conditions[j]
+                            j -= 1
+                        j += 1
+                    i += 1
+
+                ret = Tree(f"filter", conditions)
+                return ret
+            else:
+                t[:] = [simplify_filters(tc) for tc in t]
+            return t
+
         lf = ztree
         if self.simplify_mode == "none":
             lf = simplify_sw(lf)
+            lf = simplify_call(lf)
+            lf = simplify_filters(lf)
             return lf
         if self.simplify_mode != "none":
             lf = simplify_tree(lf)
