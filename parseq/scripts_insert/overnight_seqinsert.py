@@ -899,7 +899,7 @@ def run(domain="restaurants",
 
         # run different prob_thresholds:
         # thresholds = [0., 0.3, 0.5, 0.6, 0.75, 0.85, 0.9, 0.95,  1.]
-        thresholds = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 0.95, 0.975, 0.99, 1.]
+        thresholds = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 0.95, 1.]
         for threshold in thresholds:
             tt.tick("running test for threshold " + str(threshold))
             decoder.prob_threshold = threshold
