@@ -555,7 +555,7 @@ class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
         newy = None
         newyalign = None
         ended = torch.zeros_like(y[:, 0]).bool()
-        while torch.any(ylens < goldlens):
+        while not torch.all(ended): #torch.any(ylens < goldlens):
             # make newy the previous y
             y = newy if newy is not None else y
             yalign = newyalign if newyalign is not None else yalign
@@ -578,6 +578,9 @@ class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
                     # y_ij = _y[i, j]
                     k = _yalign[i, j]   # this is where in the gold we're at
                     k = k + 1
+                    # if j + 1 >= len(_yalign[i]):
+                    #     print("too large")
+                    #     pass
                     while k < _yalign[i, j + 1]:
                         slotvalues.append(_gold[i, k])
                         k += 1
@@ -586,7 +589,7 @@ class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
                     else:
                         for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
                             tgt[i, j, slotvalue] += float(valueprob)
-                        all_slotvalues.append((slotvalues, self.get_slot_value_probs(slotvalues)))
+                    all_slotvalues.append((slotvalues, self.get_slot_value_probs(slotvalues)))
                 slotvalues_acc.append(all_slotvalues)
             tgtmask = (tgt.sum(-1) != 0).float()
             uniform_tgt = torch.ones_like(tgt) / tgt.size(-1)
@@ -615,53 +618,60 @@ class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
                 k = 0
                 # randomly choose which slot to develop
                 chosen_js = []
-                for j in range(len(slotvalues_acc[i])):
+                for j in range(len(slotvalues_acc[i])):     # for every slot
                     if _y[i, j] == self.vocab["@EOS@"]:
                         break
-                    slotvalues = slotvalues_acc[i][j]
-                    if len(slotvalues) != 0:
+                    slotvalues = slotvalues_acc[i][j][0]
+                    if len(slotvalues) != 0:        # consider only positions where a real token must be predicted so not @END@
                         chosen_js.append(j)
-                chosen_j = random.choice(chosen_js)
+
                 terminated = True
+                if len(chosen_js) == 0:     # if all slots terminated
+                    break
+                else:
+                    chosen_j = random.choice(chosen_js)
 
-                for j in range(len(y[i])):
-                    if k >= newy.size(1):
-                        break
-                    newy[i, k] = y[i, j]        # copy
-                    newyalign[i, k] = yalign[i, j]
-                    k += 1
-                    y_ij = _y[i, j]
-                    if y_ij == self.vocab["@EOS@"]:  # if token was EOS, terminate generation
-                        break  # stop
-                    # if j >= len(p_i):  # if we reached beyond the length of predictions, terminate
-                    #     break
+                    for j in range(len(y[i])):
+                        if k >= newy.size(1):
+                            break
+                        newy[i, k] = y[i, j]        # copy
+                        newyalign[i, k] = yalign[i, j]
+                        k += 1
+                        y_ij = _y[i, j]
+                        if y_ij == self.vocab["@EOS@"]:  # if token was EOS, terminate generation
+                            break  # stop
+                        # if j >= len(p_i):  # if we reached beyond the length of predictions, terminate
+                        #     break
 
-                    if j == chosen_j:       # if we're at the chosen insertion slot:
-                        # get the most probable correct token
-                        logits_ij = logits[i, j]  # (vocabsize,)
-                        newlogits_ij = torch.zeros_like(logits_ij)
-                        slv = slotvalues_acc[i][j][0]
-                        newlogits_ij[slv] = logits_ij[slv]
-                        pp_ij, p_ij = newlogits_ij.max(-1)
-                        p_ij = p_ij.cpu().detach().item()
-                        if p_ij == self.vocab["@END@"]:  # if predicted token is @END@, do nothing
-                            pass  # don't insert anything
-                        else:  # insert what was predicted
-                            if k >= newy.size(1):
-                                break
-                            # insert token
-                            newy[i, k] = p_ij
-                            # align inserted token to gold
-                            slotvalues = list(zip(*(slotvalues_acc[i][j] + (range(len(slotvalues_acc[i][j][0])),))))
-                            slotvalues = sorted(slotvalues, key=lambda x: x[1], reverse=True)
-                            aligned_pos = None
-                            for slv, slp, sll in slotvalues:
-                                if slv == p_ij:
-                                    aligned_pos = sll + newyalign[i, j] + 1
+                        if j == chosen_j:       # if we're at the chosen insertion slot:
+                            # get the most probable correct token
+                            logits_ij = logits[i, j]  # (vocabsize,)
+                            newlogits_ij = torch.zeros_like(logits_ij) - np.infty
+                            slv = list(set(slotvalues_acc[i][j][0]))
+                            if len(slv) == 0:       # this slot is completed
+                                newlogits_ij[self.vocab["@END@"]] = 1
+                            else:
+                                newlogits_ij[slv] = logits_ij[slv]
+                            pp_ij, p_ij = newlogits_ij.max(-1)
+                            p_ij = p_ij.cpu().detach().item()
+                            if p_ij == self.vocab["@END@"]:  # if predicted token is @END@, do nothing
+                                pass  # don't insert anything
+                            else:  # insert what was predicted
+                                if k >= newy.size(1):
                                     break
-                            newyalign[i, k] = aligned_pos
-                            k += 1  # advance newy pointer to next position
-                            terminated = False  # sequence changed so don't terminate
+                                # insert token
+                                newy[i, k] = p_ij
+                                # align inserted token to gold
+                                slotvalues = list(zip(*(slotvalues_acc[i][j] + (range(len(slotvalues_acc[i][j][0])),))))
+                                slotvalues = sorted(slotvalues, key=lambda x: x[1], reverse=True)
+                                aligned_pos = None
+                                for slv, slp, sll in slotvalues:
+                                    if slv == p_ij:
+                                        aligned_pos = sll + newyalign[i, j] + 1
+                                        break
+                                newyalign[i, k] = aligned_pos
+                                k += 1  # advance newy pointer to next position
+                                terminated = False  # sequence changed so don't terminate
                 _ended[i] = terminated
 
             y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
@@ -681,6 +691,7 @@ class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
             # find the most central token that is the same as predicted token for every slot and advance state
 
             # endregion
+        return {"loss": lossacc}, logitsacc
 
 #
 # class SeqInsertionDecoderBinaryPredictive(SeqInsertionDecoderPredictive, SeqInsertionDecoderBinary): pass
