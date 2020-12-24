@@ -507,6 +507,9 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
 
 
 def get_slotvalues_maxspan(selected, yi):
+    if len(selected) == 0:
+        ret = [list(yi.cpu().detach().numpy())]
+        return ret
     middle_j = int(len(selected)/2)
     yilen = (yi > 0).sum()
     yi = yi[:yilen]
@@ -517,44 +520,30 @@ def get_slotvalues_maxspan(selected, yi):
     foundit = 0
 
     # compute earliest possible position for the middle element of selected
-    sel_counts_left = {}
-    for sel_x in list(left_selected.cpu().detach().numpy()):
-        if sel_x not in sel_counts_left:
-            sel_counts_left[sel_x] = 0
-        sel_counts_left[sel_x] += 1
-    sel_counts_right = {}
-    for sel_x in list(right_selected.cpu().detach().numpy()):
-        if sel_x not in sel_counts_right:
-            sel_counts_right[sel_x] = 0
-        sel_counts_right[sel_x] += 1
+    _left_selected = list(left_selected.cpu().detach().numpy())
+    _right_selected = list(right_selected.cpu().detach().numpy())
+    _yi = list(yi.cpu().detach().numpy())
 
-    i = -1
-    if len(sel_counts_left) > 0:
-        for i, sel_x in enumerate(list(yi.cpu().detach().numpy())):
-            if sel_x in sel_counts_left:
-                sel_counts_left[sel_x] -= 1
-                if sel_counts_left[sel_x] <= 0:
-                    del sel_counts_left[sel_x]
-            if len(sel_counts_left) == 0:
-                break
-    i = i + 1
+    i = 0
+    for e in _left_selected:
+        while e != _yi[i]:
+            i += 1
+        i += 1
     earliest_pos = i
 
-    i = -1
-    if len(sel_counts_right) > 0:
-        for i, sel_x in enumerate(list(yi.cpu().detach().numpy())[::-1]):
-            if sel_x in sel_counts_right:
-                sel_counts_right[sel_x] -= 1
-                if sel_counts_right[sel_x] <= 0:
-                    del sel_counts_right[sel_x]
-            if len(sel_counts_right) == 0:
-                break
-    i = i + 1
-    latest_pos = len(yi) - i
+    _yi = _yi[::-1]
+    i = 0
+    for e in _right_selected[::-1]:
+        while e != _yi[i]:
+            i += 1
+        i += 1
+    latest_pos = len(_yi) - i
 
     # compute latest possible position for the middle
     for l in range(math.ceil(len(yi)/2)+1):
         foundit = 0
+        if len(yi) == 0 or len(selected) == 0:
+            print("something wrong")
         if middle_k - l >= earliest_pos and middle_k - l < latest_pos and yi[middle_k - l] == selected[middle_j]:
             foundit = -1
         elif middle_k + l >= earliest_pos and middle_k + l < latest_pos and yi[middle_k + l] == selected[middle_j]:
@@ -580,8 +569,6 @@ def get_slotvalues_maxspan(selected, yi):
             return ret
     if foundit == 0:
         return None
-
-
 
 
 class SeqInsertionDecoderMaxspanBinary(SeqInsertionDecoderBinary):
@@ -624,7 +611,13 @@ class SeqInsertionDecoderMaxspanBinary(SeqInsertionDecoderBinary):
             #         slotvalues.append(y_ij)
             #         # tgt[i, k - 1, y_ij] = 1
             # slotvalues_acc.append(slotvalues)
-            # newy[i, k] = self.vocab["@EOS@"]
+            k = 1
+            j = len(slotvalues_acc[0])
+            for slotvalues in slotvalues_acc[1:]:
+                newy[i, k] = y[i, j]
+                k += 1
+                j += len(slotvalues) + 1
+            newy[i, k] = self.vocab["@EOS@"]
 
             for j, slotvalues in enumerate(slotvalues_acc):
                 if len(slotvalues) == 0:
