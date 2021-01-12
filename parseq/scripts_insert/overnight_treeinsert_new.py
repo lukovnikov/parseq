@@ -8,7 +8,7 @@ import random
 from abc import abstractmethod
 from copy import deepcopy
 from functools import partial
-from typing import Dict, List
+from typing import Dict, List, Union, Iterable, Tuple
 
 import torch
 import wandb
@@ -20,7 +20,7 @@ import qelos as q
 
 from parseq.datasets import OvernightDatasetLoader, autocollate
 from parseq.eval import make_array_of_metrics
-from parseq.grammar import tree_to_lisp_tokens, are_equal_trees, lisp_to_tree
+from parseq.grammar import tree_to_lisp_tokens, are_equal_trees, lisp_to_tree, tree_size
 from parseq.scripts_insert.overnight_treeinsert import extract_info
 from parseq.scripts_insert.util import reorder_tree, flatten_tree
 from parseq.transformer import TransformerConfig, TransformerStack
@@ -198,7 +198,7 @@ def deepcopy_tree(x:Tree):
     return y
 
 
-def get_supervision_sets(tree:Tree, node:Tree):
+def get_supervision_sets(tree:Union[Tree, List[Tree]], node:Tree):
     """
     Should return T, Tprime, B, L, R:
         T is top part of 'tree', where the subtree of the parent of 'node' is removed,
@@ -206,8 +206,10 @@ def get_supervision_sets(tree:Tree, node:Tree):
         B, L, R are lists of subtrees of tree.
     The provided 'tree' is modified in place, so pass a deepcopy to be safe!
     """
+    # TODO: support list of trees as 'tree' argument
     if tree is node:    # if top-level recursion: return
         return None, [], tree[:], [], []
+
     A = []
     B, L = None, None
     i = 0
@@ -217,7 +219,10 @@ def get_supervision_sets(tree:Tree, node:Tree):
             B = child[:]
             L = A
             A = []
-            Tprime = [tree]
+            if isinstance(tree, Tree):
+                Tprime = [tree]
+            else:
+                Tprime = []
         else:
             A.append(child)
         i += 1
@@ -227,16 +232,44 @@ def get_supervision_sets(tree:Tree, node:Tree):
         while i < len(tree):
             child = tree[i]
             ret = get_supervision_sets(child, node)
-            if len(ret) == 1:   # not found here
+            if ret is None or len(ret) == 1:   # not found here
                 pass
             elif len(ret) == 5:
                 T, Tprime, B, L, R = ret
-                Tprime.append(tree)
+                if isinstance(tree, Tree):
+                    Tprime.append(tree)
                 return tree, Tprime, B, L, R
             i += 1
+        return None
     else:           # found --> return
         del tree[:]
         return tree, Tprime, B, L, A
+
+
+def filter_graph(nodes:List[Tree], edges:List[Tuple], trees:Union[Tree, Iterable[Tree]]):
+    if isinstance(trees, Tree):
+        trees = [trees]
+
+    # collect all nodes contained in 'trees'
+    treenodes = []
+    for tree in trees:
+        treenodes = treenodes + _gather_descendants(tree, _top=False)
+    # and map them to nodeids
+    treenodeids = set([tn.nodeid for tn in treenodes])
+
+    # filter
+    _nodes = []
+    _edges = []
+
+    for node in nodes:
+        if node.nodeid in treenodeids:
+            _nodes.append(node)
+
+    for edge in edges:
+        if edge[0] in treenodeids and edge[1] in treenodeids:
+            _edges.append(edge)
+
+    return _nodes, _edges
 
 
 def test_tree_oracle(x="x"):
@@ -280,8 +313,8 @@ def test_tree_oracle(x="x"):
             bestnode = node
             bestcentrality = centralities[node.nodeid]
         queue = queue + node[:]
-
     print(f"best node: {bestnode}")
+
     _tree = deepcopy_tree(tree)
     T, Tprime, B, L, R = get_supervision_sets(tree, bestnode)
     print(T)
@@ -291,6 +324,42 @@ def test_tree_oracle(x="x"):
     print(R)
 
     # filter nodes and edges using a set B(ottom) for example and rerun centralities etc
+    _nodes, _edges = filter_graph(nodes, edges, B)
+    distances = compute_distances_graph(_nodes, _edges)
+    centralities = compute_centralities(distances)
+
+    print(json.dumps(centralities, indent=3))
+
+    bestnode = None
+    bestcentrality = 0
+    queue = [be for be in B]
+    while len(queue) > 0:
+        node = queue.pop(0)
+        print(node)
+        print(centralities[node.nodeid])
+        if centralities[node.nodeid] > bestcentrality:
+            bestnode = node
+            bestcentrality = centralities[node.nodeid]
+        queue = queue + node[:]
+    print(f"best node: {bestnode}")
+
+    Bcopy = [deepcopy_tree(be) for be in B]
+
+    T, Tprime, _B, L, R = get_supervision_sets(B, bestnode)
+    print(T)
+    print(Tprime)
+    print(_B)
+    print(L)
+    print(R)
+
+
+    print(f"best node 2: {Bcopy[1][1]}")
+    T, Tprime, _B, L, R = get_supervision_sets(Bcopy, Bcopy[1][1])
+    print(T)
+    print(Tprime)
+    print(_B)
+    print(L)
+    print(R)
 
     tree = _tree
     # bestnode = tree[0]
@@ -300,6 +369,307 @@ def test_tree_oracle(x="x"):
     # print(B)
     # print(L)
     # print(R)
+
+
+def sample_partial_tree(x:Tree):
+    """ Takes a full tree and samples a partial tree.
+        Root is always taken as part of the sampled partial tree.
+    """
+    try:
+        # uniformly sample length
+        xlen = tree_size(x)
+        ylen = random.choice(list(range(xlen)))
+
+        # select nodes
+        nodes = _gather_descendants(x)
+        random.shuffle(nodes)
+
+        selectednodes = nodes[:ylen] + [x]
+        selectednodeids = set([sn.nodeid for sn in selectednodes])
+
+        # build partial tree
+        ptree = build_partial_tree(x, selectednodeids)
+        ptree = ptree[0]
+        return ptree
+    except PartialTreeImpossibleException as e:
+        return sample_partial_tree(x)
+
+
+class PartialTreeImpossibleException(Exception): pass
+
+
+def build_partial_tree(tree, sel):
+    children = []
+    for k in tree:
+        child = build_partial_tree(k, sel)
+        children.append(child)
+    if not (len(children) <= 1 or all([len(k) <= 1 for k in children])):
+        raise PartialTreeImpossibleException()
+    children = [child for k in children for child in k]
+    if tree.nodeid in sel:
+        ret = Tree(tree.label(), children=children)
+        ret.nodeid = tree.nodeid
+        return [ret]
+    else:
+        return children
+
+
+def build_supervision_sets(ptree, tree):
+    """
+    Receives a partial tree 'ptree' and the original tree 'tree'.
+    Has to compute the insertion sets (T(op), B(ottom), L(eft), R(ight)) for every node in 'ptree'.
+    (! Single children should always have an empty T set)
+    (! )
+    """
+    if len(ptree) == 0:
+        ret = Tree(ptree.label(), [])
+        ret.nodeid = ptree.nodeid
+        ret.insert_ancestors = []
+        ret.insert_descendants = []
+        ret.insert_siblings = []
+        return ret
+    # find lowest common ancestor
+    pchildren = ptree[:]
+    pchildrenids = set([pk.nodeid for pk in pchildren])
+    lca = _rec_find_lca(tree, pchildrenids)
+
+    # build sets and do deeper recurrence
+    bottom, ancestors, siblings, pchildren_ss = _rec_build_sets(tree, lca, pchildren)
+
+    ret = Tree(ptree.label(), pchildren_ss)
+    ret.insert_ancestors = []
+    ret.insert_descendants = bottom
+    ret.insert_siblings = siblings
+
+    assert len(ptree) == len(ancestors)
+    for child, child_ancestors in zip(pchildren_ss, ancestors):
+        child.insert_ancestors = child_ancestors
+
+    return ret
+
+
+def _rec_build_sets(tree, lca, pchildren):
+    if lca is not None:
+        if tree is lca or tree.nodeid == lca.nodeid:    # 'tree' is lca --> gather
+            _lca = None
+            child_ancestors = []
+            insert_siblings = [[]]
+            pchildren_ss = []
+            for k in tree:
+                pchild = pchildren[0] if len(pchildren) > 0 else None
+                found, l, pchild_ss = _rec_build_sets(k, None, pchild)        # try to find first pchild in this child
+                if found is True:
+                    pchildren.pop(0)
+                    child_ancestors.append(l)
+                    insert_siblings.append([])
+                    pchildren_ss.append(pchild_ss)
+                else:
+                    insert_siblings[-1] += l
+            assert len(pchildren) == 0, "not all children in partial tree found!"
+            return [], child_ancestors, insert_siblings, pchildren_ss
+        else:       # go deeper
+            if len(tree) == 0:      # leaf, dead-end
+                return False
+            else:
+                for k in tree:
+                    ret = _rec_build_sets(k, lca, pchildren)
+                    if ret is False:    # this whole branch is dead end, do nothing
+                        pass
+                    else:
+                        push_down, child_ancestors, insert_siblings, pchildren_ss = ret
+                        push_down = push_down + [k]
+                        return push_down, child_ancestors, insert_siblings, pchildren_ss
+                return False
+
+    else:   # we reached lca above  --> look out for children
+        pchild = pchildren
+        if pchild is not None and tree.nodeid == pchild.nodeid:        # found child
+            pchild_ss = build_supervision_sets(pchild, tree)
+            return True, [], pchild_ss
+        elif len(tree) == 0:        # no more children left
+            return False, [tree], None
+        else:                       # some children present
+            nodes = []
+            for k in tree:
+                found, l, pchild_ss = _rec_build_sets(k, None, pchild)
+                if found is True:
+                    l = l + [tree]
+                    return found, l, pchild_ss
+                nodes = nodes + l
+            nodes = nodes + [tree]
+            return found, nodes, None
+
+
+def _rec_find_lca(tree, pchildrenids):
+    found = set()
+    if len(pchildrenids) > 0 and tree.nodeid in pchildrenids:
+        pass
+        found.add(tree.nodeid)
+        return found
+    elif len(tree) > 0:
+        for k in tree:
+            ret = _rec_find_lca(k, pchildrenids)
+            if isinstance(ret, Tree):
+                return ret
+            else:
+                found = found | ret
+        if found == pchildrenids:       # all children found
+            return tree
+        else:
+            return found
+    else:
+        return found
+
+
+def linearize_supervised_ptree(x, only_child=True, sibling_slot="@SIB@", ancestor_slot="@ANC@", descendant_slot="@DES@", open_parentheses="(", closed_parentheses=")", parent_separator="|"):
+    if len(x) == 0:     # no children
+        assert len(x.insert_descendants) == 0
+        assert len(x.insert_siblings) == 0
+        ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, closed_parentheses]
+        ret_sup = [None, x.insert_ancestors, None, [], None]
+    else:
+        childrets = [sibling_slot]
+        i = 0
+        childret_sups = [x.insert_siblings[i]]
+        for k in x:
+            ret, ret_sup = linearize_supervised_ptree(k, only_child=len(x) == 1,
+                                                            sibling_slot=sibling_slot,
+                                                            ancestor_slot=ancestor_slot,
+                                                            descendant_slot=descendant_slot,
+                                                            open_parentheses=open_parentheses,
+                                                            closed_parentheses=closed_parentheses,
+                                                            parent_separator=parent_separator)
+            childrets = childrets + ret + [sibling_slot]
+            i += 1
+            childret_sups = childret_sups + ret_sup + [x.insert_siblings[i]]
+        ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, parent_separator] + childrets + [closed_parentheses]
+        ret_sup = [None, x.insert_ancestors, None, x.insert_descendants, None] + childret_sups + [None]
+    if only_child:
+        assert len(ret_sup[1]) == 0
+        del ret[1]
+        del ret_sup[1]
+    return ret, ret_sup
+
+
+def test_tree_sampling(x="x"):
+    treestr = "(A ( B (C E F) K (D (G H I J))))"
+    # treestr = "(A ( B (C (E (F (X (I J))))) D ))"
+    # treestr = "(1 (11 (111 1111 1112 1113) (112 1121 1122 1123) (113 1131 1132 1133)) (12 (121 1211 1212 1213) (122 1221 (1222 (12222 (122222 1222222))) 1223) (123 1231 1232 1233)) (13 (131 1311 1312 1313) (132 1321 1322 1323) (133 1331 1332 1333)))"
+    tree = lisp_to_tree(treestr)
+    print(tree)
+    print(" ".join(tree_to_seq_special(tree)))
+
+    tree = assign_dfs_nodeids(tree)
+
+    ptree = sample_partial_tree(tree)
+
+    print(ptree)
+
+
+    ptree = Tree("A", children=[Tree("E", []), Tree("I", [])])
+    print(f"Ptree: {ptree}")
+    ptree.nodeid = 0
+    ptree[0].nodeid = 3
+    ptree[1].nodeid = 9
+    ptree_ret = build_supervision_sets(ptree, tree)
+
+    ret, retsup = linearize_supervised_ptree(ptree_ret,
+                                                        sibling_slot="-",
+                                                        ancestor_slot="^",
+                                                        descendant_slot="v")
+
+    print(" ".join(ret))
+
+    for rete, retsupe in zip(ret, retsup):
+        if retsupe != None:
+            supstr = ", ".join([str(e) for e in retsupe])
+            print(f"{rete}: [{supstr}]")
+        else:
+            print(f"{rete}")
+
+
+
+    print("\n")
+    ptree = Tree("A", children=[Tree("I", []), Tree("J", [])])
+    print(f"Ptree: {ptree}")
+    ptree.nodeid = 0
+    ptree[0].nodeid = 9
+    ptree[1].nodeid = 10
+    ptree_ret = build_supervision_sets(ptree, tree)
+
+    ret, retsup = linearize_supervised_ptree(ptree_ret,
+                                             sibling_slot="-",
+                                             ancestor_slot="^",
+                                             descendant_slot="v")
+
+    print(" ".join(ret))
+
+    for rete, retsupe in zip(ret, retsup):
+        if retsupe != None:
+            supstr = ", ".join([str(e) for e in retsupe])
+            print(f"{rete}: [{supstr}]")
+        else:
+            print(f"{rete}")
+
+
+
+    print("\n")
+    ptree = Tree("A", children=[Tree("I", [])])
+    print(f"Ptree: {ptree}")
+    ptree.nodeid = 0
+    ptree[0].nodeid = 9
+    ptree_ret = build_supervision_sets(ptree, tree)
+
+    ret, retsup = linearize_supervised_ptree(ptree_ret,
+                                             sibling_slot="-",
+                                             ancestor_slot="^",
+                                             descendant_slot="v")
+
+    print(" ".join(ret))
+
+    for rete, retsupe in zip(ret, retsup):
+        if retsupe != None:
+            supstr = ", ".join([str(e) for e in retsupe])
+            print(f"{rete}: [{supstr}]")
+        else:
+            print(f"{rete}")
+
+
+
+    print("\n")
+    ptree = Tree("A", children=[Tree("E", []), Tree("D", [Tree("I", [])])])
+    print(f"Ptree: {ptree}")
+    ptree.nodeid = 0
+    ptree[0].nodeid = 3
+    ptree[1].nodeid = 6
+    ptree[1][0].nodeid = 9
+    ptree_ret = build_supervision_sets(ptree, tree)
+
+    ret, retsup = linearize_supervised_ptree(ptree_ret,
+                                             sibling_slot="-",
+                                             ancestor_slot="^",
+                                             descendant_slot="v")
+
+    print(" ".join(ret))
+
+    for rete, retsupe in zip(ret, retsup):
+        if retsupe != None:
+            supstr = ", ".join([str(e) for e in retsupe])
+            print(f"{rete}: [{supstr}]")
+        else:
+            print(f"{rete}")
+
+
+    # TODO: compute centralities within supervision segments
+
+    # TODO: compute weights from centralities <-- rank nodes, use softmax with temp
+
+    # TODO: generate tensors for input and target distributions
+
+
+
+
+
 
 
 
@@ -1776,7 +2146,8 @@ def run_experiment(domain="default",    #
 
 
 if __name__ == '__main__':
-    q.argprun(test_tree_oracle)
+    # q.argprun(test_tree_oracle)
+    q.argprun(test_tree_sampling)
     # DONE: fix orderless for no simplification setting used here
     # DONE: make baseline decoder use cached decoder states
     # DONE: in unsimplified Overnight, the filters are nested but are interchangeable! --> use simplify filters ?!
