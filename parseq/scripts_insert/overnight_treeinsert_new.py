@@ -525,8 +525,14 @@ def linearize_supervised_ptree(x, only_child=True, sibling_slot="@SIB@", ancesto
     if len(x) == 0:     # no children
         assert len(x.insert_descendants) == 0
         assert len(x.insert_siblings) == 0
-        ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, closed_parentheses]
-        ret_sup = [None, x.insert_ancestors, None, [], None]
+        # ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, closed_parentheses]
+        ret = [ancestor_slot, x.label(), descendant_slot]
+        # ret_sup = [None, x.insert_ancestors, None, [], None]
+        ret_sup = [x.insert_ancestors, None, []]
+        if only_child:
+            assert len(ret_sup[0]) == 0
+            del ret[0]
+            del ret_sup[0]
     else:
         childrets = [sibling_slot]
         i = 0
@@ -544,11 +550,44 @@ def linearize_supervised_ptree(x, only_child=True, sibling_slot="@SIB@", ancesto
             childret_sups = childret_sups + ret_sup + [x.insert_siblings[i]]
         ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, parent_separator] + childrets + [closed_parentheses]
         ret_sup = [None, x.insert_ancestors, None, x.insert_descendants, None] + childret_sups + [None]
-    if only_child:
-        assert len(ret_sup[1]) == 0
-        del ret[1]
-        del ret_sup[1]
+        if only_child:
+            assert len(ret_sup[1]) == 0
+            del ret[1]
+            del ret_sup[1]
     return ret, ret_sup
+
+
+def test_tree_sampling_random(n=100):
+    # treestr = "(A ( B (C E F) K (D (G H I J))))"
+    # treestr = "(A ( B (C (E (F (X (I J))))) D ))"
+    treestr = "(1 (11 (111 1111 1112 1113) (112 1121 1122 1123) (113 1131 1132 1133)) (12 (121 1211 1212 1213) (122 1221 (1222 (12222 (122222 1222222))) 1223) (123 1231 1232 1233)) (13 (131 1311 1312 1313) (132 1321 1322 1323) (133 1331 1332 1333)))"
+    tree = lisp_to_tree(treestr)
+    print(tree)
+    print(" ".join(tree_to_seq_special(tree)))
+
+    tree = assign_dfs_nodeids(tree)
+
+    for _ in range(n):
+        print("\n")
+        ptree = sample_partial_tree(tree)
+
+        print(ptree)
+
+        ptree_ret = build_supervision_sets(ptree, tree)
+
+        ret, retsup = linearize_supervised_ptree(ptree_ret,
+                                                 sibling_slot="-",
+                                                 ancestor_slot="^",
+                                                 descendant_slot="v")
+
+        print(" ".join(ret))
+
+        for rete, retsupe in zip(ret, retsup):
+            if retsupe != None:
+                supstr = ", ".join([str(e) for e in retsupe])
+                print(f"{rete}: [{supstr}]")
+            else:
+                print(f"{rete}")
 
 
 def test_tree_sampling(x="x"):
@@ -566,6 +605,7 @@ def test_tree_sampling(x="x"):
     print(ptree)
 
 
+    print("\n")
     ptree = Tree("A", children=[Tree("E", []), Tree("I", [])])
     print(f"Ptree: {ptree}")
     ptree.nodeid = 0
@@ -2148,6 +2188,8 @@ def run_experiment(domain="default",    #
 if __name__ == '__main__':
     # q.argprun(test_tree_oracle)
     q.argprun(test_tree_sampling)
+    # q.argprun(test_tree_sampling_random)
+
     # DONE: fix orderless for no simplification setting used here
     # DONE: make baseline decoder use cached decoder states
     # DONE: in unsimplified Overnight, the filters are nested but are interchangeable! --> use simplify filters ?!
