@@ -793,13 +793,16 @@ def perform_decoding_step(xseq:List[str], tagseq:List[str],
         elif xseq_elem == closing_parentheses:
             pass
         elif xseq_elem == parent_separator:
-            parent_separated = True
+            if len(current_parent) > 0:
+                assert len(current_parent) == 1
+                current_parent = current_parent[-1]
         elif xseq_elem in (ancestor_slot,):
             stack[-1].append(Tree(tagseq_elem, []))
             stack.append([])
         elif xseq_elem in (descendant_slot,):
             node = Tree(tagseq_elem, [])    # create a descendant
             current_parent.append(node)     # append it to the parent
+            node.parentnode = current_parent
         elif xseq_elem in (sibling_slot,):
             if tagseq_elem not in ("@END@", "@KEEP@", None):
                 stack[-1].append(tagseq_elem)
@@ -810,8 +813,11 @@ def perform_decoding_step(xseq:List[str], tagseq:List[str],
             #     next_is_parent = False
 
             node = Tree(xseq_elem, [])
-            if current_parent is not None:      # node is root
+            if current_parent is not None:      # node is not root
                 current_parent.append(node)
+                node.parentnode = current_parent
+            else:
+                node.parentnode = None          # root node has no parent
             if next_is_parent:
                 current_parent = node
                 next_is_parent = False
