@@ -57,12 +57,15 @@ def compute_centralities(distances):
     centralities = {}
     for src in distances:
         acc = sum(distances[src].values())
-        centralities[src] = 1 / acc
+        centralities[src] = 1 / max(acc, 1e-3)
     return centralities
 
 
 def compute_distances_graph(nodes, edges):
     """ Run message passing to compute minimum distances.
+        Takes a list of nodes with nodeids and edges (expressed using those nodeids)
+        Returns a dictionary mapping from nodeid u to a dictionary that maps from a nodeid v
+        to an integer that is the minimum distance between u and v in the graph.
     """
     _nodes = nodes
     nodes = [n.nodeid for n in nodes]
@@ -163,8 +166,18 @@ def assign_dfs_nodeids(x:Tree):
         e = queue.pop(0)
         nodes.append(e)
         e.nodeid = len(nodes) - 1
-        if len(e) > 0:
-            queue = e[:] + queue
+        queue = e[:] + queue
+    return x
+
+
+def assign_f_nodeids(x:Tree, f=None):
+    nodes = []
+    queue = [x]
+    while len(queue) > 0:
+        e = queue.pop(0)
+        nodes.append(e)
+        e.nodeid = f(e)
+        queue = e[:] + queue
     return x
 
 
@@ -177,7 +190,7 @@ def build_graph(x:Tree):
     while len(queue) > 0:
         e = queue.pop(0)
         nodes.append(e)
-        assert(e.nodeid == len(nodes) - 1)
+        # assert(e.nodeid == len(nodes) - 1)
         if len(e) > 0:
             children = e[:]
             for i, child in enumerate(children):
@@ -198,7 +211,7 @@ def deepcopy_tree(x:Tree):
     return y
 
 
-def get_supervision_sets(tree:Union[Tree, List[Tree]], node:Tree):
+def get_supervision_sets(tree:Tree, node:Tree):
     """
     Should return T, Tprime, B, L, R:
         T is top part of 'tree', where the subtree of the parent of 'node' is removed,
@@ -206,7 +219,6 @@ def get_supervision_sets(tree:Union[Tree, List[Tree]], node:Tree):
         B, L, R are lists of subtrees of tree.
     The provided 'tree' is modified in place, so pass a deepcopy to be safe!
     """
-    # TODO: support list of trees as 'tree' argument
     if tree is node:    # if top-level recursion: return
         return None, [], tree[:], [], []
 
@@ -247,6 +259,12 @@ def get_supervision_sets(tree:Union[Tree, List[Tree]], node:Tree):
 
 
 def filter_graph(nodes:List[Tree], edges:List[Tuple], trees:Union[Tree, Iterable[Tree]]):
+    """
+    :param nodes:   List of nodes with nodeids
+    :param edges:   List of edges expressed using nodeids
+    :param trees:   Node(s) (with nodeids from the same space as 'nodes')
+    :return: list of nodes and edges that are contained in the subgraph covered by nodes specified in 'trees'
+    """
     if isinstance(trees, Tree):
         trees = [trees]
 
@@ -425,7 +443,8 @@ def build_supervision_sets(ptree, tree):
         ret = Tree(ptree.label(), [])
         ret.nodeid = ptree.nodeid
         ret.insert_ancestors = []
-        ret.insert_descendants = []
+        assert ptree.nodeid == tree.nodeid
+        ret.insert_descendants = _gather_descendants(tree)
         ret.insert_siblings = []
         return ret
     # find lowest common ancestor
@@ -437,6 +456,7 @@ def build_supervision_sets(ptree, tree):
     bottom, ancestors, siblings, pchildren_ss = _rec_build_sets(tree, lca, pchildren)
 
     ret = Tree(ptree.label(), pchildren_ss)
+    ret.nodeid = ptree.nodeid
     ret.insert_ancestors = []
     ret.insert_descendants = bottom
     ret.insert_siblings = siblings
@@ -521,40 +541,293 @@ def _rec_find_lca(tree, pchildrenids):
         return found
 
 
-def linearize_supervised_ptree(x, only_child=True, sibling_slot="@SIB@", ancestor_slot="@ANC@", descendant_slot="@DES@", open_parentheses="(", closed_parentheses=")", parent_separator="|"):
+def linearize_ptree(x, is_root=True, only_child=True, sibling_slot="@--", ancestor_slot="@^", descendant_slot="@v", open_parentheses="(", closing_parentheses=")", parent_separator="|"):
     if len(x) == 0:     # no children
-        assert len(x.insert_descendants) == 0
+        # ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, closed_parentheses]
+        ret = [ancestor_slot, x, descendant_slot]
+        if only_child:
+            del ret[0]
+        if is_root:
+            ret = [open_parentheses] + ret + [closing_parentheses]
+    else:
+        childrets = [sibling_slot]
+        i = 0
+        for k in x:
+            ret = linearize_ptree(k, only_child=len(x) == 1,
+                                     is_root=False,
+                                             sibling_slot=sibling_slot,
+                                             ancestor_slot=ancestor_slot,
+                                             descendant_slot=descendant_slot,
+                                             open_parentheses=open_parentheses,
+                                             closing_parentheses=closing_parentheses,
+                                             parent_separator=parent_separator)
+            childrets = childrets + ret + [sibling_slot]
+            i += 1
+        ret = [open_parentheses, ancestor_slot, x, descendant_slot, parent_separator] + childrets + [closing_parentheses]
+        if only_child:
+            del ret[1]
+    return ret
+
+
+def linearize_supervised_ptree(x, is_root=True, only_child=True, sibling_slot="@--", ancestor_slot="@^", descendant_slot="@v", open_parentheses="(", closing_parentheses=")", parent_separator="|"):
+    if len(x) == 0:     # no children
+        # assert len(x.insert_descendants) == 0
         assert len(x.insert_siblings) == 0
         # ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, closed_parentheses]
-        ret = [ancestor_slot, x.label(), descendant_slot]
+        ret = [ancestor_slot, x, descendant_slot]
         # ret_sup = [None, x.insert_ancestors, None, [], None]
-        ret_sup = [x.insert_ancestors, None, []]
+        ret_sup = [x.insert_ancestors, None, x.insert_descendants]
         if only_child:
             assert len(ret_sup[0]) == 0
             del ret[0]
             del ret_sup[0]
+        if is_root:
+            ret = [open_parentheses] + ret + [closing_parentheses]
+            ret_sup = [None] + ret_sup + [None]
     else:
         childrets = [sibling_slot]
         i = 0
         childret_sups = [x.insert_siblings[i]]
         for k in x:
             ret, ret_sup = linearize_supervised_ptree(k, only_child=len(x) == 1,
-                                                            sibling_slot=sibling_slot,
-                                                            ancestor_slot=ancestor_slot,
-                                                            descendant_slot=descendant_slot,
-                                                            open_parentheses=open_parentheses,
-                                                            closed_parentheses=closed_parentheses,
-                                                            parent_separator=parent_separator)
+                                                      sibling_slot=sibling_slot,
+                                                      ancestor_slot=ancestor_slot,
+                                                      descendant_slot=descendant_slot,
+                                                      open_parentheses=open_parentheses,
+                                                      closing_parentheses=closing_parentheses,
+                                                      parent_separator=parent_separator)
             childrets = childrets + ret + [sibling_slot]
             i += 1
             childret_sups = childret_sups + ret_sup + [x.insert_siblings[i]]
-        ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, parent_separator] + childrets + [closed_parentheses]
+        ret = [open_parentheses, ancestor_slot, x, descendant_slot, parent_separator] + childrets + [closing_parentheses]
         ret_sup = [None, x.insert_ancestors, None, x.insert_descendants, None] + childret_sups + [None]
         if only_child:
             assert len(ret_sup[1]) == 0
             del ret[1]
             del ret_sup[1]
     return ret, ret_sup
+
+
+def compute_centralities_ptree(ptree, tree):
+    """
+    :param ptree:   partial tree with nodeids as well as supervision sets
+    :param tree:    original tree with the same nodeid space
+    :return:        dictionary mapping nodeids to centralities
+    """
+    # 1. break up the graph of 'tree'
+    #       by removing edges of nodes that are already in ptree
+    #       as well as separating all children of LCA nodes with more than one child
+    nodes, edges = build_graph(tree)
+    break_edges = find_break_edges(ptree)
+
+
+    break_nodeids = set()
+    queue = [ptree]
+    while len(queue) > 0:
+        pchild = queue.pop(0)
+        break_nodeids.add(pchild.nodeid)
+        queue = pchild[:] + queue
+
+    edges_ = []
+    for edge in edges:
+        if (edge[0], edge[1]) in break_edges:
+            continue
+        elif edge[0] in break_nodeids or edge[1] in break_nodeids:
+            continue
+        else:
+            edges_.append(edge)
+
+    # print(len(edges), len(edges_))
+    # 2. compute distances
+    distances = compute_distances_graph(nodes, edges_)
+    # 3. compute centralities
+    centralities = compute_centralities(distances)
+    return centralities
+
+
+def find_break_edges(ptree):
+    """ Find edges which to remove from the graph for the original tree behind this ptree.
+        ==> edges between adjac
+    """
+    ret = set()
+    if len(ptree.insert_descendants) > 0:
+        lca = ptree.insert_descendants[0]
+        for lca_child in lca:
+            ret.add((lca.nodeid, lca_child.nodeid))
+            ret.add((lca_child.nodeid, lca.nodeid))
+
+    ancestors_of_children = []
+    for pchild in ptree:
+        ancestors_of_children.append([pchild.insert_ancestors[-1]] if len(pchild.insert_ancestors) > 0 else [])
+        ret_ = find_break_edges(pchild)
+        ret |= ret_
+
+    if len(ptree) > 1:
+        s = [ptree.insert_siblings[0]]
+        for i in range(len(ancestors_of_children)):
+            s.append(ancestors_of_children[i])
+            s.append(ptree.insert_siblings[i+1])
+        s = [se for se in s if len(se) > 0]
+        for i in range(len(s)-1):
+            ret.add((s[i][-1].nodeid, s[i+1][0].nodeid))
+            ret.add((s[i+1][0].nodeid, s[i][-1].nodeid))
+    return ret
+
+
+def _collect_lca_nodeids(tree, ptree):
+    lcas = set()
+    if len(ptree) > 1:
+        pchildren = ptree[:]
+        pchildrenids = set([pk.nodeid for pk in pchildren])
+        lca = _rec_find_lca(tree, pchildrenids)
+        lcas.add(lca.nodeid)
+    for pchild in ptree:
+        _lcas = _collect_lca_nodeids_2(tree, pchild)
+        lcas = lcas | _lcas
+    return lcas
+
+
+def _collect_lca_nodeids_2(tree, pchild):
+    lcas = set()
+    if tree.nodeid == pchild.nodeid:
+        _lcas = _collect_lca_nodeids(tree, pchild)
+        lcas = lcas | _lcas
+    else:
+        for child in tree:
+            _lcas = _collect_lca_nodeids_2(child, pchild)
+            lcas = lcas | _lcas
+    return lcas
+
+
+def compute_target_distribution_data(x, centrs, end_token="@END@"):
+    # compute ranks
+    if len(x) > 0:
+        sorted_retsupe = sorted([(centrs[e.nodeid], e) for e in x],
+                                key=cmp_to_key(retsup_cmp))
+        r = []
+        rank = 0
+        prev_e = sorted_retsupe[0]
+        r.append((rank, prev_e[1].label()))
+        for e in sorted_retsupe[1:]:
+            if retsup_cmp(e, prev_e) != 0:
+                assert retsup_cmp(e, prev_e) > 0
+                rank += 1
+            r.append((rank, e[1].label()))
+            prev_e = e
+    else:
+        r = [(1., end_token)]
+    # compute softmax over ranks
+    tau = 1.
+    d = sum([np.exp(-e[0] / tau) for e in r])
+    r = [(np.exp(-e[0] / tau)/d, e[1]) for e in r]
+    return r
+
+
+def retsup_cmp(a:Tuple[float, Tree], b:Tuple[float, Tree]):
+    """
+    :param a, b:        tuple consisting of a float and a Tree: (float, Tree) where the float is a centrality score for the tree (higher is better)
+    :return:
+    """
+    ret = b[0] - a[0]
+    if ret == 0:
+        ret = +1* (tree_size(a[1]) - tree_size(b[1]))
+    # if ret == 0:
+    #     al = a[1].label()
+    #     bl = b[1].label()
+    #     if al == bl:
+    #         ret = 0
+    #     elif al < bl:
+    #         ret = -1
+    #     else:
+    #         ret = 1
+    # if ret == 0:
+    #     al = str(a[1])
+    #     bl = str(b[1])
+    #     if al == bl:
+    #         ret = 0
+    #     elif al < bl:
+    #         ret = -1
+    #     else:
+    #         ret = 1
+    return ret
+
+
+def cmp_to_key(mycmp):
+    'Convert a cmp= function into a key= function'
+    class K:
+        def __init__(self, obj, *args):
+            self.obj = obj
+        def __lt__(self, other):
+            return mycmp(self.obj, other.obj) < 0
+        def __gt__(self, other):
+            return mycmp(self.obj, other.obj) > 0
+        def __eq__(self, other):
+            return mycmp(self.obj, other.obj) == 0
+        def __le__(self, other):
+            return mycmp(self.obj, other.obj) <= 0
+        def __ge__(self, other):
+            return mycmp(self.obj, other.obj) >= 0
+        def __ne__(self, other):
+            return mycmp(self.obj, other.obj) != 0
+    return K
+
+
+def perform_decoding_step(xseq:List[str], tagseq:List[str],
+                          sibling_slot="@--", ancestor_slot="@^", descendant_slot="@v", open_parentheses="(", closing_parentheses=")", parent_separator="|"):
+    """
+    Applies a tag sequence on the given linearized tree sequence.
+    :param xseq:    linearized tree sequence containing insertion slots
+    :param tagseq:  tag sequence
+    :return: new xseq
+    """
+    # this method processes the two sequences together, building up a tree and then linearizes that tree back to a sequence
+    assert len(xseq) == len(tagseq)
+    stack = []
+    current_parent = None
+    parent_separated = False
+    next_is_parent = False
+    for xseq_elem, tagseq_elem in zip(xseq, tagseq):
+        if xseq_elem == open_parentheses:
+            stack.append([])
+            next_is_parent = True
+        elif xseq_elem == closing_parentheses:
+            pass
+        elif xseq_elem == parent_separator:
+            parent_separated = True
+        elif xseq_elem in (ancestor_slot,):
+            stack[-1].append(Tree(tagseq_elem, []))
+            stack.append([])
+        elif xseq_elem in (descendant_slot,):
+            node = Tree(tagseq_elem, [])    # create a descendant
+            current_parent.append(node)     # append it to the parent
+        elif xseq_elem in (sibling_slot,):
+            if tagseq_elem not in ("@END@", "@KEEP@", None):
+                stack[-1].append(tagseq_elem)
+        else:
+            # stack[-1].append(Tree(xseq_elem, []))
+            # if next_is_parent:     # this token is the parent
+            #     stack.append([])
+            #     next_is_parent = False
+
+            node = Tree(xseq_elem, [])
+            if current_parent is not None:      # node is root
+                current_parent.append(node)
+            if next_is_parent:
+                current_parent = node
+                next_is_parent = False
+    return stack
+
+
+
+def test_decode(n=1):
+    r = Tree("R", [Tree("A", [Tree("C", [])]), Tree("B", [])])
+    rl = [re.label() if isinstance(re, Tree) else re for re in linearize_ptree(r)]
+    r_str = " ".join(rl)
+    print(r_str)
+    #            (    R    @v     |   @--    (   @^     A   @v    |    @--    C   @v    @--  )    @--   @^    B   @v   @--   )
+    rl_tags = [None, None, "D", None, "E", None, "F", None, "G", None, "H", None, "I", "J", None, "K", "L", None, "M", "N", None]
+
+    rl_tp1 = perform_decoding_step(rl, rl_tags)
 
 
 def test_tree_sampling_random(n=100):
@@ -575,10 +848,7 @@ def test_tree_sampling_random(n=100):
 
         ptree_ret = build_supervision_sets(ptree, tree)
 
-        ret, retsup = linearize_supervised_ptree(ptree_ret,
-                                                 sibling_slot="-",
-                                                 ancestor_slot="^",
-                                                 descendant_slot="v")
+        ret, retsup = linearize_supervised_ptree(ptree_ret)
 
         print(" ".join(ret))
 
@@ -591,6 +861,46 @@ def test_tree_sampling_random(n=100):
 
 
 def test_tree_sampling(x="x"):
+    # treestr = "(R (T X (A ( B (C E F) (D (G H I J)) N))))"
+    treestr = "(A ( B (C E F) K (D (G H I J))))"
+    # treestr = "(A ( B (C (E (F (X (I J))))) D ))"
+    # treestr = "(1 (11 (111 1111 1112 1113) (112 1121 1122 1123) (113 1131 1132 1133)) (12 (121 1211 1212 1213) (122 1221 (1222 (12222 (122222 1222222))) 1223) (123 1231 1232 1233)) (13 (131 1311 1312 1313) (132 1321 1322 1323) (133 1331 1332 1333)))"
+    tree = lisp_to_tree(treestr)
+    print(tree)
+    print(" ".join(tree_to_seq_special(tree)))
+
+    tree = assign_f_nodeids(tree, lambda x: ord(x.label()))
+
+    ptree = sample_partial_tree(tree)
+
+    print(ptree)
+
+
+    print("\n")
+    # ptree = Tree("R", children=[Tree("D", [])])       # ptree = Tree("R", children=[Tree("I", [])])
+    ptree = Tree("A", children=[Tree("E", []), Tree("G", [])])
+    print(f"Ptree: {ptree}")
+    ptree = assign_f_nodeids(ptree, lambda x: ord(x.label()))
+
+    ptree_ret = build_supervision_sets(ptree, tree)
+
+    ret, retsup = linearize_supervised_ptree(ptree_ret)
+
+    centralities = compute_centralities_ptree(ptree_ret, tree)
+
+    print(" ".join([e.label() if isinstance(e, Tree) else e for e in ret]))
+
+    for rete, retsupe in zip(ret, retsup):
+        if retsupe != None:
+            r = compute_target_distribution_data(retsupe, centralities)
+
+            supstr = ", ".join([f"{c:.3f}:{e}" for c, e in r])
+            print(f"{rete}: [{supstr}]")
+        else:
+            print(f"{rete.label() if isinstance(rete, Tree) else rete}")
+
+
+def test_tree_sampling_(x="x"):
     treestr = "(A ( B (C E F) K (D (G H I J))))"
     # treestr = "(A ( B (C (E (F (X (I J))))) D ))"
     # treestr = "(1 (11 (111 1111 1112 1113) (112 1121 1122 1123) (113 1131 1132 1133)) (12 (121 1211 1212 1213) (122 1221 (1222 (12222 (122222 1222222))) 1223) (123 1231 1232 1233)) (13 (131 1311 1312 1313) (132 1321 1322 1323) (133 1331 1332 1333)))"
@@ -613,10 +923,8 @@ def test_tree_sampling(x="x"):
     ptree[1].nodeid = 9
     ptree_ret = build_supervision_sets(ptree, tree)
 
-    ret, retsup = linearize_supervised_ptree(ptree_ret,
-                                                        sibling_slot="-",
-                                                        ancestor_slot="^",
-                                                        descendant_slot="v")
+    ret, retsup = linearize_supervised_ptree(ptree_ret)
+    compute_centralities_ptree(ptree_ret, tree)
 
     print(" ".join(ret))
 
@@ -626,8 +934,6 @@ def test_tree_sampling(x="x"):
             print(f"{rete}: [{supstr}]")
         else:
             print(f"{rete}")
-
-
 
     print("\n")
     ptree = Tree("A", children=[Tree("I", []), Tree("J", [])])
@@ -637,10 +943,7 @@ def test_tree_sampling(x="x"):
     ptree[1].nodeid = 10
     ptree_ret = build_supervision_sets(ptree, tree)
 
-    ret, retsup = linearize_supervised_ptree(ptree_ret,
-                                             sibling_slot="-",
-                                             ancestor_slot="^",
-                                             descendant_slot="v")
+    ret, retsup = linearize_supervised_ptree(ptree_ret)
 
     print(" ".join(ret))
 
@@ -650,8 +953,6 @@ def test_tree_sampling(x="x"):
             print(f"{rete}: [{supstr}]")
         else:
             print(f"{rete}")
-
-
 
     print("\n")
     ptree = Tree("A", children=[Tree("I", [])])
@@ -660,10 +961,7 @@ def test_tree_sampling(x="x"):
     ptree[0].nodeid = 9
     ptree_ret = build_supervision_sets(ptree, tree)
 
-    ret, retsup = linearize_supervised_ptree(ptree_ret,
-                                             sibling_slot="-",
-                                             ancestor_slot="^",
-                                             descendant_slot="v")
+    ret, retsup = linearize_supervised_ptree(ptree_ret)
 
     print(" ".join(ret))
 
@@ -673,8 +971,6 @@ def test_tree_sampling(x="x"):
             print(f"{rete}: [{supstr}]")
         else:
             print(f"{rete}")
-
-
 
     print("\n")
     ptree = Tree("A", children=[Tree("E", []), Tree("D", [Tree("I", [])])])
@@ -685,10 +981,8 @@ def test_tree_sampling(x="x"):
     ptree[1][0].nodeid = 9
     ptree_ret = build_supervision_sets(ptree, tree)
 
-    ret, retsup = linearize_supervised_ptree(ptree_ret,
-                                             sibling_slot="-",
-                                             ancestor_slot="^",
-                                             descendant_slot="v")
+    ret, retsup = linearize_supervised_ptree(ptree_ret)
+
 
     print(" ".join(ret))
 
@@ -2187,7 +2481,8 @@ def run_experiment(domain="default",    #
 
 if __name__ == '__main__':
     # q.argprun(test_tree_oracle)
-    q.argprun(test_tree_sampling)
+    # q.argprun(test_tree_sampling)
+    q.argprun(test_decode)
     # q.argprun(test_tree_sampling_random)
 
     # DONE: fix orderless for no simplification setting used here
