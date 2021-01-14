@@ -553,7 +553,7 @@ class DefaultSpecialTokens():
                  root_token="@R@",
                  ancestor_slot="@^",
                  descendant_slot="@v",
-                 sibling_slot="@--",
+                 sibling_slot="@-",
                  parent_separator="|",
                  opening_parentheses="(",
                  closing_parentheses=")",
@@ -831,6 +831,8 @@ def perform_decoding_step(xseq:List[str], tagseq:List[str], specialtokens=Defaul
             reset_vars()
         elif xe == specialtokens.closing_parentheses:     # closing a parent
             close_node()
+            if state.parentnode is None:
+                state.parentnode = state.curnode
             realchildren = [pn_child for pn_child in state.parentnode if pn_child.label() != specialtokens.sibling_slot]
             if len(realchildren) == 1:      # single child  --> preserve child's ancestral slot
                 assert realchildren[0].ancestor_insert == None
@@ -944,10 +946,26 @@ def _execute_slotted_tree(x, specialtokens=DefaultSpecialTokens()):
             childrets = _execute_slotted_tree(child, specialtokens=specialtokens)
             for childret in childrets:
                 node.append(childret)
+
+        realchildren = [child for child in node if child.label() != specialtokens.sibling_slot]
+        if len(realchildren) == 1:
+            realchildren[0].ancestor_insert = None
+
         return [ancestor]
 
 
 def test_decode(n=1):
+    # superbasic test:
+    print("superbasic test")
+    r_str = "( R @v | A @v )"
+    print(r_str)
+    rl = r_str.split(" ")
+    rl_tags = [None, None, "D", None, None, "E", None]
+    print(rl_tags)
+    rl_tp1 = perform_decoding_step(rl, rl_tags)
+    print(" ".join(rl_tp1))
+    assert " ".join(rl_tp1) == "( R @v | @- ( D @v | ( A @v | @- E @v @- ) ) @- )"
+                              #"( R @v | @- ( D @v | ( @^ A @v | @- E @v @- ) ) @- )"
 
     # test basic:
     print("basic test")
@@ -959,8 +977,7 @@ def test_decode(n=1):
     print(rl_tags)
     rl_tp1 = perform_decoding_step(rl, rl_tags)
     print(" ".join(rl_tp1))
-    assert " ".join(rl_tp1) == "( R @v | @-- ( D @v | @-- @^ E @v @-- ( @^ B @v | @-- G @v @-- ) @-- @^ H @v @-- ) @-- )"
-
+    assert " ".join(rl_tp1) == "( R @v | @- ( D @v | @- @^ E @v @- ( @^ B @v | @- G @v @- ) @- @^ H @v @- ) @- )"
 
     # test different slots
     print("test with different slots")
@@ -968,28 +985,28 @@ def test_decode(n=1):
     rl = [re.label() if isinstance(re, Tree) else re for re in linearize_ptree(r)]
     r_str = " ".join(rl)
     print(r_str)
-    #            (    R    @v     |   @--    (   @^     A   @v    |    @--    C   @v    @--  )    @--   @^    B   @v   @--   )
+    #            (    R    @v     |   @-    (   @^     A   @v    |    @-    C   @v    @-  )    @-   @^    B   @v   @-   )
     rl_tags = [None, None, "D", None, "E", None, "F", None, "G", None, "H", None, "I", "J", None, "K", "L", None, "M", "N", None]
     print(rl_tags)
     rl_tp1 = perform_decoding_step(rl, rl_tags)
     print(" ".join(rl_tp1))
-    assert " ".join(rl_tp1) == "( R @v | @-- ( D @v | @-- @^ E @v @-- ( @^ F @v | @-- ( A @v | @-- ( G @v | @-- @^ H @v @-- ( @^ C @v | @-- I @v @-- ) @-- @^ J @v @-- ) @-- ) @-- ) @-- @^ K @v @-- ( @^ L @v | @-- ( B @v | @-- M @v @-- ) @-- ) @-- @^ N @v @-- ) @-- )"
-                           #"( R @v | @-- ( D @v | @-- @^ E @v @-- ( @^ F @v | @-- ( @^ A @v | @-- ( G @v | @-- @^ H @v @-- ( @^ C @v | @-- I @v @-- ) @-- @^ J @v @-- ) @-- ) @-- ) @-- @^ K @v @-- ( @^ L @v | @-- ( @^ B @v | @-- M @v @-- ) @-- ) @-- @^ N @v @-- ) @-- )
-                              #"( R @v | @-- ( D @v | @-- @^ E @v @-- ( F @v | @-- ( @^ A @v | @-- ( G @v | @-- @^ H @v @-- ( @^ C @v | @-- I @v @-- ) @-- @^ J @v @-- ) @-- ) @-- ) @-- @^ K @v @-- ( L @v | @-- ( @^ B @v | @-- M @v @-- ) @-- ) @-- @^ N @v @-- ) @-- )"
+    assert " ".join(rl_tp1) == "( R @v | @- ( D @v | @- @^ E @v @- ( @^ F @v | @- ( A @v | @- ( G @v | @- @^ H @v @- ( @^ C @v | @- I @v @- ) @- @^ J @v @- ) @- ) @- ) @- @^ K @v @- ( @^ L @v | @- ( B @v | @- M @v @- ) @- ) @- @^ N @v @- ) @- )"
+
+    
     # test with closed slots I
     print("test with closed slots I")
     # r = Tree("R", [Tree("A", [Tree("C", [])]), Tree("B", [])])
     # rl = [re.label() if isinstance(re, Tree) else re for re in linearize_ptree(r)]
-    r_str = "( R @v | ( A @v | @-- B C @v @-- ) @-- )"
+    r_str = "( R @v | ( A @v | @- B C @v @- ) @- )"
     print(r_str)
     rl = r_str.split(" ")
-    #           (      R    @v    |    (     A    @v     |   @--    B     C   @v   @--    )   @--  )
+    #           (      R    @v    |    (     A    @v     |   @-    B     C   @v   @-    )   @-  )
     rl_tags = [None, None, "D", None, None, None, "E", None, "F", None, None, "G", "H", None, "I", None]
     print(rl_tags)
     rl_tp1 = perform_decoding_step(rl, rl_tags)
     print(" ".join(rl_tp1))
     assert " ".join(
-        rl_tp1) == "( R @v | @-- ( D @v | ( @^ A @v | @-- ( E @v | @-- @^ F @v @-- B ( C @v | @-- G @v @-- ) @-- @^ H @v @-- ) @-- ) @-- @^ I @v @-- ) @-- )"
+        rl_tp1) == "( R @v | @- ( D @v | ( @^ A @v | @- ( E @v | @- @^ F @v @- B ( C @v | @- G @v @- ) @- @^ H @v @- ) @- ) @- @^ I @v @- ) @- )"
 
 
 def test_tree_sampling_random(n=100):
