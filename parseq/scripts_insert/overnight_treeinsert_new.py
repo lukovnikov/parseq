@@ -541,40 +541,63 @@ def _rec_find_lca(tree, pchildrenids):
         return found
 
 
-def linearize_ptree(x, is_root=True, only_child=True, sibling_slot="@--", ancestor_slot="@^", descendant_slot="@v", open_parentheses="(", closing_parentheses=")", parent_separator="|"):
+class SpecialTokens():
+    def __init__(self, **kw):
+        super(SpecialTokens, self).__init__()
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+
+class DefaultSpecialTokens():
+    def __init__(self,
+                 root_token="@R@",
+                 ancestor_slot="@^",
+                 descendant_slot="@v",
+                 sibling_slot="@--",
+                 parent_separator="|",
+                 opening_parentheses="(",
+                 closing_parentheses=")",
+                 keep_action="@KEEP@",
+                 close_action="@CLOSE@"):
+        super(DefaultSpecialTokens, self).__init__()
+        self.root_token = root_token
+        self.ancestor_slot = ancestor_slot
+        self.descendant_slot = descendant_slot
+        self.sibling_slot = sibling_slot
+        self.parent_separator = parent_separator
+        self.opening_parentheses = opening_parentheses
+        self.closing_parentheses = closing_parentheses
+        self.keep_action = keep_action
+        self.close_action = close_action
+
+
+def linearize_ptree(x, is_root=True, only_child=True, specialtokens=DefaultSpecialTokens()):
     if len(x) == 0:     # no children
         # ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, closed_parentheses]
-        ret = [ancestor_slot, x, descendant_slot]
+        ret = [specialtokens.ancestor_slot, x, specialtokens.descendant_slot]
         if only_child:
             del ret[0]
         if is_root:
-            ret = [open_parentheses] + ret + [closing_parentheses]
+            ret = [specialtokens.opening_parentheses] + ret + [specialtokens.closing_parentheses]
     else:
-        childrets = [sibling_slot]
+        childrets = [specialtokens.sibling_slot]
         i = 0
         for k in x:
-            ret = linearize_ptree(k, only_child=len(x) == 1,
-                                     is_root=False,
-                                             sibling_slot=sibling_slot,
-                                             ancestor_slot=ancestor_slot,
-                                             descendant_slot=descendant_slot,
-                                             open_parentheses=open_parentheses,
-                                             closing_parentheses=closing_parentheses,
-                                             parent_separator=parent_separator)
-            childrets = childrets + ret + [sibling_slot]
+            ret = linearize_ptree(k, only_child=len(x) == 1, is_root=False, specialtokens=specialtokens)
+            childrets = childrets + ret + [specialtokens.sibling_slot]
             i += 1
-        ret = [open_parentheses, ancestor_slot, x, descendant_slot, parent_separator] + childrets + [closing_parentheses]
+        ret = [specialtokens.opening_parentheses, specialtokens.ancestor_slot, x, specialtokens.descendant_slot, specialtokens.parent_separator] + childrets + [specialtokens.closing_parentheses]
         if only_child:
             del ret[1]
     return ret
 
 
-def linearize_supervised_ptree(x, is_root=True, only_child=True, sibling_slot="@--", ancestor_slot="@^", descendant_slot="@v", open_parentheses="(", closing_parentheses=")", parent_separator="|"):
+def linearize_supervised_ptree(x, is_root=True, only_child=True, specialtokens=DefaultSpecialTokens()):
     if len(x) == 0:     # no children
         # assert len(x.insert_descendants) == 0
         assert len(x.insert_siblings) == 0
         # ret = [open_parentheses, ancestor_slot, x.label(), descendant_slot, closed_parentheses]
-        ret = [ancestor_slot, x, descendant_slot]
+        ret = [specialtokens.ancestor_slot, x, specialtokens.descendant_slot]
         # ret_sup = [None, x.insert_ancestors, None, [], None]
         ret_sup = [x.insert_ancestors, None, x.insert_descendants]
         if only_child:
@@ -582,24 +605,18 @@ def linearize_supervised_ptree(x, is_root=True, only_child=True, sibling_slot="@
             del ret[0]
             del ret_sup[0]
         if is_root:
-            ret = [open_parentheses] + ret + [closing_parentheses]
+            ret = [specialtokens.opening_parentheses] + ret + [specialtokens.closing_parentheses]
             ret_sup = [None] + ret_sup + [None]
     else:
-        childrets = [sibling_slot]
+        childrets = [specialtokens.sibling_slot]
         i = 0
         childret_sups = [x.insert_siblings[i]]
         for k in x:
-            ret, ret_sup = linearize_supervised_ptree(k, only_child=len(x) == 1,
-                                                      sibling_slot=sibling_slot,
-                                                      ancestor_slot=ancestor_slot,
-                                                      descendant_slot=descendant_slot,
-                                                      open_parentheses=open_parentheses,
-                                                      closing_parentheses=closing_parentheses,
-                                                      parent_separator=parent_separator)
-            childrets = childrets + ret + [sibling_slot]
+            ret, ret_sup = linearize_supervised_ptree(k, only_child=len(x) == 1, specialtokens=specialtokens)
+            childrets = childrets + ret + [specialtokens.sibling_slot]
             i += 1
             childret_sups = childret_sups + ret_sup + [x.insert_siblings[i]]
-        ret = [open_parentheses, ancestor_slot, x, descendant_slot, parent_separator] + childrets + [closing_parentheses]
+        ret = [specialtokens.opening_parentheses, specialtokens.ancestor_slot, x, specialtokens.descendant_slot, specialtokens.parent_separator] + childrets + [specialtokens.closing_parentheses]
         ret_sup = [None, x.insert_ancestors, None, x.insert_descendants, None] + childret_sups + [None]
         if only_child:
             assert len(ret_sup[1]) == 0
@@ -772,68 +789,207 @@ def cmp_to_key(mycmp):
     return K
 
 
-def perform_decoding_step(xseq:List[str], tagseq:List[str],
-                          sibling_slot="@--", ancestor_slot="@^", descendant_slot="@v", open_parentheses="(", closing_parentheses=")", parent_separator="|"):
-    """
-    Applies a tag sequence on the given linearized tree sequence.
-    :param xseq:    linearized tree sequence containing insertion slots
-    :param tagseq:  tag sequence
-    :return: new xseq
-    """
-    # this method processes the two sequences together, building up a tree and then linearizes that tree back to a sequence
+def perform_decoding_step(xseq:List[str], tagseq:List[str], specialtokens=DefaultSpecialTokens()):
+    # build special tree where siblings slots are nodes and other nodes have annotations what slots are available and what is being inserted there
     assert len(xseq) == len(tagseq)
-    stack = []
-    current_parent = None
-    parent_separated = False
-    next_is_parent = False
-    for xseq_elem, tagseq_elem in zip(xseq, tagseq):
-        if xseq_elem == open_parentheses:
-            stack.append([])
-            next_is_parent = True
-        elif xseq_elem == closing_parentheses:
-            pass
-        elif xseq_elem == parent_separator:
-            if len(current_parent) > 0:
-                assert len(current_parent) == 1
-                current_parent = current_parent[-1]
-        elif xseq_elem in (ancestor_slot,):
-            stack[-1].append(Tree(tagseq_elem, []))
-            stack.append([])
-        elif xseq_elem in (descendant_slot,):
-            node = Tree(tagseq_elem, [])    # create a descendant
-            current_parent.append(node)     # append it to the parent
-            node.parentnode = current_parent
-        elif xseq_elem in (sibling_slot,):
-            if tagseq_elem not in ("@END@", "@KEEP@", None):
-                stack[-1].append(tagseq_elem)
-        else:
-            # stack[-1].append(Tree(xseq_elem, []))
-            # if next_is_parent:     # this token is the parent
-            #     stack.append([])
-            #     next_is_parent = False
 
-            node = Tree(xseq_elem, [])
-            if current_parent is not None:      # node is not root
-                current_parent.append(node)
-                node.parentnode = current_parent
+    class State():
+        def __setattr__(self, key, value):
+            self.__dict__[key] = value
+        def __getattr__(self, key):
+            return self.__dict__[key]
+
+    state = State()
+    state.parentnode = None
+    state.curnode = None
+    state.next_is_parent = False
+    state.ancestor_insert = None
+    state.node = None
+    state.descendant_insert = None
+
+    def close_node():
+        if state.node is not None:
+            state.node.ancestor_insert = state.ancestor_insert
+            state.node.descendant_insert = state.descendant_insert
+            state.curnode = state.node
+            if state.parentnode is not None:
+                state.parentnode.append(state.curnode)
+                state.curnode.parent = state.parentnode
+        reset_vars()
+
+    def reset_vars():
+        state.ancestor_insert = None
+        state.descendant_insert = None
+        state.node = None
+
+    for xe, ye in zip(xseq, tagseq):
+        if xe == specialtokens.opening_parentheses:
+            # next_is_parent = True
+            assert state.ancestor_insert is None
+            assert state.node is None
+            assert state.descendant_insert is None
+            reset_vars()
+        elif xe == specialtokens.closing_parentheses:     # closing a parent
+            close_node()
+            realchildren = [pn_child for pn_child in state.parentnode if pn_child.label() != specialtokens.sibling_slot]
+            if len(realchildren) == 1:      # single child  --> preserve child's ancestral slot
+                assert realchildren[0].ancestor_insert == None
+                realchildren[0].ancestor_insert = specialtokens.keep_action
+            # go up
+            if state.parentnode.parent is not None:
+                state.parentnode = state.parentnode.parent
             else:
-                node.parentnode = None          # root node has no parent
-            if next_is_parent:
-                current_parent = node
-                next_is_parent = False
-    return stack
+                break
+        elif xe == specialtokens.parent_separator:
+            # parent itself complete --> proceed to children
+            close_node()
+            state.parentnode = state.curnode
+        elif xe == specialtokens.ancestor_slot:
+            close_node()
+            state.ancestor_insert = ye
+        elif xe == specialtokens.descendant_slot:
+            state.descendant_insert = ye
+        elif xe == specialtokens.sibling_slot:
+            close_node()
+            node = Tree(xe, [])
+            node.insert_node = ye
+            state.parentnode.append(node)
+            node.parent = state.parentnode
+        else:       # real token
+            if state.node is not None:    # unfinished node is open
+                close_node()
+            state.node = Tree(xe, [])
+            state.node.parent = None
 
+    # execute annotated slotted tree
+    executed_tree = _execute_slotted_tree(state.parentnode, specialtokens=specialtokens)
+    assert len(executed_tree) == 1
+    executed_tree = executed_tree[0]
+
+    # linearize executed slotted tree to special slotted sequence of tokens
+    outseq = _linearize_slotted_tree(executed_tree, specialtokens=specialtokens)
+
+    return outseq
+
+
+def _linearize_slotted_tree(x, specialtokens=DefaultSpecialTokens()):
+    ownseq = []
+    if x.label() == specialtokens.sibling_slot:
+        ownseq.append(x.label())
+    else:
+        if x.ancestor_insert is not None:
+            ownseq.append(specialtokens.ancestor_slot)
+        ownseq.append(x.label())
+        if x.descendant_insert is not None:
+            ownseq.append(specialtokens.descendant_slot)
+
+    if len(x) > 0:
+        seq = [specialtokens.opening_parentheses] + ownseq + [specialtokens.parent_separator]
+
+        for k in x:
+            subseq = _linearize_slotted_tree(k, specialtokens=specialtokens)
+            seq = seq + subseq
+
+        seq = seq + [specialtokens.closing_parentheses]
+    else:
+        seq = ownseq
+    return seq
+
+
+def _execute_slotted_tree(x, specialtokens=DefaultSpecialTokens()):
+    if x.label() == specialtokens.sibling_slot:
+        if x.insert_node == specialtokens.keep_action:
+            node = Tree(x.label(), [])
+            return [node]
+        elif x.insert_node == specialtokens.close_action or x.insert_node is None:
+            return []
+        else:
+            node = Tree(x.insert_node, [])
+            node.ancestor_insert = specialtokens.keep_action
+            node.descendant_insert = specialtokens.keep_action
+            ret = [Tree(specialtokens.sibling_slot, []), node, Tree(specialtokens.sibling_slot, [])]
+            return ret
+    else:
+        node = Tree(x.label(), [])
+        node.ancestor_insert = specialtokens.keep_action
+        node.descendant_insert = specialtokens.keep_action
+        ancestor = node
+
+        if x.ancestor_insert == specialtokens.keep_action:
+            node.ancestor_insert = specialtokens.keep_action
+        elif x.ancestor_insert == specialtokens.close_action or x.ancestor_insert is None:
+            node.ancestor_insert = None
+        else:
+            ancestor = Tree(x.ancestor_insert, [Tree(specialtokens.sibling_slot, []),
+                                                node,
+                                                Tree(specialtokens.sibling_slot, [])])
+            node.ancestor_insert = None
+            ancestor.ancestor_insert = specialtokens.keep_action
+            ancestor.descendant_insert = specialtokens.keep_action
+
+        if x.descendant_insert == specialtokens.keep_action:
+            node.descendant_insert = specialtokens.keep_action
+        elif x.descendant_insert == specialtokens.close_action or x.descendant_insert is None:
+            node.descendant_insert = None
+        else:
+            descendant = Tree(x.descendant_insert, [])
+            descendant.ancestor_insert = None
+            descendant.descendant_insert = specialtokens.keep_action
+            node.append(Tree(specialtokens.sibling_slot, []))
+            node.append(descendant)
+            node.append(Tree(specialtokens.sibling_slot, []))
+            node = descendant
+
+        for child in x:
+            childrets = _execute_slotted_tree(child, specialtokens=specialtokens)
+            for childret in childrets:
+                node.append(childret)
+        return [ancestor]
 
 
 def test_decode(n=1):
+
+    # test basic:
+    print("basic test")
+    r = Tree("R", [Tree("B", [])])
+    rl = [re.label() if isinstance(re, Tree) else re for re in linearize_ptree(r)]
+    r_str = " ".join(rl)
+    print(r_str)
+    rl_tags = [None, None, "D", None, "E", None, "G", "H", None]
+    print(rl_tags)
+    rl_tp1 = perform_decoding_step(rl, rl_tags)
+    print(" ".join(rl_tp1))
+    assert " ".join(rl_tp1) == "( R @v | @-- ( D @v | @-- @^ E @v @-- ( @^ B @v | @-- G @v @-- ) @-- @^ H @v @-- ) @-- )"
+
+
+    # test different slots
+    print("test with different slots")
     r = Tree("R", [Tree("A", [Tree("C", [])]), Tree("B", [])])
     rl = [re.label() if isinstance(re, Tree) else re for re in linearize_ptree(r)]
     r_str = " ".join(rl)
     print(r_str)
     #            (    R    @v     |   @--    (   @^     A   @v    |    @--    C   @v    @--  )    @--   @^    B   @v   @--   )
     rl_tags = [None, None, "D", None, "E", None, "F", None, "G", None, "H", None, "I", "J", None, "K", "L", None, "M", "N", None]
-
+    print(rl_tags)
     rl_tp1 = perform_decoding_step(rl, rl_tags)
+    print(" ".join(rl_tp1))
+    assert " ".join(rl_tp1) == "( R @v | @-- ( D @v | @-- @^ E @v @-- ( @^ F @v | @-- ( A @v | @-- ( G @v | @-- @^ H @v @-- ( @^ C @v | @-- I @v @-- ) @-- @^ J @v @-- ) @-- ) @-- ) @-- @^ K @v @-- ( @^ L @v | @-- ( B @v | @-- M @v @-- ) @-- ) @-- @^ N @v @-- ) @-- )"
+                           #"( R @v | @-- ( D @v | @-- @^ E @v @-- ( @^ F @v | @-- ( @^ A @v | @-- ( G @v | @-- @^ H @v @-- ( @^ C @v | @-- I @v @-- ) @-- @^ J @v @-- ) @-- ) @-- ) @-- @^ K @v @-- ( @^ L @v | @-- ( @^ B @v | @-- M @v @-- ) @-- ) @-- @^ N @v @-- ) @-- )
+                              #"( R @v | @-- ( D @v | @-- @^ E @v @-- ( F @v | @-- ( @^ A @v | @-- ( G @v | @-- @^ H @v @-- ( @^ C @v | @-- I @v @-- ) @-- @^ J @v @-- ) @-- ) @-- ) @-- @^ K @v @-- ( L @v | @-- ( @^ B @v | @-- M @v @-- ) @-- ) @-- @^ N @v @-- ) @-- )"
+    # test with closed slots I
+    print("test with closed slots I")
+    # r = Tree("R", [Tree("A", [Tree("C", [])]), Tree("B", [])])
+    # rl = [re.label() if isinstance(re, Tree) else re for re in linearize_ptree(r)]
+    r_str = "( R @v | ( A @v | @-- B C @v @-- ) @-- )"
+    print(r_str)
+    rl = r_str.split(" ")
+    #           (      R    @v    |    (     A    @v     |   @--    B     C   @v   @--    )   @--  )
+    rl_tags = [None, None, "D", None, None, None, "E", None, "F", None, None, "G", "H", None, "I", None]
+    print(rl_tags)
+    rl_tp1 = perform_decoding_step(rl, rl_tags)
+    print(" ".join(rl_tp1))
+    assert " ".join(
+        rl_tp1) == "( R @v | @-- ( D @v | ( @^ A @v | @-- ( E @v | @-- @^ F @v @-- B ( C @v | @-- G @v @-- ) @-- @^ H @v @-- ) @-- ) @-- @^ I @v @-- ) @-- )"
 
 
 def test_tree_sampling_random(n=100):
