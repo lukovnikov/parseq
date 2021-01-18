@@ -1506,12 +1506,11 @@ class TreeInsertionTagger(torch.nn.Module):
 
 class TransformerTagger(TreeInsertionTagger):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", baseline=False, **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
         self.dim = dim
-        self.baseline = baseline
         config = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
                                    num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
                                    use_relative_position=False)
@@ -1520,13 +1519,10 @@ class TransformerTagger(TreeInsertionTagger):
         self.posemb = torch.nn.Embedding(maxpos, config.d_model)
         decoder_config = deepcopy(config)
         decoder_config.is_decoder = True
-        decoder_config.use_causal_mask = baseline
+        decoder_config.use_causal_mask = False
         self.decoder = TransformerStack(decoder_config)
 
-        if baseline:
-            self.out = torch.nn.Linear(self.dim, self.vocabsize)
-        else:
-            self.out = torch.nn.Linear(self.dim * 2, self.vocabsize)
+        self.out = torch.nn.Linear(self.dim, self.vocabsize)
         # self.out = MOS(self.dim, self.vocabsize, K=mosk)
 
         vocab_mask = torch.ones(self.vocabsize)
@@ -1567,8 +1563,6 @@ class TransformerTagger(TreeInsertionTagger):
         posembs = self.posemb(torch.arange(tokens.size(1), device=tokens.device))[None]
         embs = embs + posembs
         use_cache = False
-        if self.baseline:
-            use_cache = True
         if cache is not None:
             embs = embs[:, -1:, :]
         _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
@@ -1577,19 +1571,11 @@ class TransformerTagger(TreeInsertionTagger):
                             past_key_value_states=cache)
         ret = _ret[0]
         cache = None
-        if self.baseline:
-            c = ret
-            cache = _ret[1]
-        else:
-            c = torch.cat([ret[:, 1:], ret[:, :-1]], -1)
+
+        c = ret
+
         logits = self.out(c)
-        # logits = logits + torch.log(self.vocab_mask[None, None, :])
-        if self.baseline:
-            return logits, cache
-        else:
-            return logits
-        # probs = self.out(ret[0], self.vocab_mask[None, None, :])
-        # return probs
+        return logits
 
 
 class TreeInsertionDecoder(torch.nn.Module):
@@ -1653,7 +1639,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         # run through tagger: the same for all versions
         logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
         # compute loss: different versions do different masking and different targets
-        loss = self.compute_loss(logits, tgt[:, :-1], mask=tgtmask[:, :-1])
+        loss = self.compute_loss(logits, tgt, mask=tgtmask)
         return {"loss": loss}, logits
 
     def extract_training_example_mapf(self, tree):
@@ -1713,28 +1699,26 @@ class TreeInsertionDecoder(torch.nn.Module):
     def get_prediction(self, x:torch.Tensor):
         """
         Takes tensor of input sequence.
-        Return tree of output sequence.
+        Return output sequence which is a sequence of tokens as strings.
         """
         ptrees = [Tree(self.specialtokens.root_token, []) for _ in range(len(x))]
-        rls = [[re.label() if isinstance(re, Tree) else re for re in linearize_ptree(ptree)] for ptree in ptrees]
-        maxlen = max([len(rl) for rl in rls])
+        rls = [[r.label() if isinstance(r, Tree) else r for r in linearize_ptree(ptree)] for ptree in ptrees]
 
-        steps_used = torch.ones(len(rls), device=x.device, dtype=torch.long) * self.max_steps
-        # initialize empty ys:
-        y = torch.zeros(len(rls), maxlen, device=x.device, dtype=torch.long)
-        for i, rl in enumerate(rls):
-            for j, rli in enumerate(rl):
-                y[i, j] = self.vocab[rli]
+        steps_used = [0 for _ in rls]
 
         # run encoder
         enc, encmask = self.tagger.encode_source(x)
 
         step = 0
-        newy = None
         prevstrs = [None for _ in rls]
         finalpreds = [None for _ in rls]
         while step < self.max_steps and any([finalpred is None for finalpred in finalpreds]): #(newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
-            y = newy if newy is not None else y
+            maxlen = max([len(rl) for rl in rls])
+            y = torch.zeros(len(rls), maxlen, device=x.device, dtype=torch.long)
+            for i, rl in enumerate(rls):
+                for j, rli in enumerate(rl):
+                    y[i, j] = self.vocab[rli]
+
             # run tagger
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
 
@@ -1744,72 +1728,32 @@ class TreeInsertionDecoder(torch.nn.Module):
                 probs[:, :, self.vocab[self.slot_termination_action]] - self.end_offset
             predprobs, preds = probs.max(-1)
             predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
-            # TODO
+
             # translate preds to tokens
+            tagses = list(np.vectorize(lambda x: self.vocab(x))(preds))
 
+            newrls = []
             # execute tags on the original sequence
+            for i, (rle, tags) in enumerate(zip(rls, tagses)):
+                if finalpreds[i] is None:
+                    new_rle = perform_decoding_step(rle, list(tags), specialtokens=self.specialtokens)
+                    if len(new_rle) >= self.max_size or step >= self.max_steps or prevstrs[i] == str(rle):
+                        finalpreds[i] = new_rle[:min(len(new_rle), self.max_size)]
+                        new_rle = [self.specialtokens.opening_parentheses,
+                                   self.specialtokens.closing_parentheses]
+                    steps_used[i] += 1
+                    newrls.append(new_rle)
+                else:
+                    newrls.append(rls[i])
+                prevstrs[i] = " ".join(newrls[i])
 
-            # take care of termination: terminate if (1) none of the examples changed (use prevstrs)
-            #                                     OR (2) max_steps reached
-            # ! if an example reached maximum allowable length, don't change it and consider it terminated
-            # ! for efficiency, don't run terminated examples through tagger
-
-
-            # prevstr = str(xtree)
-
-
-
-            _y = y.cpu().detach().numpy()
-            newy = torch.zeros(y.size(0), min(self.max_size, y.size(1) * 2), device=y.device, dtype=torch.long)
-            _ended = torch.zeros_like(y[:, 0]).bool()
-            # update sequences
-            for i in range(len(y)):
-                k = 0
-                p_i = preds[i]
-                pp_mask = p_i != self.vocab["@END@"]
-                pp_i = predprobs[i] * pp_mask
-                pp_mask = _y[i] == self.vocab["@EOS@"]
-                pp_mask = np.cumsum(pp_mask, -1)
-                pp_i = pp_i * (pp_mask[:-1] == 0)
-                # pp_i = (pp_i > 0) * np.random.rand(*pp_i.shape)
-                prob_thresh = min(self.prob_threshold, max(pp_i))
-                terminated = True
-                for j in range(len(y[i])):          # loop, advance j = j+1
-                    if k >= newy.size(1):
-                        break
-                    newy[i, k] = y[i, j]            # copy from previous target sequence
-                    k += 1                          # advance newy pointer to next position
-                    y_ij = _y[i, j]
-                    if y_ij == self.vocab["@EOS@"]: # if token was EOS, terminate generation
-                        break  # stop
-                    if j >= len(p_i):               # if we reached beyond the length of predictions, terminate
-                        break
-                    p_ij = p_i[j]                   # token predicted between j-th and j+1-st position in previous sequence
-                    pp_ij = pp_i[j]                 # probability assigned to that token
-                    if pp_ij >= prob_thresh:        # skip if probability was lower than threshold
-                        if p_ij == self.vocab["@END@"]:         # if predicted token is @END@, do nothing
-                            pass  # don't insert anything
-                        else:  # insert what was predicted
-                            if k >= newy.size(1):
-                                break
-                            newy[i, k] = preds[i, j]
-                            k += 1                  # advance newy pointer to next position
-                            terminated = False      # sequence changed so don't terminate
-                _ended[i] = terminated
-
-            y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
-            newy = torch.where(ended[:, None], y__, newy)  # prevent terminated examples from changing
-
-            maxlen = (newy != 0).long().sum(-1).max()
-            newy = newy[:, :maxlen]
+            rls = newrls
             step += 1
-            ended = ended | _ended
-            steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
-            lens = (newy != 0).long().sum(-1)
-            maxlenreached = (lens == self.max_size)
-            if torch.all(maxlenreached):
-                break
-        return newy, steps_used.float()
+        #     # take care of termination: terminate if (1) none of the examples changed (use prevstrs)
+        #     #                                     OR (2) max_steps reached
+        #     # ! if an example reached maximum allowable length, don't change it and consider it terminated
+        #     # ! for efficiency, don't run terminated examples through tagger
+        return finalpreds, torch.tensor(steps_used).float().to(x.device)
 
     def test_forward(self, x:torch.Tensor, gold:Tuple[Tree]):   # --> implement how decoder operates end-to-end
         """
@@ -1821,7 +1765,8 @@ class TreeInsertionDecoder(torch.nn.Module):
 
         # compute loss and metrics
         gold_trees = gold
-        pred_trees = preds
+        pred_trees = [lisp_to_tree(" ".join(pred)) for pred in preds]
+        pred_trees = [predtree if not (isinstance(predtree, tuple) and predtree[0] is None) else None for predtree in pred_trees]
         treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
