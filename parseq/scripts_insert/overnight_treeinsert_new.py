@@ -1,5 +1,6 @@
 import math
 import re
+from multiprocessing import Pool, cpu_count
 
 from prompt_toolkit.formatted_text import PygmentsTokens
 
@@ -728,7 +729,7 @@ def _collect_lca_nodeids_2(tree, pchild):
     return lcas
 
 
-def compute_target_distribution_data(x, centrs, end_token="@END@"):
+def compute_target_distribution_data(x, centrs, end_token="@END@", tau=1.):
     # compute ranks
     if len(x) > 0:
         sorted_retsupe = sorted([(centrs[e.nodeid], e) for e in x],
@@ -746,7 +747,6 @@ def compute_target_distribution_data(x, centrs, end_token="@END@"):
     else:
         r = [(1., end_token)]
     # compute softmax over ranks
-    tau = 1.
     d = sum([np.exp(-e[0] / tau) for e in r])
     r = [(np.exp(-e[0] / tau)/d, e[1]) for e in r]
     return r
@@ -1365,12 +1365,6 @@ def run_decoding_oracle(domain="recipes", verbose=False):
     return avg_seq_insertion_steps, avg_tree_insertion_steps
 
 
-
-
-
-
-
-
 def tree_to_seq(x:Tree):
     xstr = tree_to_lisp_tokens(x)
     # xstr = ["@BOS@"] + xstr + ["@EOS@"]
@@ -1388,7 +1382,23 @@ def make_numbered_tokens(x:List[str]):
     return y
 
 
-def make_numbered_nodes(x:List[str]):
+def make_numbered_nodes(x:Tree, counts=None):
+    if counts is None:      # root
+        counts = {}
+    xe = x.label()
+    if xe not in counts:
+        counts[xe] = 0
+    counts[xe] += 1
+    xe = f"{xe}::{counts[xe]}"
+    children = []
+    for child in x:
+        _child, counts = make_numbered_nodes(child, counts)
+        children.append(_child)
+    ret = Tree(xe, children)
+    return ret, counts
+
+
+def make_numbered_nodes_list(x:List[str]):
     counts = {}
     y = []
     for xe in x:
@@ -1404,7 +1414,7 @@ def make_numbered_nodes(x:List[str]):
 
 def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
             trainonvalid=False, noreorder=False, numbered=False, numbered_nodes=False,
-            output="tensors"):
+            output="special", specialtokens=DefaultSpecialTokens()):
     """
     Creates a dataset of examples which have
     * NL question and tensor
@@ -1422,22 +1432,23 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
 
     if not noreorder:
         ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
-    ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
+
+    if numbered_nodes:
+        ds = ds.map(lambda x: (x[0], make_numbered_nodes(x[1])[0], x[2]))
+
+    ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[1], x[2]))
 
     if numbered:
-        ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
-    elif numbered_nodes:
-        ds = ds.map(lambda x: (x[0], make_numbered_nodes(x[1]), x[2]))
+        ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2], x[3]))
 
     vocab = Vocab(padid=0, startid=2, endid=3, unkid=1)
-    vocab.add_token("@BOS@", seen=np.infty)
-    vocab.add_token("@EOS@", seen=np.infty)
-    vocab.add_token("@STOP@", seen=np.infty)
+    for _, specialtoken_v in specialtokens.__dict__.items():
+        vocab.add_token(specialtoken_v, seen=np.infty)
 
 
-    tds, vds, xds = ds[lambda x: x[2] == "train"], \
-                    ds[lambda x: x[2] == "valid"], \
-                    ds[lambda x: x[2] == "test"]
+    tds, vds, xds = ds[lambda x: x[-1] == "train"], \
+                    ds[lambda x: x[-1] == "valid"], \
+                    ds[lambda x: x[-1] == "test"]
 
     nl_tokenizer = BertTokenizer.from_pretrained(nl_mode)
     seqenc = SequenceEncoder(vocab=vocab, tokenizer=lambda x: x,
@@ -1463,6 +1474,11 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
             tr = lisp_to_tree(" ".join(x[1]))
             ret = (x[0], tr)
             return ret
+    elif output == "special":       # input as tensors, outputs as rerooted trees
+        def mapper(x):
+            inp = nl_tokenizer.encode(x[0], return_tensors="pt")[0]
+            out = Tree(specialtokens.root_token, [x[2]])
+            return (inp, out)
     else:
         mapper = None
 
@@ -1470,6 +1486,8 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
         tds_seq = tds.map(mapper)
         vds_seq = vds.map(mapper)
         xds_seq = xds.map(mapper)
+    else:
+        tds_seq, vds_seq, xds_seq = tds, vds, xds
     return tds_seq, vds_seq, xds_seq, nl_tokenizer, seqenc, orderless
 
 
@@ -1582,8 +1600,11 @@ class TreeInsertionDecoder(torch.nn.Module):
                  vocab=None,
                  prob_threshold=0.,
                  max_steps:int=20,
-                 max_size:int=100,
+                 max_size:int=200,
                  end_offset=0.,
+                 tau=1.,
+                 termination="keep",
+                 specialtokens=DefaultSpecialTokens(),
                  **kw):
         super(TreeInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
@@ -1594,7 +1615,13 @@ class TreeInsertionDecoder(torch.nn.Module):
         self.logsm = torch.nn.LogSoftmax(-1)
         self.prob_threshold = prob_threshold
         self.end_offset = end_offset
+        self.tau = tau
 
+        self.specialtokens = specialtokens
+        assert termination == "keep", "Termination strategies other than 'keep' not supported yet."
+        self.slot_termination_action = specialtokens.keep_action if termination == "keep" else specialtokens.close_action
+
+        self.pool = [Pool(cpu_count())]
         # self.termination_mode = self.default_termination_mode if termination_mode == "default" else termination_mode
         # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
 
@@ -1603,10 +1630,6 @@ class TreeInsertionDecoder(torch.nn.Module):
             return self.train_forward(x, y)
         else:
             return self.test_forward(x, y)
-
-    @abstractmethod
-    def extract_training_example(self, x, y):
-        pass
 
     def compute_loss(self, logits, tgt, mask=None):
         """
@@ -1623,7 +1646,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         kl = kl.sum(-1)
         return kl
 
-    def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
+    def train_forward(self, x:torch.Tensor, y:Tuple[Tree]):  # --> implement one step training of tagger
         # extract a training example from y:
         x, newy, tgt, tgtmask = self.extract_training_example(x, y)
         enc, encmask = self.tagger.encode_source(x)
@@ -1633,30 +1656,109 @@ class TreeInsertionDecoder(torch.nn.Module):
         loss = self.compute_loss(logits, tgt[:, :-1], mask=tgtmask[:, :-1])
         return {"loss": loss}, logits
 
+    def extract_training_example_mapf(self, tree):
+        tree = assign_dfs_nodeids(tree)
+        ptree = sample_partial_tree(tree)
+        ptree = build_supervision_sets(ptree, tree)
+        centralities = compute_centralities_ptree(ptree, tree)
+        ret, retsup = linearize_supervised_ptree(ptree)
+
+        _retsup = []
+        for rete, retsupe in zip(ret, retsup):
+            if retsupe != None:
+                r = compute_target_distribution_data(retsupe, centralities, tau=self.tau)
+                _retsup.append(r)
+            else:
+                _retsup.append(None)
+        return ret, _retsup
+
+    def extract_training_example(self, x: torch.Tensor, y:Tuple[Tree]):
+        """
+        Samples a partial tree, generates output distributions (tgt) and mask (tgtmask).
+        :return: x, newy (batsize, seqlen), tgt (batsize, seqlen, vocsize), tgtmask (batsize, seqlen)
+        """
+        # sample partial tree
+        parallel = False
+        if parallel:
+            ret = self.pool[0].map(self.extract_training_example_mapf, y)
+            ret, retsup = list(zip(*ret))
+        else:
+            ret, retsup = list(zip(*[self.extract_training_example_mapf(ye) for ye in y]))
+
+        maxlen = max([len(rete) for rete in ret])
+        _y = y
+        newy = torch.zeros(len(y), maxlen, dtype=torch.long, device=x.device)
+        for i, rete in enumerate(ret):
+            for j, retei in enumerate(rete):
+                retei = retei.label() if isinstance(retei, Tree) else retei
+                assert isinstance(retei, str)
+                newy[i, j] = self.vocab[retei]
+        tgtmask = (newy != 0).float()
+
+        tgt = torch.zeros(newy.size(0), newy.size(1), self.vocab.number_of_ids(), device=newy.device)
+        # 'tgt' contains target distributions
+        for i, retsupe in enumerate(retsup):
+            for j, retsupei in enumerate(retsupe):
+                if retsupei is None:
+                    tgtmask[i, j] = 0
+                    tgt[i, j, self.vocab[self.slot_termination_action]] = 1
+                elif len(retsupei) == 0:
+                    tgt[i, j, self.vocab[self.slot_termination_action]] = 1
+                else:
+                    for retsupei_v, retsupei_k in retsupei:
+                        tgt[i, j, self.vocab[retsupei_k]] = retsupei_v
+
+        return x, newy, tgt, tgtmask
+
     def get_prediction(self, x:torch.Tensor):
-        steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
+        """
+        Takes tensor of input sequence.
+        Return tree of output sequence.
+        """
+        ptrees = [Tree(self.specialtokens.root_token, []) for _ in range(len(x))]
+        rls = [[re.label() if isinstance(re, Tree) else re for re in linearize_ptree(ptree)] for ptree in ptrees]
+        maxlen = max([len(rl) for rl in rls])
+
+        steps_used = torch.ones(len(rls), device=x.device, dtype=torch.long) * self.max_steps
         # initialize empty ys:
-        y = torch.zeros(x.size(0), 2, device=x.device, dtype=torch.long)
-        y[:, 0] = self.vocab["@BOS@"]
-        y[:, 1] = self.vocab["@EOS@"]
+        y = torch.zeros(len(rls), maxlen, device=x.device, dtype=torch.long)
+        for i, rl in enumerate(rls):
+            for j, rli in enumerate(rl):
+                y[i, j] = self.vocab[rli]
 
         # run encoder
         enc, encmask = self.tagger.encode_source(x)
 
         step = 0
         newy = None
-        ended = torch.zeros_like(y[:, 0]).bool()
-        while step < self.max_steps and not torch.all(ended): #(newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
+        prevstrs = [None for _ in rls]
+        finalpreds = [None for _ in rls]
+        while step < self.max_steps and any([finalpred is None for finalpred in finalpreds]): #(newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
             y = newy if newy is not None else y
             # run tagger
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
-            # logprobs = torch.log_softmax(logits, -1)
-            # logprobs[:, :, self.vocab["@END@"]] = logprobs[:, :, self.vocab["@END@"]] - self.end_offset
-            # probs = torch.exp(logprobs)
+
+            # get probs
             probs = torch.softmax(logits, -1)
-            probs[:, :, self.vocab["@END@"]] = probs[:, :, self.vocab["@END@"]] - self.end_offset
+            probs[:, :, self.vocab[self.slot_termination_action]] = \
+                probs[:, :, self.vocab[self.slot_termination_action]] - self.end_offset
             predprobs, preds = probs.max(-1)
             predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
+            # TODO
+            # translate preds to tokens
+
+            # execute tags on the original sequence
+
+            # take care of termination: terminate if (1) none of the examples changed (use prevstrs)
+            #                                     OR (2) max_steps reached
+            # ! if an example reached maximum allowable length, don't change it and consider it terminated
+            # ! for efficiency, don't run terminated examples through tagger
+
+
+            # prevstr = str(xtree)
+
+
+
             _y = y.cpu().detach().numpy()
             newy = torch.zeros(y.size(0), min(self.max_size, y.size(1) * 2), device=y.device, dtype=torch.long)
             _ended = torch.zeros_like(y[:, 0]).bool()
@@ -1709,172 +1811,25 @@ class TreeInsertionDecoder(torch.nn.Module):
                 break
         return newy, steps_used.float()
 
-    def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
+    def test_forward(self, x:torch.Tensor, gold:Tuple[Tree]):   # --> implement how decoder operates end-to-end
+        """
+        :param x:       tensor for BERT
+        :param gold:    tuple of rerooted gold trees
+        :return:
+        """
         preds, stepsused = self.get_prediction(x)
 
-        def tensor_to_trees(x, vocab:Vocab):
-            xstrs = [vocab.tostr(x[i]).replace("@BOS@", "").replace("@EOS@", "") for i in range(len(x))]
-            xstrs = [re.sub("::\d+", "", xstr) for xstr in xstrs]
-            trees = []
-            for xstr in xstrs:
-                # drop everything after @END@, if present
-                xstr = xstr.split("@END@")
-                xstr = xstr[0]
-                # add an opening parentheses if not there
-                xstr = xstr.strip()
-                if len(xstr) == 0 or xstr[0] != "(":
-                    xstr = "(" + xstr
-                # balance closing parentheses
-                parenthese_imbalance = xstr.count("(") - xstr.count(")")
-                xstr = xstr + ")" * max(0, parenthese_imbalance)        # append missing closing parentheses
-                xstr = "(" * -min(0, parenthese_imbalance) + xstr       # prepend missing opening parentheses
-                try:
-                    tree = lisp_to_tree(xstr)
-                    if isinstance(tree, tuple) and len(tree) == 2 and tree[0] is None:
-                        tree = None
-                except Exception as e:
-                    tree = None
-                trees.append(tree)
-            return trees
-
         # compute loss and metrics
-        gold_trees = tensor_to_trees(gold, vocab=self.vocab)
-        pred_trees = tensor_to_trees(preds, vocab=self.vocab)
+        gold_trees = gold
+        pred_trees = preds
         treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
         return ret, pred_trees
 
 
-class TreeInsertionDecoderUniform(TreeInsertionDecoder):
-    # decode modes: "parallel", "serial" or "semiparallel":
-    #    - parallel: execute actions at all slots simultaneously
-    #           --> prob threshold = 0.
-    #    - serial: execute action with highest probability across all slots, unless the action is an @END@
-    #           --> prob threshold > 1.
-    #    - semiparallel: execute actions for all slots where the highest probability is above a certain threshold,
-    #                    unless the action is an @END@.
-    #                    if there are no slots with highest probability higher than threshold, fall back to serial mode for this decoding step
-    #           --> prob threshold between 0. and 1.
-    # --> all modes naturally terminate once all slots predict an @END@
-    # default_termination_mode = "slot"
-    # default_decode_mode = "parallel"
-
-    def get_slot_value_probs(self, slotvalues):     # uniform
-        # uniformly distribute probability over unique tokens
-        # then distribute uniformly over every position a token occurs in
-        # example: A B B C D --> [0.25, 0.125, 0.125, 0.25, 0.25]
-        # this way, when tgt is accumulated in training code, the distribution over tokens will be uniform
-        prob = 1./len(set(slotvalues))
-        token_freqs = {}
-        for slotvalue in slotvalues:
-            if slotvalue not in token_freqs:
-                token_freqs[slotvalue] = 0
-            token_freqs[slotvalue] += 1
-        probs = [prob/token_freqs[slotvalue] for slotvalue in slotvalues]
-        return probs
-
-    def extract_training_example(self, x: torch.Tensor, y: torch.Tensor):
-        # y: (batsize, seqlen) ids, padded with zeros
-        ymask = (y != 0).float()
-        ytotallens = ymask.sum(1)
-        ylens = torch.rand(ytotallens.size(), device=ytotallens.device)
-        ylens = (ylens * ytotallens).round().long()
-        _ylens = ylens.cpu().numpy()
-        # ylens contains the sampled lengths
-
-        # for LTR: take 'ylens' leftmost tokens
-        # for Uniform/Binary: randomly select 'ylens' tokens
-        newy = torch.zeros(y.size(0), y.size(1) + 2, device=y.device).long()
-        newy[:, 0] = self.vocab["@BOS@"]
-        tgt = torch.zeros(y.size(0), y.size(1) + 2, self.vocab.number_of_ids(), device=y.device)
-        # 'tgt' contains target distributions
-        for i in range(newy.size(0)):
-            perm = torch.randperm(ytotallens[i].long().cpu().item())
-            perm = perm[:ylens[i].long().cpu().item()]
-            select, _ = perm.sort(-1)
-            select = list(select.cpu().numpy())
-            k = 1  # k is where in the new sampled sequence we're at
-
-            slotvalues_acc = []
-            slotvalues = []
-            for j in range(int(ytotallens[i].cpu().item())):
-                y_ij = y[i, j].cpu().item()
-                if k <= len(select) and j == select[k - 1]:  # if j-th token in y should be k-th in newy
-                    newy[i, k] = y[i, j]
-                    slotvalues_acc.append(slotvalues)
-                    slotvalues = []
-                    k += 1
-                else:  # otherwise, add
-                    slotvalues.append(y_ij)
-                    # tgt[i, k - 1, y_ij] = 1
-            slotvalues_acc.append(slotvalues)
-            newy[i, k] = self.vocab["@EOS@"]
-
-            for j, slotvalues in enumerate(slotvalues_acc):
-                if len(slotvalues) == 0:
-                    tgt[i, j, self.vocab["@END@"]] = 1
-                else:
-                    for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
-                        tgt[i, j, slotvalue] += float(valueprob)
-
-        # normalize
-        tgt = tgt / tgt.sum(-1, keepdim=True).clamp_min(1e-6)
-        tgtmask = (tgt.sum(-1) != 0).float()
-        # make uniform for masked positions
-        newymask = (newy != 0).float()
-        uniform_tgt = torch.ones_like(tgt) / tgt.size(-1)
-        tgt = torch.where(tgtmask[:, :, None].bool(), tgt, uniform_tgt)
-        # cut unnecessary padded elements from the right of newy
-        newlen = newymask.sum(-1).max()
-        newy = newy[:, :int(newlen)]
-        tgt = tgt[:, :int(newlen)]
-        tgtmask = tgtmask[:, :int(newlen)]
-
-        return x, newy, tgt, tgtmask
-
-
-class TreeInsertionDecoderBinary(TreeInsertionDecoderUniform):
-    """ Differs from Uniform only in computing and using non-uniform weights for gold output distributions """
-    def __init__(self, tagger:TreeInsertionTagger,
-                 vocab=None,
-                 prob_threshold=0.,
-                 max_steps:int=20,
-                 max_size:int=100,
-                 tau=1.,
-                 **kw):
-        super(TreeInsertionDecoderBinary, self).__init__(tagger, vocab=vocab,
-                                                         max_steps=max_steps,
-                                                         max_size=max_size,
-                                                         prob_threshold=prob_threshold,
-                                                         **kw)
-        self.tau = tau
-
-    def get_slot_value_probs(self, slotvalues):
-        # assign higher probability to tokens closer to centre
-        # when multiple tokens of the same type are present: keep score of the closest one to center
-        # set distance for all other ones of the same token to infinity
-        center = len(slotvalues) / 2 - 0.5
-        distances = [abs(x - center) for x in range(len(slotvalues))]
-        mindist_per_token = {}
-        for slotvalue, distance in zip(slotvalues, distances):
-            if slotvalue not in mindist_per_token:
-                mindist_per_token[slotvalue] = +9999
-            mindist_per_token[slotvalue] = min(mindist_per_token[slotvalue], distance)
-        mindistances = [d for d in distances]
-        for i, (slotvalue, distance) in enumerate(zip(slotvalues, distances)):
-            if distance == mindist_per_token[slotvalue]:
-                mindistances[i] = distance
-            else:
-                mindistances[i] = +99999
-
-        probs = torch.softmax(-torch.tensor(mindistances)/self.tau, -1)
-        probs = probs.numpy()
-        return probs
-
-
 def run(domain="restaurants",
-        mode="baseline",         # "baseline", "ltr", "uniform", "binary"
+        goldtemp=1.,        # 10000 --> towards a more uniform gold distribution
         probthreshold=0.,       # 0. --> parallel, >1. --> serial, 0.< . <= 1. --> semi-parallel
         lr=0.0001,
         enclrmul=0.1,
@@ -1902,7 +1857,7 @@ def run(domain="restaurants",
 
     settings = locals().copy()
     q.pp_dict(settings)
-    wandb.init(project=f"seqinsert_overnight_v2", config=settings, reinit=True)
+    wandb.init(project=f"treeinsert_overnight_v2", config=settings, reinit=True)
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -1911,7 +1866,8 @@ def run(domain="restaurants",
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid, noreorder=noreorder, numbered=numbered)
+    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid,
+                                                                 noreorder=noreorder, numbered_nodes=numbered)
     tt.tock("loaded")
 
     tdl_seq = DataLoader(tds_seq, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -1919,12 +1875,9 @@ def run(domain="restaurants",
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, baseline=mode=="baseline")
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
 
-    if mode == "uniform":
-        decoder = TreeInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
-    elif mode == "binary":
-        decoder = TreeInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+    decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold, tau=goldtemp)
 
     # test run
     if testcode:
@@ -2054,55 +2007,12 @@ def run(domain="restaurants",
     settings.update({"final_valid_steps_used": vmetrics[1].get_epoch_error()})
     settings.update({"final_test_steps_used": xmetrics[1].get_epoch_error()})
 
-    if mode != "baseline":
-        calibrate_end = False
-        if calibrate_end:
-            # calibrate END offset
-            tt.tick("running termination calibration")
-            end_offsets = [0., 0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
-            decoder.prob_threshold = 1.
-
-            end_offset_values = []
-
-            best_offset = 0.
-            best_offset_value = 0.
-            for end_offset in end_offsets:
-                tt.tick("rerunning validation")
-                decoder.end_offset = end_offset
-                validres = validepoch()
-                tt.tock(f"Validation results: {validres}")
-                end_offset_values.append(vmetrics[0].get_epoch_error())
-                if vmetrics[0].get_epoch_error() > best_offset_value:
-                    best_offset = end_offset
-                    best_offset_value = vmetrics[0].get_epoch_error()
-                tt.tock("done")
-            print(f"offset results: {dict(zip(end_offsets, end_offset_values))}")
-            print(f"best offset: {best_offset}")
-
-            decoder.end_offset = best_offset
-
-        # run different prob_thresholds:
-        # thresholds = [0., 0.3, 0.5, 0.6, 0.75, 0.85, 0.9, 0.95,  1.]
-        thresholds = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 0.95, 1.]
-        for threshold in thresholds:
-            tt.tick("running test for threshold " + str(threshold))
-            decoder.prob_threshold = threshold
-            testres = testepoch()
-            print(f"Test tree acc for threshold {threshold}: testres: {testres}")
-            settings.update({f"_thr{threshold}_acc": xmetrics[0].get_epoch_error()})
-            settings.update({f"_thr{threshold}_len": xmetrics[1].get_epoch_error()})
-            tt.tock("done")
-
-
     wandb.config.update(settings)
     q.pp_dict(settings)
 
-# TODO: EOS balancing ?!
-
-# TODO: model that follows predictive distribution during training and uses AnyToken loss
 
 def run_experiment(domain="default",    #
-                   mode="baseline",         # "baseline", "ltr", "uniform", "binary"
+                   goldtemp=1.,
                    probthreshold=-1.,
         lr=-1.,
         enclrmul=-1.,
@@ -2123,7 +2033,7 @@ def run_experiment(domain="default",    #
         gradnorm=3.,
         validinter=-1,
         maxsteps=90,
-        maxsize=90,
+        maxsize=250,
         numbered=False,
                    testcode=False,
         ):
@@ -2147,42 +2057,18 @@ def run_experiment(domain="default",    #
         "gradacc": [1],
     }
 
-    if mode == "baseline":        # baseline
-        ranges["validinter"] = [5]
-    elif mode.startswith("predictive"):
-        ranges["validinter"] = [1]
-        ranges["lr"] = [0.0001]
-        ranges["enclrmul"] = [1.]
-        ranges["dropout"] = [0.0, 0.1, 0.3]     # use 0.
-        ranges["hdim"] = [768]
-        ranges["numlayers"] = [6]
-        ranges["numheads"] = [12]
-        ranges["numbered"] = [False]
-    else:
-        # ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
-        # ranges["domain"] = ["calendar", "publications", "recipes"]
-        ranges["batsize"] = [30]
-        ranges["dropout"] = [0.0, 0.1, 0.2]     # use 0.
-        # ranges["lr"] = [0.0001]                 # use 0.000025
-        ranges["validinter"] = [20]
-        ranges["epochs"] = [401]
-        ranges["hdim"] = [768]
-        ranges["numlayers"] = [6]
-        ranges["numheads"] = [12]
-        ranges["probthreshold"] = [0.]
-        ranges["lr"] = [0.000025]
-        ranges["enclrmul"] = [1.]
-        ranges["numbered"] = [True]
-
-    if mode == "ltr":
-        ranges["lr"] = [0.0001, 0.000025]
-        ranges["warmup"] = [50]
-        ranges["epochs"] = [501]
-        ranges["validinter"] = [25]
-        ranges["gradacc"] = [10]
-        ranges["hdim"] = [768]
-        ranges["numlayers"] = [6]
-        ranges["numheads"] = [12]
+    ranges["batsize"] = [30]
+    ranges["dropout"] = [0.0, 0.1, 0.2]  # use 0.
+    # ranges["lr"] = [0.0001]                 # use 0.000025
+    ranges["validinter"] = [20]
+    ranges["epochs"] = [401]
+    ranges["hdim"] = [768]
+    ranges["numlayers"] = [6]
+    ranges["numheads"] = [12]
+    ranges["probthreshold"] = [0.]
+    ranges["lr"] = [0.000025]
+    ranges["enclrmul"] = [1.]
+    ranges["numbered"] = [True]
 
     for k in ranges:
         if k in settings:
@@ -2214,8 +2100,9 @@ if __name__ == '__main__':
     # q.argprun(test_tree_sampling)
     # q.argprun(test_decode)
     # test_oracle_decoder()
-    q.argprun(run_decoding_oracle)
+    # q.argprun(run_decoding_oracle)
     # q.argprun(test_tree_sampling_random)
+    q.argprun(run_experiment)
 
     # DONE: fix orderless for no simplification setting used here
     # DONE: make baseline decoder use cached decoder states
