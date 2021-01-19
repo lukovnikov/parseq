@@ -1644,7 +1644,8 @@ class TransformerTagger(TreeInsertionTagger):
         pass
         # self.posemb.weight.fill_(0.)
 
-    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None, relpos=None):
+    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None, relpos=None, attn_mask=None):
+        # TODO: incorporate attn_mask into padmask
         padmask = (tokens != 0)
         # if not self.baseline:
         #     padmask = padmask[:, 1:]
@@ -1667,6 +1668,90 @@ class TransformerTagger(TreeInsertionTagger):
 
         logits = self.out(c)
         return logits
+
+
+
+def compute_relpos_and_attn_mask(seq:List[str], specialtokens=DefaultSpecialTokens()):
+    """
+    :param x:   the current batch of trees
+    :return:    (batsize, qlen, klen, 4) -- how to reach every token from every other token in the tree.
+                    First 3 (out of 4) coordinates specify how to move between real tree nodes.
+                    Last 4th (out of 4) is a different special index space for slot tokens:
+                        sibling slot is connected to parent using child-N-of relative position,
+                            to left and right using special relposes too
+                        descendant slot is connected to its node using its special relpos
+                        ancestor slot is connected to its node
+                    Structural tokens ("(", ")", "|") should be ignored in relpos
+
+                (batsize, qlen, klen) -- attention mask that ignores structural tokens and removes slot tokens from keys
+                            and leaves only immediate neighbours as keys to which slot tokens can attend to as queries
+    """
+    badtokens = {specialtokens.opening_parentheses,
+                 specialtokens.closing_parentheses,
+                 specialtokens.parent_separator,
+                 specialtokens.descendant_slot,
+                 specialtokens.ancestor_slot,
+                 specialtokens.sibling_slot}
+
+    Vs = ["@PAD@", "self", "descslot", "ancslot", "left", "right", "parent"]
+    V = dict(zip(Vs, range(len(Vs))))
+
+    relpos_slots = torch.zeros(len(seq), len(seq))
+    attnmask = torch.ones(len(seq), len(seq))       # (qlen, klen)
+    for i, x in enumerate(seq):
+        if x in badtokens:
+            attnmask[:, i] = 0      # can't be attended to from anywhere
+            attnmask[i, :] = 0      # can't attend to anything either, ...
+
+        if x == specialtokens.descendant_slot:
+            attnmask[i, i-1] = 1    # ... except to its node
+            relpos_slots[i, i-1] = V["descslot"]
+        elif x == specialtokens.ancestor_slot:
+            attnmask[i, i+1] = 1    # ... except to its node
+            relpos_slots[i, i+1] = V["ancslot"]
+        elif x == specialtokens.sibling_slot:
+            # ... except to its left and right sibling as well as its parent
+            j = i-1
+            left_sibling_found = False
+            parent_found = False
+            parent_separator_found = False
+            while j >= 0 and (not left_sibling_found or not parent_found):
+                if seq[j] == specialtokens.parent_separator:    # no left
+                    left_sibling_found = True   # no left sibling
+                    parent_separator_found = True
+                elif seq[j] not in badtokens:       # first real token to the left --> left sibling
+                    if left_sibling_found and parent_separator_found:
+                        attnmask[i, j] = 1      # this is the parent
+                        relpos_slots[i, j] = V["parent"]
+                        parent_found = True
+                    elif not left_sibling_found:
+                        attnmask[i, j] = 1      # this is the left sibling
+                        relpos_slots[i, j] = V["left"]
+                        left_sibling_found = True
+                j -= 1
+            j = i+1
+            while j < len(seq):
+                if seq[j] == specialtokens.closing_parentheses:     # no right
+                    pass
+                elif seq[j] not in badtokens:
+                    attnmask[i, j] = 1      # this is the right sibling
+                    relpos_slots[i, j] = V["right"]
+                    break
+                j += 1
+
+    relpos = torch.zeros(len(seq), len(seq), 4)
+    return [relpos_slots], attnmask
+
+
+def test_relpos_and_attnmask(n=1):
+    tree = lisp_to_tree("(R (A B))")
+    ret = linearize_ptree(tree)
+    ret = [rete.label() if isinstance(rete, Tree) else rete for rete in ret]
+    relpos, attnmask = compute_relpos_and_attn_mask(ret)
+    for i, rete in enumerate(ret):
+        print(f"{i}: {rete}")
+    print(attnmask)
+    print(relpos[-1])
 
 
 class TreeInsertionDecoder(torch.nn.Module):
@@ -1726,24 +1811,6 @@ class TreeInsertionDecoder(torch.nn.Module):
         kl = kl.sum(-1)
         return kl
 
-    def compute_relpos_and_attn_mask(self, x):
-        """
-        :param x:   the current batch of trees
-        :return:    (batsize, qlen, klen, 4) -- how to reach every token from every other token in the tree.
-                        First 3 (out of 4) coordinates specify how to move between real tree nodes.
-                        Last 4th (out of 4) is a different special index space for slot tokens:
-                            sibling slot is connected to parent using child-N-of relative position,
-                                to left and right using special relposes too
-                            descendant slot is connected to its node using its special relpos
-                            ancestor slot is connected to its node
-                        Structural tokens ("(", ")", "|") should be ignored in relpos
-
-                    (batsize, qlen, klen) -- attention mask that ignores structural tokens and removes slot tokens from keys
-                                and leaves only immediate neighbours as keys to which slot tokens can attend to as queries
-        """
-        pass
-        # TODO
-
     def train_forward(self, x:torch.Tensor, y:Tuple[Tree]):  # --> implement one step training of tagger
         # extract a training example from y:
         x, newy, tgt, tgtmask = self.extract_training_example(x, y)
@@ -1760,6 +1827,8 @@ class TreeInsertionDecoder(torch.nn.Module):
         ptree = build_supervision_sets(ptree, tree)
         centralities = compute_centralities_ptree(ptree, tree)
         ret, retsup = linearize_supervised_ptree(ptree)
+        relpos, attnmask = compute_relpos_and_attn_mask(ret)
+        # TODO: use relpos and attnmask
 
         _retsup = []
         for rete, retsupe in zip(ret, retsup):
@@ -2163,7 +2232,8 @@ if __name__ == '__main__':
     # test_oracle_decoder()
     # q.argprun(run_decoding_oracle)
     # q.argprun(test_tree_sampling_random)
-    q.argprun(run_experiment)
+    test_relpos_and_attnmask()
+    # q.argprun(run_experiment)
 
     # DONE: fix orderless for no simplification setting used here
     # DONE: make baseline decoder use cached decoder states
