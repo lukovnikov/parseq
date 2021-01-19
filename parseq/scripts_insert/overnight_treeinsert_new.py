@@ -23,8 +23,8 @@ from parseq.datasets import OvernightDatasetLoader, autocollate
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import tree_to_lisp_tokens, are_equal_trees, lisp_to_tree, tree_size
 from parseq.scripts_insert.overnight_treeinsert import extract_info
+from parseq.scripts_insert.transformer import TransformerConfig, TransformerStack
 from parseq.scripts_insert.util import reorder_tree, flatten_tree
-from parseq.transformer import TransformerConfig, TransformerStack
 from parseq.vocab import Vocab, SequenceEncoder
 from transformers import BertTokenizer, BertModel
 
@@ -1504,9 +1504,89 @@ class TreeInsertionTagger(torch.nn.Module):
         pass
 
 
+class RelPosEmb(torch.nn.Module):
+    def __init__(self, dim, maxv=10, maxh=10, mode="sum", **kw):
+        super(RelPosEmb, self).__init__(**kw)
+        self.maxv, self.maxh, self.mode = maxv, maxh, mode
+
+        self.maxv = maxv
+        self.maxh = maxh
+        self.embv = torch.nn.Embedding(self.maxv + 1, dim)
+        self.embh = torch.nn.Embedding(self.maxh * 2 + 1, dim)
+        self.embv2 = torch.nn.Embedding(self.maxv + 1, dim)
+
+    def compute_scores(self, q, relpos):
+        """
+        :param q:       (batsize, numheads, qlen, dimperhead)
+        :param relpos:  (batsize, qlen, klen, ...)
+        :return:
+        """
+        retscores = None
+        # going up
+        indexes = torch.arange(0, self.embv.num_embeddings, device=q.device).long()
+        embs = self.embv(indexes)     # (numindexes, dim)
+        embs = embs.view(embs.size(0), q.size(1), q.size(-1))        # (numindexes, numheads, dimperhead)
+        relpos_ = relpos[:, :, :, 0].clamp_max(self.maxv + 1)
+        scores = torch.einsum("bhqd,nhd->bhqn", q, embs)            # (batsize, numheads, qlen, numindexes)
+        relpos_ = relpos_[:, None, :, :].repeat(1, scores.size(1), 1, 1)    # (batsize, numheads, qlen, klen)
+        scores_ = torch.gather(scores, 3, relpos_)      # (batsize, numheads, qlen, klen)
+        retscores = scores_
+
+        # going left or right
+        indexes = torch.arange(0, self.embv.num_embeddings, device=q.device).long()
+        embs = self.embh(indexes)     # (numindexes, dim)
+        embs = embs.view(embs.size(0), q.size(1), q.size(-1))        # (numindexes, numheads, dimperhead)
+        relpos_ = relpos[:, :, :, 1].clamp(self.maxh * 2 + 1)
+        scores = torch.einsum("bhqd,nhd->bhqn", q, embs)            # (batsize, numheads, qlen, numindexes)
+        relpos_ = relpos_[:, None, :, :].repeat(1, scores.size(1), 1, 1)    # (batsize, numheads, qlen, klen)
+        scores_ = torch.gather(scores, 3, relpos_)      # (batsize, numheads, qlen, klen)
+        retscores = retscores + scores_
+
+        # going down
+        indexes = torch.arange(0, self.embv.num_embeddings, device=q.device).long()
+        embs = self.embh(indexes)  # (numindexes, dim)
+        embs = embs.view(embs.size(0), q.size(1), q.size(-1))  # (numindexes, numheads, dimperhead)
+        relpos_ = relpos[:, :, :, 2].clamp_max(self.maxv + 1)
+        scores = torch.einsum("bhqd,nhd->bhqn", q, embs)  # (batsize, numheads, qlen, numindexes)
+        relpos_ = relpos_[:, None, :, :].repeat(1, scores.size(1), 1, 1)  # (batsize, numheads, qlen, klen)
+        scores_ = torch.gather(scores, 3, relpos_)  # (batsize, numheads, qlen, klen)
+        retscores = retscores + scores_
+
+        # TODO: relpos for slot tokens
+
+        return retscores        # (batsize, numheads, qlen, klen)
+
+    def compute_context(self, weights, relpos):
+        """
+        :param weights: (batsize, numheads, qlen, klen)
+        :param relpos:  (batsize, qlen, klen, ...)
+        :return:    # weighted sum over klen (batsize, numheads, qlen, dimperhead)
+        """
+        ret = None
+        numheads = weights.size(1)
+
+        # going up
+        relposv_ = relpos[:, :, :, 0]
+        relposembv = self.embv[relposv_]      # (batsize, qlen, klen, dim)
+        relposh_ = relpos[:, :, :, 1]
+        relposembh = self.embh[relposh_]  # (batsize, qlen, klen, dim)
+        relposv2_ = relpos[:, :, :, 2]
+        relposembv2 = self.embv[relposv2_]      # (batsize, qlen, klen, dim)
+        relposemb = relposembv + relposembh + relposembv2
+        relposemb = relposemb.view(relposemb.size(0), relposemb.size(1), relposemb.size(2), numheads, -1)   # (batsize, qlen, klen, numheads, dimperhead)
+        relposemb = relposemb.permute(0, 3, 1, 2, 4)
+        x = (relposemb * weights.unsqueeze(-1)).sum(3)
+        ret = x
+
+        # TODO: relpos for slot tokens
+
+        return ret
+
+
 class TransformerTagger(TreeInsertionTagger):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased",
+                 rel_pos=False, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -1515,12 +1595,21 @@ class TransformerTagger(TreeInsertionTagger):
                                    num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
                                    use_relative_position=False)
 
+        self.rel_pos = rel_pos
+
         self.emb = torch.nn.Embedding(config.vocab_size, config.d_model)
-        self.posemb = torch.nn.Embedding(maxpos, config.d_model)
+        self.absposemb = None
+
+        if self.rel_pos is True:
+            self.rel_pos = RelPosEmb(self.dim, maxv=10, maxh=10)
+
+        if self.rel_pos is not None and self.rel_pos is not False:
+            self.absposemb = torch.nn.Embedding(maxpos, config.d_model)
+
         decoder_config = deepcopy(config)
         decoder_config.is_decoder = True
         decoder_config.use_causal_mask = False
-        self.decoder = TransformerStack(decoder_config)
+        self.decoder = TransformerStack(decoder_config, rel_emb=self.relposemb)
 
         self.out = torch.nn.Linear(self.dim, self.vocabsize)
         # self.out = MOS(self.dim, self.vocabsize, K=mosk)
@@ -1555,20 +1644,22 @@ class TransformerTagger(TreeInsertionTagger):
         pass
         # self.posemb.weight.fill_(0.)
 
-    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
+    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None, relpos=None):
         padmask = (tokens != 0)
         # if not self.baseline:
         #     padmask = padmask[:, 1:]
         embs = self.emb(tokens)
-        posembs = self.posemb(torch.arange(tokens.size(1), device=tokens.device))[None]
-        embs = embs + posembs
+        if self.absposemb is not None:
+            posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
+            embs = embs + posembs
         use_cache = False
         if cache is not None:
             embs = embs[:, -1:, :]
         _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=use_cache,
-                            past_key_value_states=cache)
+                     past_key_value_states=cache,
+                     relpos=relpos)
         ret = _ret[0]
         cache = None
 
@@ -1590,6 +1681,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                  end_offset=0.,
                  tau=1.,
                  termination="keep",
+                 use_rel_pos=False,
                  specialtokens=DefaultSpecialTokens(),
                  **kw):
         super(TreeInsertionDecoder, self).__init__(**kw)
@@ -1611,6 +1703,8 @@ class TreeInsertionDecoder(torch.nn.Module):
         # self.termination_mode = self.default_termination_mode if termination_mode == "default" else termination_mode
         # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
 
+        self.use_rel_pos = use_rel_pos
+
     def forward(self, x, y):
         if self.training:
             return self.train_forward(x, y)
@@ -1631,6 +1725,24 @@ class TreeInsertionDecoder(torch.nn.Module):
             kl = kl * mask
         kl = kl.sum(-1)
         return kl
+
+    def compute_relpos_and_attn_mask(self, x):
+        """
+        :param x:   the current batch of trees
+        :return:    (batsize, qlen, klen, 4) -- how to reach every token from every other token in the tree.
+                        First 3 (out of 4) coordinates specify how to move between real tree nodes.
+                        Last 4th (out of 4) is a different special index space for slot tokens:
+                            sibling slot is connected to parent using child-N-of relative position,
+                                to left and right using special relposes too
+                            descendant slot is connected to its node using its special relpos
+                            ancestor slot is connected to its node
+                        Structural tokens ("(", ")", "|") should be ignored in relpos
+
+                    (batsize, qlen, klen) -- attention mask that ignores structural tokens and removes slot tokens from keys
+                                and leaves only immediate neighbours as keys to which slot tokens can attend to as queries
+        """
+        pass
+        # TODO
 
     def train_forward(self, x:torch.Tensor, y:Tuple[Tree]):  # --> implement one step training of tagger
         # extract a training example from y:
@@ -1798,6 +1910,7 @@ def run(domain="restaurants",
         maxsize=75,
         testcode=False,
         numbered=False,
+        userelpos=False,
         ):
 
     settings = locals().copy()
@@ -1820,9 +1933,10 @@ def run(domain="restaurants",
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout)
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, rel_pos=userelpos)
 
-    decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold, tau=goldtemp)
+    decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize,
+                                   prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos)
 
     # test run
     if testcode:
@@ -1980,7 +2094,9 @@ def run_experiment(domain="default",    #
         maxsteps=90,
         maxsize=250,
         numbered=False,
+        userelpos=False,
                    testcode=False,
+
         ):
 
     settings = locals().copy()
