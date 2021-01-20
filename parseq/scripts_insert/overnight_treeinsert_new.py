@@ -1504,56 +1504,87 @@ class TreeInsertionTagger(torch.nn.Module):
         pass
 
 
+class RelPosDict(object):
+    def __init__(self, maxv=10, maxh=10, **kw):
+        super(RelPosDict, self).__init__(**kw)
+        self.maxv, self.maxh = maxv, maxh
+        self.build_dict()
+
+    def build_dict(self):
+        self.D = {}
+        self.D["@PAD@"] = 0
+        self.D["@UNK@"] = 1
+        nextid = max(self.D.values()) + 1
+
+        for t in ["self", "descslot", "ancslot", "left", "right", "parent"]:
+            self.D[t] = nextid
+            nextid += 1
+
+        for i in range(self.maxv):
+            self.D[f"^{i}"] = nextid
+            nextid += 1
+
+        for i in range(self.maxv):
+            self.D[f"v{i}"] = nextid
+            nextid += 1
+
+        for i in range(self.maxh):
+            self.D[f"<{i}"] = nextid
+            nextid += 1
+
+        for i in range(self.maxh):
+            self.D[f">{i}"] = nextid
+            nextid += 1
+
+        for i in range(self.maxh):
+            self.D[f"child-{i}"] = nextid
+            nextid += 1
+
+        for i in range(self.maxh):
+            self.D[f"child-{i}-of"] = nextid
+            nextid += 1
+
+        self.RD = {v: k for k, v in self.D.items()}
+
+    def __getitem__(self, item:str):
+        return self.D[item]
+
+    def __call__(self, item:int):
+        return self.RD[item]
+
+    def __len__(self):
+        return self.num_tokens()
+
+    def num_tokens(self):
+        return max(self.D.values()) + 1
+
+
 class RelPosEmb(torch.nn.Module):
-    def __init__(self, dim, maxv=10, maxh=10, mode="sum", **kw):
+    def __init__(self, dim, D=RelPosDict(), mode="sum", **kw):
         super(RelPosEmb, self).__init__(**kw)
-        self.maxv, self.maxh, self.mode = maxv, maxh, mode
+        self.D, self.mode = D, mode
 
-        self.maxv = maxv
-        self.maxh = maxh
-        self.embv = torch.nn.Embedding(self.maxv + 1, dim)
-        self.embh = torch.nn.Embedding(self.maxh * 2 + 1, dim)
-        self.embv2 = torch.nn.Embedding(self.maxv + 1, dim)
+        self.emb = torch.nn.Embedding(len(self.D), dim, padding_idx=0)
+        self.emb_v = torch.nn.Embedding(len(self.D), dim, padding_idx=0)
 
-    def compute_scores(self, q, relpos):
+    def compute_scores(self, query, relpos):
         """
         :param q:       (batsize, numheads, qlen, dimperhead)
-        :param relpos:  (batsize, qlen, klen, ...)
+        :param relpos:  (batsize, qlen, klen, n)
         :return:
         """
         retscores = None
-        # going up
-        indexes = torch.arange(0, self.embv.num_embeddings, device=q.device).long()
-        embs = self.embv(indexes)     # (numindexes, dim)
-        embs = embs.view(embs.size(0), q.size(1), q.size(-1))        # (numindexes, numheads, dimperhead)
-        relpos_ = relpos[:, :, :, 0].clamp_max(self.maxv + 1)
-        scores = torch.einsum("bhqd,nhd->bhqn", q, embs)            # (batsize, numheads, qlen, numindexes)
-        relpos_ = relpos_[:, None, :, :].repeat(1, scores.size(1), 1, 1)    # (batsize, numheads, qlen, klen)
-        scores_ = torch.gather(scores, 3, relpos_)      # (batsize, numheads, qlen, klen)
-        retscores = scores_
-
-        # going left or right
-        indexes = torch.arange(0, self.embv.num_embeddings, device=q.device).long()
-        embs = self.embh(indexes)     # (numindexes, dim)
-        embs = embs.view(embs.size(0), q.size(1), q.size(-1))        # (numindexes, numheads, dimperhead)
-        relpos_ = relpos[:, :, :, 1].clamp(self.maxh * 2 + 1)
-        scores = torch.einsum("bhqd,nhd->bhqn", q, embs)            # (batsize, numheads, qlen, numindexes)
-        relpos_ = relpos_[:, None, :, :].repeat(1, scores.size(1), 1, 1)    # (batsize, numheads, qlen, klen)
-        scores_ = torch.gather(scores, 3, relpos_)      # (batsize, numheads, qlen, klen)
-        retscores = retscores + scores_
-
-        # going down
-        indexes = torch.arange(0, self.embv.num_embeddings, device=q.device).long()
-        embs = self.embh(indexes)  # (numindexes, dim)
-        embs = embs.view(embs.size(0), q.size(1), q.size(-1))  # (numindexes, numheads, dimperhead)
-        relpos_ = relpos[:, :, :, 2].clamp_max(self.maxv + 1)
-        scores = torch.einsum("bhqd,nhd->bhqn", q, embs)  # (batsize, numheads, qlen, numindexes)
-        relpos_ = relpos_[:, None, :, :].repeat(1, scores.size(1), 1, 1)  # (batsize, numheads, qlen, klen)
-        scores_ = torch.gather(scores, 3, relpos_)  # (batsize, numheads, qlen, klen)
-        retscores = retscores + scores_
-
-        # TODO: relpos for slot tokens
-
+        for n in range(relpos.size(-1)):
+            indexes = torch.arange(0, self.emb.num_embeddings, device=query.device).long()
+            embs = self.emb(indexes)# (numindexes, dim)
+            embs = embs.view(embs.size(0), query.size(1), query.size(-1))        # (numindexes, numheads, dimperhead)
+            relpos_ = relpos[:, :, :, n]
+            scores = torch.einsum("bhqd,nhd->bhqn", query, embs)  # (batsize, numheads, qlen, numindexes)
+            relpos_ = relpos_[:, None, :, :].repeat(1, scores.size(1), 1, 1)  # (batsize, numheads, qlen, klen)
+            scores_ = torch.gather(scores, 3, relpos_)  # (batsize, numheads, qlen, klen)
+            if retscores is None:
+                retscores = torch.zeros_like(scores_)
+            retscores = retscores + scores_
         return retscores        # (batsize, numheads, qlen, klen)
 
     def compute_context(self, weights, relpos):
@@ -1562,24 +1593,18 @@ class RelPosEmb(torch.nn.Module):
         :param relpos:  (batsize, qlen, klen, ...)
         :return:    # weighted sum over klen (batsize, numheads, qlen, dimperhead)
         """
-        ret = None
+        relposemb = None
         numheads = weights.size(1)
 
-        # going up
-        relposv_ = relpos[:, :, :, 0]
-        relposembv = self.embv[relposv_]      # (batsize, qlen, klen, dim)
-        relposh_ = relpos[:, :, :, 1]
-        relposembh = self.embh[relposh_]  # (batsize, qlen, klen, dim)
-        relposv2_ = relpos[:, :, :, 2]
-        relposembv2 = self.embv[relposv2_]      # (batsize, qlen, klen, dim)
-        relposemb = relposembv + relposembh + relposembv2
+        for n in range(relpos.size(-1)):
+            relpos_ = relpos[:, :, :, n]
+            relposemb_ = self.emb[relpos_]      # (batsize, qlen, klen, dim)
+            if relposemb is None:
+                relposemb = torch.zeros_like(relposemb_)
+            relposemb = relposemb + relposemb_
         relposemb = relposemb.view(relposemb.size(0), relposemb.size(1), relposemb.size(2), numheads, -1)   # (batsize, qlen, klen, numheads, dimperhead)
         relposemb = relposemb.permute(0, 3, 1, 2, 4)
-        x = (relposemb * weights.unsqueeze(-1)).sum(3)
-        ret = x
-
-        # TODO: relpos for slot tokens
-
+        ret = (relposemb * weights.unsqueeze(-1)).sum(3)
         return ret
 
 
@@ -1601,7 +1626,7 @@ class TransformerTagger(TreeInsertionTagger):
         self.absposemb = None
 
         if self.rel_pos is True:
-            self.rel_pos = RelPosEmb(self.dim, maxv=10, maxh=10)
+            self.rel_pos = RelPosEmb(self.dim, D=RelPosDict())
 
         if self.rel_pos is not None and self.rel_pos is not False:
             self.absposemb = torch.nn.Embedding(maxpos, config.d_model)
@@ -1644,9 +1669,8 @@ class TransformerTagger(TreeInsertionTagger):
         pass
         # self.posemb.weight.fill_(0.)
 
-    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None, relpos=None, attn_mask=None):
-        # TODO: incorporate attn_mask into padmask
-        padmask = (tokens != 0)
+    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None, relpos=None, attnmask=None):
+        padmask = (tokens != 0) if attnmask is None else attnmask
         # if not self.baseline:
         #     padmask = padmask[:, 1:]
         embs = self.emb(tokens)
@@ -1656,6 +1680,8 @@ class TransformerTagger(TreeInsertionTagger):
         use_cache = False
         if cache is not None:
             embs = embs[:, -1:, :]
+
+        # TODO: ensure that relpos reaches the attention layers
         _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=use_cache,
@@ -1671,7 +1697,7 @@ class TransformerTagger(TreeInsertionTagger):
 
 
 
-def compute_relpos_and_attn_mask(seq:List[str], specialtokens=DefaultSpecialTokens()):
+def compute_relpos_and_attn_mask(seq:List[str], specialtokens=DefaultSpecialTokens(), D=RelPosDict()):
     """
     :param x:   the current batch of trees
     :return:    (batsize, qlen, klen, 4) -- how to reach every token from every other token in the tree.
@@ -1685,6 +1711,8 @@ def compute_relpos_and_attn_mask(seq:List[str], specialtokens=DefaultSpecialToke
 
                 (batsize, qlen, klen) -- attention mask that ignores structural tokens and removes slot tokens from keys
                             and leaves only immediate neighbours as keys to which slot tokens can attend to as queries
+
+                ??? TO DO ?: ^0, v0, <0, >0 should all map to a zero-vector (@PAD@ instead)
     """
     badtokens = {specialtokens.opening_parentheses,
                  specialtokens.closing_parentheses,
@@ -1693,65 +1721,229 @@ def compute_relpos_and_attn_mask(seq:List[str], specialtokens=DefaultSpecialToke
                  specialtokens.ancestor_slot,
                  specialtokens.sibling_slot}
 
-    Vs = ["@PAD@", "self", "descslot", "ancslot", "left", "right", "parent"]
-    V = dict(zip(Vs, range(len(Vs))))
-
-    relpos_slots = torch.zeros(len(seq), len(seq))
+    # attnmask and relpos_slots
     attnmask = torch.ones(len(seq), len(seq))       # (qlen, klen)
+    relpos_slots = torch.zeros(len(seq), len(seq))
     for i, x in enumerate(seq):
         if x in badtokens:
             attnmask[:, i] = 0      # can't be attended to from anywhere
             attnmask[i, :] = 0      # can't attend to anything either, ...
 
+        if x not in {specialtokens.opening_parentheses,
+                     specialtokens.closing_parentheses,
+                     specialtokens.parent_separator}:
+            attnmask[i, i] = 1
+            relpos_slots[i, i] = D["self"]
+
         if x == specialtokens.descendant_slot:
             attnmask[i, i-1] = 1    # ... except to its node
-            relpos_slots[i, i-1] = V["descslot"]
+            relpos_slots[i, i-1] = D["descslot"]
         elif x == specialtokens.ancestor_slot:
             attnmask[i, i+1] = 1    # ... except to its node
-            relpos_slots[i, i+1] = V["ancslot"]
+            relpos_slots[i, i+1] = D["ancslot"]
         elif x == specialtokens.sibling_slot:
-            # ... except to its left and right sibling as well as its parent
-            j = i-1
-            left_sibling_found = False
-            parent_found = False
-            parent_separator_found = False
-            while j >= 0 and (not left_sibling_found or not parent_found):
-                if seq[j] == specialtokens.parent_separator:    # no left
-                    left_sibling_found = True   # no left sibling
-                    parent_separator_found = True
-                elif seq[j] not in badtokens:       # first real token to the left --> left sibling
-                    if left_sibling_found and parent_separator_found:
-                        attnmask[i, j] = 1      # this is the parent
-                        relpos_slots[i, j] = V["parent"]
-                        parent_found = True
-                    elif not left_sibling_found:
-                        attnmask[i, j] = 1      # this is the left sibling
-                        relpos_slots[i, j] = V["left"]
-                        left_sibling_found = True
-                j -= 1
-            j = i+1
-            while j < len(seq):
-                if seq[j] == specialtokens.closing_parentheses:     # no right
-                    pass
-                elif seq[j] not in badtokens:
-                    attnmask[i, j] = 1      # this is the right sibling
-                    relpos_slots[i, j] = V["right"]
-                    break
-                j += 1
-
+            pass
     relpos = torch.zeros(len(seq), len(seq), 4)
-    return [relpos_slots], attnmask
+    relpos[:, :, -1] = relpos_slots
+
+    # do relative position coordinates
+    do_relpos(seq, relpos, attnmask, D=D, specialtokens=specialtokens)
+    return relpos, attnmask
+
+
+def do_relpos(seq, relpos, attnmask, specialtokens=DefaultSpecialTokens(), D=RelPosDict()):
+
+    # region build tree
+    buffer = seq[:]
+    stack = [[]]
+    i = 0
+
+    nextisparent = False
+
+    while len(buffer) > 0:
+        first = buffer.pop(0)
+        if first == specialtokens.opening_parentheses:
+            nextisparent = True
+        elif first == specialtokens.closing_parentheses:
+            bottom = stack.pop(-1)
+            stack[-1][-1][:] = bottom
+        elif first in {
+            specialtokens.parent_separator,
+            # specialtokens.sibling_slot,
+            specialtokens.ancestor_slot,
+            specialtokens.descendant_slot,
+        }:
+            pass
+        else:
+            node = Tree(first, [])
+            node.seqid = i
+            stack[-1].append(node)
+            if nextisparent:
+                stack.append([])
+                nextisparent = False
+
+        i += 1
+
+    assert len(stack) == 1 and len(stack[0]) == 1
+    tree = stack[0][0]
+    # endregion
+
+    ret = do_relpos_rec(tree, relpos, attnmask, D=D, specialtokens=specialtokens)
+    return tree
+
+
+def do_relpos_rec(tree, relpos, attnmask, D=RelPosDict(), specialtokens=DefaultSpecialTokens()):
+    rets = []
+    ownret = []
+    realchildren = []
+
+    for i, child in enumerate(tree):
+        if child.label() == specialtokens.sibling_slot:
+            leftsibling = tree[i-1] if i-1 >= 0 else None
+            rightsibling = tree[i+1] if i+1 < len(tree) else None
+            parentnode = tree
+            if leftsibling is not None:
+                relpos[child.seqid, leftsibling.seqid, 3] = D["left"]
+                attnmask[child.seqid, leftsibling.seqid] = 1
+            if rightsibling is not None:
+                relpos[child.seqid, rightsibling.seqid, 3] = D["right"]
+                attnmask[child.seqid, rightsibling.seqid] = 1
+            relpos[child.seqid, parentnode.seqid, 3] = D["parent"]
+            attnmask[child.seqid, parentnode.seqid] = 1
+        else:
+            realchildren.append(child)
+            ret = do_relpos_rec(child, relpos, attnmask, D=D)      # ret is a list of tuples (Tree, depth) of all descendants
+            rets.append(ret)
+            # record relations between parent and children
+            relpos[tree.seqid, child.seqid, 3] = D[f"child-{i}"]
+            relpos[child.seqid, tree.seqid, 3] = D[f"child-{i}-of"]
+            # make ownret
+            ownret.append((child, 1))
+            for rete in ret:
+                # record relations between this node and its descendants
+                relpos[rete[0].seqid, tree.seqid, 0] = D[f"^{min(rete[1]+1, D.maxv)}"]
+                relpos[tree.seqid, rete[0].seqid, 2] = D[f"v{min(rete[1]+1, D.maxv)}"]
+                # build ownret
+                ownret.append((rete[0], rete[1]+1))
+
+
+    for i in range(len(rets)):
+        for j in range(i+1, len(rets)):
+            # record relations between siblings
+            # record relations between descendants of siblings
+            for (lret, ldepth) in rets[i] + [(realchildren[i], 0)]:
+                for (rret, rdepth) in rets[j] + [(realchildren[j], 0)]:
+                    relpos[lret.seqid, rret.seqid, 0] = D[f"^{min(ldepth, D.maxv)}"] if ldepth > 0 else D["@PAD@"]
+                    relpos[rret.seqid, lret.seqid, 2] = D[f"v{min(ldepth, D.maxv)}"] if ldepth > 0 else D["@PAD@"]
+                    relpos[lret.seqid, rret.seqid, 1] = D[f">{min(j-i, D.maxh)}"]
+                    relpos[rret.seqid, lret.seqid, 1] = D[f"<{min(j-i, D.maxh)}"]
+                    relpos[rret.seqid, lret.seqid, 0] = D[f"^{min(rdepth, D.maxv)}"] if rdepth > 0 else D["@PAD@"]
+                    relpos[lret.seqid, rret.seqid, 2] = D[f"v{min(rdepth, D.maxv)}"] if rdepth > 0 else D["@PAD@"]
+
+    return ownret
 
 
 def test_relpos_and_attnmask(n=1):
-    tree = lisp_to_tree("(R (A B))")
+    tree = lisp_to_tree("(A (B (C F) (D G) (E H I)))")
     ret = linearize_ptree(tree)
     ret = [rete.label() if isinstance(rete, Tree) else rete for rete in ret]
     relpos, attnmask = compute_relpos_and_attn_mask(ret)
     for i, rete in enumerate(ret):
         print(f"{i}: {rete}")
+
+    D = RelPosDict()
+
+    for i in range(len(relpos)):
+        for j in range(len(relpos[i])):
+            if relpos[i, j].sum() > 0:
+                s = []
+                for k in range(len(relpos[i, j])):
+                    if relpos[i, j, k] != 0:
+                        s.append(D(relpos[i, j, k].item()))
+                print(f"{ret[i]} -> {ret[j]}: {', '.join(s)}")
+
     print(attnmask)
-    print(relpos[-1])
+    relpos_ = torch.zeros_like(relpos)
+
+    attnmask_ = (relpos.sum(-1) > 0).float()
+    print((attnmask_- attnmask).nonzero())
+    assert torch.allclose(attnmask_, attnmask)
+
+    relpos_[1, 12, 2] = D["v2"]
+    relpos_[1, 16, 2] = D["v3"]
+    relpos_[1, 23, 2] = D["v2"]
+    relpos_[1, 27, 2] = D["v3"]
+    relpos_[1, 34, 2] = D["v2"]
+    relpos_[1, 39, 2] = D["v3"]
+    relpos_[1, 43, 2] = D["v3"]
+    relpos_[6, 16, 2] = D["v2"]
+    relpos_[6, 27, 2] = D["v2"]
+    relpos_[6, 39, 2] = D["v2"]
+    relpos_[6, 43, 2] = D["v2"]
+    relpos_[16, 27, 2] = D["v1"]
+    relpos_[27, 16, 2] = D["v1"]
+    relpos_[27, 39, 2] = D["v1"]
+    relpos_[39, 27, 2] = D["v1"]
+    relpos_[27, 43, 2] = D["v1"]
+    relpos_[43, 27, 2] = D["v1"]
+    relpos_[16, 39, 2] = D["v1"]
+    relpos_[39, 16, 2] = D["v1"]
+    relpos_[16, 43, 2] = D["v1"]
+    relpos_[43, 16, 2] = D["v1"]
+    relpos_[12, 27, 2] = D["v1"]
+    relpos_[12, 39, 2] = D["v1"]
+    relpos_[12, 43, 2] = D["v1"]
+    relpos_[23, 16, 2] = D["v1"]
+    relpos_[23, 39, 2] = D["v1"]
+    relpos_[23, 43, 2] = D["v1"]
+    relpos_[34, 16, 2] = D["v1"]
+    relpos_[34, 27, 2] = D["v1"]
+
+
+    # print((relpos_[:, :, 2] - relpos[:, :, 2]).nonzero())
+    assert torch.allclose(relpos_[:, :, 2], relpos[:, :, 2])
+
+    assert attnmask[1, 6] == 1
+    assert attnmask[6, 1] == 1
+    assert attnmask[6, 7] == 0
+    assert attnmask[7, 6] == 1
+    attnmask7_ = torch.zeros_like(attnmask[7])
+    attnmask7_[6] = 1
+    attnmask7_[7] = 1
+    # print(attnmask7_, attnmask[7])
+    assert torch.allclose(attnmask[7], attnmask7_)
+
+    attnmask20_ = torch.zeros_like(attnmask[20])
+    attnmask20_[20] = 1
+    attnmask20_[12] = 1
+    attnmask20_[23] = 1
+    attnmask20_[6] = 1
+    print(attnmask20_.nonzero(), attnmask[20].nonzero())
+    assert torch.allclose(attnmask[20], attnmask20_)
+
+    attnmaskx_ = torch.zeros_like(attnmask[41])
+    attnmaskx_[41] = 1
+    attnmaskx_[39] = 1
+    attnmaskx_[43] = 1
+    attnmaskx_[34] = 1
+    print(attnmaskx_.nonzero(), attnmask[41].nonzero())
+    assert torch.allclose(attnmask[41], attnmaskx_)
+
+    attnmaskx_ = torch.zeros_like(attnmask[45])
+    attnmaskx_[45] = 1
+    attnmaskx_[43] = 1
+    attnmaskx_[34] = 1
+    print(attnmaskx_.nonzero(), attnmask[45].nonzero())
+    assert torch.allclose(attnmask[45], attnmaskx_)
+
+    attnmaskx_ = torch.zeros_like(attnmask[49])
+    attnmaskx_[49] = 1
+    attnmaskx_[1] = 1
+    attnmaskx_[6] = 1
+    print(attnmaskx_.nonzero(), attnmask[49].nonzero())
+    assert torch.allclose(attnmask[49], attnmaskx_)
+
+    print("\n ||   WORKING CORRECTLY || \n")
 
 
 class TreeInsertionDecoder(torch.nn.Module):
@@ -1813,10 +2005,10 @@ class TreeInsertionDecoder(torch.nn.Module):
 
     def train_forward(self, x:torch.Tensor, y:Tuple[Tree]):  # --> implement one step training of tagger
         # extract a training example from y:
-        x, newy, tgt, tgtmask = self.extract_training_example(x, y)
+        x, newy, tgt, tgtmask, relpos, attnmask = self.extract_training_example(x, y)
         enc, encmask = self.tagger.encode_source(x)
         # run through tagger: the same for all versions
-        logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
+        logits = self.tagger(tokens=newy, enc=enc, encmask=encmask, relpos=relpos, attnmask=attnmask)
         # compute loss: different versions do different masking and different targets
         loss = self.compute_loss(logits, tgt, mask=tgtmask)
         return {"loss": loss}, logits
@@ -1827,8 +2019,9 @@ class TreeInsertionDecoder(torch.nn.Module):
         ptree = build_supervision_sets(ptree, tree)
         centralities = compute_centralities_ptree(ptree, tree)
         ret, retsup = linearize_supervised_ptree(ptree)
-        relpos, attnmask = compute_relpos_and_attn_mask(ret)
-        # TODO: use relpos and attnmask
+        relpos, attnmask = None
+        if self.use_rel_pos:
+            relpos, attnmask = compute_relpos_and_attn_mask(ret)
 
         _retsup = []
         for rete, retsupe in zip(ret, retsup):
@@ -1837,7 +2030,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                 _retsup.append(r)
             else:
                 _retsup.append(None)
-        return ret, _retsup
+        return ret, _retsup, relpos, attnmask
 
     def extract_training_example(self, x: torch.Tensor, y:Tuple[Tree]):
         """
@@ -1848,9 +2041,9 @@ class TreeInsertionDecoder(torch.nn.Module):
         parallel = False
         if parallel:
             ret = self.pool[0].map(self.extract_training_example_mapf, y)
-            ret, retsup = list(zip(*ret))
+            ret, retsup, relpos, attnmask = list(zip(*ret))
         else:
-            ret, retsup = list(zip(*[self.extract_training_example_mapf(ye) for ye in y]))
+            ret, retsup, relpos, attnmask = list(zip(*[self.extract_training_example_mapf(ye) for ye in y]))
 
         maxlen = max([len(rete) for rete in ret])
         _y = y
@@ -1875,7 +2068,15 @@ class TreeInsertionDecoder(torch.nn.Module):
                     for retsupei_v, retsupei_k in retsupei:
                         tgt[i, j, self.vocab[retsupei_k]] = retsupei_v
 
-        return x, newy, tgt, tgtmask
+        relposes, attnmasks = None, None
+        if self.use_rel_pos:
+            relposes = torch.zeros(newy.size(0), len(y), len(y), relpos[0].size(2), dtype=torch.long, device=x.device)
+            attnmasks = torch.zeros(newy.size(0), len(y), len(y), dtype=torch.float, device=x.device)
+            for i, relpose in enumerate(relpos):
+                relposes[i, :relpose.size(0), :relpose.size(1), :] = relpose
+                attnmasks[i, :attnmask[i].size(0), :attnmask[i].size(1)] = attnmask[i]
+
+        return x, newy, tgt, tgtmask, relposes, attnmasks
 
     def get_prediction(self, x:torch.Tensor):
         """
@@ -1899,6 +2100,9 @@ class TreeInsertionDecoder(torch.nn.Module):
             for i, rl in enumerate(rls):
                 for j, rli in enumerate(rl):
                     y[i, j] = self.vocab[rli]
+
+            # TODO: compute relpos and attnmask and feed it to tagger if relpos is enabled
+            # relpos, attnmask = compute_relpos_and_attn_mask(ret)
 
             # run tagger
             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)

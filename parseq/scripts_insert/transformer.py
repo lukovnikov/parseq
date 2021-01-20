@@ -549,6 +549,7 @@ class TransformerStack(TransformerPreTrainedModel):
         inputs_embeds=None,
         past_key_value_states=None,
         use_cache=False,
+            relpos=None,
     ):
         # assert(use_cache == False)
         if input_ids is not None and inputs_embeds is not None:
@@ -616,6 +617,7 @@ class TransformerStack(TransformerPreTrainedModel):
                 encoder_attention_mask=encoder_extended_attention_mask,
                 past_key_value_state=past_key_value_state,
                 use_cache=use_cache,
+                relpos=relpos,
             )
             # layer_outputs is a tuple with:
             # hidden-states, key-value-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
