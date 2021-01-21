@@ -262,7 +262,7 @@ class TransformerAttention(nn.Module):
             present_key_value_state = (None,)
 
         scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
-        scores = scores / torch.sqrt(self.d_kv)
+        scores = scores / math.sqrt(self.d_kv)
 
         if relpos is not None:
             assert self.rel_emb is not None, "can't process relpos because rel_emb is not initialized"
@@ -305,6 +305,7 @@ class TransformerLayerSelfAttention(nn.Module):
         attention_mask=None,
         past_key_value_state=None,
         use_cache=False,
+        relpos=None,
     ):
         norm_x = self.layer_norm(hidden_states)
         attention_output = self.SelfAttention(
@@ -312,6 +313,7 @@ class TransformerLayerSelfAttention(nn.Module):
             mask=attention_mask,
             past_key_value_state=past_key_value_state,
             use_cache=use_cache,
+            relpos=relpos,
         )
         y = attention_output[0]
         layer_output = hidden_states + self.dropout(y)
@@ -369,6 +371,7 @@ class TransformerBlock(nn.Module):
         encoder_attention_mask=None,
         past_key_value_state=None,
         use_cache=False,
+        relpos=None,
     ):
 
         if past_key_value_state is not None:
@@ -392,6 +395,7 @@ class TransformerBlock(nn.Module):
             attention_mask=attention_mask,
             past_key_value_state=self_attn_past_key_value_state,
             use_cache=use_cache,
+            relpos=relpos,
         )
         hidden_states, present_key_value_state = self_attention_outputs[:2]
         attention_outputs = self_attention_outputs[2:]  # Keep self-attention outputs and relative position weights
@@ -519,8 +523,8 @@ class TransformerStack(TransformerPreTrainedModel):
         self.embed_tokens = embed_tokens
         self.is_decoder = config.is_decoder
         self.rel_emb = rel_emb
-        if isinstance(self.relemb, (int, nn.Module)):
-            self.rel_emb = [self.rel_emb for _ in range(config.num_layers)]
+        if isinstance(self.rel_emb, (int, nn.Module)):
+            self.rel_emb = torch.nn.ModuleList([self.rel_emb for _ in range(config.num_layers)])
 
         self.block = nn.ModuleList(
             [TransformerBlock(config, rel_emb=self.rel_emb[i]) for i in range(config.num_layers)]
