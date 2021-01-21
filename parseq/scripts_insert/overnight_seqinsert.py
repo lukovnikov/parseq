@@ -1450,19 +1450,18 @@ def run_experiment(domain="default",    #
         ranges["numbered"] = [False]
     else:
         # ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
-        # ranges["domain"] = ["calendar", "publications", "recipes"]
+        ranges["domain"] = ["calendar", "restaurants", "publications", "recipes"]
         ranges["batsize"] = [30]
         ranges["dropout"] = [0.1]     # use 0.
         # ranges["lr"] = [0.0001]                 # use 0.000025
         ranges["validinter"] = [20]
-        ranges["epochs"] = [301]
+        ranges["epochs"] = [241]
         ranges["hdim"] = [768]
         ranges["numlayers"] = [6]
         ranges["numheads"] = [12]
         ranges["probthreshold"] = [0.]
         ranges["lr"] = [0.00005]
         ranges["enclrmul"] = [1.]
-        ranges["numbered"] = [True]
 
     if mode == "ltr":
         ranges["lr"] = [0.0001, 0.000025]
