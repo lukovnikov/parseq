@@ -893,7 +893,7 @@ def perform_decoding_step(xseq:List[str], tagseq:List[str], specialtokens=Defaul
     return outseq
 
 
-def _linearize_slotted_tree(x, specialtokens=DefaultSpecialTokens()):
+def _linearize_slotted_tree(x, _root=True, specialtokens=DefaultSpecialTokens()):
     ownseq = []
     if x.label() == specialtokens.sibling_slot:
         ownseq.append(x.label())
@@ -908,16 +908,20 @@ def _linearize_slotted_tree(x, specialtokens=DefaultSpecialTokens()):
         seq = [specialtokens.opening_parentheses] + ownseq + [specialtokens.parent_separator]
 
         for k in x:
-            subseq = _linearize_slotted_tree(k, specialtokens=specialtokens)
+            subseq = _linearize_slotted_tree(k, _root=False, specialtokens=specialtokens)
             seq = seq + subseq
 
         seq = seq + [specialtokens.closing_parentheses]
     else:
         seq = ownseq
+        if _root:
+            seq = [specialtokens.opening_parentheses] + seq + [specialtokens.closing_parentheses]
     return seq
 
 
 def _execute_slotted_tree(x, specialtokens=DefaultSpecialTokens()):
+    if x is None:
+        print("x is None")
     if x.label() == specialtokens.sibling_slot:
         if x.insert_node == specialtokens.keep_action:
             node = Tree(x.label(), [])
@@ -2101,6 +2105,8 @@ class TreeInsertionDecoder(torch.nn.Module):
                     tgt[i, j, self.vocab[self.slot_termination_action]] = 1
                 elif len(retsupei) == 0:
                     tgt[i, j, self.vocab[self.slot_termination_action]] = 1
+                elif len(retsupei) == 1 and retsupei[0][1] == "@END@":
+                    tgt[i, j, self.vocab[self.slot_termination_action]] = 1
                 else:
                     for retsupei_v, retsupei_k in retsupei:
                         tgt[i, j, self.vocab[retsupei_k]] = retsupei_v
@@ -2129,7 +2135,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         enc, encmask = self.tagger.encode_source(x)
 
         step = 0
-        prevstrs = [None for _ in rls]
+        prevstrs = [" ".join(rle) for rle in rls]
         finalpreds = [None for _ in rls]
         while step < self.max_steps and any([finalpred is None for finalpred in finalpreds]): #(newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
             maxlen = max([len(rl) for rl in rls])
@@ -2166,15 +2172,15 @@ class TreeInsertionDecoder(torch.nn.Module):
             for i, (rle, tags) in enumerate(zip(rls, tagses)):
                 if finalpreds[i] is None:
                     new_rle = perform_decoding_step(rle, list(tags)[:len(rle)], specialtokens=self.specialtokens)
-                    if len(new_rle) >= self.max_size or step >= self.max_steps or prevstrs[i] == str(rle):
+                    if len(new_rle) >= self.max_size or step >= self.max_steps or prevstrs[i] == " ".join(new_rle):
                         finalpreds[i] = new_rle[:min(len(new_rle), self.max_size)]
                         new_rle = [self.specialtokens.opening_parentheses,
                                    self.specialtokens.closing_parentheses]
                     steps_used[i] += 1
                     newrls.append(new_rle)
+                    prevstrs[i] = " ".join(newrls[i])
                 else:
                     newrls.append(rls[i])
-                prevstrs[i] = " ".join(newrls[i])
 
             rls = newrls
             step += 1
@@ -2194,7 +2200,7 @@ class TreeInsertionDecoder(torch.nn.Module):
 
         # compute loss and metrics
         gold_trees = gold
-        pred_trees = [lisp_to_tree(" ".join(pred)) for pred in preds]
+        pred_trees = [lisp_to_tree(" ".join(pred)) if pred is not None else None for pred in preds]
         pred_trees = [predtree if not (isinstance(predtree, tuple) and predtree[0] is None) else None for predtree in pred_trees]
         treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
@@ -2344,8 +2350,8 @@ def run(domain="restaurants",
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
-                   # run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
-                   run_valid_epoch=[validepoch],
+                   run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
+                   # run_valid_epoch=[validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
@@ -2435,18 +2441,18 @@ def run_experiment(domain="default",    #
         "gradacc": [1],
     }
 
+    ranges["domain"] = ["calendar", "restaurants", "publications", "recipes"]
     ranges["batsize"] = [30]
     ranges["dropout"] = [0.0, 0.1, 0.2]  # use 0.   (or 0.1?)
     # ranges["lr"] = [0.0001]                 # use 0.000025
-    ranges["validinter"] = [20]
-    ranges["epochs"] = [401]
+    ranges["validinter"] = [10]
+    ranges["epochs"] = [201]
     ranges["hdim"] = [768]
     ranges["numlayers"] = [6]
     ranges["numheads"] = [12]
     ranges["probthreshold"] = [0.]
-    ranges["lr"] = [0.000025]
+    ranges["lr"] = [0.00005]
     ranges["enclrmul"] = [1.]
-    ranges["numbered"] = [True]
 
     for k in ranges:
         if k in settings:
