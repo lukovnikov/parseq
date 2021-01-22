@@ -1986,6 +1986,36 @@ def test_relpos_and_attnmask(n=1):
     print("\n ||   WORKING CORRECTLY || \n")
 
 
+def sample_remove_ended_slots(seq, seqsup, specialtokens=DefaultSpecialTokens()):
+    """
+    :param seq:     sequence of str or Tree
+    :param seqsup:  sequence of lists of tuples (str, prob) that specify target output distribution at every token
+    :return: new seq and seqsup where a random portion of ended slots have been removed
+    """
+    # find the positions of all slots that are ended (where nothing will be inserted in any of the following steps)
+    ended_slots = []
+    for i in range(len(seq)):
+        seqi = seq[i].label() if isinstance(seq[i], Tree) else seq[i]
+        if seqi in {specialtokens.ancestor_slot, specialtokens.descendant_slot, specialtokens.sibling_slot}:
+            if len(seqsup[i]) == 0 or (len(seqsup[i]) == 1 and seqsup[0][1] == specialtokens.close_action):
+                ended_slots.append(i)
+
+    # uniformly sample a number of how many will be sampled as already previously closed and randomly pick the slots
+    num_ended_slots = random.choice(list(range(len(ended_slots))))
+    random.shuffle(ended_slots)
+    end_slots = set(ended_slots[:num_ended_slots])
+
+    # copy the input data, but omit those positions where the slots are that are sampled as already previous closed
+    retseq = []
+    retseqsup = []
+    for i in range(len(seq)):
+        if i not in end_slots:
+            retseq.append(seq[i])
+            retseqsup.append(seqsup[i])
+
+    return retseq, retseqsup
+
+
 class TreeInsertionDecoder(torch.nn.Module):
     # default_termination_mode = "slot"
     # default_decode_mode = "parallel"
@@ -1997,7 +2027,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                  max_size:int=200,
                  end_offset=0.,
                  tau=1.,
-                 termination="keep",
+                 removeslots=False,
                  use_rel_pos=False,
                  specialtokens=DefaultSpecialTokens(),
                  **kw):
@@ -2013,8 +2043,8 @@ class TreeInsertionDecoder(torch.nn.Module):
         self.tau = tau
 
         self.specialtokens = specialtokens
-        assert termination == "keep", "Termination strategies other than 'keep' not supported yet."
-        self.slot_termination_action = specialtokens.keep_action if termination == "keep" else specialtokens.close_action
+        self.removeslots = removeslots
+        self.slot_termination_action = self.specialtokens.keep_action if not self.removeslots else self.specialtokens.close_action
 
         # self.pool = [Pool(cpu_count())]
         # self.termination_mode = self.default_termination_mode if termination_mode == "default" else termination_mode
@@ -2059,18 +2089,23 @@ class TreeInsertionDecoder(torch.nn.Module):
         ptree = build_supervision_sets(ptree, tree)
         centralities = compute_centralities_ptree(ptree, tree)
         ret, retsup = linearize_supervised_ptree(ptree)
+
+        _retsup = []
+        for rete, retsupe in zip(ret, retsup):
+            if retsupe != None:
+                r = compute_target_distribution_data(retsupe, centralities, tau=self.tau, end_token=self.slot_termination_action)
+                _retsup.append(r)
+            else:
+                _retsup.append(None)
+
+        if self.removeslots:
+            ret, _retsup = sample_remove_ended_slots(ret, _retsup)
+
         relpos, attnmask = None, None
         if self.use_rel_pos:
             ret_ = [rete.label() if isinstance(rete, Tree) else rete for rete in ret]
             relpos, attnmask = compute_relpos_and_attn_mask(ret_)
 
-        _retsup = []
-        for rete, retsupe in zip(ret, retsup):
-            if retsupe != None:
-                r = compute_target_distribution_data(retsupe, centralities, tau=self.tau)
-                _retsup.append(r)
-            else:
-                _retsup.append(None)
         return ret, _retsup, relpos, attnmask
 
     def extract_training_example(self, x: torch.Tensor, y:Tuple[Tree]):
@@ -2104,8 +2139,6 @@ class TreeInsertionDecoder(torch.nn.Module):
                     tgtmask[i, j] = 0
                     tgt[i, j, self.vocab[self.slot_termination_action]] = 1
                 elif len(retsupei) == 0:
-                    tgt[i, j, self.vocab[self.slot_termination_action]] = 1
-                elif len(retsupei) == 1 and retsupei[0][1] == "@END@":
                     tgt[i, j, self.vocab[self.slot_termination_action]] = 1
                 else:
                     for retsupei_v, retsupei_k in retsupei:
@@ -2234,6 +2267,7 @@ def run(domain="restaurants",
         testcode=False,
         numbered=False,
         userelpos=False,
+        removeslots=False,
         ):
 
     settings = locals().copy()
@@ -2258,7 +2292,7 @@ def run(domain="restaurants",
     # model
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, rel_pos=userelpos)
 
-    decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize,
+    decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, removeslots=removeslots,
                                    prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos)
 
     # test run
@@ -2418,6 +2452,7 @@ def run_experiment(domain="default",    #
         maxsize=250,
         numbered=False,
         userelpos=False,
+        removeslots=False,
                    testcode=False,
 
         ):
