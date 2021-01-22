@@ -1805,8 +1805,11 @@ def do_relpos(seq, relpos, attnmask, specialtokens=DefaultSpecialTokens(), D=Rel
         if first == specialtokens.opening_parentheses:
             nextisparent = True
         elif first == specialtokens.closing_parentheses:
-            bottom = stack.pop(-1)
-            stack[-1][-1][:] = bottom
+            try:
+                bottom = stack.pop(-1)
+                stack[-1][-1][:] = bottom
+            except Exception as e:
+                print(e)
         elif first in {
             specialtokens.parent_separator,
             # specialtokens.sibling_slot,
@@ -2208,6 +2211,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                     if len(new_rle) >= self.max_size or step >= self.max_steps or prevstrs[i] == " ".join(new_rle):
                         finalpreds[i] = new_rle[:min(len(new_rle), self.max_size)]
                         new_rle = [self.specialtokens.opening_parentheses,
+                                   self.specialtokens.root_token,
                                    self.specialtokens.closing_parentheses]
                     steps_used[i] += 1
                     newrls.append(new_rle)
@@ -2233,8 +2237,18 @@ class TreeInsertionDecoder(torch.nn.Module):
 
         # compute loss and metrics
         gold_trees = gold
-        pred_trees = [lisp_to_tree(" ".join(pred)) if pred is not None else None for pred in preds]
-        pred_trees = [predtree if not (isinstance(predtree, tuple) and predtree[0] is None) else None for predtree in pred_trees]
+        pred_trees = []
+        omit = {self.specialtokens.parent_separator, self.specialtokens.descendant_slot, self.specialtokens.ancestor_slot, self.specialtokens.sibling_slot}
+        for pred in preds:
+            pred_tree = None
+            if pred is not None:
+                pred_tree = " ".join([pred_token for pred_token in pred if pred_token not in omit])
+                pred_tree = lisp_to_tree(pred_tree)
+                if isinstance(pred_tree, tuple) and pred_tree[0] is None:
+                    pred_tree = None
+            pred_trees.append(pred_tree)
+        # pred_trees = [lisp_to_tree(" ".join(pred)) if pred is not None else None for pred in preds]
+        # pred_trees = [predtree if not (isinstance(predtree, tuple) and predtree[0] is None) else None for predtree in pred_trees]
         treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
@@ -2267,6 +2281,7 @@ def run(domain="restaurants",
         testcode=False,
         numbered=False,
         userelpos=False,
+        evaltrain=False,
         removeslots=False,
         ):
 
@@ -2383,8 +2398,14 @@ def run(domain="restaurants",
                          on_end=on_end_v)
 
     tt.tick("training")
+
+    if evaltrain:
+        valid_epoch_fs = [trainevalepoch, validepoch]
+    else:
+        valid_epoch_fs = [validepoch]
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
+                   run_valid_epoch=valid_epoch_fs,
+                   # run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
                    # run_valid_epoch=[validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
@@ -2453,6 +2474,7 @@ def run_experiment(domain="default",    #
         numbered=False,
         userelpos=False,
         removeslots=False,
+        evaltrain=False,
                    testcode=False,
 
         ):
@@ -2476,17 +2498,20 @@ def run_experiment(domain="default",    #
         "gradacc": [1],
     }
 
-    ranges["domain"] = ["calendar", "restaurants", "publications", "recipes"]
-    ranges["batsize"] = [30]
-    ranges["dropout"] = [0.0, 0.1, 0.2]  # use 0.   (or 0.1?)
+    # ranges["domain"] = ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
+    ranges["domain"] = ["calendar", "restaurants", "recipes"]
+    ranges["batsize"] = [16]
+    ranges["dropout"] = [0.0, 0.1, 0.2, 0.5]  # use 0.   (or 0.1?)
+    # ranges["dropout"] = [0.0, 0.1, 0.2, 0.5]
     # ranges["lr"] = [0.0001]                 # use 0.000025
     ranges["validinter"] = [10]
-    ranges["epochs"] = [201]
+    ranges["epochs"] = [251]
     ranges["hdim"] = [768]
     ranges["numlayers"] = [6]
     ranges["numheads"] = [12]
     ranges["probthreshold"] = [0.]
-    ranges["lr"] = [0.00005]
+    ranges["lr"] = [0.00005, 0.000025]
+    # ranges["lr"] = [0.00005, 0.000025]
     ranges["enclrmul"] = [1.]
 
     for k in ranges:
