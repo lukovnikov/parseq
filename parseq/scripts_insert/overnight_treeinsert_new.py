@@ -29,7 +29,7 @@ from parseq.vocab import Vocab, SequenceEncoder
 from transformers import BertTokenizer, BertModel
 
 
-ORDERLESS = {"op:and", "SW:concat", "filter"}
+ORDERLESS = {"op:and", "SW:concat", "filter", "call-SW:concat"}
 
 
 def tree_to_seq_special(x:Tree):
@@ -977,7 +977,7 @@ def _execute_slotted_tree(x, specialtokens=DefaultSpecialTokens()):
         return [ancestor]
 
 
-def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens()):
+def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slot_removal=False):
     assert hasattr(tree, "nodeid")
     xtree = lisp_to_tree(f"({tree.label()} )")
 
@@ -994,7 +994,7 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens()):
 
         # compute best tokens to insert
         ret, retsup = linearize_supervised_ptree(xtree, specialtokens=specialtokens)
-        retsup = _get_best_insertions(ret, retsup, centralities, specialtokens=specialtokens)
+        retsup = _get_best_insertions(ret, retsup, centralities, specialtokens=specialtokens, use_slot_removal=use_slot_removal)
         intermediate_decoding_state = (ret, retsup)
 
         # execute insertions
@@ -1012,6 +1012,7 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens()):
         maxiter -= 1
 
         intermediate_decoding_states.append(intermediate_decoding_state)
+    assert str(tree) == str(xtree)
     return intermediate_decoding_states
 
 
@@ -1324,7 +1325,7 @@ def test_tree_sampling_(x="x"):
     # TODO: generate tensors for input and target distributions
 
 
-def run_decoding_oracle(domain="recipes", verbose=False):
+def run_decoding_oracle(domain="publications", verbose=False, removeslots=False):
     tt = q.ticktock("oracle")
     # load overnight dataset
     tt.tick(f"loading '{domain}' domain")
@@ -1349,7 +1350,7 @@ def run_decoding_oracle(domain="recipes", verbose=False):
         # assign nodeids to original tree
         tree = assign_dfs_nodeids(tree)
 
-        decoding_steps = run_oracle_tree_decoding(tree)
+        decoding_steps = run_oracle_tree_decoding(tree, use_slot_removal=removeslots)
         tree_insert_steps.append(len(decoding_steps))
         if verbose:
             print(f"number of steps: {len(decoding_steps)}")
@@ -2000,13 +2001,16 @@ def sample_remove_ended_slots(seq, seqsup, specialtokens=DefaultSpecialTokens())
     for i in range(len(seq)):
         seqi = seq[i].label() if isinstance(seq[i], Tree) else seq[i]
         if seqi in {specialtokens.ancestor_slot, specialtokens.descendant_slot, specialtokens.sibling_slot}:
-            if len(seqsup[i]) == 0 or (len(seqsup[i]) == 1 and seqsup[0][1] == specialtokens.close_action):
+            if seqsup[i] is None or len(seqsup[i]) == 0 or (len(seqsup[i]) == 1 and seqsup[i][0][1] == specialtokens.close_action):
                 ended_slots.append(i)
 
-    # uniformly sample a number of how many will be sampled as already previously closed and randomly pick the slots
-    num_ended_slots = random.choice(list(range(len(ended_slots))))
-    random.shuffle(ended_slots)
-    end_slots = set(ended_slots[:num_ended_slots])
+    if len(ended_slots) > 0:
+        # uniformly sample a number of how many will be sampled as already previously closed and randomly pick the slots
+        num_ended_slots = random.choice(list(range(len(ended_slots))))
+        random.shuffle(ended_slots)
+        end_slots = set(ended_slots[:num_ended_slots])
+    else:
+        end_slots = {}
 
     # copy the input data, but omit those positions where the slots are that are sampled as already previous closed
     retseq = []
@@ -2096,7 +2100,8 @@ class TreeInsertionDecoder(torch.nn.Module):
         _retsup = []
         for rete, retsupe in zip(ret, retsup):
             if retsupe != None:
-                r = compute_target_distribution_data(retsupe, centralities, tau=self.tau, end_token=self.slot_termination_action)
+                r = compute_target_distribution_data(retsupe, centralities, tau=self.tau,
+                                                     end_token=self.slot_termination_action)
                 _retsup.append(r)
             else:
                 _retsup.append(None)
@@ -2242,6 +2247,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         for pred in preds:
             pred_tree = None
             if pred is not None:
+                # pred = [re.sub("::\d+", "", pred_token) for pred_token in pred]
                 pred_tree = " ".join([pred_token for pred_token in pred if pred_token not in omit])
                 pred_tree = lisp_to_tree(pred_tree)
                 if isinstance(pred_tree, tuple) and pred_tree[0] is None:
@@ -2249,10 +2255,27 @@ class TreeInsertionDecoder(torch.nn.Module):
             pred_trees.append(pred_tree)
         # pred_trees = [lisp_to_tree(" ".join(pred)) if pred is not None else None for pred in preds]
         # pred_trees = [predtree if not (isinstance(predtree, tuple) and predtree[0] is None) else None for predtree in pred_trees]
-        treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
-                    for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
+
+        treeaccs = []
+        for gold_tree, pred_tree in zip(gold_trees, pred_trees):
+            gold_tree = remove_number_from_tree_labels(gold_tree)
+            pred_tree = remove_number_from_tree_labels(pred_tree)
+            treeacc = float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
+            treeaccs.append(treeacc)
         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
         return ret, pred_trees
+
+
+def remove_number_from_tree_labels(x:Tree):
+    x_ = None
+    if x is not None:
+        x_ = []
+        for xe in x:
+            xe_ = remove_number_from_tree_labels(xe)
+            x_.append(xe_)
+        x_ = Tree(re.sub("::\d+", "", x.label()), x_)
+        # x.set_label(re.sub("::\d+", "", x.label()))
+    return x_
 
 
 def run(domain="restaurants",
@@ -2499,10 +2522,10 @@ def run_experiment(domain="default",    #
     }
 
     # ranges["domain"] = ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
-    ranges["domain"] = ["calendar", "restaurants", "recipes"]
+    ranges["domain"] = ["calendar", "publications"]
     ranges["batsize"] = [16]
-    ranges["dropout"] = [0.0, 0.1, 0.2, 0.5]  # use 0.   (or 0.1?)
-    # ranges["dropout"] = [0.0, 0.1, 0.2, 0.5]
+    # ranges["dropout"] = [0.0, 0.1, 0.2, 0.5]  # use 0.   (or 0.1?)
+    ranges["dropout"] = [0.0, 0.1]
     # ranges["lr"] = [0.0001]                 # use 0.000025
     ranges["validinter"] = [10]
     ranges["epochs"] = [251]
@@ -2511,7 +2534,7 @@ def run_experiment(domain="default",    #
     ranges["numheads"] = [12]
     ranges["probthreshold"] = [0.]
     ranges["lr"] = [0.00005, 0.000025]
-    # ranges["lr"] = [0.00005, 0.000025]
+    # ranges["lr"] = [0.00005]
     ranges["enclrmul"] = [1.]
 
     for k in ranges:

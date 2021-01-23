@@ -28,7 +28,7 @@ from parseq.vocab import Vocab, SequenceEncoder
 from transformers import BertTokenizer, BertModel
 
 
-ORDERLESS = {"op:and", "SW:concat", "filter"}
+ORDERLESS = {"op:and", "SW:concat", "filter", "call-SW:concat"}
 
 
 def tree_to_seq(x:Tree):
