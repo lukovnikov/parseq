@@ -523,8 +523,11 @@ class TransformerStack(TransformerPreTrainedModel):
         self.embed_tokens = embed_tokens
         self.is_decoder = config.is_decoder
         self.rel_emb = rel_emb
-        if isinstance(self.rel_emb, (int, nn.Module)):
+
+        if isinstance(self.rel_emb, nn.Module):
             self.rel_emb = torch.nn.ModuleList([self.rel_emb for _ in range(config.num_layers)])
+        elif self.rel_emb is False:
+            self.rel_emb = [None for _ in range(config.num_layers)]
 
         self.block = nn.ModuleList(
             [TransformerBlock(config, rel_emb=self.rel_emb[i]) for i in range(config.num_layers)]
