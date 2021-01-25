@@ -1652,8 +1652,8 @@ class RelPosEmb(torch.nn.Module):
 
 class TransformerTagger(TreeInsertionTagger):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased",
-                 rel_pos=False, **kw):
+                 dropout:float=0., maxpos=1024, bertname="bert-base-uncased",
+                 rel_pos=False, abs_pos=True, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -1665,13 +1665,14 @@ class TransformerTagger(TreeInsertionTagger):
         self.rel_pos = rel_pos
 
         self.emb = torch.nn.Embedding(config.vocab_size, config.d_model)
-        self.absposemb = None
+        self.abs_pos = None
 
         if self.rel_pos is True:
             self.rel_pos = RelPosEmb(self.dim, D=RelPosDict())
 
-        if self.rel_pos is None or self.rel_pos is False:
-            self.absposemb = torch.nn.Embedding(maxpos, config.d_model)
+        self.abs_pos = abs_pos
+        if self.rel_pos is None or self.rel_pos is False or self.abs_pos is True:
+            self.abs_pos = torch.nn.Embedding(maxpos, config.d_model)
 
         decoder_config = deepcopy(config)
         decoder_config.is_decoder = True
@@ -1716,8 +1717,8 @@ class TransformerTagger(TreeInsertionTagger):
         # if not self.baseline:
         #     padmask = padmask[:, 1:]
         embs = self.emb(tokens)
-        if self.absposemb is not None:
-            posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
+        if self.abs_pos is not None:
+            posembs = self.abs_pos(torch.arange(tokens.size(1), device=tokens.device))[None]
             embs = embs + posembs
         use_cache = False
         if cache is not None:
@@ -2078,7 +2079,21 @@ class TreeInsertionDecoder(torch.nn.Module):
         if mask is not None:
             kl = kl * mask
         kl = kl.sum(-1)
-        return kl
+
+        best_pred = logits.max(-1)[1]   # (batsize, seqlen)
+        best_gold = tgt.max(-1)[1]
+        same = best_pred == best_gold
+        if mask is not None:
+            same = same | ~(mask.bool())
+        acc = same.all(-1)  # (batsize,)
+
+        # get probability of best predictions
+        tgt_probs = torch.gather(tgt, -1, best_pred.unsqueeze(-1))  # (batsize, seqlen, 1)
+        recall = (tgt_probs > 0).squeeze(-1)
+        if mask is not None:
+            recall = recall | ~(mask.bool())
+        recall = recall.all(-1)
+        return kl, acc.float(), recall.float()
 
     def train_forward(self, x:torch.Tensor, y:Tuple[Tree]):  # --> implement one step training of tagger
         # extract a training example from y:
@@ -2087,8 +2102,8 @@ class TreeInsertionDecoder(torch.nn.Module):
         # run through tagger: the same for all versions
         logits = self.tagger(tokens=newy, enc=enc, encmask=encmask, relpos=relpos, attnmask=attnmask)
         # compute loss: different versions do different masking and different targets
-        loss = self.compute_loss(logits, tgt, mask=tgtmask)
-        return {"loss": loss}, logits
+        loss, acc, recall = self.compute_loss(logits, tgt, mask=tgtmask)
+        return {"loss": loss, "acc": acc, "recall": recall}, logits
 
     def extract_training_example_mapf(self, tree):
         tree = assign_dfs_nodeids(tree)
@@ -2304,6 +2319,7 @@ def run(domain="restaurants",
         testcode=False,
         numbered=False,
         userelpos=False,
+        noabspos=False,
         evaltrain=False,
         removeslots=False,
         ):
@@ -2328,7 +2344,7 @@ def run(domain="restaurants",
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, rel_pos=userelpos)
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, rel_pos=userelpos, abs_pos=not noabspos)
 
     decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, removeslots=removeslots,
                                    prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos)
@@ -2341,7 +2357,7 @@ def run(domain="restaurants",
         decoder.train(False)
         out = decoder(*batch)
 
-    tloss = make_array_of_metrics("loss", reduction="mean")
+    tloss = make_array_of_metrics("loss", "acc", "recall", reduction="mean")
     tmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
     vmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
     xmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
