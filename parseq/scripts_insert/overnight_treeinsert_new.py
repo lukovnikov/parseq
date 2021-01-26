@@ -987,7 +987,7 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slo
     while prev_xtree_str != str(xtree) and maxiter > 0:  # while xtree is changing
         # align nodeids of xtree to tree
         xtree = _align_nodeids(xtree, tree)
-
+        _xtree = xtree
         # build supervision sets
         xtree = build_supervision_sets(xtree, tree)
         centralities = compute_centralities_ptree(xtree, tree)
@@ -1005,7 +1005,7 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slo
         _new_xtree_seq = [xe for xe in new_xtree_seq if not (xe in specialtokens.removeable_tokens())]
         new_xtree_str = " ".join(_new_xtree_seq)
         new_xtree = lisp_to_tree(new_xtree_str)
-        intermediate_decoding_state = intermediate_decoding_state + (new_xtree,)
+        intermediate_decoding_state = intermediate_decoding_state + (_xtree, new_xtree,)
 
         prev_xtree_str = str(xtree)
         xtree = new_xtree
@@ -2036,6 +2036,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                  tau=1.,
                  removeslots=False,
                  use_rel_pos=False,
+                 use_oracle=False,
                  specialtokens=DefaultSpecialTokens(),
                  **kw):
         super(TreeInsertionDecoder, self).__init__(**kw)
@@ -2049,6 +2050,8 @@ class TreeInsertionDecoder(torch.nn.Module):
         self.end_offset = end_offset
         self.tau = tau
 
+        self.use_oracle = use_oracle
+
         self.specialtokens = specialtokens
         self.removeslots = removeslots
         self.slot_termination_action = self.specialtokens.keep_action if not self.removeslots else self.specialtokens.close_action
@@ -2058,6 +2061,8 @@ class TreeInsertionDecoder(torch.nn.Module):
         # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
 
         self.use_rel_pos = use_rel_pos
+
+        self._data_cache = {}
 
     def forward(self, x, y):
         if self.training:
@@ -2106,7 +2111,16 @@ class TreeInsertionDecoder(torch.nn.Module):
 
     def extract_training_example_mapf(self, tree):
         tree = assign_dfs_nodeids(tree)
-        ptree = sample_partial_tree(tree)
+        if self.use_oracle:
+            if str(tree) in self._data_cache:
+                ptrees = self._data_cache[str(tree)]
+            else:
+                ptrees = run_oracle_tree_decoding(tree, self.specialtokens, use_slot_removal=self.removeslots)
+                self._data_cache[str(tree)] = ptrees
+            ptree = random.choice(ptrees)[2]
+        else:
+            ptree = sample_partial_tree(tree)
+
         ptree = build_supervision_sets(ptree, tree)
         centralities = compute_centralities_ptree(ptree, tree)
         ret, retsup = linearize_supervised_ptree(ptree)
@@ -2120,7 +2134,7 @@ class TreeInsertionDecoder(torch.nn.Module):
             else:
                 _retsup.append(None)
 
-        if self.removeslots:
+        if self.removeslots and not self.use_oracle:
             ret, _retsup = sample_remove_ended_slots(ret, _retsup)
 
         relpos, attnmask = None, None
@@ -2321,6 +2335,7 @@ def run(domain="restaurants",
         noabspos=False,
         evaltrain=False,
         removeslots=False,
+        useoracle=False,
         ):
 
     settings = locals().copy()
@@ -2346,7 +2361,7 @@ def run(domain="restaurants",
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, rel_pos=userelpos, abs_pos=not noabspos)
 
     decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, removeslots=removeslots,
-                                   prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos)
+                                   prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos, use_oracle=useoracle)
 
     # test run
     if testcode:
@@ -2514,6 +2529,7 @@ def run_experiment(domain="default",    #
         removeslots=False,
         noabspos=False,
         evaltrain=False,
+        useoracle=False,
                    testcode=False,
 
         ):
