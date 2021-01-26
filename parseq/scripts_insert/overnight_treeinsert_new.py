@@ -2513,6 +2513,7 @@ def run_experiment(domain="default",    #
         numbered=False,
         userelpos=False,
         removeslots=False,
+        noabspos=False,
         evaltrain=False,
                    testcode=False,
 
