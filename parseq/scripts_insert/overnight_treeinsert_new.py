@@ -1692,11 +1692,9 @@ class TransformerTagger(TreeInsertionTagger):
         self.register_buffer("vocab_mask", vocab_mask)
 
         self.bertname = bertname
-        self.bert_model = BertModel.from_pretrained(self.bertname)
-        def set_dropout(m:torch.nn.Module):
-            if isinstance(m, torch.nn.Dropout):
-                m.p = min(dropout, 0.1)
-        self.bert_model.apply(set_dropout)
+        self.bert_model = BertModel.from_pretrained(self.bertname,
+                                                    hidden_dropout_prob=dropout,
+                                                    attention_probs_dropout_prob=0.)
 
         self.adapter = None
         if self.bert_model.config.hidden_size != decoder_config.d_model:
@@ -2367,6 +2365,7 @@ def run(domain="restaurants",
     decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, removeslots=removeslots,
                                    prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos, use_oracle=useoracle)
 
+    print(decoder)
     # test run
     if testcode:
         batch = next(iter(tdl_seq))
@@ -2569,7 +2568,7 @@ def run_experiment(domain="default",    #
     ranges["numlayers"] = [6]
     ranges["numheads"] = [12]
     ranges["probthreshold"] = [0.]
-    ranges["lr"] = [0.00005, 0.000025]
+    ranges["lr"] = [0.00001, 0.000025]
     # ranges["lr"] = [0.00005]
     ranges["enclrmul"] = [1.]
 
