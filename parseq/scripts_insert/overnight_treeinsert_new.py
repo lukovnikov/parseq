@@ -744,7 +744,7 @@ def compute_target_distribution_data(x, centrs, end_token="@END@", tau=1.):
                 rank += 1
             else:
                 if rank == 0:
-                    assert True
+                    assert False
             r.append((rank, e[1].label()))
             prev_e = e
     else:
@@ -1339,7 +1339,8 @@ def run_decoding_oracle(domain="publications", verbose=False, removeslots=False)
     seq_insert_steps = []
     tree_insert_steps = []
 
-    for i, x in enumerate(xds_seq):
+    # for i, x in enumerate(xds_seq):
+    for i, x in enumerate(tds_seq):
         print(f"Example {i}")
         if verbose:
             print(f"{x[0]}")
@@ -1692,10 +1693,10 @@ class TransformerTagger(TreeInsertionTagger):
 
         self.bertname = bertname
         self.bert_model = BertModel.from_pretrained(self.bertname)
-        # def set_dropout(m:torch.nn.Module):
-        #     if isinstance(m, torch.nn.Dropout):
-        #         m.p = dropout
-        # self.bert_model.apply(set_dropout)
+        def set_dropout(m:torch.nn.Module):
+            if isinstance(m, torch.nn.Dropout):
+                m.p = min(dropout, 0.1)
+        self.bert_model.apply(set_dropout)
 
         self.adapter = None
         if self.bert_model.config.hidden_size != decoder_config.d_model:
@@ -2602,10 +2603,10 @@ if __name__ == '__main__':
     # q.argprun(test_tree_sampling)
     # q.argprun(test_decode)
     # test_oracle_decoder()
-    # q.argprun(run_decoding_oracle)
+    q.argprun(run_decoding_oracle)
     # q.argprun(test_tree_sampling_random)
     # test_relpos_and_attnmask()
-    q.argprun(run_experiment)             #     -gpu 0 -numbered -batsize 10 -userelpos -domain publications -lr 0.00005 -useoracle -dropout 0 -evaltrain -goldtemp 0.1
+    # q.argprun(run_experiment)             #     -gpu 0 -numbered -batsize 10 -userelpos -noabspos -domain publications -lr 0.00005 -useoracle -dropout 0 -evaltrain -goldtemp 0.1
 
     # DONE: fix orderless for no simplification setting used here
     # DONE: make baseline decoder use cached decoder states
