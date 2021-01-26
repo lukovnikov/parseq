@@ -1665,7 +1665,6 @@ class TransformerTagger(TreeInsertionTagger):
         self.rel_pos = rel_pos
 
         self.emb = torch.nn.Embedding(config.vocab_size, config.d_model)
-        self.abs_pos = None
 
         if self.rel_pos is True:
             self.rel_pos = RelPosEmb(self.dim, D=RelPosDict())
@@ -1717,7 +1716,7 @@ class TransformerTagger(TreeInsertionTagger):
         # if not self.baseline:
         #     padmask = padmask[:, 1:]
         embs = self.emb(tokens)
-        if self.abs_pos is not None:
+        if self.abs_pos is not None and self.abs_pos is not False:
             posembs = self.abs_pos(torch.arange(tokens.size(1), device=tokens.device))[None]
             embs = embs + posembs
         use_cache = False
