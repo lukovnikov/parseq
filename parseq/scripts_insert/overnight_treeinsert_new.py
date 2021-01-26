@@ -2603,10 +2603,10 @@ if __name__ == '__main__':
     # q.argprun(test_tree_sampling)
     # q.argprun(test_decode)
     # test_oracle_decoder()
-    q.argprun(run_decoding_oracle)
+    # q.argprun(run_decoding_oracle)
     # q.argprun(test_tree_sampling_random)
     # test_relpos_and_attnmask()
-    # q.argprun(run_experiment)             #     -gpu 0 -numbered -batsize 10 -userelpos -noabspos -domain publications -lr 0.00005 -useoracle -dropout 0 -evaltrain -goldtemp 0.1
+    q.argprun(run_experiment)             #     -gpu 0 -numbered -batsize 10 -userelpos -noabspos -domain publications -lr 0.00005 -useoracle -dropout 0 -evaltrain -goldtemp 0.1
 
     # DONE: fix orderless for no simplification setting used here
     # DONE: make baseline decoder use cached decoder states
