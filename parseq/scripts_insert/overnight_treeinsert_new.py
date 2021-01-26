@@ -742,6 +742,9 @@ def compute_target_distribution_data(x, centrs, end_token="@END@", tau=1.):
             if retsup_cmp(e, prev_e) != 0:
                 assert retsup_cmp(e, prev_e) > 0
                 rank += 1
+            else:
+                if rank == 0:
+                    assert True
             r.append((rank, e[1].label()))
             prev_e = e
     else:
@@ -760,15 +763,15 @@ def retsup_cmp(a:Tuple[float, Tree], b:Tuple[float, Tree]):
     ret = b[0] - a[0]
     if ret == 0:
         ret = +1* (tree_size(a[1]) - tree_size(b[1]))
-    # if ret == 0:
-    #     al = a[1].label()
-    #     bl = b[1].label()
-    #     if al == bl:
-    #         ret = 0
-    #     elif al < bl:
-    #         ret = -1
-    #     else:
-    #         ret = 1
+    if ret == 0:
+        al = a[1].label()
+        bl = b[1].label()
+        if al == bl:
+            ret = 0
+        elif al < bl:
+            ret = -1
+        else:
+            ret = 1
     # if ret == 0:
     #     al = str(a[1])
     #     bl = str(b[1])
@@ -2602,7 +2605,7 @@ if __name__ == '__main__':
     # q.argprun(run_decoding_oracle)
     # q.argprun(test_tree_sampling_random)
     # test_relpos_and_attnmask()
-    q.argprun(run_experiment)
+    q.argprun(run_experiment)             #     -gpu 0 -numbered -batsize 10 -userelpos -domain publications -lr 0.00005 -useoracle -dropout 0 -evaltrain -goldtemp 0.1
 
     # DONE: fix orderless for no simplification setting used here
     # DONE: make baseline decoder use cached decoder states
