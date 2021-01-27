@@ -2596,6 +2596,7 @@ def run_experiment(domain="default",    #
     if settings["domain"] != "default":
         domains = settings["domain"].split(",")
         ranges["domain"] = domains
+        settings["domain"] = "default"
     else:
         # ranges["domain"] = ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
         ranges["domain"] = ["calendar", "publications"]
