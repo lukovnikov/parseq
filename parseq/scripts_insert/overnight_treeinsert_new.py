@@ -837,7 +837,8 @@ def perform_decoding_step(xseq:List[str], tagseq:List[str], specialtokens=Defaul
         state.descendant_insert = None
         state.node = None
 
-    for xe, ye in zip(xseq, tagseq):
+
+    for i, (xe, ye) in enumerate(zip(xseq, tagseq)):
         if ye in {specialtokens.opening_parentheses,
                   specialtokens.closing_parentheses,
                   specialtokens.parent_separator,
@@ -848,7 +849,9 @@ def perform_decoding_step(xseq:List[str], tagseq:List[str], specialtokens=Defaul
         if xe == specialtokens.opening_parentheses:
             # next_is_parent = True
             assert state.ancestor_insert is None
-            assert state.node is None
+            if state.node is not None:
+                close_node()
+                assert state.node is None
             assert state.descendant_insert is None
             reset_vars()
         elif xe == specialtokens.closing_parentheses:     # closing a parent
@@ -885,15 +888,16 @@ def perform_decoding_step(xseq:List[str], tagseq:List[str], specialtokens=Defaul
             state.node = Tree(xe, [])
             state.node.parent = None
 
+    annotated_tree = state.parentnode
     # execute annotated slotted tree
-    executed_tree = _execute_slotted_tree(state.parentnode, specialtokens=specialtokens)
+    executed_tree = _execute_slotted_tree(annotated_tree, specialtokens=specialtokens)
     assert len(executed_tree) == 1
     executed_tree = executed_tree[0]
 
     # linearize executed slotted tree to special slotted sequence of tokens
     outseq = _linearize_slotted_tree(executed_tree, specialtokens=specialtokens)
 
-    return outseq
+    return outseq, executed_tree
 
 
 def _linearize_slotted_tree(x, _root=True, specialtokens=DefaultSpecialTokens()):
@@ -987,9 +991,10 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slo
     intermediate_decoding_states = []
     maxiter = 100
     prev_xtree_str = None
+    new_xtree_seq = None
     while prev_xtree_str != str(xtree) and maxiter > 0:  # while xtree is changing
         # align nodeids of xtree to tree
-        xtree = _align_nodeids(xtree, tree)
+        xtree = _align_nodeids(xtree, tree, specialtokens=specialtokens)
         _xtree = xtree
         # build supervision sets
         xtree = build_supervision_sets(xtree, tree)
@@ -998,12 +1003,27 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slo
         # compute best tokens to insert
         ret, retsup = linearize_supervised_ptree(xtree, specialtokens=specialtokens)
         retsup = _get_best_insertions(ret, retsup, centralities, specialtokens=specialtokens, use_slot_removal=use_slot_removal)
+
+        # remove slots from ret that are not in new_xtree_seq
+        if new_xtree_seq is not None:
+            i, j = 0, 0
+            while i < len(ret):
+                ret_i = ret[i].label() if isinstance(ret[i], Tree) else ret[i]
+                if ret_i == new_xtree_seq[j]:
+                    i += 1; j += 1
+                else:
+                    assert ret_i in {specialtokens.sibling_slot, specialtokens.ancestor_slot, specialtokens.descendant_slot}
+                    assert retsup[i] in {specialtokens.keep_action, specialtokens.close_action}
+                    del ret[i]
+                    del retsup[i]
+
         intermediate_decoding_state = (ret, retsup)
 
         # execute insertions
         ret = [rete.label() if isinstance(rete, Tree) else rete for rete in ret]
-        new_xtree_seq = perform_decoding_step(ret, retsup, specialtokens=specialtokens)
+        new_xtree_seq, _ = perform_decoding_step(ret, retsup, specialtokens=specialtokens)
 
+        # new_xtree = _clean_up_xtree(new_xtree, specialtokens=specialtokens)
         # convert new xtree seq into the new xtree
         _new_xtree_seq = [xe for xe in new_xtree_seq if not (xe in specialtokens.removeable_tokens())]
         new_xtree_str = " ".join(_new_xtree_seq)
@@ -1017,6 +1037,18 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slo
         intermediate_decoding_states.append(intermediate_decoding_state)
     assert str(tree) == str(xtree)
     return intermediate_decoding_states
+
+
+def _clean_up_xtree(x:Tree, specialtokens=DefaultSpecialTokens()):
+    _xes = []
+    for xe in x:
+        if xe.label() == specialtokens.sibling_slot:
+            pass
+        else:
+            _xe = _clean_up_xtree(xe)
+            _xes.append(_xe)
+    x[:] = _xes
+    return x
 
 
 def _get_best_insertions(ret, retsup, centralities, use_slot_removal=False, specialtokens=DefaultSpecialTokens()):
@@ -1033,13 +1065,15 @@ def _get_best_insertions(ret, retsup, centralities, use_slot_removal=False, spec
     return _retsup
 
 
-def _align_nodeids(xtree, tree):
+def _align_nodeids(xtree, tree, specialtokens=DefaultSpecialTokens()):
     tree_nodes = _gather_descendants(tree, _top=False)
     tree_node_labels = [tree_node.label() for tree_node in tree_nodes]
     assert len(tree_node_labels) == len(set(tree_node_labels))      # assert all nodelabels unique
 
     xtree_nodes = _gather_descendants(xtree, _top=False)
     for xtree_node in xtree_nodes:
+        if xtree_node.label() == specialtokens.sibling_slot:
+            continue
         for tree_node in tree_nodes:
             if xtree_node.label() == tree_node.label():
                 xtree_node.nodeid = tree_node.nodeid
@@ -1694,7 +1728,7 @@ class TransformerTagger(TreeInsertionTagger):
         self.bertname = bertname
         self.bert_model = BertModel.from_pretrained(self.bertname,
                                                     hidden_dropout_prob=min(dropout, 0.1),
-                                                    attention_probs_dropout_prob=0.)
+                                                    attention_probs_dropout_prob=min(dropout, 0.1))
 
         self.adapter = None
         if self.bert_model.config.hidden_size != decoder_config.d_model:
@@ -2038,7 +2072,7 @@ class TreeInsertionDecoder(torch.nn.Module):
                  tau=1.,
                  removeslots=False,
                  use_rel_pos=False,
-                 use_oracle=False,
+                 oracle_mix=0.,             # 0. --> sampled from scratch, 1. --> sampled from oracle
                  specialtokens=DefaultSpecialTokens(),
                  **kw):
         super(TreeInsertionDecoder, self).__init__(**kw)
@@ -2052,7 +2086,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         self.end_offset = end_offset
         self.tau = tau
 
-        self.use_oracle = use_oracle
+        self.oracle_mix = oracle_mix
 
         self.specialtokens = specialtokens
         self.removeslots = removeslots
@@ -2064,7 +2098,7 @@ class TreeInsertionDecoder(torch.nn.Module):
 
         self.use_rel_pos = use_rel_pos
 
-        self._data_cache = {}
+        self._gold_data_cache = {}
 
     def forward(self, x, y):
         if self.training:
@@ -2113,12 +2147,14 @@ class TreeInsertionDecoder(torch.nn.Module):
 
     def extract_training_example_mapf(self, tree):
         tree = assign_dfs_nodeids(tree)
-        if self.use_oracle:
-            if str(tree) in self._data_cache:
-                ptrees = self._data_cache[str(tree)]
+
+        use_oracle = random.random() < self.oracle_mix
+        if use_oracle:
+            if str(tree) in self._gold_data_cache:
+                ptrees = self._gold_data_cache[str(tree)]
             else:
                 ptrees = run_oracle_tree_decoding(tree, self.specialtokens, use_slot_removal=self.removeslots)
-                self._data_cache[str(tree)] = ptrees
+                self._gold_data_cache[str(tree)] = ptrees
             ptree = random.choice(ptrees)[2]
         else:
             ptree = sample_partial_tree(tree)
@@ -2242,7 +2278,7 @@ class TreeInsertionDecoder(torch.nn.Module):
             # execute tags on the original sequence
             for i, (rle, tags) in enumerate(zip(rls, tagses)):
                 if finalpreds[i] is None:
-                    new_rle = perform_decoding_step(rle, list(tags)[:len(rle)], specialtokens=self.specialtokens)
+                    new_rle, _ = perform_decoding_step(rle, list(tags)[:len(rle)], specialtokens=self.specialtokens)
                     if len(new_rle) >= self.max_size or step >= self.max_steps or prevstrs[i] == " ".join(new_rle):
                         finalpreds[i] = new_rle[:min(len(new_rle), self.max_size)]
                         new_rle = [self.specialtokens.opening_parentheses,
@@ -2334,14 +2370,15 @@ def run(domain="restaurants",
         testcode=False,
         numbered=False,
         userelpos=False,
-        noabspos=False,
+        useabspos=False,
         evaltrain=False,
         removeslots=False,
-        useoracle=False,
+        oraclemix=0.,
         ):
 
     settings = locals().copy()
     q.pp_dict(settings)
+    settings["version"] = "v2.1"
     wandb.init(project=f"treeinsert_overnight_v2", config=settings, reinit=True)
 
     random.seed(seed)
@@ -2360,10 +2397,10 @@ def run(domain="restaurants",
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, rel_pos=userelpos, abs_pos=not noabspos)
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, rel_pos=userelpos, abs_pos=useabspos)
 
     decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, removeslots=removeslots,
-                                   prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos, use_oracle=useoracle)
+                                   prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos, oracle_mix=oraclemix)
 
     print(decoder)
     # test run
@@ -2530,9 +2567,9 @@ def run_experiment(domain="default",    #
         numbered=False,
         userelpos=False,
         removeslots=False,
-        noabspos=False,
+        useabspos=False,
         evaltrain=False,
-        useoracle=False,
+        oraclemix=0.,
                    testcode=False,
 
         ):
