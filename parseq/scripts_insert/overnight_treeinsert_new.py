@@ -2593,11 +2593,16 @@ def run_experiment(domain="default",    #
         "gradacc": [1],
     }
 
-    # ranges["domain"] = ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
-    ranges["domain"] = ["calendar", "publications"]
+    if settings["domain"] != "default":
+        domains = settings["domain"].split(",")
+        ranges["domain"] = domains
+    else:
+        # ranges["domain"] = ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
+        ranges["domain"] = ["calendar", "publications"]
+        ranges["domain"] = ["housing", "blocks", "basketball"]
     ranges["batsize"] = [16]
     # ranges["dropout"] = [0.0, 0.1, 0.2, 0.5]  # use 0.   (or 0.1?)
-    ranges["dropout"] = [0.0, 0.1]
+    ranges["dropout"] = [0.2, 0.4]
     # ranges["lr"] = [0.0001]                 # use 0.000025
     ranges["validinter"] = [10]
     ranges["epochs"] = [251]
