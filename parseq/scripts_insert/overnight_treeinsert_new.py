@@ -1693,7 +1693,7 @@ class TransformerTagger(TreeInsertionTagger):
 
         self.bertname = bertname
         self.bert_model = BertModel.from_pretrained(self.bertname,
-                                                    hidden_dropout_prob=dropout,
+                                                    hidden_dropout_prob=min(dropout, 0.1),
                                                     attention_probs_dropout_prob=0.)
 
         self.adapter = None
