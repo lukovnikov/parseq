@@ -1546,7 +1546,7 @@ def run_experiment(domain="default",    #
         maxsize=90,
         numbered=False,
         oraclemix=0.,
-        goldtemp=1.,
+        goldtemp=-1.,
         evaltrain=False,
                    testcode=False,
         ):
