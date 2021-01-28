@@ -151,7 +151,9 @@ class TransformerTagger(SeqInsertionTagger):
         self.register_buffer("vocab_mask", vocab_mask)
 
         self.bertname = bertname
-        self.bert_model = BertModel.from_pretrained(self.bertname)
+        self.bert_model = BertModel.from_pretrained(self.bertname,
+                                                    hidden_dropout_prob=min(dropout, 0.2),
+                                                    attention_probs_dropout_prob=min(dropout, 0.1))
         # def set_dropout(m:torch.nn.Module):
         #     if isinstance(m, torch.nn.Dropout):
         #         m.p = dropout
@@ -217,6 +219,7 @@ class SeqInsertionDecoder(torch.nn.Module):
                  max_steps:int=20,
                  max_size:int=100,
                  end_offset=0.,
+                 oraclemix=0.,
                  **kw):
         super(SeqInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
@@ -227,6 +230,8 @@ class SeqInsertionDecoder(torch.nn.Module):
         self.logsm = torch.nn.LogSoftmax(-1)
         self.prob_threshold = prob_threshold
         self.end_offset = end_offset
+
+        self.oraclemix = oraclemix
 
         # self.termination_mode = self.default_termination_mode if termination_mode == "default" else termination_mode
         # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
@@ -254,7 +259,23 @@ class SeqInsertionDecoder(torch.nn.Module):
         if mask is not None:
             kl = kl * mask
         kl = kl.sum(-1)
-        return kl
+
+
+        best_pred = logits.max(-1)[1]   # (batsize, seqlen)
+        best_gold = tgt.max(-1)[1]
+        same = best_pred == best_gold
+        if mask is not None:
+            same = same | ~(mask.bool())
+        acc = same.all(-1)  # (batsize,)
+
+        # get probability of best predictions
+        tgt_probs = torch.gather(tgt, -1, best_pred.unsqueeze(-1))  # (batsize, seqlen, 1)
+        recall = (tgt_probs > 0).squeeze(-1)
+        if mask is not None:
+            recall = recall | ~(mask.bool())
+        recall = recall.all(-1)
+        return kl, acc.float(), recall.float()
+        # return kl
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # extract a training example from y:
@@ -263,8 +284,8 @@ class SeqInsertionDecoder(torch.nn.Module):
         # run through tagger: the same for all versions
         logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
         # compute loss: different versions do different masking and different targets
-        loss = self.compute_loss(logits, tgt[:, :-1], mask=tgtmask[:, :-1])
-        return {"loss": loss}, logits
+        loss, acc, recall = self.compute_loss(logits, tgt[:, :-1], mask=tgtmask[:, :-1])
+        return {"loss": loss, "acc": acc, "recall": recall}, logits
 
     def get_prediction(self, x:torch.Tensor):
         steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
@@ -379,6 +400,40 @@ class SeqInsertionDecoder(torch.nn.Module):
         return ret, pred_trees
 
 
+def compute_oracle_path_selects(y:torch.Tensor):
+    """
+    :param y:   integer tensor
+    :return:    list of lists of select indices of which positions have been selected at this decoding step
+    """
+    ylen = (y > 0).long().sum().cpu().item()
+    yindexes = range(ylen)
+    selects = [[]]      # in the first step, nothing was selected
+
+    segments = [yindexes[:]]
+
+    while len(segments) > 0:         # while not completely decoded
+        all_segments_empty = True
+        # select the middle for each segment
+        selects.append([])
+        selects[-1] = selects[-2][:]        # copy all previous selects
+        next_segments = []
+        for segment in segments:
+            # take middle, split in two
+            if len(segment) % 2 == 1:
+                middle_pos = int((len(segment) - 1)/2)
+            else:
+                middle_pos = (len(segment) - 1)/2
+                middle_pos = random.choice([int(math.floor(middle_pos)), int(math.ceil(middle_pos))])
+            selects[-1].append(segment[middle_pos])
+            left, right = segment[:middle_pos], segment[middle_pos+1:]
+            if len(left) > 0:
+                next_segments.append(left)
+            if len(right) > 0:
+                next_segments.append(right)
+        segments = next_segments
+    return selects
+
+
 class SeqInsertionDecoderUniform(SeqInsertionDecoder):
     # decode modes: "parallel", "serial" or "semiparallel":
     #    - parallel: execute actions at all slots simultaneously
@@ -423,10 +478,16 @@ class SeqInsertionDecoderUniform(SeqInsertionDecoder):
         tgt = torch.zeros(y.size(0), y.size(1) + 2, self.vocab.number_of_ids(), device=y.device)
         # 'tgt' contains target distributions
         for i in range(newy.size(0)):
-            perm = torch.randperm(ytotallens[i].long().cpu().item())
-            perm = perm[:ylens[i].long().cpu().item()]
-            select, _ = perm.sort(-1)
-            select = list(select.cpu().numpy())
+            if random.random() < self.oraclemix:
+                # assert self.numbered is True
+                selects = compute_oracle_path_selects(y[i])
+                select = random.choice(selects)
+                select = sorted(select)
+            else:
+                perm = torch.randperm(ytotallens[i].long().cpu().item())
+                perm = perm[:ylens[i].long().cpu().item()]
+                select, _ = perm.sort(-1)
+                select = list(select.cpu().numpy())
             k = 1  # k is where in the new sampled sequence we're at
 
             slotvalues_acc = []
@@ -467,6 +528,44 @@ class SeqInsertionDecoderUniform(SeqInsertionDecoder):
         return x, newy, tgt, tgtmask
 
 
+def cmp_to_key(mycmp):
+    'Convert a cmp= function into a key= function'
+    class K:
+        def __init__(self, obj, *args):
+            self.obj = obj
+        def __lt__(self, other):
+            return mycmp(self.obj, other.obj) < 0
+        def __gt__(self, other):
+            return mycmp(self.obj, other.obj) > 0
+        def __eq__(self, other):
+            return mycmp(self.obj, other.obj) == 0
+        def __le__(self, other):
+            return mycmp(self.obj, other.obj) <= 0
+        def __ge__(self, other):
+            return mycmp(self.obj, other.obj) >= 0
+        def __ne__(self, other):
+            return mycmp(self.obj, other.obj) != 0
+    return K
+
+
+def retsup_cmp(a, b):
+    """
+    :param a, b:
+    :return:
+    """
+    ret = b[1] - a[1]
+    if ret == 0:
+        al = a[0]
+        bl = b[0]
+        if al == bl:
+            ret = 0
+        elif al < bl:
+            ret = -1
+        else:
+            ret = 1
+    return ret
+
+
 class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
     """ Differs from Uniform only in computing and using non-uniform weights for gold output distributions """
     def __init__(self, tagger:SeqInsertionTagger,
@@ -474,12 +573,14 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
                  prob_threshold=0.,
                  max_steps:int=20,
                  max_size:int=100,
+                 oraclemix=0.,
                  tau=1.,
                  **kw):
         super(SeqInsertionDecoderBinary, self).__init__(tagger, vocab=vocab,
                                                         max_steps=max_steps,
                                                         max_size=max_size,
                                                         prob_threshold=prob_threshold,
+                                                        oraclemix=oraclemix,
                                                         **kw)
         self.tau = tau
 
@@ -494,10 +595,24 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
             if slotvalue not in mindist_per_token:
                 mindist_per_token[slotvalue] = +9999
             mindist_per_token[slotvalue] = min(mindist_per_token[slotvalue], distance)
+
+        token_ranks = {}
+        prev_rank = -1
+        prev_dist = -1
+        sorted_tokendists = sorted(mindist_per_token.items(), key=cmp_to_key(retsup_cmp))[::-1]
+        for token, dist in sorted_tokendists:
+            if prev_rank > 0 and prev_dist == dist:
+                rank = prev_rank
+            else:
+                rank = prev_rank + 1
+            token_ranks[token] = rank
+            prev_rank = rank
+            prev_dist = dist
+
         mindistances = [d for d in distances]
         for i, (slotvalue, distance) in enumerate(zip(slotvalues, distances)):
             if distance == mindist_per_token[slotvalue]:
-                mindistances[i] = distance
+                mindistances[i] = token_ranks[slotvalue]
             else:
                 mindistances[i] = +99999
 
@@ -506,69 +621,69 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
         return probs
 
 
-def get_slotvalues_maxspan(selected, yi):
-    if len(selected) == 0:
-        ret = [list(yi.cpu().detach().numpy())]
-        return ret
-    middle_j = int(len(selected)/2)
-    yilen = (yi > 0).sum()
-    yi = yi[:yilen]
-    middle_k = int(len(yi)/2)
-    left_selected, right_selected = selected[:middle_j], selected[middle_j+1:]
-    # search for the midmost element in selected in yi
-    yi_left, yi_right = None, None
-    foundit = 0
-
-    # compute earliest possible position for the middle element of selected
-    _left_selected = list(left_selected.cpu().detach().numpy())
-    _right_selected = list(right_selected.cpu().detach().numpy())
-    _yi = list(yi.cpu().detach().numpy())
-
-    i = 0
-    for e in _left_selected:
-        while e != _yi[i]:
-            i += 1
-        i += 1
-    earliest_pos = i
-
-    _yi = _yi[::-1]
-    i = 0
-    for e in _right_selected[::-1]:
-        while e != _yi[i]:
-            i += 1
-        i += 1
-    latest_pos = len(_yi) - i
-
-    # compute latest possible position for the middle
-    for l in range(math.ceil(len(yi)/2)+1):
-        foundit = 0
-        if len(yi) == 0 or len(selected) == 0:
-            print("something wrong")
-        if middle_k - l >= earliest_pos and middle_k - l < latest_pos and yi[middle_k - l] == selected[middle_j]:
-            foundit = -1
-        elif middle_k + l >= earliest_pos and middle_k + l < latest_pos and yi[middle_k + l] == selected[middle_j]:
-            foundit = +1
-
-        if foundit != 0:
-            splitpoint = middle_k + l*foundit
-            yi_left, yi_right = yi[:splitpoint], yi[splitpoint + 1:]
-            if len(left_selected) == 0:
-                left_slotvalueses = [list(yi_left.cpu().detach().numpy())]
-            else:
-                left_slotvalueses = get_slotvalues_maxspan(left_selected, yi_left)
-
-            if len(right_selected) == 0:
-                right_slotvalueses = [list(yi_right.cpu().detach().numpy())]
-            else:
-                right_slotvalueses = get_slotvalues_maxspan(right_selected, yi_right)
-
-            if left_slotvalueses is None or right_slotvalueses is None:
-                continue
-
-            ret = left_slotvalueses + right_slotvalueses
-            return ret
-    if foundit == 0:
-        return None
+# def get_slotvalues_maxspan(selected, yi):
+#     if len(selected) == 0:
+#         ret = [list(yi.cpu().detach().numpy())]
+#         return ret
+#     middle_j = int(len(selected)/2)
+#     yilen = (yi > 0).sum()
+#     yi = yi[:yilen]
+#     middle_k = int(len(yi)/2)
+#     left_selected, right_selected = selected[:middle_j], selected[middle_j+1:]
+#     # search for the midmost element in selected in yi
+#     yi_left, yi_right = None, None
+#     foundit = 0
+#
+#     # compute earliest possible position for the middle element of selected
+#     _left_selected = list(left_selected.cpu().detach().numpy())
+#     _right_selected = list(right_selected.cpu().detach().numpy())
+#     _yi = list(yi.cpu().detach().numpy())
+#
+#     i = 0
+#     for e in _left_selected:
+#         while e != _yi[i]:
+#             i += 1
+#         i += 1
+#     earliest_pos = i
+#
+#     _yi = _yi[::-1]
+#     i = 0
+#     for e in _right_selected[::-1]:
+#         while e != _yi[i]:
+#             i += 1
+#         i += 1
+#     latest_pos = len(_yi) - i
+#
+#     # compute latest possible position for the middle
+#     for l in range(math.ceil(len(yi)/2)+1):
+#         foundit = 0
+#         if len(yi) == 0 or len(selected) == 0:
+#             print("something wrong")
+#         if middle_k - l >= earliest_pos and middle_k - l < latest_pos and yi[middle_k - l] == selected[middle_j]:
+#             foundit = -1
+#         elif middle_k + l >= earliest_pos and middle_k + l < latest_pos and yi[middle_k + l] == selected[middle_j]:
+#             foundit = +1
+#
+#         if foundit != 0:
+#             splitpoint = middle_k + l*foundit
+#             yi_left, yi_right = yi[:splitpoint], yi[splitpoint + 1:]
+#             if len(left_selected) == 0:
+#                 left_slotvalueses = [list(yi_left.cpu().detach().numpy())]
+#             else:
+#                 left_slotvalueses = get_slotvalues_maxspan(left_selected, yi_left)
+#
+#             if len(right_selected) == 0:
+#                 right_slotvalueses = [list(yi_right.cpu().detach().numpy())]
+#             else:
+#                 right_slotvalueses = get_slotvalues_maxspan(right_selected, yi_right)
+#
+#             if left_slotvalueses is None or right_slotvalueses is None:
+#                 continue
+#
+#             ret = left_slotvalueses + right_slotvalueses
+#             return ret
+#     if foundit == 0:
+#         return None
 
 
 # class SeqInsertionDecoderMaxspanBinary(SeqInsertionDecoderBinary):
@@ -642,27 +757,27 @@ def get_slotvalues_maxspan(selected, yi):
 #         return x, newy, tgt, tgtmask
 
 
-class SeqInsertionDecoderAny(SeqInsertionDecoderUniform):
-    def get_slot_value_probs(self, slotvalues):     # uniform
-        probs = [1. for _ in slotvalues]
-        return probs
-
-    def compute_loss(self, logits, tgt, mask=None):
-        """
-        :param logits:
-        :param tgt:         will have a non-zero for every correct token
-        :param mask:        will be zero for positions that don't need insertion
-        :return:
-        """
-        probs = torch.softmax(logits, -1)
-        nonzero_tgt = (tgt > 0).float()
-        m = probs * nonzero_tgt
-        m = m.sum(-1)       # (batsize, seqlen)
-        loss = - torch.log(m.clamp_min(1e-6))
-        if mask is not None:
-            loss = loss * mask.float()
-        loss = loss.sum(-1)
-        return loss
+# class SeqInsertionDecoderAny(SeqInsertionDecoderUniform):
+#     def get_slot_value_probs(self, slotvalues):     # uniform
+#         probs = [1. for _ in slotvalues]
+#         return probs
+#
+#     def compute_loss(self, logits, tgt, mask=None):
+#         """
+#         :param logits:
+#         :param tgt:         will have a non-zero for every correct token
+#         :param mask:        will be zero for positions that don't need insertion
+#         :return:
+#         """
+#         probs = torch.softmax(logits, -1)
+#         nonzero_tgt = (tgt > 0).float()
+#         m = probs * nonzero_tgt
+#         m = m.sum(-1)       # (batsize, seqlen)
+#         loss = - torch.log(m.clamp_min(1e-6))
+#         if mask is not None:
+#             loss = loss * mask.float()
+#         loss = loss.sum(-1)
+#         return loss
 
 
 # class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
@@ -835,172 +950,172 @@ class SeqInsertionDecoderAny(SeqInsertionDecoderUniform):
 #         return {"loss": lossacc}, logitsacc
 
 
-class OldSeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
-    def train_forward(self, x:torch.Tensor, gold:torch.Tensor):
-        enc, encmask = self.tagger.encode_source(x)
-        goldlens = (gold != 0).sum(-1)
-
-        y = torch.zeros(x.size(0), 2, device=x.device, dtype=torch.long)
-        y[:, 0] = self.vocab["@BOS@"]
-        y[:, 1] = self.vocab["@EOS@"]
-        ylens = (y != 0).sum(-1)
-
-        gold = torch.cat([y[:, 0:1], gold, torch.zeros_like(y[:, 1:2])], 1)
-        gold = gold.scatter(1, goldlens[:, None]+1, self.vocab["@EOS@"])
-        goldlens = (gold != 0).sum(-1)
-
-        yalign = torch.zeros_like(y)
-        yalign[:, 0] = 0
-        yalign[:, 1] = goldlens - 1
-
-        logitsacc = []
-        lossacc = torch.zeros(y.size(0), device=y.device)
-
-        newy = None
-        newyalign = None
-        ended = torch.zeros_like(y[:, 0]).bool()
-        while not torch.all(ended): #torch.any(ylens < goldlens):
-            # make newy the previous y
-            y = newy if newy is not None else y
-            yalign = newyalign if newyalign is not None else yalign
-
-            # region TRAIN
-            # compute target distribution and mask
-            tgt = torch.zeros(y.size(0), y.size(1), self.vocab.number_of_ids(),
-                              device=y.device)
-            _y = y.cpu().detach().numpy()
-            _yalign = yalign.cpu().detach().numpy()
-            _gold = gold.cpu().detach().numpy()
-
-            slotvalues_acc = []
-            for i in range(len(_y)):
-                all_slotvalues = []
-                for j in range(len(_y[i])):
-                    slotvalues = []
-                    if _y[i, j] == self.vocab["@EOS@"]:
-                        break
-                    # y_ij = _y[i, j]
-                    k = _yalign[i, j]   # this is where in the gold we're at
-                    k = k + 1
-                    # if j + 1 >= len(_yalign[i]):
-                    #     print("too large")
-                    #     pass
-                    while k < _yalign[i, j + 1]:
-                        slotvalues.append(_gold[i, k])
-                        k += 1
-                    if len(slotvalues) == 0:
-                        tgt[i, j, self.vocab["@END@"]] = 1
-                    else:
-                        for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
-                            tgt[i, j, slotvalue] += float(valueprob)
-                    all_slotvalues.append((slotvalues, self.get_slot_value_probs(slotvalues)))
-                slotvalues_acc.append(all_slotvalues)
-            tgtmask = (tgt.sum(-1) != 0).float()
-            uniform_tgt = torch.ones_like(tgt) / tgt.size(-1)
-            tgt = torch.where(tgtmask[:, :, None].bool(), tgt, uniform_tgt)
-            # run tagger on y
-            logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
-            # do loss and backward
-            loss = self.compute_loss(logits, tgt[:, :-1], tgtmask[:, :-1])
-            loss.mean().backward(retain_graph=True)
-
-            lossacc = lossacc + loss.detach()
-            logitsacc.append(logits.detach().clone())
-            # endregion
-
-            # region STEP
-            # get argmax predicted token to insert at every slot
-            # TODO: must predict the most probable correct tokens
-            # predprobs, preds = logits.max(-1)
-            # predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
-            _logits = logits.cpu().detach().numpy()
-
-            newy = torch.zeros(y.size(0), y.size(1) + 1, device=y.device).long()
-            newyalign = torch.zeros(yalign.size(0), yalign.size(1) + 1, device=yalign.device).long()
-            _ended = torch.zeros_like(y[:, 0]).bool()
-            for i in range(len(y)):
-                k = 0
-                # randomly choose which slot to develop
-                chosen_js = []
-                for j in range(len(slotvalues_acc[i])):     # for every slot
-                    if _y[i, j] == self.vocab["@EOS@"]:
-                        break
-                    slotvalues = slotvalues_acc[i][j][0]
-                    if len(slotvalues) != 0:        # consider only positions where a real token must be predicted so not @END@
-                        chosen_js.append(j)
-
-                terminated = True
-                if len(chosen_js) == 0:     # if all slots terminated
-                    newyalign[i, :yalign.size(1)] = yalign[i]
-                    newy[i, :y.size(1)] = y[i]
-                else:
-                    chosen_j = random.choice(chosen_js)
-
-                    for j in range(len(y[i])):
-                        if k >= newy.size(1):
-                            break
-                        newy[i, k] = y[i, j]        # copy
-                        newyalign[i, k] = yalign[i, j]
-                        k += 1
-                        y_ij = _y[i, j]
-                        if y_ij == self.vocab["@EOS@"]:  # if token was EOS, terminate generation
-                            break  # stop
-                        # if j >= len(p_i):  # if we reached beyond the length of predictions, terminate
-                        #     break
-
-                        if j == chosen_j:       # if we're at the chosen insertion slot:
-                            # get the most probable correct token
-                            logits_ij = logits[i, j]  # (vocabsize,)
-                            newlogits_ij = torch.zeros_like(logits_ij) - np.infty
-                            slv = list(set(slotvalues_acc[i][j][0]))
-                            if len(slv) == 0:       # this slot is completed
-                                newlogits_ij[self.vocab["@END@"]] = 1
-                            else:
-                                newlogits_ij[slv] = logits_ij[slv]
-                            pp_ij, p_ij = newlogits_ij.max(-1)
-                            p_ij = p_ij.cpu().detach().item()
-                            if p_ij == self.vocab["@END@"]:  # if predicted token is @END@, do nothing
-                                pass  # don't insert anything
-                            else:  # insert what was predicted
-                                if k >= newy.size(1):
-                                    break
-                                # insert token
-                                newy[i, k] = p_ij
-                                # align inserted token to gold
-                                slotvalues = list(zip(*(slotvalues_acc[i][j] + (range(len(slotvalues_acc[i][j][0])),))))
-                                slotvalues = sorted(slotvalues, key=lambda x: x[1], reverse=True)
-                                aligned_pos = None
-                                for slv, slp, sll in slotvalues:
-                                    if slv == p_ij:
-                                        aligned_pos = sll + newyalign[i, j] + 1
-                                        break
-                                newyalign[i, k] = aligned_pos
-                                k += 1  # advance newy pointer to next position
-                                terminated = False  # sequence changed so don't terminate
-                _ended[i] = terminated
-
-            y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
-            newy = torch.where(ended[:, None], y__, newy)  # prevent terminated examples from changing
-
-            maxlen = (newy != 0).long().sum(-1).max()
-            newy = newy[:, :maxlen]
-            # step += 1
-            ended = ended | _ended
-            # steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
-            lens = (newy != 0).long().sum(-1)
-            maxlenreached = (lens == self.max_size)
-            if torch.all(maxlenreached):
-                break
-
-            # select a random slot by using mask
-            # find the most central token that is the same as predicted token for every slot and advance state
-
-            # endregion
-
-            logits = None
-            loss = None
-        lossacc.requires_grad = True
-        return {"loss": lossacc}, logitsacc
+# class OldSeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
+#     def train_forward(self, x:torch.Tensor, gold:torch.Tensor):
+#         enc, encmask = self.tagger.encode_source(x)
+#         goldlens = (gold != 0).sum(-1)
+#
+#         y = torch.zeros(x.size(0), 2, device=x.device, dtype=torch.long)
+#         y[:, 0] = self.vocab["@BOS@"]
+#         y[:, 1] = self.vocab["@EOS@"]
+#         ylens = (y != 0).sum(-1)
+#
+#         gold = torch.cat([y[:, 0:1], gold, torch.zeros_like(y[:, 1:2])], 1)
+#         gold = gold.scatter(1, goldlens[:, None]+1, self.vocab["@EOS@"])
+#         goldlens = (gold != 0).sum(-1)
+#
+#         yalign = torch.zeros_like(y)
+#         yalign[:, 0] = 0
+#         yalign[:, 1] = goldlens - 1
+#
+#         logitsacc = []
+#         lossacc = torch.zeros(y.size(0), device=y.device)
+#
+#         newy = None
+#         newyalign = None
+#         ended = torch.zeros_like(y[:, 0]).bool()
+#         while not torch.all(ended): #torch.any(ylens < goldlens):
+#             # make newy the previous y
+#             y = newy if newy is not None else y
+#             yalign = newyalign if newyalign is not None else yalign
+#
+#             # region TRAIN
+#             # compute target distribution and mask
+#             tgt = torch.zeros(y.size(0), y.size(1), self.vocab.number_of_ids(),
+#                               device=y.device)
+#             _y = y.cpu().detach().numpy()
+#             _yalign = yalign.cpu().detach().numpy()
+#             _gold = gold.cpu().detach().numpy()
+#
+#             slotvalues_acc = []
+#             for i in range(len(_y)):
+#                 all_slotvalues = []
+#                 for j in range(len(_y[i])):
+#                     slotvalues = []
+#                     if _y[i, j] == self.vocab["@EOS@"]:
+#                         break
+#                     # y_ij = _y[i, j]
+#                     k = _yalign[i, j]   # this is where in the gold we're at
+#                     k = k + 1
+#                     # if j + 1 >= len(_yalign[i]):
+#                     #     print("too large")
+#                     #     pass
+#                     while k < _yalign[i, j + 1]:
+#                         slotvalues.append(_gold[i, k])
+#                         k += 1
+#                     if len(slotvalues) == 0:
+#                         tgt[i, j, self.vocab["@END@"]] = 1
+#                     else:
+#                         for slotvalue, valueprob in zip(slotvalues, self.get_slot_value_probs(slotvalues)):
+#                             tgt[i, j, slotvalue] += float(valueprob)
+#                     all_slotvalues.append((slotvalues, self.get_slot_value_probs(slotvalues)))
+#                 slotvalues_acc.append(all_slotvalues)
+#             tgtmask = (tgt.sum(-1) != 0).float()
+#             uniform_tgt = torch.ones_like(tgt) / tgt.size(-1)
+#             tgt = torch.where(tgtmask[:, :, None].bool(), tgt, uniform_tgt)
+#             # run tagger on y
+#             logits = self.tagger(tokens=y, enc=enc, encmask=encmask)
+#             # do loss and backward
+#             loss = self.compute_loss(logits, tgt[:, :-1], tgtmask[:, :-1])
+#             loss.mean().backward(retain_graph=True)
+#
+#             lossacc = lossacc + loss.detach()
+#             logitsacc.append(logits.detach().clone())
+#             # endregion
+#
+#             # region STEP
+#             # get argmax predicted token to insert at every slot
+#             # TODO: must predict the most probable correct tokens
+#             # predprobs, preds = logits.max(-1)
+#             # predprobs, preds = predprobs.cpu().detach().numpy(), preds.cpu().detach().numpy()
+#             _logits = logits.cpu().detach().numpy()
+#
+#             newy = torch.zeros(y.size(0), y.size(1) + 1, device=y.device).long()
+#             newyalign = torch.zeros(yalign.size(0), yalign.size(1) + 1, device=yalign.device).long()
+#             _ended = torch.zeros_like(y[:, 0]).bool()
+#             for i in range(len(y)):
+#                 k = 0
+#                 # randomly choose which slot to develop
+#                 chosen_js = []
+#                 for j in range(len(slotvalues_acc[i])):     # for every slot
+#                     if _y[i, j] == self.vocab["@EOS@"]:
+#                         break
+#                     slotvalues = slotvalues_acc[i][j][0]
+#                     if len(slotvalues) != 0:        # consider only positions where a real token must be predicted so not @END@
+#                         chosen_js.append(j)
+#
+#                 terminated = True
+#                 if len(chosen_js) == 0:     # if all slots terminated
+#                     newyalign[i, :yalign.size(1)] = yalign[i]
+#                     newy[i, :y.size(1)] = y[i]
+#                 else:
+#                     chosen_j = random.choice(chosen_js)
+#
+#                     for j in range(len(y[i])):
+#                         if k >= newy.size(1):
+#                             break
+#                         newy[i, k] = y[i, j]        # copy
+#                         newyalign[i, k] = yalign[i, j]
+#                         k += 1
+#                         y_ij = _y[i, j]
+#                         if y_ij == self.vocab["@EOS@"]:  # if token was EOS, terminate generation
+#                             break  # stop
+#                         # if j >= len(p_i):  # if we reached beyond the length of predictions, terminate
+#                         #     break
+#
+#                         if j == chosen_j:       # if we're at the chosen insertion slot:
+#                             # get the most probable correct token
+#                             logits_ij = logits[i, j]  # (vocabsize,)
+#                             newlogits_ij = torch.zeros_like(logits_ij) - np.infty
+#                             slv = list(set(slotvalues_acc[i][j][0]))
+#                             if len(slv) == 0:       # this slot is completed
+#                                 newlogits_ij[self.vocab["@END@"]] = 1
+#                             else:
+#                                 newlogits_ij[slv] = logits_ij[slv]
+#                             pp_ij, p_ij = newlogits_ij.max(-1)
+#                             p_ij = p_ij.cpu().detach().item()
+#                             if p_ij == self.vocab["@END@"]:  # if predicted token is @END@, do nothing
+#                                 pass  # don't insert anything
+#                             else:  # insert what was predicted
+#                                 if k >= newy.size(1):
+#                                     break
+#                                 # insert token
+#                                 newy[i, k] = p_ij
+#                                 # align inserted token to gold
+#                                 slotvalues = list(zip(*(slotvalues_acc[i][j] + (range(len(slotvalues_acc[i][j][0])),))))
+#                                 slotvalues = sorted(slotvalues, key=lambda x: x[1], reverse=True)
+#                                 aligned_pos = None
+#                                 for slv, slp, sll in slotvalues:
+#                                     if slv == p_ij:
+#                                         aligned_pos = sll + newyalign[i, j] + 1
+#                                         break
+#                                 newyalign[i, k] = aligned_pos
+#                                 k += 1  # advance newy pointer to next position
+#                                 terminated = False  # sequence changed so don't terminate
+#                 _ended[i] = terminated
+#
+#             y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
+#             newy = torch.where(ended[:, None], y__, newy)  # prevent terminated examples from changing
+#
+#             maxlen = (newy != 0).long().sum(-1).max()
+#             newy = newy[:, :maxlen]
+#             # step += 1
+#             ended = ended | _ended
+#             # steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
+#             lens = (newy != 0).long().sum(-1)
+#             maxlenreached = (lens == self.max_size)
+#             if torch.all(maxlenreached):
+#                 break
+#
+#             # select a random slot by using mask
+#             # find the most central token that is the same as predicted token for every slot and advance state
+#
+#             # endregion
+#
+#             logits = None
+#             loss = None
+#         lossacc.requires_grad = True
+#         return {"loss": lossacc}, logitsacc
 
 #
 # class SeqInsertionDecoderBinaryPredictive(SeqInsertionDecoderPredictive, SeqInsertionDecoderBinary): pass
@@ -1178,10 +1293,16 @@ def run(domain="restaurants",
         maxsize=75,
         testcode=False,
         numbered=False,
+        oraclemix=0.,
+        goldtemp=1.,
+        evaltrain=False,
+        cooldown=50
         ):
 
     settings = locals().copy()
+    settings["version"] = "v2.1"
     q.pp_dict(settings)
+
     wandb.init(project=f"seqinsert_overnight_v2", config=settings, reinit=True)
 
     random.seed(seed)
@@ -1206,15 +1327,20 @@ def run(domain="restaurants",
     elif mode == "ltr":
         decoder = SeqInsertionDecoderLTR(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
     elif mode == "uniform":
-        decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+        decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold, oraclemix=oraclemix)
     elif mode == "binary":
-        decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+        decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab,
+                                            max_steps=maxsteps,
+                                            max_size=maxsize,
+                                            prob_threshold=probthreshold,
+                                            oraclemix=oraclemix,
+                                            tau=goldtemp)
     # elif mode == "maxspanbinary":
     #     decoder = SeqInsertionDecoderMaxspanBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
     # elif mode == "predictivebinary":
     #     decoder = SeqInsertionDecoderPredictiveBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
-    elif mode == "any":
-        decoder = SeqInsertionDecoderAny(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+    # elif mode == "any":
+    #     decoder = SeqInsertionDecoderAny(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
 
     # test run
     if testcode:
@@ -1224,7 +1350,7 @@ def run(domain="restaurants",
         decoder.train(False)
         out = decoder(*batch)
 
-    tloss = make_array_of_metrics("loss", reduction="mean")
+    tloss = make_array_of_metrics("loss", "acc", "recall", reduction="mean")
     tmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
     vmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
     xmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
@@ -1272,7 +1398,8 @@ def run(domain="restaurants",
     optim = get_optim(tagger, lr, enclrmul)
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
-        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
+        assert t_max > (warmup + cooldown + 10)
+        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(low=0., high=1.0, steps=t_max-warmup) >> (0. * lr)
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
@@ -1304,9 +1431,12 @@ def run(domain="restaurants",
                          on_end=on_end_v)
 
     tt.tick("training")
+    if evaltrain:
+        valid_epoch_fs = [trainevalepoch, validepoch]
+    else:
+        valid_epoch_fs = [validepoch]
     q.run_training(run_train_epoch=trainepoch,
-                   # run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
-                   run_valid_epoch=[validepoch],
+                   run_valid_epoch=valid_epoch_fs,
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
@@ -1415,6 +1545,9 @@ def run_experiment(domain="default",    #
         maxsteps=90,
         maxsize=90,
         numbered=False,
+        oraclemix=0.,
+        goldtemp=1.,
+        evaltrain=False,
                    testcode=False,
         ):
 
@@ -1451,16 +1584,17 @@ def run_experiment(domain="default",    #
     else:
         # ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
         ranges["domain"] = ["calendar", "restaurants", "publications", "recipes"]
+        # ranges["domain"] = ["restaurants", "recipes"]
         ranges["batsize"] = [30]
-        ranges["dropout"] = [0.1]     # use 0.
+        ranges["dropout"] = [0.2, 0.1, 0.0]     # use 0.
         # ranges["lr"] = [0.0001]                 # use 0.000025
         ranges["validinter"] = [20]
-        ranges["epochs"] = [261]
+        ranges["epochs"] = [161, 201]
         ranges["hdim"] = [768]
         ranges["numlayers"] = [6]
         ranges["numheads"] = [12]
         ranges["probthreshold"] = [0.]
-        ranges["lr"] = [0.00005]
+        ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
 
     if mode == "ltr":
