@@ -1566,7 +1566,7 @@ def run_experiment(domain="default",    #
         "seed": [87646464],
         "patience": [-1],
         "warmup": [20],
-        "validinter": [15],
+        "validinter": [10],
         "gradacc": [1],
     }
 
@@ -1588,14 +1588,15 @@ def run_experiment(domain="default",    #
         ranges["batsize"] = [30]
         ranges["dropout"] = [0.2, 0.1, 0.0]     # use 0.
         # ranges["lr"] = [0.0001]                 # use 0.000025
-        ranges["validinter"] = [20]
-        ranges["epochs"] = [161, 201]
+        ranges["validinter"] = [10]
+        ranges["epochs"] = [161]
         ranges["hdim"] = [768]
         ranges["numlayers"] = [6]
         ranges["numheads"] = [12]
         ranges["probthreshold"] = [0.]
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
+        ranges["goldtemp"] = [1.0, 0.1]
 
     if mode == "ltr":
         ranges["lr"] = [0.0001, 0.000025]
