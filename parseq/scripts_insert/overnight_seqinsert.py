@@ -100,7 +100,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
         if not noreorder:
             ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
         ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
-        ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))
+        # ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
