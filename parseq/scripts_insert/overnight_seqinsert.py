@@ -1401,12 +1401,14 @@ def run(domain="restaurants",
         maxsize=75,
         testcode=False,
         numbered=False,
+        betternumbered=False,
         oraclemix=0.,
         goldtemp=1.,
         evaltrain=False,
         cooldown=50
         ):
-
+    if betternumbered:
+        numbered = True
     settings = locals().copy()
     settings["version"] = "v2.1"
     q.pp_dict(settings)
@@ -1428,7 +1430,7 @@ def run(domain="restaurants",
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, baseline=mode=="baseline")
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, baseline=mode=="baseline", vocab_factorized=betternumbered)
 
     if mode == "baseline":
         decoder = SeqDecoderBaseline(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
@@ -1653,6 +1655,7 @@ def run_experiment(domain="default",    #
         maxsteps=90,
         maxsize=90,
         numbered=False,
+        betternumbered=False,
         oraclemix=0.,
         goldtemp=-1.,
         evaltrain=False,
