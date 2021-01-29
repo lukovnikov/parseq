@@ -119,9 +119,116 @@ class SeqInsertionTagger(torch.nn.Module):
         pass
 
 
+class TokenEmb(torch.nn.Module):
+    def __init__(self, vocab, dim, factorized=False, pooler="sum", **kw):
+        super(TokenEmb, self).__init__(**kw)
+        self.vocab = vocab
+        self.vocabsize = vocab.number_of_ids()
+        self.factorized = factorized
+        self.pooler = pooler
+        if self.factorized:
+            self.token_vocab = {}
+            next_token_id = 0
+            self.number_vocab = {}
+            next_number_id = 0
+            self.register_buffer("id_to_token", torch.zeros(self.vocabsize, dtype=torch.long))
+            self.register_buffer("id_to_number", torch.zeros(self.vocabsize, dtype=torch.long))
+            for k, v in self.vocab.D.items():
+                if "::" in k:
+                    token, number = k.split("::")
+                else:
+                    token, number = k, "0"
+                if token not in self.token_vocab:
+                    self.token_vocab[token] = next_token_id
+                    next_token_id += 1
+                self.id_to_token[v] = self.token_vocab[token]
+                if number not in self.number_vocab:
+                    self.number_vocab[number] = next_number_id
+                    next_number_id += 1
+                self.id_to_number[v] = self.number_vocab[number]
+            self.token_emb = torch.nn.Embedding(max(self.token_vocab.values()) + 1, dim)
+            self.number_emb = torch.nn.Embedding(max(self.number_vocab.values()) + 1, dim)
+        else:
+            self.emb = torch.nn.Embedding(self.vocabsize, dim)
+
+    def forward(self, x):
+        if self.factorized:
+            token = self.id_to_token[x]
+            tokenemb = self.token_emb(token)
+            number = self.id_to_number[x]
+            numberemb = self.number_emb(number)
+            if self.pooler == "sum":
+                emb = tokenemb + numberemb
+            elif self.pooler == "max":
+                emb = torch.max(tokenemb, numberemb)
+            elif self.pooler == "mul":
+                emb = tokenemb * numberemb
+            else:
+                raise Exception(f"unknown pooler: '{self.pooler}'")
+        else:
+            emb = self.emb(x)
+        return emb
+
+
+class TokenOut(torch.nn.Module):
+    def __init__(self, dim, vocab, factorized=False, pooler="sum", **kw):
+        super(TokenOut, self).__init__(**kw)
+        self.vocab = vocab
+        self.vocabsize = vocab.number_of_ids()
+        self.factorized = factorized
+        self.pooler = pooler
+        if self.factorized:
+            self.token_vocab = {}
+            next_token_id = 0
+            self.number_vocab = {}
+            next_number_id = 0
+            self.register_buffer("token_to_id", torch.zeros(self.vocabsize, dtype=torch.long))
+            self.register_buffer("number_to_id", torch.zeros(self.vocabsize, dtype=torch.long))
+            self.register_buffer("id_to_token", torch.zeros(self.vocabsize, dtype=torch.long))
+            self.register_buffer("id_to_number", torch.zeros(self.vocabsize, dtype=torch.long))
+            for k, v in self.vocab.D.items():
+                if "::" in k:
+                    token, number = k.split("::")
+                else:
+                    token, number = k, "0"
+                if token not in self.token_vocab:
+                    self.token_vocab[token] = next_token_id
+                    next_token_id += 1
+                self.token_to_id[self.token_vocab[token]] = v
+                self.id_to_token[v] = self.token_vocab[token]
+                if number not in self.number_vocab:
+                    self.number_vocab[number] = next_number_id
+                    next_number_id += 1
+                self.number_to_id[self.number_vocab[number]] = v
+                self.id_to_number[v] = self.number_vocab[number]
+            self.token_lin = torch.nn.Linear(dim, max(self.token_vocab.values()) + 1)
+            self.number_lin = torch.nn.Linear(dim, max(self.number_vocab.values()) + 1)
+            self.token_to_id = self.token_to_id[:next_token_id]
+            self.number_to_id = self.number_to_id[:next_number_id]
+        else:
+            self.lin = torch.nn.Linear(dim, self.vocabsize)
+
+    def forward(self, x):
+        if self.factorized:
+            if self.pooler == "sum":
+                # compute scores for tokens and numbers separately
+                tokenscores = self.token_lin(x)     # (batsize, seqlen, numtok)
+                numberscores = self.number_lin(x)   # (batsize, seqlen, numnum)
+                # distribute them and sum up
+                tokenscores = torch.index_select(tokenscores, -1, self.id_to_token)
+                numberscores = torch.index_select(numberscores, -1, self.id_to_number)
+                scores = tokenscores + numberscores
+            else:
+                raise Exception(f'Pooler "{self.pooler}" is not supported yet.')
+        else:
+            scores = self.lin(x)
+        return scores
+
+
+
 class TransformerTagger(SeqInsertionTagger):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", baseline=False, **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", baseline=False, vocab_factorized=True, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -131,7 +238,7 @@ class TransformerTagger(SeqInsertionTagger):
                                    num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
                                    use_relative_position=False)
 
-        self.emb = torch.nn.Embedding(config.vocab_size, config.d_model)
+        self.emb = TokenEmb(vocab, config.d_model, factorized=vocab_factorized, pooler="sum")
         self.posemb = torch.nn.Embedding(maxpos, config.d_model)
         decoder_config = deepcopy(config)
         decoder_config.is_decoder = True
@@ -141,7 +248,8 @@ class TransformerTagger(SeqInsertionTagger):
         if baseline:
             self.out = torch.nn.Linear(self.dim, self.vocabsize)
         else:
-            self.out = torch.nn.Linear(self.dim * 2, self.vocabsize)
+            # self.out = torch.nn.Linear(self.dim * 2, self.vocabsize)
+            self.out = TokenOut(self.dim * 2, self.vocab, factorized=vocab_factorized, pooler="sum")
         # self.out = MOS(self.dim, self.vocabsize, K=mosk)
 
         vocab_mask = torch.ones(self.vocabsize)
