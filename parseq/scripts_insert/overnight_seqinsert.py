@@ -228,7 +228,7 @@ class TokenOut(torch.nn.Module):
 
 class TransformerTagger(SeqInsertionTagger):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", baseline=False, vocab_factorized=True, **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", baseline=False, vocab_factorized=False, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
