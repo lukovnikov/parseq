@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 
 import qelos as q
 
-from parseq.datasets import OvernightDatasetLoader, autocollate
+from parseq.datasets import OvernightDatasetLoader, autocollate, Dataset
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import tree_to_lisp_tokens, are_equal_trees, lisp_to_tree
 from parseq.scripts_insert.overnight_treeinsert import extract_info
@@ -61,12 +61,45 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
     # orderless = {"op:and", "SW:concat"}     # only use in eval!!
     orderless = ORDERLESS
 
-    ds = OvernightDatasetLoader(simplify_mode="none").load(domain=domain, trainonvalid=trainonvalid)
-    # ds contains 3-tuples of (input, output tree, split name)
+    if domain.startswith("syn"):
+        if domain.startswith("syn-rep-"):
+            words = list(set(["cat", "dog", "person", "camera", "tv", "woman", "man", "sum", "ting", "wong", "blackbird",
+                     "plane", "computer", "pc", "bert", "captain", "slow", "went", "home", "car", "bike", "train", 
+                     "fox", "virus", "vaccine", "pharma", "company", "eu", "uk", "us", "israel", "iran", "syria", 
+                     "russia", "denmark", "capital", "wallstreetbets", "reddit", "option", "short", "squeeze"]))
+            
+            NUMTRAIN = 400
+            NUMVALID = 100
+            NUMTEST = 100
+            L = 30
+            assert L < len(set(words))
+            rep = int(domain[len("syn-rep-"):])
+            examples = []
+            for NUMEX, splitname in zip([NUMTRAIN, NUMVALID, NUMTEST], ["train", "valid", "test"]):
+                for i in range(NUMEX):
+                    words_i = words[:]
+                    random.shuffle(words_i)
+                    example = []
+                    k = 0
+                    for j in range(L):
+                        example.append(words_i.pop(0))
+                        k += 1
+                        if k == rep:
+                            example.append("and")
+                            k = 0
+                        if len(example) > L:
+                            break
+                    examples.append((" ".join(example), example, splitname))
+            ds = Dataset(examples)
+        else:
+            raise Exception(f"Unknown domain '{domain}'")
+    else:
+        ds = OvernightDatasetLoader(simplify_mode="none").load(domain=domain, trainonvalid=trainonvalid)
+        # ds contains 3-tuples of (input, output tree, split name)
 
-    if not noreorder:
-        ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
-    ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
+        if not noreorder:
+            ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
+        ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
