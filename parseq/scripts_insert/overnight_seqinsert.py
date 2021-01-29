@@ -100,6 +100,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
         if not noreorder:
             ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
         ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
+        ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
@@ -1726,8 +1727,14 @@ def run_experiment(domain="default",    #
         ranges["numheads"] = [12]
         ranges["numbered"] = [False]
     else:
-        # ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
-        ranges["domain"] = ["calendar", "restaurants", "publications", "recipes"]
+        if settings["domain"] != "default":
+            domains = settings["domain"].split(",")
+            ranges["domain"] = domains
+            settings["domain"] = "default"
+        else:
+            # ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
+            # ranges["domain"] = ["calendar", "restaurants", "publications", "recipes"]
+            ranges["domain"] = ["blocks", "housing", "socialnetwork", "basketball"]
         # ranges["domain"] = ["restaurants", "recipes"]
         ranges["batsize"] = [30]
         ranges["dropout"] = [0.2, 0.1, 0.0]     # use 0.
