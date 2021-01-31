@@ -388,7 +388,8 @@ class ActionTree(ParentedTree):
 def are_equal_trees(self, other, orderless={"and", "or"}, unktoken="@UNK@", use_terminator=False):
     if self is None or other is None:
         return False
-    assert(isinstance(other, Tree) and isinstance(self, Tree))
+    if not isinstance(other, Tree) or not isinstance(self, Tree):
+        assert(isinstance(other, Tree) and isinstance(self, Tree))
     if self._label != other._label or self._label == unktoken or other._label == unktoken:
         return False
     if self._label in orderless or orderless == "__ALL__":

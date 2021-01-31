@@ -729,22 +729,24 @@ def _collect_lca_nodeids_2(tree, pchild):
     return lcas
 
 
-def compute_target_distribution_data(x, centrs, end_token="@END@", tau=1.):
+def compute_target_distribution_data(x, centrs, end_token="@END@", tau=1., cmp_use_labels=True):
     # compute ranks
     if len(x) > 0:
         sorted_retsupe = sorted([(centrs[e.nodeid], e) for e in x],
-                                key=cmp_to_key(retsup_cmp))
+                                key=cmp_to_key(partial(retsup_cmp, uselabels=cmp_use_labels)))
         r = []
         rank = 0
         prev_e = sorted_retsupe[0]
         r.append((rank, prev_e[1].label()))
         for e in sorted_retsupe[1:]:
-            if retsup_cmp(e, prev_e) != 0:
-                assert retsup_cmp(e, prev_e) > 0
+            if retsup_cmp(e, prev_e, uselabels=cmp_use_labels) != 0:
+                if retsup_cmp(e, prev_e, uselabels=cmp_use_labels) < 0:
+                    assert retsup_cmp(e, prev_e, uselabels=cmp_use_labels) >= 0
                 rank += 1
             else:
                 if rank == 0:
-                    assert False
+                    pass
+                    # assert False
             r.append((rank, e[1].label()))
             prev_e = e
     else:
@@ -755,7 +757,7 @@ def compute_target_distribution_data(x, centrs, end_token="@END@", tau=1.):
     return r
 
 
-def retsup_cmp(a:Tuple[float, Tree], b:Tuple[float, Tree]):
+def retsup_cmp(a:Tuple[float, Tree], b:Tuple[float, Tree], uselabels=True):
     """
     :param a, b:        tuple consisting of a float and a Tree: (float, Tree) where the float is a centrality score for the tree (higher is better)
     :return:
@@ -763,7 +765,7 @@ def retsup_cmp(a:Tuple[float, Tree], b:Tuple[float, Tree]):
     ret = b[0] - a[0]
     if ret == 0:
         ret = +1* (tree_size(a[1]) - tree_size(b[1]))
-    if ret == 0:
+    if uselabels and ret == 0:
         al = a[1].label()
         bl = b[1].label()
         if al == bl:
@@ -984,7 +986,7 @@ def _execute_slotted_tree(x, specialtokens=DefaultSpecialTokens()):
         return [ancestor]
 
 
-def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slot_removal=False):
+def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slot_removal=False, explore_top=False):
     assert hasattr(tree, "nodeid")
     xtree = lisp_to_tree(f"({tree.label()} )")
 
@@ -1002,7 +1004,12 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slo
 
         # compute best tokens to insert
         ret, retsup = linearize_supervised_ptree(xtree, specialtokens=specialtokens)
-        retsup = _get_best_insertions(ret, retsup, centralities, specialtokens=specialtokens, use_slot_removal=use_slot_removal)
+        retsup_sup = _get_best_insertions(ret, retsup, centralities, specialtokens=specialtokens, use_slot_removal=use_slot_removal, explore_top=False)
+        if explore_top:
+            retsup_step = _get_best_insertions(ret, retsup, centralities, specialtokens=specialtokens,
+                                               use_slot_removal=use_slot_removal, explore_top=True)
+        else:
+            retsup_step = retsup_sup
 
         # remove slots from ret that are not in new_xtree_seq
         if new_xtree_seq is not None:
@@ -1017,11 +1024,11 @@ def run_oracle_tree_decoding(tree, specialtokens=DefaultSpecialTokens(), use_slo
                     del ret[i]
                     del retsup[i]
 
-        intermediate_decoding_state = (ret, retsup)
+        intermediate_decoding_state = (ret, retsup_sup)
 
         # execute insertions
         ret = [rete.label() if isinstance(rete, Tree) else rete for rete in ret]
-        new_xtree_seq, _ = perform_decoding_step(ret, retsup, specialtokens=specialtokens)
+        new_xtree_seq, _ = perform_decoding_step(ret, retsup_step, specialtokens=specialtokens)
 
         # new_xtree = _clean_up_xtree(new_xtree, specialtokens=specialtokens)
         # convert new xtree seq into the new xtree
@@ -1051,15 +1058,23 @@ def _clean_up_xtree(x:Tree, specialtokens=DefaultSpecialTokens()):
     return x
 
 
-def _get_best_insertions(ret, retsup, centralities, use_slot_removal=False, specialtokens=DefaultSpecialTokens()):
+def _get_best_insertions(ret, retsup, centralities, use_slot_removal=False, specialtokens=DefaultSpecialTokens(), explore_top=False):
     # if end_token is "@KEEP@", then normal termination is followed,
     # if end_token is "@CLOSE@", then slot removal is used
     end_token = specialtokens.close_action if use_slot_removal is True else specialtokens.keep_action
     _retsup = []
     for rete, retsupe in zip(ret, retsup):
         if retsupe != None:
-            r = compute_target_distribution_data(retsupe, centralities, end_token=end_token)
-            _retsup.append(r[0][1])
+            r = compute_target_distribution_data(retsupe, centralities, end_token=end_token, cmp_use_labels=not explore_top)
+            best_score = r[0][0]
+            _r = [r[0]]
+            for r_i in r[1:]:
+                if r_i[0] == best_score:
+                    _r.append(r_i)
+                else:
+                    break
+            _r = random.choice(_r)
+            _retsup.append(_r[1])
         else:
             _retsup.append(end_token)
     return _retsup
@@ -1748,6 +1763,11 @@ class TransformerTagger(TreeInsertionTagger):
         # self.posemb.weight.fill_(0.)
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None, relpos=None, attnmask=None):
+        if attnmask is not None:
+            # compress inputs
+            attnmask_q = attnmask.sum(1) > 0
+            attnmask_k = attnmask.sum(2) > 0
+            compress_mask = attnmask_q | attnmask_k
         attnmask = (tokens != 0) if attnmask is None else attnmask
         # if not self.baseline:
         #     padmask = padmask[:, 1:]
@@ -2145,17 +2165,22 @@ class TreeInsertionDecoder(torch.nn.Module):
         loss, acc, recall = self.compute_loss(logits, tgt, mask=tgtmask)
         return {"loss": loss, "acc": acc, "recall": recall}, logits
 
-    def extract_training_example_mapf(self, tree):
+    def extract_training_example_mapf(self, tree, ptree_choice=None, num_top_explore=5):
         tree = assign_dfs_nodeids(tree)
 
         use_oracle = random.random() < self.oracle_mix
         if use_oracle:
-            if str(tree) in self._gold_data_cache:
-                ptrees = self._gold_data_cache[str(tree)]
-            else:
-                ptrees = run_oracle_tree_decoding(tree, self.specialtokens, use_slot_removal=self.removeslots)
+            if str(tree) not in self._gold_data_cache:
+                ptrees = []
+                for _ in range(max(min(1, num_top_explore), num_top_explore)):
+                    ptreese = run_oracle_tree_decoding(tree, self.specialtokens, use_slot_removal=self.removeslots, explore_top=num_top_explore > 0)
+                    ptrees.append(ptreese)
                 self._gold_data_cache[str(tree)] = ptrees
-            ptree = random.choice(ptrees)[2]
+            ptrees = random.choice(self._gold_data_cache[str(tree)])
+            # if ptree_choice is None:
+            ptree_choice = random.choice(list(range(len(ptrees))))
+            _ptree_choice = min(ptree_choice, len(ptrees)-1)
+            ptree = ptrees[_ptree_choice][2]
         else:
             ptree = sample_partial_tree(tree)
 
@@ -2180,7 +2205,7 @@ class TreeInsertionDecoder(torch.nn.Module):
             ret_ = [rete.label() if isinstance(rete, Tree) else rete for rete in ret]
             relpos, attnmask = compute_relpos_and_attn_mask(ret_)
 
-        return ret, _retsup, relpos, attnmask
+        return ret, _retsup, relpos, attnmask, ptree_choice
 
     def extract_training_example(self, x: torch.Tensor, y:Tuple[Tree]):
         """
@@ -2193,7 +2218,14 @@ class TreeInsertionDecoder(torch.nn.Module):
             ret = self.pool[0].map(self.extract_training_example_mapf, y)
             ret, retsup, relpos, attnmask = list(zip(*ret))
         else:
-            ret, retsup, relpos, attnmask = list(zip(*[self.extract_training_example_mapf(ye) for ye in y]))
+            outputs = []
+            ptree_choice = None
+            for ye in y:
+                output = self.extract_training_example_mapf(ye, ptree_choice=ptree_choice)
+                ptree_choice = output[-1]
+                outputs.append(output[:-1])
+            ret, retsup, relpos, attnmask = list(zip(*outputs))
+            # ret, retsup, relpos, attnmask = list(zip(*[self.extract_training_example_mapf(ye) for ye in y]))
 
         maxlen = max([len(rete) for rete in ret])
         _y = y
@@ -2459,7 +2491,7 @@ def run(domain="restaurants",
     optim = get_optim(tagger, lr, enclrmul)
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
-        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
+        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(high=1., low=0.1, steps=t_max-warmup) >> 0.1
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)

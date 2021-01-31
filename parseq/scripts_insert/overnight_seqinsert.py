@@ -93,6 +93,24 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
             ds = Dataset(examples)
         else:
             raise Exception(f"Unknown domain '{domain}'")
+    elif domain.startswith("top-eval"):
+        examples = []
+        with open("../../datasets/top/eval.tsv") as f:
+            lines = f.readlines()
+            for line in lines:
+                splits = line.strip().split("\t")
+                nl = splits[1]
+                if domain == "top-eval-nl":
+                    fl = nl.replace("'", "|").replace("\"", "|").replace("\s+", " ")
+                    fl = f"[ SENTENCE {fl} ]"
+                else:
+                    fl = splits[2].replace("'", "|").replace("\"", "|").replace("[", " [ ").replace("]", " ] ").replace("\s+", " ")
+                fl = lisp_to_tree(fl, brackets="[]")
+                examples.append((nl, tree_to_seq(fl)))
+        splits = ["train"]*500 + ["valid"]*50 + ["test"]*50
+        examples = examples[:len(splits)]
+        examples = [(x[0], x[1], y) for x, y in zip(examples, splits)]
+        ds = Dataset(examples)
     else:
         ds = OvernightDatasetLoader(simplify_mode="none").load(domain=domain, trainonvalid=trainonvalid)
         # ds contains 3-tuples of (input, output tree, split name)
@@ -100,7 +118,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
         if not noreorder:
             ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
         ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
-        # ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))
+        ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
