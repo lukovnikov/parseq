@@ -380,6 +380,7 @@ class SeqInsertionDecoder(torch.nn.Module):
                  max_size:int=100,
                  end_offset=0.,
                  oraclemix=0.,
+                 usejoint=False,
                  **kw):
         super(SeqInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
@@ -392,6 +393,8 @@ class SeqInsertionDecoder(torch.nn.Module):
         self.end_offset = end_offset
 
         self.oraclemix = oraclemix
+
+        self.usejoint = usejoint
 
         # self.termination_mode = self.default_termination_mode if termination_mode == "default" else termination_mode
         # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
@@ -413,12 +416,26 @@ class SeqInsertionDecoder(torch.nn.Module):
         :param mask:        (batsize, seqlen)
         :return:
         """
-        logprobs = self.logsm(logits)
-        kl = self.kldiv(logprobs, tgt)      # (batsize, seqlen, vocsize)
-        kl = kl.sum(-1)                     # (batsize, seqlen)
-        if mask is not None:
-            kl = kl * mask
-        kl = kl.sum(-1)
+        if self.usejoint is True:
+            _logits = logits.view(logits.size(0), -1)
+            _tgt = tgt.view(tgt.size(0), -1)
+            if mask is not None:
+                _mask = mask[:,:, None].repeat(1, 1, logits.size(-1))
+                _mask = _mask.view(_mask.size(0), -1)
+                _tgt = _tgt * _mask
+            logprobs = self.logsm(_logits)
+            _tgt = _tgt / _tgt.sum(-1, keepdim=True)       # renormalize flattened target
+            kl = self.kldiv(logprobs, _tgt)
+            if mask is not None:
+                kl = kl * _mask
+            kl = kl.sum(-1)    # (batsize,)
+        else:
+            logprobs = self.logsm(logits)
+            kl = self.kldiv(logprobs, tgt)      # (batsize, seqlen, vocsize)
+            kl = kl.sum(-1)                     # (batsize, seqlen)
+            if mask is not None:
+                kl = kl * mask
+            kl = kl.sum(-1)
 
 
         best_pred = logits.max(-1)[1]   # (batsize, seqlen)
@@ -735,12 +752,14 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
                  max_size:int=100,
                  oraclemix=0.,
                  tau=1.,
+                 usejoint=False,
                  **kw):
         super(SeqInsertionDecoderBinary, self).__init__(tagger, vocab=vocab,
                                                         max_steps=max_steps,
                                                         max_size=max_size,
                                                         prob_threshold=prob_threshold,
                                                         oraclemix=oraclemix,
+                                                        usejoint=usejoint,
                                                         **kw)
         self.tau = tau
 
@@ -1457,7 +1476,8 @@ def run(domain="restaurants",
         oraclemix=0.,
         goldtemp=1.,
         evaltrain=False,
-        cooldown=50
+        cooldown=0,
+        usejoint=False,
         ):
     if betternumbered:
         numbered = True
@@ -1489,14 +1509,15 @@ def run(domain="restaurants",
     elif mode == "ltr":
         decoder = SeqInsertionDecoderLTR(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
     elif mode == "uniform":
-        decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold, oraclemix=oraclemix)
+        decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold, oraclemix=oraclemix, usejoint=usejoint)
     elif mode == "binary":
         decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab,
                                             max_steps=maxsteps,
                                             max_size=maxsize,
                                             prob_threshold=probthreshold,
                                             oraclemix=oraclemix,
-                                            tau=goldtemp)
+                                            tau=goldtemp,
+                                            usejoint=usejoint)
     # elif mode == "maxspanbinary":
     #     decoder = SeqInsertionDecoderMaxspanBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
     # elif mode == "predictivebinary":
@@ -1711,6 +1732,7 @@ def run_experiment(domain="default",    #
         oraclemix=0.,
         goldtemp=-1.,
         evaltrain=False,
+        usejoint=False,
                    testcode=False,
         ):
 

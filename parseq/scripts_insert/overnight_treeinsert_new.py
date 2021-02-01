@@ -1794,7 +1794,7 @@ class TransformerTagger(TreeInsertionTagger):
 
 
 
-def compute_relpos_and_attn_mask(seq:List[str], specialtokens=DefaultSpecialTokens(), D=RelPosDict()):
+def compute_relpos_and_attn_mask(seq:List[str], specialtokens=DefaultSpecialTokens(), D=RelPosDict(), usechildrels=True):
     """
     :param x:   the current batch of trees
     :return:    (batsize, qlen, klen, 4) -- how to reach every token from every other token in the tree.
@@ -1844,11 +1844,11 @@ def compute_relpos_and_attn_mask(seq:List[str], specialtokens=DefaultSpecialToke
     relpos[:, :, -1] = relpos_slots
 
     # do relative position coordinates
-    do_relpos(seq, relpos, attnmask, D=D, specialtokens=specialtokens)
+    do_relpos(seq, relpos, attnmask, D=D, specialtokens=specialtokens, usechildrels=usechildrels)
     return relpos, attnmask
 
 
-def do_relpos(seq, relpos, attnmask, specialtokens=DefaultSpecialTokens(), D=RelPosDict()):
+def do_relpos(seq, relpos, attnmask, specialtokens=DefaultSpecialTokens(), D=RelPosDict(), usechildrels=True):
 
     # region build tree
     buffer = seq[:]
@@ -1888,11 +1888,11 @@ def do_relpos(seq, relpos, attnmask, specialtokens=DefaultSpecialTokens(), D=Rel
     tree = stack[0][0]
     # endregion
 
-    ret = do_relpos_rec(tree, relpos, attnmask, D=D, specialtokens=specialtokens)
+    ret = do_relpos_rec(tree, relpos, attnmask, D=D, specialtokens=specialtokens, usechildrels=usechildrels)
     return tree
 
 
-def do_relpos_rec(tree, relpos, attnmask, D=RelPosDict(), specialtokens=DefaultSpecialTokens()):
+def do_relpos_rec(tree, relpos, attnmask, D=RelPosDict(), specialtokens=DefaultSpecialTokens(), usechildrels=True):
     rets = []
     ownret = []
     realchildren = []
@@ -1912,11 +1912,15 @@ def do_relpos_rec(tree, relpos, attnmask, D=RelPosDict(), specialtokens=DefaultS
             attnmask[child.seqid, parentnode.seqid] = 1
         else:
             realchildren.append(child)
-            ret = do_relpos_rec(child, relpos, attnmask, D=D)      # ret is a list of tuples (Tree, depth) of all descendants
+            ret = do_relpos_rec(child, relpos, attnmask, D=D, usechildrels=usechildrels)      # ret is a list of tuples (Tree, depth) of all descendants
             rets.append(ret)
             # record relations between parent and children
-            relpos[tree.seqid, child.seqid, 3] = D[f"child-{min(i, D.maxh-1)}"]
-            relpos[child.seqid, tree.seqid, 3] = D[f"child-{min(i, D.maxh-1)}-of"]
+            if usechildrels is True:
+                relpos[tree.seqid, child.seqid, 3] = D[f"child-{min(i, D.maxh-1)}"]
+                relpos[child.seqid, tree.seqid, 3] = D[f"child-{min(i, D.maxh-1)}-of"]
+            else:
+                relpos[tree.seqid, child.seqid, 0] = D[f"^1"]
+                relpos[child.seqid, tree.seqid, 2] = D[f"v1"]
             # make ownret
             ownret.append((child, 1))
             for rete in ret:
@@ -2094,6 +2098,8 @@ class TreeInsertionDecoder(torch.nn.Module):
                  use_rel_pos=False,
                  oracle_mix=0.,             # 0. --> sampled from scratch, 1. --> sampled from oracle
                  specialtokens=DefaultSpecialTokens(),
+                 numtraj=5,
+                 usechildrels=True,
                  **kw):
         super(TreeInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
@@ -2117,6 +2123,9 @@ class TreeInsertionDecoder(torch.nn.Module):
         # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
 
         self.use_rel_pos = use_rel_pos
+
+        self.numtraj = numtraj
+        self.usechildrels = usechildrels
 
         self._gold_data_cache = {}
 
@@ -2172,7 +2181,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         if use_oracle:
             if str(tree) not in self._gold_data_cache:
                 ptrees = []
-                for _ in range(max(min(1, num_top_explore), num_top_explore)):
+                for _ in range(max(1, num_top_explore)):
                     ptreese = run_oracle_tree_decoding(tree, self.specialtokens, use_slot_removal=self.removeslots, explore_top=num_top_explore > 0)
                     ptrees.append(ptreese)
                 self._gold_data_cache[str(tree)] = ptrees
@@ -2203,7 +2212,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         relpos, attnmask = None, None
         if self.use_rel_pos:
             ret_ = [rete.label() if isinstance(rete, Tree) else rete for rete in ret]
-            relpos, attnmask = compute_relpos_and_attn_mask(ret_)
+            relpos, attnmask = compute_relpos_and_attn_mask(ret_, usechildrels=self.usechildrels)
 
         return ret, _retsup, relpos, attnmask, ptree_choice
 
@@ -2215,13 +2224,14 @@ class TreeInsertionDecoder(torch.nn.Module):
         # sample partial tree
         parallel = False
         if parallel:
+            assert False
             ret = self.pool[0].map(self.extract_training_example_mapf, y)
             ret, retsup, relpos, attnmask = list(zip(*ret))
         else:
             outputs = []
             ptree_choice = None
             for ye in y:
-                output = self.extract_training_example_mapf(ye, ptree_choice=ptree_choice)
+                output = self.extract_training_example_mapf(ye, ptree_choice=ptree_choice, num_top_explore=self.numtraj)
                 ptree_choice = output[-1]
                 outputs.append(output[:-1])
             ret, retsup, relpos, attnmask = list(zip(*outputs))
@@ -2285,7 +2295,7 @@ class TreeInsertionDecoder(torch.nn.Module):
 
             relpos, attnmask = None, None
             if self.use_rel_pos:
-                relposes, attnmasks = list(zip(*[compute_relpos_and_attn_mask(rete) for rete in rls]))
+                relposes, attnmasks = list(zip(*[compute_relpos_and_attn_mask(rete, usechildrels=self.usechildrels) for rete in rls]))
                 relpos = torch.zeros(len(relposes), maxlen, maxlen, relposes[0].size(2), dtype=torch.long,
                                        device=x.device)
                 attnmask = torch.zeros(len(relposes), maxlen, maxlen, dtype=torch.float, device=x.device)
@@ -2406,6 +2416,8 @@ def run(domain="restaurants",
         evaltrain=False,
         removeslots=False,
         oraclemix=0.,
+        numtraj=5,
+        usechildrels=True,
         ):
 
     settings = locals().copy()
@@ -2432,7 +2444,8 @@ def run(domain="restaurants",
     tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, rel_pos=userelpos, abs_pos=useabspos)
 
     decoder = TreeInsertionDecoder(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, removeslots=removeslots,
-                                   prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos, oracle_mix=oraclemix)
+                                   prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos, oracle_mix=oraclemix,
+                                   usechildrels=usechildrels, numtraj=numtraj)
 
     print(decoder)
     # test run
@@ -2574,7 +2587,7 @@ def run(domain="restaurants",
 
 
 def run_experiment(domain="default",    #
-                   goldtemp=1.,
+                   goldtemp=-1,
                    probthreshold=-1.,
         lr=-1.,
         enclrmul=-1.,
@@ -2602,6 +2615,8 @@ def run_experiment(domain="default",    #
         useabspos=False,
         evaltrain=False,
         oraclemix=0.,
+        usechildrels="default",
+        numtraj=-1,
                    testcode=False,
 
         ):
@@ -2646,6 +2661,14 @@ def run_experiment(domain="default",    #
     ranges["lr"] = [0.00001, 0.000025]
     # ranges["lr"] = [0.00005]
     ranges["enclrmul"] = [1.]
+    ranges["goldtemp"] = [1., 0.1, 10.]     # results use 0.1, default is 1.
+
+    if usechildrels == "default":
+        ranges["usechildrels"] = [True, False]
+    else:
+        ranges["usechildrels"] = [True] if usechildrels in ("True", "true", "1") else [False]
+
+    ranges["numtraj"] = [0, 1, 10]      # default 5
 
     for k in ranges:
         if k in settings:
