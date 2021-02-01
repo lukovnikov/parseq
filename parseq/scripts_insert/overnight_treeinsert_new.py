@@ -2587,7 +2587,7 @@ def run(domain="restaurants",
 
 
 def run_experiment(domain="default",    #
-                   goldtemp=-1,
+                   goldtemp=-1.,
                    probthreshold=-1.,
         lr=-1.,
         enclrmul=-1.,
