@@ -2,6 +2,8 @@ import csv
 import json
 import os
 import random
+import shutil
+import tarfile
 import timeit
 import urllib
 import urllib.request
@@ -1012,6 +1014,99 @@ class OvernightPCFGBuilder(PCFGBuilder):
         super(OvernightPCFGBuilder, self).__init__(("op:and",), **kw)
 
 
+class DownloadProgressBar(tqdm):
+    def update_to(self, b=1, bsize=1, tsize=None):
+        if tsize is not None:
+            self.total = tsize
+        self.update(b * bsize - self.n)
+
+
+def download_url(url, output_path):
+    with DownloadProgressBar(unit='B', unit_scale=True,
+                             miniters=1, desc=url.split('/')[-1]) as t:
+        urllib.request.urlretrieve(url, filename=output_path, reporthook=t.update_to)
+
+
+class CFQDatasetLoader(object):
+    fullp = "https://storage.googleapis.com/cfq_dataset/cfq1.1.tar.gz"
+    split_names = "mcd1,mcd2,mcd3"
+    available_splits = tuple("mcd1,mcd2,mcd3".split(","))
+    rename = {
+        "mcd1": "mcd1",
+        "mcd2": "mcd2",
+        "mcd3": "mcd3",
+        "random": "random_split",
+        "question_pattern": "question_pattern_split",
+        "question_complexity": "question_complexity_split",
+        "query_pattern": "query_pattern_split",
+        "query_complexity": "query_complexity_split"
+    }
+    remap = {
+        "trainIdxs": "train",
+        "devIdxs": "valid",
+        "testIdxs": "test"
+    }
+
+    def __init__(self, path="../datasets/cfq/", **kw):
+        super(CFQDatasetLoader, self).__init__(**kw)
+        self.p = os.path.join(os.path.dirname(__file__), path)
+        self.tt = q.ticktock("CFQDatasetLoader")
+        self.tt.tick("make data")
+        if os.path.exists(os.path.join(self.p, "_data.jsonl")):
+            pass
+        else:
+            if os.path.exists(os.path.join(self.p, "_data.json")):
+                pass
+            else:
+                self.download()
+            self.clean_data()
+        self.tt.tock()
+
+    def clean_data(self):       # data can also be downloaded here: https://www.dropbox.com/s/7kjl25k0oea9ziy/cfq_data.jsonl?dl=0
+        self.tt.tick("clean data")
+        d = json.load(open(os.path.join(self.p, "_data.json")))
+        # y = []
+        with open(os.path.join(self.p, "_data.jsonl"), "w") as outf:
+            for ds in tqdm(d):
+                if "ruleTree" in ds:
+                    del ds["ruleTree"]
+                if "ruleIds" in ds:
+                    del ds["ruleIds"]
+            outf.write(json.dumps(ds) + "\n")
+            # outf.flush()
+        # json.dump(y, open(os.path.join(self.p, "_data.json")))
+        os.remove(os.path.join(self.p, "_data.json"))
+        self.tt.tock()
+
+    def download(self):
+        self.tt.tick("prepare")
+        self.tt.tick("download")
+        download_url(self.fullp, os.path.join(self.p, "cfq.tar.gz"))
+        self.tt.tock()
+        self.tt.tick("unpack")
+        tar = tarfile.open(os.path.join(self.p, "cfq.tar.gz"), "r:gz")
+        tar.extractall(self.p)
+        tar.close()
+        self.tt.tock()
+
+        self.tt.tick("process")
+        shutil.move(os.path.join(self.p, "cfq", "dataset.json"),
+                    os.path.join(self.p, "_data.json"))
+        files = os.listdir(os.path.join(self.p, "cfq", "splits"))
+        for f in files:
+            if f.endswith(".json"):
+                shutil.move(os.path.join(self.p, "cfq", "splits", f), self.p)
+        self.tt.tock()
+
+        self.tt.tick("clean up")
+        os.remove(os.path.join(self.p, "cfq.tar.gz"))
+        os.rmdir(os.path.join(self.p, "cfq"))
+        self.tt.tock()
+
+    def load(self, split="random"):
+
+
+
 class SCANDatasetLoader(object):
     fullp = "https://raw.githubusercontent.com/brendenlake/SCAN/master/tasks.txt"
     split_names = "random,length,add_jump,add_turn_left"
@@ -1025,7 +1120,7 @@ class SCANDatasetLoader(object):
             pass
         else:
             print("file missing, downloading")
-            urllib.request.urlretrieve(self.fullp, os.path.join(self.p, "all.txt"))
+            download_url(self.fullp, os.path.join(self.p, "all.txt"))
 
     def load(self, split="random", lispify=True, validfrac=0.1, seed=42, verbose=True):
         """
@@ -1112,6 +1207,8 @@ class SCANDatasetLoader(object):
 
 
 # endregion
+def try_cfq():
+    dsl = CFQDatasetLoader()
 
 
 def try_scan():
@@ -1277,4 +1374,5 @@ if __name__ == '__main__':
     # print(govd[0])
     # print(govd.examples)
     # print(try_multilingual_geoquery_dataset_loader())
-    try_scan()
+    # try_scan()
+    try_cfq()
