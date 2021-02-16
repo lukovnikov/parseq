@@ -3,6 +3,8 @@ import json
 import os
 import random
 import timeit
+import urllib
+import urllib.request
 from abc import abstractmethod
 from copy import copy
 from typing import List, Tuple, Callable, Union
@@ -87,6 +89,9 @@ class Dataset(object):
         if isinstance(item, (Callable, tuple, dict)):
             ret = self.filter(item)
             return ret
+        elif isinstance(item, str):     # interpreted as split, then last column is assumed to be the split
+            ret = self.filter(lambda x: x[-1] == item).map(lambda x: x[:-1])
+            return ret
         else:
             ret = self._examples[item]
             return ret
@@ -165,6 +170,9 @@ class MappedDataset(Dataset, CachedDataset):
     def __getitem__(self, item):
         if isinstance(item, (Callable, tuple, dict)):
             ret = self.filter(item)
+            return ret
+        elif isinstance(item, str):     # interpreted as split, then last column is assumed to be the split
+            ret = self.filter(lambda x: x[-1] == item).map(lambda x: x[:-1])
             return ret
         else:
             if self.use_cache and item in self._examples_cache:
@@ -1004,7 +1012,113 @@ class OvernightPCFGBuilder(PCFGBuilder):
         super(OvernightPCFGBuilder, self).__init__(("op:and",), **kw)
 
 
+class SCANDatasetLoader(object):
+    fullp = "https://raw.githubusercontent.com/brendenlake/SCAN/master/tasks.txt"
+    split_names = "random,length,add_jump,add_turn_left"
+    available_splits = tuple("random,length,add_jump,add_turn_left,mcd1,mcd2,mcd3".split(","))
+    remap = {"train": "train", "valid": "valid", "test": "test", "trainIdxs": "train", "devIdxs": "valid", "testIdxs": "test"}
+
+    def __init__(self, path="../datasets/scan/", **kw):
+        super(SCANDatasetLoader, self).__init__(**kw)
+        self.p = os.path.join(os.path.dirname(__file__), path)
+        if os.path.exists(os.path.join(self.p, "all.txt")):
+            pass
+        else:
+            print("file missing, downloading")
+            urllib.request.urlretrieve(self.fullp, os.path.join(self.p, "all.txt"))
+
+    def load(self, split="random", lispify=True, validfrac=0.1, seed=42, verbose=True):
+        """
+        :param split: which split to use (see self.available_splits)
+        :return:
+        """
+        assert split in self.available_splits, f"Split '{split}' not among available splits: {', '.join(self.available_splits)}"
+        if verbose:
+            print(f"loading split '{split}'")
+        examples = []
+        splitidxs = json.load(open(os.path.join(self.p, f"{split}.json")))
+        splitidxs = {self.remap[k]: v for k, v in splitidxs.items()}
+
+        validpresent = "valid" in splitidxs
+        trainidxs = splitidxs["train"]
+
+        if not validpresent and validfrac >= 0:
+            if verbose:
+                print(f"splitting off a random {validfrac*100:.0f}% of 'train' for 'valid' using seed {seed}")
+            rnd = random.Random(seed)
+            rnd.shuffle(trainidxs)
+            numvalid = round(validfrac * len(trainidxs))
+            valididxs = trainidxs[:numvalid]
+            trainidxs = trainidxs[numvalid:]
+            splitidxs["train"] = trainidxs
+            splitidxs["valid"] = valididxs
+
+        all_lines = open(os.path.join(self.p, "all.txt")).readlines()
+        all_lines = [x.strip() for x in all_lines]
+        for subsetname in splitidxs:
+            if verbose:
+                print(f"doing '{subsetname}'")
+            for i in tqdm(splitidxs[subsetname], disable=not verbose):
+                example = self.process_line(all_lines[i], lispify=lispify)
+                examples.append(example + (subsetname,))
+        ret = Dataset(examples)
+        return ret
+
+    def process_line(self, x:str, lispify=False):
+        # print(x)
+        assert x[:4] == "IN: "
+        x = x[4:]
+        splits = x.split(" OUT: ")
+        assert len(splits) == 2
+        inp, out = splits
+        inp, out = inp.strip(), out.strip()
+        if lispify:
+            out = f"( @R@ {out} )"
+        return (inp, out)
+
+
+    def build_index_sets(self):
+        splitnames = self.split_names.split(",")
+        # load lines from all.txt
+        try:
+            all_lines = open(os.path.join(self.p, "all.txt")).readlines()
+            all_lines = [x.strip() for x in all_lines]
+            all_lines_D = dict(zip(all_lines, range(len(all_lines))))
+            print(f"total: {len(all_lines_D)}")
+            print(f"total unique: {len(set(all_lines_D.keys()))}")
+            for splitname in splitnames:
+                split_indexes = {"train": [], "test": []}
+                print(f"doing {splitname}")
+                trainlines = open(os.path.join(self.p, f"{splitname}_train.txt")).readlines()
+                trainlines = [x.strip() for x in trainlines]
+                testlines = open(os.path.join(self.p, f"{splitname}_test.txt")).readlines()
+                testlines = [x.strip() for x in testlines]
+                for trainline in trainlines:
+                    assert trainline in all_lines_D, "line not in all lines"
+                    split_indexes["train"].append(all_lines_D[trainline])
+                for testline in testlines:
+                    assert testline in all_lines_D, "line not in all lines"
+                    split_indexes["test"].append(all_lines_D[testline])
+                for k in split_indexes:
+                    split_indexes[k] = sorted(split_indexes[k])
+                print(f"num_train: {len(split_indexes['train'])}/{len(set(split_indexes['train']))}")
+                print(f"num_test: {len(split_indexes['test'])}/{len(set(split_indexes['test']))}")
+                print(f"num_total: {len(split_indexes['test']) + len(split_indexes['train'])}")
+                json.dump(split_indexes, open(os.path.join(self.p, f"{splitname}.json"), "w"))
+        except Exception as e:
+            raise e
+
+
+
+
 # endregion
+
+
+def try_scan():
+    scandsl = SCANDatasetLoader()
+    # scandsl.build_index_sets()
+    ds = scandsl.load("length")
+    print(ds[0])
 
 
 def try_tokenizer_dataset():
@@ -1162,4 +1276,5 @@ if __name__ == '__main__':
     # print(ovd[0])
     # print(govd[0])
     # print(govd.examples)
-    print(try_multilingual_geoquery_dataset_loader())
+    # print(try_multilingual_geoquery_dataset_loader())
+    try_scan()

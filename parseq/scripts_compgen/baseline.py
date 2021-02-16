@@ -3,11 +3,14 @@ import re
 from copy import deepcopy
 from typing import Dict
 
-import datasets
+import wandb
+
 import qelos as q
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
+
+from parseq.datasets import SCANDatasetLoader, autocollate
 from transformers import AutoTokenizer, BertModel
 
 from parseq.grammar import lisp_to_tree, are_equal_trees
@@ -253,20 +256,20 @@ class SeqDecoderBaseline(torch.nn.Module):
         return newy, steps_used.float()
 
 
-def autocollate(x:Dict, pad_value=0):
-    y = {}
-    for k in x[0]:
-        yk = []
-        for xe in x:
-            yk.append(xe[k])
-        y[k] = yk
-        if isinstance(yk[0], torch.LongTensor) and yk[0].dim() == 1:
-            y[k] = q.pad_tensors(yk, 0, pad_value)
-    for k, yk in y.items():
-        if isinstance(yk[0], torch.Tensor):
-            yk = [yij[None] for yij in yk]
-            y[k] = torch.cat(yk, 0)
-    return y
+# def autocollate(x:Dict, pad_value=0):
+#     y = {}
+#     for k in x[0]:
+#         yk = []
+#         for xe in x:
+#             yk.append(xe[k])
+#         y[k] = yk
+#         if isinstance(yk[0], torch.LongTensor) and yk[0].dim() == 1:
+#             y[k] = q.pad_tensors(yk, 0, pad_value)
+#     for k, yk in y.items():
+#         if isinstance(yk[0], torch.Tensor):
+#             yk = [yij[None] for yij in yk]
+#             y[k] = torch.cat(yk, 0)
+#     return y
 
 
 class Tokenizer(object):
@@ -280,6 +283,7 @@ class Tokenizer(object):
         outtoks = self.get_out_toks(outs)
         outret = self.tokenizer.encode(inps, return_tensors="pt")[0]
         ret = {"inps": inps, "outs":outs, "inptoks": inptoks, "outtoks": outtoks, "inptensor": outret, "outtensor": self.tensorize_output(outtoks)}
+        ret = (ret["inptensor"], ret["outtensor"])
         return ret
 
     def get_out_toks(self, x):
@@ -291,68 +295,62 @@ class Tokenizer(object):
         return ret
 
 
-def load_ds(dataset="scan", split="simple"):
+def load_ds(dataset="scan/random", validfrac=0.1):
     tt = q.ticktock("data")
     tt.tick("loading")
-    scan_ds = datasets.load_dataset("scan", split)
-    print(scan_ds)
+
+    dataset, split = dataset.split("/")
+    if dataset == "scan":
+        ds = SCANDatasetLoader().load(split, validfrac=validfrac)
+    elif dataset == "cfq":
+        ds = CFQDatasetLoader().load(split, validfrac=validfrac)
+    else:
+        raise Exception(f"Unknown dataset: '{dataset}'")
     tt.tock("loaded")
 
+    tt.tick("creating tokenizer")
     tokenizer = Tokenizer()
+    tt.tock("created tokenizer")
 
-    print(len(scan_ds))
-    print(scan_ds)
-    print(len(scan_ds["train"]))
-    print(scan_ds["train"][0])
-    print(scan_ds)
-
-    tt.tick("validation set")
-    ret = scan_ds["train"].train_test_split(0.1)
-    # print(scan_ds)
-    print(ret)
-    scan_ds["valid"] = ret["test"]
-    scan_ds["train"] = ret["train"]
-    # scan_ds.train_test_split(0.1)
-    print(scan_ds)
-    tt.tock()
+    print(len(ds))
 
     tt.tick("dictionaries")
     fldic = Vocab()
-    for x in scan_ds["train"]:
-        for tok in tokenizer.get_out_toks(x["actions"]):
-            fldic.add_token(tok, seen=True)
-    for x in scan_ds["valid"]:
-        for tok in tokenizer.get_out_toks(x["actions"]):
-            fldic.add_token(tok, seen=False)
-    for x in scan_ds["test"]:
-        for tok in tokenizer.get_out_toks(x["actions"]):
-            fldic.add_token(tok, seen=False)
-
+    for x in ds:
+        for tok in tokenizer.get_out_toks(x[1]):
+            fldic.add_token(tok, seen=x[2] == "train")
     fldic.finalize(min_freq=0, top_k=np.infty)
     print(f"output vocabulary size: {len(fldic.D)}")
     tt.tock()
 
     tt.tick("tensorizing")
     tokenizer.outvocab = fldic
-    scan_ds = scan_ds.map(lambda x: tokenizer.tokenize(x["commands"], x["actions"]))
+    trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+    validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+    testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+    # ds = ds.map(lambda x: tokenizer.tokenize(x[0], x[1]) + (x[2],)).cache(True)
     tt.tock("tensorized")
 
-    return scan_ds, fldic
+    return trainds, validds, testds, fldic
 
 
-def run(lr=0.001, split="simple", batsize=10):
+def run(lr=0.001, dataset="scan/length", batsize=10):
+
+    settings = locals().copy()
+    print(json.dumps(settings, indent=3))
+    # wandb.init()
 
     tt = q.ticktock("script")
     tt.tick("data")
-    ds, fldic = load_ds(dataset="scan", split=split)
+    trainds, validds, testds, fldic = load_ds(dataset=dataset)
 
     tt.tick("dataloaders")
-    ds.set_format(type='torch', columns=['inptensor', 'outtensor'])
-    trainds = DataLoader(ds["train"], batch_size=batsize, shuffle=True, collate_fn=autocollate)
-    validds = DataLoader(ds["valid"], batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    testds = DataLoader(ds["test"], batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
+    validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
     # print(json.dumps(next(iter(trainds)), indent=3))
-    print(next(iter(trainds)))
+    print(next(iter(traindl)))
+    print(next(iter(validdl)))
     tt.tock()
     tt.tock()
 
