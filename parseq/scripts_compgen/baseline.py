@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import shelve
 from copy import deepcopy
 from typing import Dict
 
@@ -10,7 +12,7 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 
-from parseq.datasets import SCANDatasetLoader, autocollate
+from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetLoader
 from transformers import AutoTokenizer, BertModel
 
 from parseq.grammar import lisp_to_tree, are_equal_trees
@@ -295,46 +297,83 @@ class Tokenizer(object):
         return ret
 
 
-def load_ds(dataset="scan/random", validfrac=0.1):
+def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="bert-base-uncased"):
     tt = q.ticktock("data")
-    tt.tick("loading")
+    tt.tick(f"loading '{dataset}'")
+    key = f"{dataset}|validfrac={validfrac}|bertname={bertname}"
 
-    dataset, split = dataset.split("/")
-    if dataset == "scan":
-        ds = SCANDatasetLoader().load(split, validfrac=validfrac)
-    elif dataset == "cfq":
-        ds = CFQDatasetLoader().load(split, validfrac=validfrac)
-    else:
-        raise Exception(f"Unknown dataset: '{dataset}'")
-    tt.tock("loaded")
+    shelfname = os.path.basename(__file__) + ".cache.shelve"
+    if not recompute:
+        tt.tick(f"loading from shelf (key '{key}')")
+        with shelve.open(shelfname) as shelf:
+            if key not in shelf:
+                recompute = True
+                tt.tock("couldn't load from shelf")
+            else:
+                shelved = shelf[key]
+                trainex, validex, testex, fldic = shelved["trainex"], shelved["validex"], shelved["testex"], shelved["fldic"]
+                trainds, validds, testds = Dataset(trainex), Dataset(validex), Dataset(testex)
+                tt.tock("loaded from shelf")
 
-    tt.tick("creating tokenizer")
-    tokenizer = Tokenizer()
-    tt.tock("created tokenizer")
+    if recompute:
+        tt.tick("loading data")
+        dataset, split = dataset.split("/")
+        if dataset == "scan":
+            ds = SCANDatasetLoader().load(split, validfrac=validfrac)
+        elif dataset == "cfq":
+            ds = CFQDatasetLoader().load(split, validfrac=validfrac)
+        else:
+            raise Exception(f"Unknown dataset: '{dataset}'")
+        tt.tock("loaded data")
 
-    print(len(ds))
+        tt.tick("creating tokenizer")
+        tokenizer = Tokenizer(bertname=bertname)
+        tt.tock("created tokenizer")
 
-    tt.tick("dictionaries")
-    fldic = Vocab()
-    for x in ds:
-        for tok in tokenizer.get_out_toks(x[1]):
-            fldic.add_token(tok, seen=x[2] == "train")
-    fldic.finalize(min_freq=0, top_k=np.infty)
-    print(f"output vocabulary size: {len(fldic.D)}")
-    tt.tock()
+        print(len(ds))
 
-    tt.tick("tensorizing")
-    tokenizer.outvocab = fldic
-    trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-    validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-    testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-    # ds = ds.map(lambda x: tokenizer.tokenize(x[0], x[1]) + (x[2],)).cache(True)
-    tt.tock("tensorized")
+        tt.tick("dictionaries")
+        fldic = Vocab()
+        for x in ds:
+            for tok in tokenizer.get_out_toks(x[1]):
+                fldic.add_token(tok, seen=x[2] == "train")
+        fldic.finalize(min_freq=0, top_k=np.infty)
+        print(f"output vocabulary size: {len(fldic.D)}")
+        tt.tock()
 
+        tt.tick("tensorizing")
+        tokenizer.outvocab = fldic
+        trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+        validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+        testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+        # ds = ds.map(lambda x: tokenizer.tokenize(x[0], x[1]) + (x[2],)).cache(True)
+        tt.tock("tensorized")
+
+        tt.tick("shelving")
+        with shelve.open(shelfname) as shelf:
+            shelved = {
+                "trainex": trainds.examples,
+                "validex": validds.examples,
+                "testex": testds.examples,
+                "fldic": fldic
+            }
+            shelf[key] = shelved
+        tt.tock("shelved")
+
+    tt.tock(f"loaded '{dataset}'")
     return trainds, validds, testds, fldic
 
 
-def run(lr=0.001, dataset="scan/length", batsize=10):
+def run(lr=0.001,
+        batsize=10,
+        dataset="scan/length",
+        seed=42,
+        hdim=768,
+        numlayers=6,
+        numheads=12,
+        dropout=0.1,
+        bertname="bert-base-uncased",
+        ):
 
     settings = locals().copy()
     print(json.dumps(settings, indent=3))
@@ -342,7 +381,7 @@ def run(lr=0.001, dataset="scan/length", batsize=10):
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, validds, testds, fldic = load_ds(dataset=dataset)
+    trainds, validds, testds, fldic = load_ds(dataset=dataset, recompute=False, bertname=bertname)
 
     tt.tick("dataloaders")
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -354,9 +393,10 @@ def run(lr=0.001, dataset="scan/length", batsize=10):
     tt.tock()
     tt.tock()
 
-    # print(len(scan_ds[0]))
-    # print(len(scan_ds[1]))
-    # print(dir(scan_ds))
+    tt.tick("model")
+    cell = TransformerTagger(hdim, fldic, numlayers, numheads, dropout, bertname=bertname)
+    tt.tock()
+
 
 
 if __name__ == '__main__':

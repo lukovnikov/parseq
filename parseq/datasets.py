@@ -397,8 +397,8 @@ def build_vocab_from_pcfg(pcfg, min_freq=0, top_k=np.infty)->Vocab:
 def autocollate(x, pad_value=0):
     y = list(zip(*x))
     for i, yi in enumerate(y):
-        if isinstance(yi[0], torch.LongTensor) and yi[0].dim() == 1:
-            y[i] = q.pad_tensors(yi, 0, pad_value)
+        if isinstance(yi[0], torch.LongTensor):# and yi[0].dim() == 1:
+            y[i] = q.pad_tensors(yi, list(range(yi[0].dim())), pad_value)
     for i, yi in enumerate(y):
         if isinstance(yi[0], torch.Tensor):
             yi = [yij[None] for yij in yi]
@@ -1104,6 +1104,7 @@ class CFQDatasetLoader(object):
         self.tt.tock()
 
     def load(self, split="random"):
+        pass
 
 
 
