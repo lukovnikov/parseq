@@ -2175,7 +2175,7 @@ class TreeInsertionDecoder(torch.nn.Module):
         return {"loss": loss, "acc": acc, "recall": recall}, logits
 
     def extract_training_example_mapf(self, tree, ptree_choice=None, num_top_explore=5):
-         tree = assign_dfs_nodeids(tree)
+        tree = assign_dfs_nodeids(tree)
 
         use_oracle = random.random() < self.oracle_mix
         if use_oracle:

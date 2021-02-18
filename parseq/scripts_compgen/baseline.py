@@ -109,9 +109,6 @@ class TransformerTagger(torch.nn.Module):
         # return probs
 
 
-ORDERLESS = {}
-
-
 class SeqDecoderBaseline(torch.nn.Module):
     # default_termination_mode = "sequence"
     # default_decode_mode = "serial"
@@ -289,7 +286,7 @@ class Tokenizer(object):
         return ret
 
     def get_out_toks(self, x):
-        return x.split(" ")
+        return x.strip().split(" ")
 
     def tensorize_output(self, x):
         ret = [self.outvocab[xe] for xe in x]
@@ -297,10 +294,17 @@ class Tokenizer(object):
         return ret
 
 
+ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY"}
+
+
 def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="bert-base-uncased"):
     tt = q.ticktock("data")
     tt.tick(f"loading '{dataset}'")
-    key = f"{dataset}|validfrac={validfrac}|bertname={bertname}"
+    if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
+        key = f"{dataset}|bertname={bertname}"
+        print(f"validfrac is ineffective with dataset '{dataset}'")
+    else:
+        key = f"{dataset}|validfrac={validfrac}|bertname={bertname}"
 
     shelfname = os.path.basename(__file__) + ".cache.shelve"
     if not recompute:
@@ -317,11 +321,13 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
 
     if recompute:
         tt.tick("loading data")
-        dataset, split = dataset.split("/")
+        splits = dataset.split("/")
+        dataset, splits = splits[0], splits[1:]
+        split = "/".join(splits)
         if dataset == "scan":
             ds = SCANDatasetLoader().load(split, validfrac=validfrac)
         elif dataset == "cfq":
-            ds = CFQDatasetLoader().load(split, validfrac=validfrac)
+            ds = CFQDatasetLoader().load(split)
         else:
             raise Exception(f"Unknown dataset: '{dataset}'")
         tt.tock("loaded data")
@@ -381,7 +387,7 @@ def run(lr=0.001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, validds, testds, fldic = load_ds(dataset=dataset, recompute=False, bertname=bertname)
+    trainds, validds, testds, fldic = load_ds(dataset=dataset)
 
     tt.tick("dataloaders")
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)

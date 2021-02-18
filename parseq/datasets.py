@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import random
+import re
 import shutil
 import tarfile
 import timeit
@@ -1029,8 +1030,8 @@ def download_url(url, output_path):
 
 class CFQDatasetLoader(object):
     fullp = "https://storage.googleapis.com/cfq_dataset/cfq1.1.tar.gz"
-    split_names = "mcd1,mcd2,mcd3"
-    available_splits = tuple("mcd1,mcd2,mcd3".split(","))
+    split_names = "mcd1,mcd2,mcd3,random"
+    available_splits = tuple("mcd1,mcd2,mcd3,random".split(","))
     rename = {
         "mcd1": "mcd1",
         "mcd2": "mcd2",
@@ -1103,9 +1104,158 @@ class CFQDatasetLoader(object):
         os.rmdir(os.path.join(self.p, "cfq"))
         self.tt.tock()
 
-    def load(self, split="random"):
-        pass
+    def load(self, split="random/modent", verbose=True, lispify=True):
+        """
+                :param split: which split to use (see self.available_splits)
+                must be of the form "split/version" where "split" part can be "mcdX" or "random" or other
+                and where the "version" part is "full" (original question and query with mids)
+                    or "noeid" (placeholders for entities)
+                :return:
+                """
+        parts = split.split("/")
+        split = parts[0]
+        version = "full" if len(parts) == 1 else parts[1]
 
+        assert split in self.available_splits, f"Split '{split}' not among available splits: {', '.join(self.available_splits)}"
+        if verbose:
+            print(f"loading split '{split}'")
+        split = self.rename[split]
+        examples = []
+        splitidxs = json.load(open(os.path.join(self.p, f"{split}.json")))
+        splitidxs = {self.remap[k]: v for k, v in splitidxs.items()}
+
+        all_lines = open(os.path.join(self.p, "_data.jsonl")).readlines()
+        all_lines = [x.strip() for x in all_lines]
+        for subsetname in splitidxs:
+            if verbose:
+                print(f"doing '{subsetname}'")
+            for i in tqdm(splitidxs[subsetname], disable=not verbose):
+                example = self.process_line(all_lines[i], lispify=lispify, version=version)
+                examples.append(example + (subsetname,))
+        ret = Dataset(examples)
+        return ret
+
+    def process_line(self, line, lispify=False, version="full"):
+        x = json.loads(line)
+        if version == "full":
+            ret = (x["question"], x["sparql"])
+        elif version in ("modent", "noeid", "entplace", "anonent"):
+            ret = (x["questionPatternModEntities"], x["sparqlPatternModEntities"])
+        else:
+            raise Exception(f"Unrecognized data version: '{version}'")
+
+        if lispify:
+            # print(ret[0])
+            # print(ret[1])
+            tree = sparql_to_tree(ret[1])
+            treestr = tree_to_lisp(tree)
+            treestr = re.sub(r"\s+", " ", treestr.replace("(", " ( ").replace(")", " ) "))
+            treestr = treestr.strip()
+            ret = (ret[0], treestr)
+            # print(ret[1])
+        return ret
+
+
+def sparql_to_tree(x):
+    xs = re.split("([)\n\s+|\(\)])", x)
+    # xs = [xse for xse in xs if xse not in {'', ' ', '\n'}]
+    _xs = []
+    prevspace = False
+    for xe in xs:
+        if xe in {'', ' ', '\n'}:
+            xe = ''
+            if prevspace:
+                continue
+            prevspace = True
+        else:
+            prevspace = False
+        _xs.append(xe)
+    xs = _xs
+
+    buffer = []
+    inselect = False
+    inwhere = False
+    inblock = False
+    intriplepattern = False
+
+    ORDERLESS = {"@QUERY", "@AND", "@OR", "@WHERE"}
+
+    tree = Tree("@R@", [Tree("@QUERY", [])])
+    curnode = tree[0]
+    tree[0].parent = tree
+
+    def resolve_buffer(c, b):
+        _c = c
+        node = Tree("@COND", [])
+        c.append(node)
+        node.parent = c
+        c = node
+        appendto = None
+        for be in b:
+            if be == "":
+                pass
+            elif be == "|":
+                if c[-1].label() != "@OR":      # append next to the or
+                    prev = c.pop(-1)
+                    node = Tree("@OR", [prev])
+                    prev.parent = node
+                    c.append(node)
+                    node.parent = c
+                appendto = c[-1]
+            elif be == "(":
+                c = c[-1]
+            elif be == ")":
+                c = c.parent
+            else:
+                be = Tree(be, [])
+                appendto = c if appendto is None else appendto
+                appendto.append(be)
+                be.parent = appendto
+                appendto = None
+
+        if c[0].label() == "filter":
+            assert len(c) == 1
+            assert c.parent[-1] is c
+            c.parent[-1] = c[0]
+        return c
+
+    buffer = []
+    for xe in xs:
+        xe = xe.lower()
+        if xe == "select":
+            inselect = True
+            node = Tree("@SELECT", [])
+            curnode.append(node)
+            node.parent = curnode
+            curnode = node
+        elif xe == "where":
+            node = resolve_buffer(curnode, buffer)
+            curnode[:] = curnode[0][:]
+            buffer = []
+            curnode = curnode.parent
+            inselect = False
+            inwhere = True
+            node = Tree("@WHERE", [])
+            curnode.append(node)
+            node.parent = curnode
+            curnode = node
+        elif xe == "{":  # begin of block
+            assert inwhere      # can only be inside "where" clause
+            buffer = []
+            inblock = True
+        elif xe == "}":  # end of block
+            node = resolve_buffer(curnode, buffer)
+            buffer = []
+            inblock = False
+            curnode = curnode.parent
+            assert curnode.label() == "@QUERY"
+        elif xe == ".":     # end of a condition in "where" clause
+            node = resolve_buffer(curnode, buffer)
+            buffer = []
+        else:
+            buffer.append(xe)
+
+    return tree
 
 
 class SCANDatasetLoader(object):
@@ -1203,8 +1353,6 @@ class SCANDatasetLoader(object):
                 json.dump(split_indexes, open(os.path.join(self.p, f"{splitname}.json"), "w"))
         except Exception as e:
             raise e
-
-
 
 
 # endregion
