@@ -1753,7 +1753,7 @@ class TransformerTagger(TreeInsertionTagger):
 
     def encode_source(self, x):
         encmask = (x != 0)
-        encs = self.bert_model(x)[0]
+        encs = self.bert_model(x, attention_mask=encmask)[0]
         if self.adapter is not None:
             encs = self.adapter(encs)
         return encs, encmask
