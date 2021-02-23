@@ -599,6 +599,7 @@ class TransformerStack(TransformerPreTrainedModel):
             past_key_value_states = [None] * len(self.block)
 
         # ourselves in which case we just need to make it broadcastable to all heads.
+        # !!! causality is added to the attention_mask in the following line!
         extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape, self.device)
 
         if self.is_decoder and encoder_attention_mask is not None:
@@ -653,7 +654,7 @@ class TransformerStack(TransformerPreTrainedModel):
         return outputs  # last-layer hidden state, (presents,) (all hidden states), (all attentions)
 
     def get_extended_attention_mask(self, attention_mask: torch.Tensor, input_shape: tuple, device: torch.device):
-        """Makes broadcastable attention mask and causal mask so that future and maked tokens are ignored.
+        """Makes broadcastable attention mask and causal mask so that future and masked tokens are ignored.
 
         Arguments:
             attention_mask: torch.Tensor with 1 indicating tokens to ATTEND to
