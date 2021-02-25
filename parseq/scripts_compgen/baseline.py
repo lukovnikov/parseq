@@ -90,6 +90,7 @@ class BasicRelPosEmb(torch.nn.Module):
             relpos_ = relpos[:, :, :, n]
             scores = torch.einsum("bhqd,nhd->bhqn", query, embs)  # (batsize, numheads, qlen, numindexes)
             relpos_ = relpos_[:, None, :, :].repeat(1, scores.size(1), 1, 1)  # (batsize, numheads, qlen, klen)
+            print(scores.size(), relpos_.size())
             scores_ = torch.gather(scores, 3, relpos_)  # (batsize, numheads, qlen, klen)
             if retscores is None:
                 retscores = torch.zeros_like(scores_)
