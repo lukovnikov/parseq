@@ -176,6 +176,7 @@ class TransformerAttention(nn.Module):
         self.d_model = config.d_model
         self.d_kv = config.d_kv
         self.n_heads = config.num_heads
+        assert self.d_model == self.d_kv * self.n_heads
         self.dropout = torch.nn.Dropout(config.attention_dropout_rate)
         self.inner_dim = self.n_heads * self.d_kv
 

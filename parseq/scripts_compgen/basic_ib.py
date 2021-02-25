@@ -28,14 +28,12 @@ from parseq.vocab import Vocab
 class TransformerDecoderCellWithVIB(TransformerDecoderCell):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6, userelpos=False, useabspos=True,
                  relposmode="basic", relposrng=10,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased",
-                 vib_numsamples=5, **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
         super(TransformerDecoderCellWithVIB, self).__init__(dim,
                                                             vocab=vocab, numlayers=numlayers, numheads=numheads,
                                                             userelpos=userelpos, useabspos=useabspos, relposmode=relposmode, relposrng=relposrng,
                                                             dropout=dropout, maxpos=maxpos, bertname=bertname, **kw)
 
-        self.vib_numsamples = vib_numsamples
         # reparam network:
         self.vib_linA = None
         self.vib_linA = torch.nn.Sequential(torch.nn.Linear(dim, dim*2), torch.nn.ReLU())
@@ -43,19 +41,22 @@ class TransformerDecoderCellWithVIB(TransformerDecoderCell):
         self.vib_lin_mu = torch.nn.Linear(dim*2, dim)
         self.vib_lin_logvar = torch.nn.Linear(dim*2, dim)
 
-    def sample_z(self, x, numsamples):
+    def sample_z(self, x):
         if self.vib_linA is not None:
             x = self.vib_linA(x)
         mu, logvar = self.vib_lin_mu(x), self.vib_lin_logvar(x)
         if self.training:
-            ret = mu + torch.exp(0.5 * logvar) * torch.randn(*((numsamples,) + mu.size()), device=mu.device)
+            ret = mu + torch.exp(0.5 * logvar) * torch.randn_like(mu)
         else:
             ret = None
-        return ret, (mu, logvar)
+        return ret, (mu, logvar)        # (batsize, seqlen, dim)
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
         padmask = (tokens != 0)
-        embs = self.dec_emb(tokens)
+        try:
+            embs = self.dec_emb(tokens)
+        except Exception as e:
+            raise e
         if self.absposemb is not None:
             posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
             embs = embs + posembs
@@ -78,13 +79,14 @@ class TransformerDecoderCellWithVIB(TransformerDecoderCell):
         c = ret
         cache = _ret[1]
 
-        zs, (mu, logvar) = self.sample_z(c, self.vib_numsamples)        # ([numsamples,] batsize, seqlen, dim)
+        zs, (mu, logvar) = self.sample_z(c)        # (batsize, seqlen, dim)
         if self.training:
-            logits = self.out(zs)  # ([numsamples,] batsize, seqlen, vocabsize)
+            logits = self.out(zs)  # (batsize, seqlen, vocabsize)
             return logits, cache, (mu, logvar)
         else:
             assert zs is None
-            return mu, cache
+            logits = self.out(mu)
+            return logits, cache
 
 
 class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
@@ -94,7 +96,7 @@ class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
 
     def compute_loss(self, logits, tgt, mulogvar):
         """
-        :param logits:      (numsamples, batsize, seqlen, vocsize)
+        :param logits:      (batsize, seqlen, vocsize)
         :param tgt:         (batsize, seqlen)
         :return:
         """
@@ -102,13 +104,12 @@ class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
         # batsize, seqlen = tgt.size()
 
         logprobs = self.logsm(logits)
-        logprobs = logprobs.transpose(0, 1)       # -> (batsize, numsamples, seqlen, vocsize)
-        _tgt = tgt[:, None, :].repeat(1, logprobs.size(1), 1) # -> (batsize, numsamples, seqlen)
         if self.smoothing > 0:
-            loss = self.loss(logprobs, _tgt)
+            loss = self.loss(logprobs, tgt)
         else:
-            loss = self.loss(logprobs.permute(0, 3, 1, 2), _tgt)      # (batsize, numsamples, seqlen)
-        loss = loss.mean(1)     # -> (batsize, seqlen)
+            # print(tgt.max(), tgt.min(), logprobs.size(-1))
+            # print()
+            loss = self.loss(logprobs.permute(0, 2, 1), tgt)      # (batsize, seqlen)
         loss = loss * mask
         loss = loss.sum(-1)
 
@@ -120,7 +121,6 @@ class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
             priorkl = priorkls.sum(-1) * self.priorweight
             loss = loss + priorkl
 
-        logits = logits.mean(0)
         best_pred = logits.max(-1)[1]   # (batsize, seqlen)
         best_gold = tgt
         same = best_pred == best_gold
@@ -166,7 +166,6 @@ def run(lr=0.0001,
         gpu=-1,
         evaltrain=False,
         priorweight=1.,
-        numsamples=10,
         ):
 
     settings = locals().copy()
@@ -195,7 +194,7 @@ def run(lr=0.0001,
 
     tt.tick("model")
     cell = TransformerDecoderCellWithVIB(hdim, vocab=fldic, numlayers=numlayers, numheads=numheads, dropout=dropout,
-                                  bertname=bertname, userelpos=userelpos, useabspos=not userelpos, vib_numsamples=numsamples)
+                                  bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
     decoder = SeqDecoderBaselineWithVIB(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, priorweight=priorweight)
     print(f"one layer of decoder: \n {cell.decoder.block[0]}")
     tt.tock()
@@ -365,11 +364,14 @@ def run_experiment(
         userelpos=False,
         gpu=-1,
         evaltrain=False,
-        priorweight=1.,
-        numsamples=10,
+        priorweight=-1.,
         ):
 
     settings = locals().copy()
+
+    _dataset = None
+    if dataset.endswith("mcd"):
+        _dataset = [dataset+str(i) for i in range(3)]
 
     ranges = {
         "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
@@ -387,16 +389,24 @@ def run_experiment(
         # "warmup": [20],
         "validinter": [2],
         # "gradacc": [1],
+        "priorweight": [0.01, 0.03, 0.1, 0.3, 1.],
     }
+
+    if _dataset is not None:
+        ranges["dataset"] = _dataset
+        settings["dataset"] = "default"
 
     if bertname.startswith("none"):
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
-        ranges["epochs"] = [40]
+        ranges["epochs"] = [71]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
         ranges["batsize"] = [256]
-        ranges["validinter"] = [3]
+        ranges["validinter"] = [5]
+
+        ranges["dropout"] = [0.1]
+        ranges["smoothing"] = [0.]
 
     for k in ranges:
         if k in settings:

@@ -115,7 +115,10 @@ class BasicRelPosEmb(torch.nn.Module):
             relpos_ = relpos[:, :, :, n]
 
             # map relpos_ to compact integer space of unique relpos_ entries
-            relpos_unique = relpos_.unique()
+            try:
+                relpos_unique = relpos_.unique()
+            except Exception as e:
+                raise e
             mapper = torch.zeros(relpos_unique.max() + 1, device=device, dtype=torch.long)  # mapper is relpos_unique but the other way around
             mapper[relpos_unique] = torch.arange(0, relpos_unique.size(0), device=device).long()
             relpos_mapped = mapper[relpos_]     # (batsize, qlen, klen) but ids are from 0 to number of unique relposes
@@ -149,6 +152,7 @@ class TransformerDecoderCell(torch.nn.Module):
         self.relposrng = relposrng
         self.useabspos = useabspos
         decconfig = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
+                                          d_kv=int(self.dim/numheads),
                                    num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
 
         self.dec_emb = torch.nn.Embedding(self.vocabsize, decconfig.d_model)
@@ -192,6 +196,7 @@ class TransformerDecoderCell(torch.nn.Module):
             bname = "bert" + self.bertname[4:]
             tokenizer = AutoTokenizer.from_pretrained(bname)
             encconfig = TransformerConfig(vocab_size=tokenizer.vocab_size, d_model=self.dim, d_ff=self.dim * 4,
+                                          d_kv=int(self.dim/numheads),
                                        num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
             encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout, useabspos=useabspos)
             self.encoder_model = TransformerStack(encconfig, encemb, rel_emb=self.encrelposemb)
@@ -765,6 +770,9 @@ def run_experiment(
         ranges["numheads"] = [6]
         ranges["batsize"] = [256]
         ranges["validinter"] = [3]
+
+        ranges["dropout"] = [0.1]
+        ranges["smoothing"] = [0.]
 
     for k in ranges:
         if k in settings:
