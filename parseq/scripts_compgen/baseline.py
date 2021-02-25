@@ -23,6 +23,49 @@ from parseq.scripts_compgen.transformer import TransformerConfig, TransformerSta
 from parseq.vocab import Vocab
 
 
+class TransformerEmbeddings(torch.nn.Module):
+    """Construct the embeddings from word, position and token_type embeddings.
+    """
+
+    def __init__(self, vocab_size, hidden_size, dropout=0., pad_token_id=0, max_position_embeddings=512,
+                 layer_norm_eps=1e-12, useabspos=True):
+        super().__init__()
+        self.word_embeddings = torch.nn.Embedding(vocab_size, hidden_size, padding_idx=pad_token_id)
+        self.position_embeddings = torch.nn.Embedding(max_position_embeddings, hidden_size)
+
+        # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
+        # any TensorFlow checkpoint file
+        self.LayerNorm = torch.nn.LayerNorm(hidden_size, eps=layer_norm_eps)
+        self.dropout = torch.nn.Dropout(dropout)
+
+        self.useabspos = useabspos
+
+    def forward(self, input_ids=None, position_ids=None, inputs_embeds=None):
+        if input_ids is not None:
+            input_shape = input_ids.size()
+        else:
+            input_shape = inputs_embeds.size()[:-1]
+
+        seq_length = input_shape[1]
+        device = input_ids.device if input_ids is not None else inputs_embeds.device
+
+        if inputs_embeds is None:
+            inputs_embeds = self.word_embeddings(input_ids)
+
+        ret = inputs_embeds
+
+        if self.useabspos:
+            if position_ids is None:
+                position_ids = torch.arange(seq_length, dtype=torch.long, device=device)
+                position_ids = position_ids.unsqueeze(0).expand(input_shape)
+            position_embeddings = self.position_embeddings(position_ids)
+            ret = ret + position_embeddings
+
+        ret = self.LayerNorm(ret)
+        ret = self.dropout(ret)
+        return ret
+
+
 class BasicRelPosEmb(torch.nn.Module):
     ## Note: Even if this is shared across layers, keep the execution separate between layers because attention weights are different
     def __init__(self, dim, rng=10, **kw):
@@ -104,11 +147,10 @@ class TransformerDecoderCell(torch.nn.Module):
         self.userelpos = userelpos
         self.relposrng = relposrng
         self.useabspos = useabspos
-        config = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
-                                   num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
-                                   use_relative_position=False)
+        decconfig = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
+                                   num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
 
-        self.emb = torch.nn.Embedding(self.vocabsize, config.d_model)
+        self.dec_emb = torch.nn.Embedding(self.vocabsize, decconfig.d_model)
 
         self.relposemb = None
         if self.userelpos is True:
@@ -121,9 +163,9 @@ class TransformerDecoderCell(torch.nn.Module):
 
         self.absposemb = None
         if self.relposemb is None or self.useabspos is True:
-            self.absposemb = torch.nn.Embedding(maxpos, config.d_model)
+            self.absposemb = torch.nn.Embedding(maxpos, decconfig.d_model)
 
-        decoder_config = deepcopy(config)
+        decoder_config = deepcopy(decconfig)
         decoder_config.is_decoder = True
         decoder_config.use_causal_mask = True
         self.decoder = TransformerStack(decoder_config, rel_emb=self.relposemb)
@@ -137,19 +179,44 @@ class TransformerDecoderCell(torch.nn.Module):
         self.register_buffer("vocab_mask", vocab_mask)
 
         self.bertname = bertname
-        self.bert_model = BertModel.from_pretrained(self.bertname,
-                                                    hidden_dropout_prob=min(dropout, 0.2),
-                                                    attention_probs_dropout_prob=min(dropout, 0.1))
+        if self.bertname.startswith("none"):
+            self.encrelposemb = None
+            if self.userelpos is True:
+                if relposmode == "basic":
+                    self.encrelposemb = BasicRelPosEmb(self.dim, relposrng)
+                # elif relposmode == "mod":
+                #     self.relposemb = ModRelPosEmb(self.dim, relposrng, levels=4)
+                else:
+                    raise Exception(f"Unrecognized relposmode '{relposmode}'")
+            bname = "bert" + self.bertname[4:]
+            tokenizer = AutoTokenizer.from_pretrained(bname)
+            encconfig = TransformerConfig(vocab_size=tokenizer.vocab_size, d_model=self.dim, d_ff=self.dim * 4,
+                                       num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
+            encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout, useabspos=useabspos)
+            self.encoder_model = TransformerStack(encconfig, encemb, rel_emb=self.encrelposemb)
+        else:
+            self.encoder_model = BertModel.from_pretrained(self.bertname,
+                                                     hidden_dropout_prob=min(dropout, 0.2),
+                                                     attention_probs_dropout_prob=min(dropout, 0.1))
 
         self.adapter = None
-        if self.bert_model.config.hidden_size != decoder_config.d_model:
-            self.adapter = torch.nn.Linear(self.bert_model.config.hidden_size, decoder_config.d_model, bias=False)
+        if self.encoder_model.config.hidden_size != decoder_config.d_model:
+            self.adapter = torch.nn.Linear(self.encoder_model.config.hidden_size, decoder_config.d_model, bias=False)
 
         self.reset_parameters()
 
     def encode_source(self, x):
         encmask = (x != 0)
-        encs = self.bert_model(x)[0]
+        relpos = None
+        if self.encrelposemb is not None:      # compute relative positions
+            positions = torch.arange(x.size(1), device=x.device)
+            relpos = positions[None, :] - positions[:, None]
+            relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
+            relpos = relpos[None, :, :, None]
+        if relpos is not None:
+            encs = self.encoder_model(x, attention_mask=encmask, relpos=relpos)[0]
+        else:
+            encs = self.encoder_model(x, attention_mask=encmask)[0]
         if self.adapter is not None:
             encs = self.adapter(encs)
         return encs, encmask
@@ -160,7 +227,7 @@ class TransformerDecoderCell(torch.nn.Module):
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
         padmask = (tokens != 0)
-        embs = self.emb(tokens)
+        embs = self.dec_emb(tokens)
         if self.absposemb is not None:
             posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
             embs = embs + posembs
@@ -193,12 +260,18 @@ class SeqDecoderBaseline(torch.nn.Module):
     def __init__(self, tagger:TransformerDecoderCell,
                  vocab=None,
                  max_size:int=100,
+                 smoothing:float=0.,
                  **kw):
         super(SeqDecoderBaseline, self).__init__(**kw)
         self.tagger = tagger
         self.vocab = vocab
         self.max_size = max_size
-        self.nll = torch.nn.NLLLoss(reduction="none", ignore_index=0)
+        self.smoothing = smoothing
+        if self.smoothing > 0:
+            self.loss = q.SmoothedCELoss(reduction="none", ignore_index=0, smoothing=smoothing, mode="logprobs")
+        else:
+            self.loss = torch.nn.NLLLoss(reduction="none", ignore_index=0)
+
         self.logsm = torch.nn.LogSoftmax(-1)
 
     def forward(self, x, y):
@@ -216,16 +289,19 @@ class SeqDecoderBaseline(torch.nn.Module):
         mask = (tgt != 0).float()
 
         logprobs = self.logsm(logits)
-        nll = self.nll(logprobs.transpose(1, 2), tgt)      # (batsize, seqlen)
-        nll = nll * mask
-        nll = nll.sum(-1)
+        if self.smoothing > 0:
+            loss = self.loss(logprobs, tgt)
+        else:
+            loss = self.loss(logprobs.permute(0, 2, 1), tgt)      # (batsize, seqlen)
+        loss = loss * mask
+        loss = loss.sum(-1)
 
         best_pred = logits.max(-1)[1]   # (batsize, seqlen)
         best_gold = tgt
         same = best_pred == best_gold
         same = same | ~(mask.bool())
         acc = same.all(-1)  # (batsize,)
-        return nll, acc.float()
+        return loss, acc.float()
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
         preds, stepsused = self.get_prediction(x)
@@ -433,16 +509,19 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
         tt.tock("shelved")
 
     tt.tock(f"loaded '{dataset}'")
+    tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
     return trainds, validds, testds, fldic
 
 
 def run(lr=0.0001,
         enclrmul=0.1,
+        smoothing=0.1,
         gradnorm=3,
         batsize=60,
         epochs=16,
         patience=10,
         validinter=3,
+        validfrac=0.1,
         warmup=3,
         cosinelr=False,
         dataset="scan/length",
@@ -459,7 +538,7 @@ def run(lr=0.0001,
         ):
 
     settings = locals().copy()
-    print(json.dumps(settings, indent=3))
+    q.pp_dict(settings, indent=3)
     # wandb.init()
 
     wandb.init(project=f"compgen_baseline", config=settings, reinit=True)
@@ -470,7 +549,7 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, validds, testds, fldic = load_ds(dataset=dataset)
+    trainds, validds, testds, fldic = load_ds(dataset=dataset, validfrac=validfrac, bertname="bert"+bertname[4:])
 
     tt.tick("dataloaders")
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -485,7 +564,7 @@ def run(lr=0.0001,
     tt.tick("model")
     cell = TransformerDecoderCell(hdim, vocab=fldic, numlayers=numlayers, numheads=numheads, dropout=dropout,
                                   bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
-    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize)
+    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing)
     print(f"one layer of decoder: \n {cell.decoder.block[0]}")
     tt.tock()
 
@@ -512,7 +591,7 @@ def run(lr=0.0001,
         bertparams = []
         otherparams = []
         for k, v in m.named_parameters():
-            if "bert_model." in k:
+            if "encoder_model." in k:
                 bertparams.append(v)
             else:
                 otherparams.append(v)
@@ -588,6 +667,17 @@ def run(lr=0.0001,
                    validinter=validinter)
     tt.tock("done training")
 
+    tt.tick("running test before reloading")
+    testepoch = partial(q.test_epoch,
+                         model=decoder,
+                         losses=xmetrics,
+                         dataloader=testdl,
+                         device=device)
+
+    testres = testepoch()
+    print(f"Test tree acc: {testres}")
+    tt.tock("ran test")
+
     if eyt.remembered is not None:
         tt.msg("reloading best")
         decoder.tagger = eyt.remembered
@@ -603,11 +693,6 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("running test")
-    testepoch = partial(q.test_epoch,
-                         model=decoder,
-                         losses=xmetrics,
-                         dataloader=testdl,
-                         device=device)
     testres = testepoch()
     print(f"Test tree acc: {testres}")
     tt.tock()
@@ -623,24 +708,24 @@ def run(lr=0.0001,
 
 
 def run_experiment(
-
-        lr=0.0001,
-        enclrmul=0.1,
+        lr=-1.,
+        enclrmul=-1.,
+        smoothing=-1.,
         gradnorm=2,
-        batsize=60,
-        epochs=15,      # probably 11 is enough
-        patience=10,
-        validinter=2,
+        batsize=-1,
+        epochs=-1,      # probably 11 is enough
+        patience=100,
+        validinter=-1,
         warmup=3,
         cosinelr=False,
         dataset="default",
         maxsize=50,
         seed=-1,
-        hdim=768,
-        numlayers=6,
-        numheads=12,
+        hdim=-1,
+        numlayers=-1,
+        numheads=-1,
         dropout=-1.,
-        bertname="bert-base-uncased",
+        bertname="none-base-uncased",
         testcode=False,
         userelpos=False,
         gpu=-1,
@@ -650,20 +735,30 @@ def run_experiment(
 
     ranges = {
         "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
-        "dropout": [0.25, 0.5],
-        "seed": [42],  # 87646464, 456852],
-        # "epochs": [121],
-        # "batsize": [50],
-        # "hdim": [366, 768],
-        # "numheads": [6, 12],
-        # "numlayers": [6, 8, 12],
-        # "lr": [0.0001, 0.000025],
-        # "enclrmul": [1., 0.1],                  # use 1.
+        "dropout": [0.1, 0.25, 0.5],
+        "seed": [42, 87646464, 456852],
+        "epochs": [15],
+        "batsize": [60],
+        "hdim": [768],
+        "numheads": [12],
+        "numlayers": [6],
+        "lr": [0.0001],
+        "enclrmul": [0.1],                  # use 1.
+        "smoothing": [0., 0.1],
         # "patience": [-1],
         # "warmup": [20],
-        # "validinter": [10],
+        "validinter": [2],
         # "gradacc": [1],
     }
+
+    if bertname.startswith("none"):
+        ranges["lr"] = [0.0001]
+        ranges["enclrmul"] = [1.]
+        ranges["epochs"] = [40]
+        ranges["hdim"] = [384]
+        ranges["numheads"] = [6]
+        ranges["batsize"] = [256]
+        ranges["validinter"] = [3]
 
     for k in ranges:
         if k in settings:
