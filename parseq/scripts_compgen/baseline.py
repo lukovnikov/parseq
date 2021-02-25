@@ -536,6 +536,7 @@ def run(lr=0.0001,
         testcode=False,
         userelpos=False,
         gpu=-1,
+        evaltrain=False,
         ):
 
     settings = locals().copy()
@@ -661,8 +662,12 @@ def run(lr=0.0001,
                          on_end=on_end_v)
 
     tt.tick("training")
+    if evaltrain:
+        validfs = [trainevalepoch, validepoch]
+    else:
+        validfs = [validepoch]
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=[trainevalepoch, validepoch],
+                   run_valid_epoch=validfs,
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
