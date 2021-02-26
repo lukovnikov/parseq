@@ -172,7 +172,7 @@ def run(lr=0.0001,
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compgen_baseline", config=settings, reinit=True)
+    wandb.init(project=f"compgen_basic_ib", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -423,7 +423,7 @@ def run_experiment(
         return True
 
     print(__file__)
-    p = __file__ + f".baseline.{dataset}"
+    p = __file__ + f".baseline.{dataset.replace('/', '-')}"
     q.run_experiments_random(
         run, ranges, path_prefix=p, check_config=checkconfig, **settings)
 
