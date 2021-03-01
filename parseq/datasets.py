@@ -1073,7 +1073,7 @@ class CFQDatasetLoader(object):
                     del ds["ruleTree"]
                 if "ruleIds" in ds:
                     del ds["ruleIds"]
-                outf.write(json.dumps(ds))
+                outf.write(json.dumps(ds) + "\n")
             # outf.flush()
         # json.dump(y, open(os.path.join(self.p, "_data.json")))
         os.remove(os.path.join(self.p, "_data.json"))
