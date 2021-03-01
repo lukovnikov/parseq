@@ -28,11 +28,13 @@ from parseq.vocab import Vocab
 class TransformerDecoderCellWithVIB(TransformerDecoderCell):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6, userelpos=False, useabspos=True,
                  relposmode="basic", relposrng=10,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", mode="afterdec", **kw):
         super(TransformerDecoderCellWithVIB, self).__init__(dim,
                                                             vocab=vocab, numlayers=numlayers, numheads=numheads,
                                                             userelpos=userelpos, useabspos=useabspos, relposmode=relposmode, relposrng=relposrng,
                                                             dropout=dropout, maxpos=maxpos, bertname=bertname, **kw)
+
+        self.mode = mode
 
         # reparam network:
         self.vib_linA = None
@@ -40,6 +42,33 @@ class TransformerDecoderCellWithVIB(TransformerDecoderCell):
 
         self.vib_lin_mu = torch.nn.Linear(dim*2, dim)
         self.vib_lin_logvar = torch.nn.Linear(dim*2, dim)
+
+    def encode_source(self, x):
+        encmask = (x != 0)
+        relpos = None
+        if self.encrelposemb is not None:      # compute relative positions
+            positions = torch.arange(x.size(1), device=x.device)
+            relpos = positions[None, :] - positions[:, None]
+            relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
+            relpos = relpos[None, :, :, None]
+        if relpos is not None:
+            encs = self.encoder_model(x, attention_mask=encmask, relpos=relpos)[0]
+        else:
+            encs = self.encoder_model(x, attention_mask=encmask)[0]
+        if self.adapter is not None:
+            encs = self.adapter(encs)
+
+        if self.mode == "afterenc":
+            encz, (mu, logvar) = self.sample_z(encs)
+            if encz is not None:
+                return encz, encmask, (mu, logvar)
+            else:
+                return mu, encmask
+        else:
+            if self.training:
+                return encs, encmask, None
+            else:
+                return encs, encmask
 
     def sample_z(self, x):
         if self.vib_linA is not None:
@@ -79,14 +108,21 @@ class TransformerDecoderCellWithVIB(TransformerDecoderCell):
         c = ret
         cache = _ret[1]
 
-        zs, (mu, logvar) = self.sample_z(c)        # (batsize, seqlen, dim)
-        if self.training:
-            logits = self.out(zs)  # (batsize, seqlen, vocabsize)
-            return logits, cache, (mu, logvar)
+        if self.mode == "afterdec":
+            zs, (mu, logvar) = self.sample_z(c)        # (batsize, seqlen, dim)
+            if self.training:
+                logits = self.out(zs)  # (batsize, seqlen, vocabsize)
+                return logits, cache, (mu, logvar)
+            else:
+                assert zs is None
+                logits = self.out(mu)
+                return logits, cache
         else:
-            assert zs is None
-            logits = self.out(mu)
-            return logits, cache
+            logits = self.out(c)
+            if self.training:
+                return logits, cache, None
+            else:
+                return logits, cache
 
 
 class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
@@ -94,7 +130,7 @@ class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
         super(SeqDecoderBaselineWithVIB, self).__init__(tagger=tagger, vocab=vocab, max_size=max_size, smoothing=smoothing, **kw)
         self.priorweight = priorweight
 
-    def compute_loss(self, logits, tgt, mulogvar):
+    def compute_loss(self, logits, tgt, mulogvar, mulogvarmask=None):
         """
         :param logits:      (batsize, seqlen, vocsize)
         :param tgt:         (batsize, seqlen)
@@ -115,9 +151,10 @@ class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
 
         priorkl = torch.zeros(loss.size(0), device=loss.device)
         if self.priorweight > 0:
+            mulogvarmask = mask if mulogvarmask is None else mulogvarmask
             mu, logvar = mulogvar  # (batsize, seqlen, dim)
             priorkls = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=-1)    # (batsize, seqlen)
-            priorkls = priorkls * mask
+            priorkls = priorkls * mulogvarmask
             priorkl = priorkls.sum(-1) * self.priorweight
             loss = loss + priorkl
 
@@ -131,14 +168,16 @@ class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # extract a training example from y:
         x, newy, tgt = self.extract_training_example(x, y)
-        enc, encmask = self.tagger.encode_source(x)
+        enc, encmask, mulogvar = self.tagger.encode_source(x)
         # run through tagger: the same for all versions
-        logits, cache, (mu, logvar) = self.tagger(tokens=newy, enc=enc, encmask=encmask, cache=None)
+        mulogvarmask = encmask if mulogvar is not None else None
+        logits, cache, _mulogvar = self.tagger(tokens=newy, enc=enc, encmask=encmask, cache=None)
+        mulogvar = _mulogvar if mulogvar is None else mulogvar
         # logits: (numsamples, batsize, seqlen, vocabsize)
         # cache: ...
         # mu, sigma: (numsamples, batsize, dim)
         # compute loss: different versions do different masking and different targets
-        loss, priorkl, acc = self.compute_loss(logits, tgt, (mu, logvar))
+        loss, priorkl, acc = self.compute_loss(logits, tgt, mulogvar, mulogvarmask)
         return {"loss": loss, "priorkl": priorkl, "acc": acc}, logits
 
 
@@ -166,6 +205,7 @@ def run(lr=0.0001,
         gpu=-1,
         evaltrain=False,
         priorweight=1.,
+        mode="afterdec",
         ):
 
     settings = locals().copy()
@@ -194,7 +234,7 @@ def run(lr=0.0001,
 
     tt.tick("model")
     cell = TransformerDecoderCellWithVIB(hdim, vocab=fldic, numlayers=numlayers, numheads=numheads, dropout=dropout,
-                                  bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
+                                  bertname=bertname, userelpos=userelpos, useabspos=not userelpos, mode=mode)
     decoder = SeqDecoderBaselineWithVIB(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, priorweight=priorweight)
     print(f"one layer of decoder: \n {cell.decoder.block[0]}")
     tt.tock()
@@ -365,6 +405,7 @@ def run_experiment(
         gpu=-1,
         evaltrain=False,
         priorweight=-1.,
+        mode="afterdec",
         ):
 
     settings = locals().copy()

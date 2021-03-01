@@ -475,7 +475,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
         if dataset == "scan":
             ds = SCANDatasetLoader().load(split, validfrac=validfrac)
         elif dataset == "cfq":
-            ds = CFQDatasetLoader().load(split)
+            ds = CFQDatasetLoader().load(split + "/modent")
         else:
             raise Exception(f"Unknown dataset: '{dataset}'")
         tt.tock("loaded data")
@@ -542,6 +542,8 @@ def run(lr=0.0001,
         userelpos=False,
         gpu=-1,
         evaltrain=False,
+        trainonvalidonly=False,
+        recomputedata=False,
         ):
 
     settings = locals().copy()
@@ -556,7 +558,7 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, validds, testds, fldic = load_ds(dataset=dataset, validfrac=validfrac, bertname="bert"+bertname[4:])
+    trainds, validds, testds, fldic = load_ds(dataset=dataset, validfrac=validfrac, bertname="bert"+bertname[4:], recompute=recomputedata)
 
     tt.tick("dataloaders")
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -643,6 +645,10 @@ def run(lr=0.0001,
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
     trainbatch = partial(q.train_batch, on_before_optim_step=[lambda : clipgradnorm(_m=cell, _norm=gradnorm)])
+
+    if trainonvalidonly:
+        traindl = validdl
+        validdl = testdl
 
     trainepoch = partial(q.train_epoch, model=decoder,
                          dataloader=traindl,
@@ -739,7 +745,9 @@ def run_experiment(
         bertname="none-base-uncased",
         testcode=False,
         userelpos=False,
+        trainonvalidonly=False,
         gpu=-1,
+        recomputedata=False,
         ):
 
     settings = locals().copy()
