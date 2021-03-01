@@ -487,11 +487,15 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
         print(len(ds))
 
         tt.tick("dictionaries")
+        inpmaxlen, outmaxlen = 0, 0
         fldic = Vocab()
         for x in ds:
+            inpmaxlen = max(inpmaxlen, len(x[0]))
+            outmaxlen = max(outmaxlen, len(x[1]))
             for tok in tokenizer.get_out_toks(x[1]):
                 fldic.add_token(tok, seen=x[2] == "train")
         fldic.finalize(min_freq=0, top_k=np.infty)
+        print(f"input max length is {inpmaxlen}, output max length is {outmaxlen}")
         print(f"output vocabulary size: {len(fldic.D)}")
         tt.tock()
 
