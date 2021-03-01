@@ -788,9 +788,9 @@ def run_experiment(
         ranges["smoothing"] = [0.]
 
     if dataset.startswith("cfq"):
-        maxsize = 200
+        settings["maxsize"] = 200
     elif dataset.startswith("scan"):
-        maxsize = 50
+        settings["maxsize"] = 50
 
     for k in ranges:
         if k in settings:
