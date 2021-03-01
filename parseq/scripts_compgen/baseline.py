@@ -746,6 +746,7 @@ def run_experiment(
         testcode=False,
         userelpos=False,
         trainonvalidonly=False,
+        evaltrain=False,
         gpu=-1,
         recomputedata=False,
         ):
