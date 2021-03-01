@@ -141,11 +141,12 @@ class BasicRelPosEmb(torch.nn.Module):
 
 
 class TransformerDecoderCell(torch.nn.Module):
-    def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6, userelpos=False, useabspos=True,
+    def __init__(self, dim, vocab:Vocab=None, inpvocab:Vocab=None, numlayers:int=6, numheads:int=6, userelpos=False, useabspos=True,
                  relposmode="basic", relposrng=10,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
         super(TransformerDecoderCell, self).__init__(**kw)
         self.vocab = vocab
+        self.inpvocab = inpvocab
         self.vocabsize = vocab.number_of_ids()
         self.dim = dim
         self.userelpos = userelpos
@@ -184,7 +185,7 @@ class TransformerDecoderCell(torch.nn.Module):
         self.register_buffer("vocab_mask", vocab_mask)
 
         self.bertname = bertname
-        if self.bertname.startswith("none"):
+        if self.bertname.startswith("none") or self.bertname == "vanilla":
             self.encrelposemb = None
             if self.userelpos is True:
                 if relposmode == "basic":
@@ -194,8 +195,12 @@ class TransformerDecoderCell(torch.nn.Module):
                 else:
                     raise Exception(f"Unrecognized relposmode '{relposmode}'")
             bname = "bert" + self.bertname[4:]
-            tokenizer = AutoTokenizer.from_pretrained(bname)
-            encconfig = TransformerConfig(vocab_size=tokenizer.vocab_size, d_model=self.dim, d_ff=self.dim * 4,
+            if self.bertname == "vanilla":
+                inpvocabsize = inpvocab.number_of_ids()
+            else:
+                tokenizer = AutoTokenizer.from_pretrained(bname)
+                inpvocabsize = tokenizer.vocab_size
+            encconfig = TransformerConfig(vocab_size=inpvocabsize, d_model=self.dim, d_ff=self.dim * 4,
                                           d_kv=int(self.dim/numheads),
                                        num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
             encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout, useabspos=useabspos)
@@ -420,24 +425,35 @@ class SeqDecoderBaseline(torch.nn.Module):
 
 
 class Tokenizer(object):
-    def __init__(self, bertname="bert-base-uncased", outvocab:Vocab=None, **kw):
+    def __init__(self, bertname="bert-base-uncased", inpvocab:Vocab=None, outvocab:Vocab=None, **kw):
         super(Tokenizer, self).__init__(**kw)
-        self.tokenizer = AutoTokenizer.from_pretrained(bertname)
+        self.inpvocab = inpvocab
+        self.tokenizer = None if bertname == "vanilla" else AutoTokenizer.from_pretrained(bertname)
         self.outvocab = outvocab
 
     def tokenize(self, inps, outs):
-        inptoks = self.tokenizer.tokenize(inps)
+        if self.tokenizer is not None:
+            inptoks = self.tokenizer.tokenize(inps)
+        else:
+            inptoks = ["@START@"] + self.get_toks(inps) + ["@END@"]
         outtoks = self.get_out_toks(outs)
-        outret = self.tokenizer.encode(inps, return_tensors="pt")[0]
-        ret = {"inps": inps, "outs":outs, "inptoks": inptoks, "outtoks": outtoks, "inptensor": outret, "outtensor": self.tensorize_output(outtoks)}
+        if self.tokenizer is not None:
+            inptensor = self.tokenizer.encode(inps, return_tensors="pt")[0]
+        else:
+            inptensor = self.tensorize_output(inptoks, self.inpvocab)
+        ret = {"inps": inps, "outs":outs, "inptoks": inptoks, "outtoks": outtoks,
+               "inptensor": inptensor, "outtensor": self.tensorize_output(outtoks, self.outvocab)}
         ret = (ret["inptensor"], ret["outtensor"])
         return ret
 
-    def get_out_toks(self, x):
+    def get_toks(self, x):
         return x.strip().split(" ")
 
-    def tensorize_output(self, x):
-        ret = [self.outvocab[xe] for xe in x]
+    def get_out_toks(self, x):
+        return self.get_toks(x)
+
+    def tensorize_output(self, x, vocab):
+        ret = [vocab[xe] for xe in x]
         ret = torch.tensor(ret)
         return ret
 
@@ -448,6 +464,8 @@ ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY"}
 def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="bert-base-uncased"):
     tt = q.ticktock("data")
     tt.tick(f"loading '{dataset}'")
+    if bertname.startswith("none"):
+        bertname = "bert" + bertname[4:]
     if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
         key = f"{dataset}|bertname={bertname}"
         print(f"validfrac is ineffective with dataset '{dataset}'")
@@ -464,6 +482,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
             else:
                 shelved = shelf[key]
                 trainex, validex, testex, fldic = shelved["trainex"], shelved["validex"], shelved["testex"], shelved["fldic"]
+                inpdic = shelved["inpdic"] if "inpdic" in shelved else None
                 trainds, validds, testds = Dataset(trainex), Dataset(validex), Dataset(testex)
                 tt.tock("loaded from shelf")
 
@@ -487,6 +506,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
         print(len(ds))
 
         tt.tick("dictionaries")
+        inpdic = Vocab()
         inplens, outlens = [0], []
         fldic = Vocab()
         for x in ds:
@@ -494,12 +514,18 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
             outlens.append(len(outtoks))
             for tok in outtoks:
                 fldic.add_token(tok, seen=x[2] == "train")
+            inptoks = tokenizer.get_toks(x[0])
+            for tok in inptoks:
+                inpdic.add_token(tok, seen=x[2] == "train")
+        inpdic.finalize(min_freq=0, top_k=np.infty)
         fldic.finalize(min_freq=0, top_k=np.infty)
-        print(f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
-        print(f"output vocabulary size: {len(fldic.D)}")
+        print(
+            f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
+        print(f"output vocabulary size: {len(fldic.D)} at output, {len(inpdic.D)} at input")
         tt.tock()
 
         tt.tick("tensorizing")
+        tokenizer.inpvocab = inpdic
         tokenizer.outvocab = fldic
         trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
         validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
@@ -513,14 +539,15 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
                 "trainex": trainds.examples,
                 "validex": validds.examples,
                 "testex": testds.examples,
-                "fldic": fldic
+                "fldic": fldic,
+                "inpdic": inpdic,
             }
             shelf[key] = shelved
         tt.tock("shelved")
 
     tt.tock(f"loaded '{dataset}'")
     tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
-    return trainds, validds, testds, fldic
+    return trainds, validds, testds, fldic, inpdic
 
 
 def run(lr=0.0001,
@@ -562,7 +589,7 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, validds, testds, fldic = load_ds(dataset=dataset, validfrac=validfrac, bertname="bert"+bertname[4:], recompute=recomputedata)
+    trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recomputedata)
 
     tt.tick("dataloaders")
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -575,7 +602,7 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("model")
-    cell = TransformerDecoderCell(hdim, vocab=fldic, numlayers=numlayers, numheads=numheads, dropout=dropout,
+    cell = TransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads, dropout=dropout,
                                   bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
     decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing)
     print(f"one layer of decoder: \n {cell.decoder.block[0]}")
@@ -727,7 +754,6 @@ def run(lr=0.0001,
     q.pp_dict(settings)
 
 
-
 def run_experiment(
         lr=-1.,
         enclrmul=-1.,
@@ -746,7 +772,7 @@ def run_experiment(
         numlayers=-1,
         numheads=-1,
         dropout=-1.,
-        bertname="none-base-uncased",
+        bertname="vanilla",
         testcode=False,
         userelpos=False,
         trainonvalidonly=False,
@@ -775,7 +801,7 @@ def run_experiment(
         # "gradacc": [1],
     }
 
-    if bertname.startswith("none"):
+    if bertname.startswith("none") or bertname == "vanilla":
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
         ranges["epochs"] = [40]
