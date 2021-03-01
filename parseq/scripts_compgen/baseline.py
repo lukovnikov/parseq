@@ -740,7 +740,7 @@ def run_experiment(
         warmup=3,
         cosinelr=False,
         dataset="default",
-        maxsize=50,
+        maxsize=-1,
         seed=-1,
         hdim=-1,
         numlayers=-1,
@@ -786,6 +786,11 @@ def run_experiment(
 
         ranges["dropout"] = [0.1]
         ranges["smoothing"] = [0.]
+
+    if dataset.startswith("cfq"):
+        maxsize = 200
+    elif dataset.startswith("scan"):
+        maxsize = 50
 
     for k in ranges:
         if k in settings:
