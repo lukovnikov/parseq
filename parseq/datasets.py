@@ -1101,7 +1101,7 @@ class CFQDatasetLoader(object):
 
         self.tt.tick("clean up")
         os.remove(os.path.join(self.p, "cfq.tar.gz"))
-        os.rmdir(os.path.join(self.p, "cfq"))
+        shutil.rmtree(os.path.join(self.p, "cfq"))
         self.tt.tock()
 
     def load(self, split="random/modent", verbose=True, lispify=True):
