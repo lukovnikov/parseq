@@ -19,31 +19,90 @@ from transformers import AutoTokenizer, BertModel
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees
-from parseq.scripts_compgen.baseline import BasicRelPosEmb, TransformerEmbeddings, ORDERLESS, load_ds, \
-    SeqDecoderBaseline, TransformerDecoderCell
+from parseq.scripts_compgen.baseline import BasicRelPosEmb, TransformerEmbeddings, TransformerDecoderCell, load_ds
 from parseq.scripts_compgen.transformer import TransformerConfig, TransformerStack
 from parseq.vocab import Vocab
 
 
-class TransformerDecoderCellWithVIB(TransformerDecoderCell):
+class SetModel(torch.nn.Module):
+    """ Predicts the set of output tokens.
+    Implemented as a tagging model that labels every input position with one of the output tokens.
+    The probability that a certain output token is in the set is computed
+    by taking the max logit over sequence dimension and taking Sigmoid of that.
+    """
     def __init__(self, dim, vocab:Vocab=None, inpvocab:Vocab=None, numlayers:int=6, numheads:int=6, userelpos=False, useabspos=True,
                  relposmode="basic", relposrng=10,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", mode="afterdec", **kw):
-        super(TransformerDecoderCellWithVIB, self).__init__(dim,
-                                                            vocab=vocab, inpvocab=inpvocab, numlayers=numlayers, numheads=numheads,
-                                                            userelpos=userelpos, useabspos=useabspos, relposmode=relposmode, relposrng=relposrng,
-                                                            dropout=dropout, maxpos=maxpos, bertname=bertname, **kw)
+                 dropout:float=0., sidedrop=0., maxpos=512, bertname="bert-base-uncased", mode="normal", priorweight=0., **kw):
+        super(SetModel, self).__init__(**kw)
+        self.vocab = vocab
+        self.inpvocab = inpvocab
+        self.vocabsize = vocab.number_of_ids()
+        self.dim = dim
+        self.userelpos = userelpos
+        self.relposrng = relposrng
+        self.useabspos = useabspos
+
+        self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        self.bertname = bertname
+        if self.bertname.startswith("none") or self.bertname == "vanilla":
+            self.encrelposemb = None
+            if self.userelpos is True:
+                if relposmode == "basic":
+                    self.encrelposemb = BasicRelPosEmb(self.dim, relposrng)
+                # elif relposmode == "mod":
+                #     self.relposemb = ModRelPosEmb(self.dim, relposrng, levels=4)
+                else:
+                    raise Exception(f"Unrecognized relposmode '{relposmode}'")
+            bname = "bert" + self.bertname[4:]
+            if self.bertname == "vanilla":
+                inpvocabsize = inpvocab.number_of_ids()
+            else:
+                tokenizer = AutoTokenizer.from_pretrained(bname)
+                inpvocabsize = tokenizer.vocab_size
+            encconfig = TransformerConfig(vocab_size=inpvocabsize, d_model=self.dim, d_ff=self.dim * 4,
+                                          d_kv=int(self.dim / numheads), attention_dropout_rate=0.,
+                                          num_layers=numlayers, num_heads=numheads,
+                                          dropout_rate=dropout, sideways_dropout=sidedrop)
+            encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout,
+                                           max_position_embeddings=maxpos, useabspos=useabspos)
+            self.encoder_model = TransformerStack(encconfig, encemb, rel_emb=self.encrelposemb)
+        else:
+            self.encoder_model = BertModel.from_pretrained(self.bertname,
+                                                           hidden_dropout_prob=min(dropout, 0.2),
+                                                           attention_probs_dropout_prob=min(dropout, 0.1))
+        self.adapter = None
+        if self.encoder_model.config.hidden_size != self.dim:
+            self.adapter = torch.nn.Linear(self.encoder_model.config.hidden_size, self.dim, bias=False)
+
+        self.reset_parameters()
+
+        self.bce = torch.nn.BCEWithLogitsLoss(reduction="none")
 
         self.mode = mode
+        self.priorweight = priorweight
 
-        # reparam network:
-        self.vib_linA = None
-        self.vib_linA = torch.nn.Sequential(torch.nn.Linear(dim, dim*2), torch.nn.ReLU())
+        if self.mode == "vib":
+            self.vib_lin_mu = torch.nn.Linear(dim, dim)
+            self.vib_lin_logvar = torch.nn.Linear(dim, dim)
 
-        self.vib_lin_mu = torch.nn.Linear(dim*2, dim)
-        self.vib_lin_logvar = torch.nn.Linear(dim*2, dim)
+    def reset_parameters(self):
+        pass
 
-    def encode_source(self, x):
+    def sample_z(self, x, xmask):
+        mu, logvar = self.vib_lin_mu(x), self.vib_lin_logvar(x)
+        if self.training:
+            ret = mu + torch.exp(0.5 * logvar) * torch.randn_like(mu)
+        else:
+            ret = mu
+
+        priorkl = torch.zeros(ret.size(0), device=ret.device)
+        if self.priorweight > 0 and self.training:
+            priorkls = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=-1)  # (batsize, seqlen)
+            priorkls = priorkls * xmask.float()
+            priorkl = priorkls.sum(-1)
+        return ret, priorkl        # (batsize, seqlen, dim)
+
+    def encode(self, x):
         encmask = (x != 0)
         relpos = None
         if self.encrelposemb is not None:      # compute relative positions
@@ -57,128 +116,39 @@ class TransformerDecoderCellWithVIB(TransformerDecoderCell):
             encs = self.encoder_model(x, attention_mask=encmask)[0]
         if self.adapter is not None:
             encs = self.adapter(encs)
+        return encs, encmask
 
-        if self.mode == "afterenc":
-            encz, (mu, logvar) = self.sample_z(encs)
-            if encz is not None:
-                return encz, encmask, (mu, logvar)
-            else:
-                return mu, encmask
-        else:
-            if self.training:
-                return encs, encmask, None
-            else:
-                return encs, encmask
+    def compute_loss(self, logits, golds):
+        bce = self.bce(logits, golds)       # (batsize, vocsize)
+        bce = bce.sum(-1)
 
-    def sample_z(self, x):
-        if self.vib_linA is not None:
-            x = self.vib_linA(x)
-        mu, logvar = self.vib_lin_mu(x), self.vib_lin_logvar(x)
-        if self.training:
-            ret = mu + torch.exp(0.5 * logvar) * torch.randn_like(mu)
-        else:
-            ret = None
-        return ret, (mu, logvar)        # (batsize, seqlen, dim)
+        preds = (torch.sigmoid(logits) > 0.5)        # (batsize, vocsize)
+        acc = torch.all(preds == golds, 1)
 
-    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
-        padmask = (tokens != 0)
-        try:
-            embs = self.dec_emb(tokens)
-        except Exception as e:
-            raise e
-        if self.absposemb is not None:
-            posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
-            embs = embs + posembs
-        relpos = None
-        if self.relposemb is not None:      # compute relative positions
-            positions = torch.arange(tokens.size(1), device=tokens.device)
-            relpos = positions[None, :] - positions[:, None]
-            relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
-            relpos = relpos[None, :, :, None]
-        if cache is not None:
-            embs = embs[:, -1:, :]
-            if relpos is not None:
-                relpos = relpos[:, -1:, :, :]
-        _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
-                     encoder_hidden_states=enc,
-                     encoder_attention_mask=encmask, use_cache=True,
-                     past_key_value_states=cache,
-                     relpos=relpos)
-        ret = _ret[0]
-        c = ret
-        cache = _ret[1]
+        return bce, acc.float()
 
-        if self.mode == "afterdec":
-            zs, (mu, logvar) = self.sample_z(c)        # (batsize, seqlen, dim)
-            if self.training:
-                logits = self.out(zs)  # (batsize, seqlen, vocabsize)
-                return logits, cache, (mu, logvar)
-            else:
-                assert zs is None
-                logits = self.out(mu)
-                return logits, cache
-        else:
-            logits = self.out(c)
-            if self.training:
-                return logits, cache, None
-            else:
-                return logits, cache
+    def forward(self, x:torch.Tensor, y:torch.Tensor):      # integer tensors
+        enc, encmask = self.encode(x)
+
+        priorloss = None
+        if self.mode == "vib":
+            enc, priorloss = self.sample_z(enc, encmask)
+
+        seqlogits = self.out(enc)      # (batsize, seqlen, vocsize)
+        seqlogits = seqlogits + -9999 * (1 - encmask.float())[:, :, None]    # --> sets masked positions to -infty
+        logits, _ = seqlogits.max(1)    # (batsize, vocsize) -- max logits for every possible output token
+        golds = torch.zeros_like(logits)
+        golds[:, 0] = 1
+        golds.scatter_(-1, y, 1)
 
 
-class SeqDecoderBaselineWithVIB(SeqDecoderBaseline):
-    def __init__(self, tagger:TransformerDecoderCellWithVIB, vocab=None, max_size:int=100, smoothing:float=0., priorweight=1., **kw):
-        super(SeqDecoderBaselineWithVIB, self).__init__(tagger=tagger, vocab=vocab, max_size=max_size, smoothing=smoothing, **kw)
-        self.priorweight = priorweight
+        loss, acc = self.compute_loss(logits, golds)
+        if priorloss is None:
+            priorloss = torch.zeros_like(loss)
 
-    def compute_loss(self, logits, tgt, mulogvar, mulogvarmask=None):
-        """
-        :param logits:      (batsize, seqlen, vocsize)
-        :param tgt:         (batsize, seqlen)
-        :return:
-        """
-        mask = (tgt != 0).float()
-        # batsize, seqlen = tgt.size()
-
-        logprobs = self.logsm(logits)
-        if self.smoothing > 0:
-            loss = self.loss(logprobs, tgt)
-        else:
-            # print(tgt.max(), tgt.min(), logprobs.size(-1))
-            # print()
-            loss = self.loss(logprobs.permute(0, 2, 1), tgt)      # (batsize, seqlen)
-        loss = loss * mask
-        loss = loss.sum(-1)
-
-        priorkl = torch.zeros(loss.size(0), device=loss.device)
-        if self.priorweight > 0:
-            mulogvarmask = mask if mulogvarmask is None else mulogvarmask
-            mu, logvar = mulogvar  # (batsize, seqlen, dim)
-            priorkls = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=-1)    # (batsize, seqlen)
-            priorkls = priorkls * mulogvarmask
-            priorkl = priorkls.sum(-1) * self.priorweight
-            loss = loss + priorkl
-
-        best_pred = logits.max(-1)[1]   # (batsize, seqlen)
-        best_gold = tgt
-        same = best_pred == best_gold
-        same = same | ~(mask.bool())
-        acc = same.all(-1)  # (batsize,)
-        return loss, priorkl, acc.float()
-
-    def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
-        # extract a training example from y:
-        x, newy, tgt = self.extract_training_example(x, y)
-        enc, encmask, mulogvar = self.tagger.encode_source(x)
-        # run through tagger: the same for all versions
-        mulogvarmask = encmask if mulogvar is not None else None
-        logits, cache, _mulogvar = self.tagger(tokens=newy, enc=enc, encmask=encmask, cache=None)
-        mulogvar = _mulogvar if mulogvar is None else mulogvar
-        # logits: (numsamples, batsize, seqlen, vocabsize)
-        # cache: ...
-        # mu, sigma: (numsamples, batsize, dim)
-        # compute loss: different versions do different masking and different targets
-        loss, priorkl, acc = self.compute_loss(logits, tgt, mulogvar, mulogvarmask)
-        return {"loss": loss, "priorkl": priorkl, "acc": acc}, logits
+        priorloss = priorloss * self.priorweight
+        loss = loss + priorloss
+        return {"loss": loss, "priorkl": priorloss, "acc": acc}, logits
 
 
 def run(lr=0.0001,
@@ -188,7 +158,7 @@ def run(lr=0.0001,
         batsize=60,
         epochs=16,
         patience=10,
-        validinter=3,
+        validinter=1,
         validfrac=0.1,
         warmup=3,
         cosinelr=False,
@@ -199,6 +169,7 @@ def run(lr=0.0001,
         numlayers=6,
         numheads=12,
         dropout=0.1,
+        sidedrop=0.0,
         bertname="bert-base-uncased",
         testcode=False,
         userelpos=False,
@@ -206,16 +177,16 @@ def run(lr=0.0001,
         evaltrain=False,
         trainonvalid=False,
         trainonvalidonly=False,
-        priorweight=1.,
-        mode="afterdec",
         recomputedata=False,
+        mode="normal",      # "normal", "vib", "aib"
+        priorweight=1.,
         ):
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compgen_basic_ib", config=settings, reinit=True)
+    wandb.init(project=f"compgen_set", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -239,10 +210,8 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("model")
-    cell = TransformerDecoderCellWithVIB(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads, dropout=dropout,
-                                  bertname=bertname, userelpos=userelpos, useabspos=not userelpos, mode=mode)
-    decoder = SeqDecoderBaselineWithVIB(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, priorweight=priorweight)
-    print(f"one layer of decoder: \n {cell.decoder.block[0]}")
+    model = SetModel(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads, dropout=dropout, sidedrop=sidedrop,
+                                  bertname=bertname, userelpos=userelpos, useabspos=not userelpos, mode=mode, priorweight=priorweight)
     tt.tock()
 
     if testcode:
@@ -250,18 +219,18 @@ def run(lr=0.0001,
         batch = next(iter(traindl))
         # out = tagger(batch[1])
         tt.tick("train")
-        out = decoder(*batch)
+        out = model(*batch)
         tt.tock()
-        decoder.train(False)
+        model.train(False)
         tt.tick("test")
-        out = decoder(*batch)
+        out = model(*batch)
         tt.tock()
         tt.tock("testcode")
 
     tloss = make_array_of_metrics("loss", "priorkl", "acc", reduction="mean")
-    tmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    vmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    xmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    tmetrics = make_array_of_metrics("loss", "priorkl", "acc", reduction="mean")
+    vmetrics = make_array_of_metrics("loss", "priorkl", "acc", reduction="mean")
+    xmetrics = make_array_of_metrics("loss", "priorkl", "acc", reduction="mean")
 
     # region parameters
     def get_parameters(m, _lr, _enclrmul):
@@ -290,20 +259,20 @@ def run(lr=0.0001,
     if patience < 0:
         patience = epochs
     eyt = q.EarlyStopper(vmetrics[0], patience=patience, min_epochs=30, more_is_better=True,
-                         remember_f=lambda: deepcopy(cell))
+                         remember_f=lambda: deepcopy(model))
 
     def wandb_logger():
         d = {}
         for name, loss in zip(["loss", "priorkl", "acc"], tloss):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], tmetrics):
+        for name, loss in zip(["acc"], tmetrics):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], vmetrics):
+        for name, loss in zip(["acc"], vmetrics):
             d["valid_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
     t_max = epochs
-    optim = get_optim(cell, lr, enclrmul)
+    optim = get_optim(model, lr, enclrmul)
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
         assert t_max > (warmup + 10)
@@ -312,13 +281,16 @@ def run(lr=0.0001,
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
-    trainbatch = partial(q.train_batch, on_before_optim_step=[lambda : clipgradnorm(_m=cell, _norm=gradnorm)])
+    trainbatch = partial(q.train_batch, on_before_optim_step=[lambda : clipgradnorm(_m=model, _norm=gradnorm)])
+
+    print("using test data for validation")
+    validdl = testdl
 
     if trainonvalidonly:
         traindl = validdl
         validdl = testdl
 
-    trainepoch = partial(q.train_epoch, model=decoder,
+    trainepoch = partial(q.train_epoch, model=model,
                          dataloader=traindl,
                          optim=optim,
                          losses=tloss,
@@ -327,14 +299,14 @@ def run(lr=0.0001,
                          on_end=[lambda: lr_schedule.step()])
 
     trainevalepoch = partial(q.test_epoch,
-                             model=decoder,
+                             model=model,
                              losses=tmetrics,
                              dataloader=traindl,
                              device=device)
 
     on_end_v = [lambda: eyt.on_epoch_end(), lambda: wandb_logger()]
     validepoch = partial(q.test_epoch,
-                         model=decoder,
+                         model=model,
                          losses=vmetrics,
                          dataloader=validdl,
                          device=device,
@@ -354,7 +326,7 @@ def run(lr=0.0001,
 
     tt.tick("running test before reloading")
     testepoch = partial(q.test_epoch,
-                         model=decoder,
+                         model=model,
                          losses=xmetrics,
                          dataloader=testdl,
                          device=device)
@@ -365,8 +337,7 @@ def run(lr=0.0001,
 
     if eyt.remembered is not None:
         tt.msg("reloading best")
-        decoder.tagger = eyt.remembered
-        tagger = eyt.remembered
+        model = eyt.remembered
 
         tt.tick("rerunning validation")
         validres = validepoch()
@@ -383,9 +354,9 @@ def run(lr=0.0001,
     tt.tock()
 
     settings.update({"final_train_loss": tloss[0].get_epoch_error()})
-    settings.update({"final_train_tree_acc": tmetrics[0].get_epoch_error()})
-    settings.update({"final_valid_tree_acc": vmetrics[0].get_epoch_error()})
-    settings.update({"final_test_tree_acc": xmetrics[0].get_epoch_error()})
+    settings.update({"final_train_acc": tmetrics[2].get_epoch_error()})
+    settings.update({"final_valid_acc": vmetrics[2].get_epoch_error()})
+    settings.update({"final_test_acc": xmetrics[2].get_epoch_error()})
 
     wandb.config.update(settings)
     q.pp_dict(settings)
@@ -398,8 +369,6 @@ def run_experiment(
         gradnorm=2,
         batsize=-1,
         epochs=-1,      # probably 11 is enough
-        patience=100,
-        validinter=-1,
         warmup=3,
         cosinelr=False,
         dataset="default",
@@ -409,22 +378,21 @@ def run_experiment(
         numlayers=-1,
         numheads=-1,
         dropout=-1.,
+        sidedrop=-1.,
         bertname="vanilla",
         testcode=False,
         userelpos=False,
         trainonvalidonly=False,
         evaltrain=False,
         gpu=-1,
-        priorweight=-1.,
-        mode="afterdec",
         recomputedata=False,
+        mode="normal",      # "normal", "vib"
+        priorweight=-1.,
         ):
 
     settings = locals().copy()
-
-    _dataset = None
-    if dataset.endswith("mcd"):
-        _dataset = [dataset+str(i) for i in range(3)]
+    settings["patience"] = -1
+    settings["validinter"] = 1
 
     ranges = {
         "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
@@ -440,23 +408,19 @@ def run_experiment(
         "smoothing": [0., 0.1],
         # "patience": [-1],
         # "warmup": [20],
-        "validinter": [2],
+        # "validinter": [2],
         # "gradacc": [1],
-        "priorweight": [0.01, 0.03, 0.1, 0.3, 1.],
+        "sidedrop": [0., 0.5, 0.9],
     }
-
-    if _dataset is not None:
-        ranges["dataset"] = _dataset
-        settings["dataset"] = "default"
 
     if bertname.startswith("none") or bertname == "vanilla":
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
-        ranges["epochs"] = [71]
+        ranges["epochs"] = [40]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
-        ranges["batsize"] = [256]
-        ranges["validinter"] = [5]
+        ranges["batsize"] = [512]
+        # ranges["validinter"] = [3]
 
         ranges["dropout"] = [0.1]
         ranges["smoothing"] = [0.]
@@ -465,6 +429,9 @@ def run_experiment(
         settings["maxsize"] = 200
     elif dataset.startswith("scan"):
         settings["maxsize"] = 50
+
+    if mode == "vib":
+        ranges["priorweight"] = [0.01, 0.1, 1.]
 
     for k in ranges:
         if k in settings:
@@ -481,7 +448,7 @@ def run_experiment(
         return True
 
     print(__file__)
-    p = __file__ + f".baseline.{dataset.replace('/', '-')}"
+    p = __file__ + f".baseline.{dataset}"
     q.run_experiments_random(
         run, ranges, path_prefix=p, check_config=checkconfig, **settings)
 

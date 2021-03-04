@@ -106,6 +106,9 @@ class Dataset(object):
         ret = MappedDataset(self, f)
         return ret
 
+    def __add__(self, other):   # concatenate this dataset with another
+        raise NotImplemented()
+
 
 class CachedDataset(object):
     def __init__(self, use_cache=False, **kw):

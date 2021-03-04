@@ -69,6 +69,7 @@ class TransformerConfig(PretrainedConfig):
         num_heads=8,
         relative_attention_num_buckets=32,
         dropout_rate=0.1,
+            sideways_dropout=0.0,
         attention_dropout_rate=0.0,
         layer_norm_epsilon=1e-6,
         initializer_factor=1.0,
@@ -92,6 +93,7 @@ class TransformerConfig(PretrainedConfig):
         self.num_heads = num_heads
         self.relative_attention_num_buckets = relative_attention_num_buckets
         self.dropout_rate = dropout_rate
+        self.sideways_dropout = sideways_dropout
         self.attention_dropout_rate = attention_dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
         self.initializer_factor = initializer_factor
@@ -178,6 +180,7 @@ class TransformerAttention(nn.Module):
         self.n_heads = config.num_heads
         assert self.d_model == self.d_kv * self.n_heads
         self.dropout = torch.nn.Dropout(config.attention_dropout_rate)
+        self.sidedropout = torch.nn.Dropout(config.sideways_dropout)
         self.inner_dim = self.n_heads * self.d_kv
 
         # Mesh TensorFlow initialization to avoid scaling before softmax
@@ -242,10 +245,12 @@ class TransformerAttention(nn.Module):
         q = shape(self.q(input))  # (bs, n_heads, qlen, dim_per_head)
 
         if kv is None:
-            k = shape(self.k(input))  # (bs, n_heads, qlen, dim_per_head)
-            v = shape(self.v(input))  # (bs, n_heads, qlen, dim_per_head)
+            _input = self.sidedropout(input)
+            k = shape(self.k(_input))  # (bs, n_heads, qlen, dim_per_head)
+            v = shape(self.v(_input))  # (bs, n_heads, qlen, dim_per_head)
         elif past_key_value_state is None:
-            k = v = kv
+            _kv = self.sidedropout(kv)
+            k = v = _kv
             k = shape(self.k(k))  # (bs, n_heads, qlen, dim_per_head)
             v = shape(self.v(v))  # (bs, n_heads, qlen, dim_per_head)
 

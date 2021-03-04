@@ -203,7 +203,7 @@ class TransformerDecoderCell(torch.nn.Module):
             encconfig = TransformerConfig(vocab_size=inpvocabsize, d_model=self.dim, d_ff=self.dim * 4,
                                           d_kv=int(self.dim/numheads),
                                        num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
-            encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout, useabspos=useabspos)
+            encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout, max_position_embeddings=maxpos, useabspos=useabspos)
             self.encoder_model = TransformerStack(encconfig, encemb, rel_emb=self.encrelposemb)
         else:
             self.encoder_model = BertModel.from_pretrained(self.bertname,
@@ -573,6 +573,7 @@ def run(lr=0.0001,
         userelpos=False,
         gpu=-1,
         evaltrain=False,
+        trainonvalid=False,
         trainonvalidonly=False,
         recomputedata=False,
         ):
@@ -590,6 +591,9 @@ def run(lr=0.0001,
     tt = q.ticktock("script")
     tt.tick("data")
     trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recomputedata)
+    if trainonvalid:
+        trainds = trainds + validds
+        validds = testds
 
     tt.tick("dataloaders")
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
