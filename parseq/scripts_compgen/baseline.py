@@ -18,7 +18,7 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 from transformers import AutoTokenizer, BertModel
 
 from parseq.eval import make_array_of_metrics
-from parseq.grammar import lisp_to_tree, are_equal_trees
+from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
 from parseq.scripts_compgen.transformer import TransformerConfig, TransformerStack
 from parseq.vocab import Vocab
 
@@ -334,7 +334,7 @@ class SeqDecoderBaseline(torch.nn.Module):
                 xstr = xstr + ")" * max(0, parenthese_imbalance)        # append missing closing parentheses
                 xstr = "(" * -min(0, parenthese_imbalance) + xstr       # prepend missing opening parentheses
                 try:
-                    tree = lisp_to_tree(xstr)
+                    tree = taglisp_to_tree(xstr)
                     if isinstance(tree, tuple) and len(tree) == 2 and tree[0] is None:
                         tree = None
                 except Exception as e:
@@ -458,7 +458,7 @@ class Tokenizer(object):
         return ret
 
 
-ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY"}
+ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY", "(@WHERE", "(@OR", "(@AND", "(@QUERY"}
 
 
 def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="bert-base-uncased"):
@@ -818,7 +818,7 @@ def run_experiment(
         ranges["smoothing"] = [0.]
 
     if dataset.startswith("cfq"):
-        settings["maxsize"] = 200
+        settings["maxsize"] = 160
     elif dataset.startswith("scan"):
         settings["maxsize"] = 50
 

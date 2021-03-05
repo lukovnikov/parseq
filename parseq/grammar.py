@@ -141,6 +141,18 @@ class LispToTree(TreeStrParser):
         self.stack[-1].append(Tree(next_token, []))
 
 
+class TaggedToTree(LispToTree):
+    def close_level(self):
+        siblings = self.stack.pop(-1)
+        # assert siblings[-1] == siblings[0]
+        siblings = siblings[:-1]
+        if len(siblings) > 0:
+            assert (len(siblings[0]) == 0)
+            siblings[0].extend(siblings[1:])
+            self.stack[-1].append(siblings[0])
+
+
+
 def _inc_convert_treestr(x, cls, self=-1, brackets="()"):
     """
     :param x: lisp-style string
@@ -168,6 +180,14 @@ def lisp_to_pas(x:str, self:LispToPas=-1, brackets="()"):
 
 def prolog_to_pas(x:str, self:PrologToPas=-1, brackets="()"):
     return _inc_convert_treestr(x, PrologToPas, self=self, brackets=brackets)
+
+
+def taglisp_to_tree(x:str, self:LispToTree=-1, brackets="()"):
+    return _inc_convert_treestr(x, LispToTree, self=self, brackets=brackets)
+
+
+def tagged_to_tree(x:str, self:TaggedToTree=-1, brackets="()"):
+    return _inc_convert_treestr(x, TaggedToTree, self=self, brackets=brackets)
 
 
 def lisp_to_tree(x:str, self:LispToTree=-1, brackets="()"):
@@ -202,6 +222,13 @@ def pas_to_expression(x):
         return [x[0]] + [pas_to_expression(xe) for xe in x[1]]
     else:
         return x
+
+
+def try_taglisp_to_tree():
+    x = "(A (B C B) A)"
+    y = taglisp_to_tree(x)
+    print(x)
+    print(y)
 
 
 def try_str_to_pas():
@@ -253,6 +280,22 @@ def pas_to_tree(x):
     else:
         node = Tree(x, [])
     return node
+
+
+def tree_to_taglisp(x:Tree, brackets="()"):
+    if len(x) > 0:
+        children = [tree_to_taglisp(xe, brackets=brackets) for xe in x]
+        return f"{brackets[0]}{x.label()} {' '.join(children)} {brackets[1]}"
+    else:
+        return x.label()
+
+
+def tree_to_tagged(x:Tree, brackets="()"):
+    if len(x) > 0:
+        children = [tree_to_tagged(xe, brackets=brackets) for xe in x]
+        return f"{brackets[0]}{x.label()} {' '.join(children)} {x.label()}{brackets[1]}"
+    else:
+        return x.label()
 
 
 def tree_to_lisp(x:Tree, brackets="()"):
@@ -860,4 +903,5 @@ class FuncGrammar(object):
 
 if __name__ == '__main__':
     # try_str_to_pas()
-    try_lisp_to_tree()
+    # try_lisp_to_tree()
+    try_taglisp_to_tree()

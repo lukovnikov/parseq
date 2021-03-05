@@ -24,7 +24,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from tqdm import tqdm
 
-from parseq.grammar import lisp_to_pas, pas_to_tree, tree_size, tree_to_lisp, tree_to_lisp_tokens, lisp_to_tree
+from parseq.grammar import lisp_to_pas, pas_to_tree, tree_size, tree_to_lisp, tree_to_lisp_tokens, lisp_to_tree, \
+    tree_to_taglisp, taglisp_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
 
 import multiprocessing as mp
@@ -401,7 +402,7 @@ def build_vocab_from_pcfg(pcfg, min_freq=0, top_k=np.infty)->Vocab:
 def autocollate(x, pad_value=0):
     y = list(zip(*x))
     for i, yi in enumerate(y):
-        if isinstance(yi[0], torch.LongTensor):# and yi[0].dim() == 1:
+        if isinstance(yi[0], torch.Tensor) and yi[0].dtype in (torch.int64, torch.int32, torch.int16):# and yi[0].dim() == 1:
             y[i] = q.pad_tensors(yi, list(range(yi[0].dim())), pad_value)
     for i, yi in enumerate(y):
         if isinstance(yi[0], torch.Tensor):
@@ -413,7 +414,7 @@ def autocollate(x, pad_value=0):
 def pad_and_default_collate(x, pad_value=0):
     y = list(zip(*x))
     for i, yi in enumerate(y):
-        if isinstance(yi[0], torch.LongTensor) and yi[0].dim() == 1:
+        if isinstance(yi[0], torch.Tensor) and yi[0].dtype in (torch.int64, torch.int32, torch.int16) and yi[0].dim() == 1:
             y[i] = q.pad_tensors(yi, 0, pad_value)
     x = list(zip(*y))
     ret = default_collate(x)
@@ -1151,8 +1152,11 @@ class CFQDatasetLoader(object):
             # print(ret[0])
             # print(ret[1])
             tree = sparql_to_tree(ret[1])
-            treestr = tree_to_lisp(tree)
-            treestr = re.sub(r"\s+", " ", treestr.replace("(", " ( ").replace(")", " ) "))
+            treestr = tree_to_taglisp(tree)
+            treestr = treestr.replace("(", " (").replace(")", " ) ")
+            tree_recons = taglisp_to_tree(treestr)
+            assert(tree == tree_recons)
+            treestr = re.sub(r"\s+", " ", treestr)
             treestr = treestr.strip()
             ret = (ret[0], treestr)
             # print(ret[1])
@@ -1322,9 +1326,8 @@ class SCANDatasetLoader(object):
         inp, out = splits
         inp, out = inp.strip(), out.strip()
         if lispify:
-            out = f"( @R@ {out} )"
+            out = f"(@R@ {out} )"
         return (inp, out)
-
 
     def build_index_sets(self):
         splitnames = self.split_names.split(",")
