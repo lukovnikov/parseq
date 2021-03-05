@@ -62,7 +62,7 @@ class SetModel(torch.nn.Module):
             encconfig = TransformerConfig(vocab_size=inpvocabsize, d_model=self.dim, d_ff=self.dim * 4,
                                           d_kv=int(self.dim / numheads), attention_dropout_rate=0.,
                                           num_layers=numlayers, num_heads=numheads,
-                                          dropout_rate=dropout, sideways_dropout=sidedrop)
+                                          dropout_rate=dropout, sideways_dropout=sidedrop, vib_att=mode.replace(" ", "")=="vibatt")
             encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout,
                                            max_position_embeddings=maxpos, useabspos=useabspos)
             self.encoder_model = TransformerStack(encconfig, encemb, rel_emb=self.encrelposemb)
@@ -111,12 +111,19 @@ class SetModel(torch.nn.Module):
             relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
             relpos = relpos[None, :, :, None]
         if relpos is not None:
-            encs = self.encoder_model(x, attention_mask=encmask, relpos=relpos)[0]
+            encoderouts = self.encoder_model(x, attention_mask=encmask, relpos=relpos)
         else:
-            encs = self.encoder_model(x, attention_mask=encmask)[0]
+            encoderouts = self.encoder_model(x, attention_mask=encmask)
+        encs = encoderouts[0]
         if self.adapter is not None:
             encs = self.adapter(encs)
-        return encs, encmask
+        if self.mode == "vibatt":
+            priorkl = encoderouts[1]
+            priorkl = priorkl * encmask
+            priorkl = priorkl.sum(-1)
+            return encs, encmask, priorkl
+        else:
+            return encs, encmask
 
     def compute_loss(self, logits, golds):
         bce = self.bce(logits, golds)       # (batsize, vocsize)
@@ -128,9 +135,12 @@ class SetModel(torch.nn.Module):
         return bce, acc.float()
 
     def forward(self, x:torch.Tensor, y:torch.Tensor):      # integer tensors
-        enc, encmask = self.encode(x)
-
         priorloss = None
+        if self.mode == "vibatt":
+            enc, encmask, priorloss = self.encode(x)
+        else:
+            enc, encmask = self.encode(x)
+
         if self.mode == "vib":
             enc, priorloss = self.sample_z(enc, encmask)
 
@@ -140,7 +150,6 @@ class SetModel(torch.nn.Module):
         golds = torch.zeros_like(logits)
         golds[:, 0] = 1
         golds.scatter_(-1, y, 1)
-
 
         loss, acc = self.compute_loss(logits, golds)
         if priorloss is None:
@@ -378,7 +387,7 @@ def run_experiment(
         numlayers=-1,
         numheads=-1,
         dropout=-1.,
-        sidedrop=-1.,
+        sidedrop=0.,
         bertname="vanilla",
         testcode=False,
         userelpos=False,
@@ -410,7 +419,7 @@ def run_experiment(
         # "warmup": [20],
         # "validinter": [2],
         # "gradacc": [1],
-        "sidedrop": [0., 0.5, 0.9],
+        # "sidedrop": [0., 0.5, 0.9],
     }
 
     if bertname.startswith("none") or bertname == "vanilla":
@@ -430,7 +439,7 @@ def run_experiment(
     elif dataset.startswith("scan"):
         settings["maxsize"] = 50
 
-    if mode == "vib":
+    if mode in ("vib", "vibatt"):
         ranges["priorweight"] = [0.01, 0.1, 1.]
 
     for k in ranges:

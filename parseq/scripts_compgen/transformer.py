@@ -79,6 +79,7 @@ class TransformerConfig(PretrainedConfig):
         use_position_bias=False,
         use_causal_mask=True,       # use causal mask in decoder blocks
         use_relative_position=False,
+            vib_att=False,
         **kwargs
     ):
         super().__init__(
@@ -100,6 +101,7 @@ class TransformerConfig(PretrainedConfig):
         self.use_position_bias = use_position_bias
         self.use_causal_mask = use_causal_mask
         self.use_relative_position = use_relative_position
+        self.vib_att = vib_att
 
     @property
     def max_position_embeddings(self):
@@ -189,6 +191,12 @@ class TransformerAttention(nn.Module):
         self.v = nn.Linear(self.d_model, self.inner_dim, bias=False)
         self.o = nn.Linear(self.inner_dim, self.d_model, bias=False)
 
+        if config.vib_att:
+            self.o_gate = nn.Linear(self.inner_dim, self.d_model, bias=False)
+            self.o_mu = nn.Linear(self.d_model, self.d_model, bias=True)
+            self.o_logvar = nn.Linear(self.d_model, self.d_model, bias=True)
+            self.o_ln = nn.LayerNorm(self.d_model, eps=self.config.layer_norm_epsilon)
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -199,6 +207,12 @@ class TransformerAttention(nn.Module):
         self.k.weight.data.normal_(mean=0.0, std=FACTOR * (d_model ** -0.5))
         self.v.weight.data.normal_(mean=0.0, std=FACTOR * (d_model ** -0.5))
         self.o.weight.data.normal_(mean=0.0, std=FACTOR * ((n_heads * d_kv) ** -0.5))
+        if self.config.vib_att:
+            self.o_gate.weight.data.normal_(mean=0.0, std=FACTOR * ((n_heads * d_kv) ** -0.5))
+            self.o_mu.weight.data.normal_(mean=0.0, std=FACTOR * ((n_heads * d_kv) ** -0.5))
+            self.o_mu.bias.data.fill_(0)
+            self.o_logvar.weight.data.normal_(mean=0.0, std=FACTOR * ((n_heads * d_kv) ** -0.5))
+            self.o_logvar.bias.data.fill_(0)
 
     def forward(
         self,
@@ -289,9 +303,29 @@ class TransformerAttention(nn.Module):
 
         context = unshape(context)  # (bs, qlen, dim)
 
+        _context = context
         context = self.o(context)
 
-        outputs = (context,) + present_key_value_state
+        if self.config.vib_att:
+            _context = torch.relu(context)     * torch.sigmoid(self.o_gate(_context))
+            _context = self.o_ln(_context)
+            mu, logvar = self.o_mu(_context), self.o_logvar(_context)
+
+            if self.training:
+                ret = mu + torch.exp(0.5 * logvar) * torch.randn_like(mu)
+            else:
+                ret = mu
+            context = ret
+
+            priorkl = torch.zeros(ret.size(0), ret.size(1), device=ret.device)
+            if self.training:
+                priorkl = -0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=-1)  # (batsize, seqlen)
+                # priorkls = priorkls * mask.float()        # TOD: mask !!!
+                # priorkl = priorkls.sum(-1)
+
+            outputs = (context, ) + present_key_value_state + (priorkl,)
+        else:
+            outputs = (context, ) + present_key_value_state
 
         if self.output_attentions:
             outputs = outputs + (weights,)
@@ -515,7 +549,7 @@ class TransformerPreTrainedModel(PreTrainedModel):
 
 
 class TransformerStack(TransformerPreTrainedModel):
-    def __init__(self, config, embed_tokens=None, rel_emb=False):
+    def __init__(self, config:TransformerConfig, embed_tokens=None, rel_emb=False):
         """
         If rel_emb is False or None, no relative positioning added
         If rel_emb is int: layer-wise separate embeddings created at every layer
@@ -620,6 +654,8 @@ class TransformerStack(TransformerPreTrainedModel):
 
         hidden_states = self.dropout(inputs_embeds)
 
+        vib_att_priorkls = []
+
         for i, (layer_module, past_key_value_state) in enumerate(zip(self.block, past_key_value_states)):
             if self.output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
@@ -639,8 +675,18 @@ class TransformerStack(TransformerPreTrainedModel):
             # append next layer key value states
             present_key_value_states = present_key_value_states + (present_key_value_state,)
 
+            layer_outputs = layer_outputs[2:]
+            if self.config.vib_att:
+                priorkl = layer_outputs[0]
+                vib_att_priorkls.append(priorkl)
+                layer_outputs = layer_outputs[1:]
             if self.output_attentions:
                 all_attentions = all_attentions + (layer_outputs[2],)  # We keep only self-attention weights for now
+
+        if len(vib_att_priorkls) > 0:
+            vib_att_priorkls = sum(vib_att_priorkls)
+        else:
+            vib_att_priorkls = None
 
         hidden_states = self.final_layer_norm(hidden_states)
         # hidden_states = self.dropout(hidden_states)
@@ -650,6 +696,8 @@ class TransformerStack(TransformerPreTrainedModel):
             all_hidden_states = all_hidden_states + (hidden_states,)
 
         outputs = (hidden_states,)
+        if self.config.vib_att:
+            outputs = outputs + (vib_att_priorkls,)
         if use_cache is True:
             assert self.is_decoder, "`use_cache` can only be set to `True` if {} is used as a decoder".format(self)
             outputs = outputs + (present_key_value_states,)
