@@ -20,6 +20,7 @@ from transformers import AutoTokenizer, BertModel
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
 from parseq.scripts_compgen.transformer import TransformerConfig, TransformerStack
+from parseq.scripts_compgen.transformerdecoder import TransformerStack as TransformerStackDecoder
 from parseq.vocab import Vocab
 
 
@@ -75,6 +76,27 @@ class BasicRelPosEmb(torch.nn.Module):
         self.D = dict(zip(self.D, range(len(self.D))))
         self.emb = torch.nn.Embedding(len(self.D), dim, padding_idx=0)
         self.embv = torch.nn.Embedding(len(self.D), dim, padding_idx=0)
+
+    def get_vectors(self, query, relpos, keyorvalue="key"):
+        """
+        :param q:       (batsize, numheads, qlen, dimperhead)
+        :param relpos:  (batsize, qlen, klen, n)
+        :return:        (batsize, numheads, qlen, klen, dimperhead)
+        """
+        ret = None
+        for n in range(relpos.size(-1)):
+            indexes = torch.arange(0, self.emb.num_embeddings, device=query.device).long()
+            if keyorvalue.startswith("k"):
+                embs = self.emb(indexes)# (numindexes, dim)
+            elif keyorvalue.startswith("v"):
+                embs = self.embv(indexes)
+            embs = embs.view(embs.size(0), query.size(1), query.size(-1))        # (numindexes, numheads, dimperhead)
+            vectors = relpos[:, :, :, n][embs]      # (batsize, qlen, klen, numheads, dimperhead)
+            vectors = vectors.permute(0, 3, 1, 2, 4)
+            if ret is None:
+                ret = torch.zeros_like(vectors)
+            ret = ret + vectors
+        return ret
 
     def compute_scores(self, query, relpos):
         """
@@ -157,6 +179,7 @@ class TransformerDecoderCell(torch.nn.Module):
                                    num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
 
         self.dec_emb = torch.nn.Embedding(self.vocabsize, decconfig.d_model)
+        self.slot_emb = torch.nn.Embedding(1, decconfig.d_model)
 
         self.relposemb = None
         if self.userelpos is True:
@@ -174,7 +197,7 @@ class TransformerDecoderCell(torch.nn.Module):
         decoder_config = deepcopy(decconfig)
         decoder_config.is_decoder = True
         decoder_config.use_causal_mask = True
-        self.decoder = TransformerStack(decoder_config, rel_emb=self.relposemb)
+        self.decoder = TransformerStackDecoder(decoder_config, rel_emb=self.relposemb)
 
         self.out = torch.nn.Linear(self.dim, self.vocabsize)
 
@@ -238,30 +261,65 @@ class TransformerDecoderCell(torch.nn.Module):
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
         padmask = (tokens != 0)
-        embs = self.dec_emb(tokens)
+        embs = self.dec_emb(tokens)     # (bs, seqlen, dim)
+        slots = self.slot_emb.weight[0][None, None].repeat(embs.size(0), embs.size(1), 1)     # (1, seqlen, dim)
         if self.absposemb is not None:
-            posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
-            embs = embs + posembs
+            posembs = self.absposemb(torch.arange(tokens.size(1)+1, device=tokens.device))[None]
+            embs = embs + posembs[:, :-1, :]
+            slots = slots + posembs[:, 1:, :]
         relpos = None
         if self.relposemb is not None:      # compute relative positions
-            positions = torch.arange(tokens.size(1), device=tokens.device)
+            positions = torch.arange(tokens.size(1)+1, device=tokens.device)
+            positions = torch.cat([positions[:, None], positions[:, None]], 1).view(-1)
             relpos = positions[None, :] - positions[:, None]
+            relpos = relpos[1:-1, 1:-1]
             relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
             relpos = relpos[None, :, :, None]
+        embs = torch.cat([embs[:, :, None, :], slots[:, :, None, :]], 2).view(embs.size(0), -1, embs.size(2))
+        padmask = torch.cat([padmask[:, :, None], padmask[:, :, None]], 2).view(padmask.size(0), -1)
+
         if cache is not None:
-            embs = embs[:, -1:, :]
+            embs = embs[:, -2:, :]
             if relpos is not None:
-                relpos = relpos[:, -1:, :, :]
+                relpos = relpos[:, -2:, :, :]
+
         _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=True,
                      past_key_value_states=cache,
                      relpos=relpos)
         ret = _ret[0]
-        c = ret
+        c = ret.view(ret.size(0), int(ret.size(1)/2), 2, ret.size(2))[:, :, 1, :]
         cache = _ret[1]
         logits = self.out(c)
         return logits, cache
+
+    # def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
+    #     padmask = (tokens != 0)
+    #     embs = self.dec_emb(tokens)
+    #     if self.absposemb is not None:
+    #         posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
+    #         embs = embs + posembs
+    #     relpos = None
+    #     if self.relposemb is not None:      # compute relative positions
+    #         positions = torch.arange(tokens.size(1), device=tokens.device)
+    #         relpos = positions[None, :] - positions[:, None]
+    #         relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
+    #         relpos = relpos[None, :, :, None]
+    #     if cache is not None:
+    #         embs = embs[:, -1:, :]
+    #         if relpos is not None:
+    #             relpos = relpos[:, -1:, :, :]
+    #     _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
+    #                  encoder_hidden_states=enc,
+    #                  encoder_attention_mask=encmask, use_cache=True,
+    #                  past_key_value_states=cache,
+    #                  relpos=relpos)
+    #     ret = _ret[0]
+    #     c = ret
+    #     cache = _ret[1]
+    #     logits = self.out(c)
+    #     return logits, cache
 
 
 class SeqDecoderBaseline(torch.nn.Module):
