@@ -294,6 +294,7 @@ class TransformerAttention(nn.Module):
                 maskslots = ((torch.arange(mask.size(3), device=mask.device) + 1) % 2).float()[None, :]
                 maskslots = maskslots + torch.eye(mask.size(3), device=mask.device)
                 maskslots = torch.where(maskslots > 0, torch.ones_like(maskslots) * 0, torch.ones_like(maskslots) * -1e6)
+                maskslots = maskslots[-mask.size(2):, :]
                 maskslots = maskslots[None, None, :]
                 mask = mask + maskslots
             scores = scores + mask
@@ -625,8 +626,11 @@ class TransformerStack(TransformerPreTrainedModel):
         batch_size, seq_length = input_shape
 
         if past_key_value_states is not None:
-            assert seq_length == 1, "Input shape is {}, but should be {} when using past_key_value_sates".format(
-                input_shape, (batch_size, 1)
+            _seqlen = 1
+            if self.is_decoder:
+                _seqlen = 2
+            assert seq_length == _seqlen, "Input shape is {}, but should be {} when using past_key_value_sates".format(
+                input_shape, (batch_size, _seqlen)
             )
             # required mask seq length can be calculated via length of past
             # key value states and seq_length = 1 for the last token
@@ -734,11 +738,12 @@ class TransformerStack(TransformerPreTrainedModel):
             # - if the model is an encoder, make the mask broadcastable to [batch_size, num_heads, seq_length, seq_length]
             if self.config.is_decoder and self.config.use_causal_mask:
                 batch_size, seq_length = input_shape
-                seq_ids = torch.arange(seq_length, device=device)
-                causal_mask = seq_ids[None, None, :].repeat(batch_size, seq_length, 1) <= seq_ids[None, :, None]
+                _seq_length = attention_mask.size(-1)
+                seq_ids = torch.arange(_seq_length, device=device)
+                causal_mask = seq_ids[None, None, :].repeat(batch_size, _seq_length, 1) <= seq_ids[None, :, None]
                 # causal and attention masks must have same type with pytorch version < 1.3
                 causal_mask = causal_mask.to(attention_mask.dtype)
-                extended_attention_mask = causal_mask[:, None, :, :] * attention_mask[:, None, None, :]
+                extended_attention_mask = causal_mask[:, None, -seq_length:, :] * attention_mask[:, None, None, :]
             else:
                 extended_attention_mask = attention_mask[:, None, None, :]
         else:
