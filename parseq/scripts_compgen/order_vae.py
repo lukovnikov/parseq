@@ -21,63 +21,141 @@ from transformers import AutoTokenizer, BertModel
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree, tree_to_taglisp, tree_to_lisp
-from parseq.scripts_compgen.baseline import TransformerDecoderCell
+from parseq.scripts_compgen.baseline import TransformerDecoderCell, BasicRelPosEmb, TransformerEmbeddings
 from parseq.scripts_compgen.transformer import TransformerConfig, TransformerStack
 from parseq.scripts_compgen.transformerdecoder import TransformerStack as TransformerStackDecoder
 from parseq.vocab import Vocab
 
 
-class QTransformerDecoderCell(TransformerDecoderCell):
+class QTransformerDecoderCell(torch.nn.Module):
     def __init__(self, dim, vocab:Vocab=None, inpvocab:Vocab=None, numlayers:int=6, numheads:int=6, userelpos=False, useabspos=True,
                  relposmode="basic", relposrng=10,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
-        super(QTransformerDecoderCell, self).__init__(dim, vocab=vocab, inpvocab=inpvocab, numlayers=numlayers,
-                 numheads=numheads, userelpos=userelpos, useabspos=useabspos, relposmode=relposmode, relposrng=relposrng,
-                 dropout=dropout, maxpos=maxpos, bertname=bertname, **kw)
+        super(QTransformerDecoderCell, self).__init__(**kw)
+        self.vocab = vocab
+        self.inpvocab = inpvocab
+        self.vocabsize = vocab.number_of_ids()
+        self.dim = dim
+        self.userelpos = userelpos
+        self.relposrng = relposrng
+        self.useabspos = useabspos
+        decconfig = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
+                                      d_kv=int(self.dim / numheads),
+                                      num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
+
+        self.dec_emb = torch.nn.Embedding(self.vocabsize, decconfig.d_model)
+
+        self.relposemb = None
+        if self.userelpos is True:
+            if relposmode == "basic":
+                self.relposemb = BasicRelPosEmb(self.dim, relposrng)
+            # elif relposmode == "mod":
+            #     self.relposemb = ModRelPosEmb(self.dim, relposrng, levels=4)
+            else:
+                raise Exception(f"Unrecognized relposmode '{relposmode}'")
+
+        self.absposemb = None
+        if self.relposemb is None or self.useabspos is True:
+            self.absposemb = torch.nn.Embedding(maxpos, decconfig.d_model)
+
+        decoder_config = deepcopy(decconfig)
+        decoder_config.is_decoder = True
+        decoder_config.use_causal_mask = True
+        self.decoder = TransformerStack(decoder_config, rel_emb=self.relposemb)
+
+        self.out = torch.nn.Linear(self.dim, self.vocabsize)
+
+        vocab_mask = torch.ones(self.vocabsize)
+        # for excl_token in self.exclude:
+        #     if excl_token in self.vocab:
+        #         vocab_mask[self.vocab[excl_token]] = 0
+        self.register_buffer("vocab_mask", vocab_mask)
+
+        self.bertname = bertname
+        if self.bertname.startswith("none") or self.bertname == "vanilla":
+            self.encrelposemb = None
+            if self.userelpos is True:
+                if relposmode == "basic":
+                    self.encrelposemb = BasicRelPosEmb(self.dim, relposrng)
+                # elif relposmode == "mod":
+                #     self.relposemb = ModRelPosEmb(self.dim, relposrng, levels=4)
+                else:
+                    raise Exception(f"Unrecognized relposmode '{relposmode}'")
+            bname = "bert" + self.bertname[4:]
+            if self.bertname == "vanilla":
+                inpvocabsize = inpvocab.number_of_ids()
+            else:
+                tokenizer = AutoTokenizer.from_pretrained(bname)
+                inpvocabsize = tokenizer.vocab_size
+            encconfig = TransformerConfig(vocab_size=inpvocabsize, d_model=self.dim, d_ff=self.dim * 4,
+                                          d_kv=int(self.dim / numheads),
+                                          num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
+            encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout,
+                                           max_position_embeddings=maxpos, useabspos=useabspos)
+            self.encoder_model = TransformerStack(encconfig, encemb, rel_emb=self.encrelposemb)
+        else:
+            self.encoder_model = BertModel.from_pretrained(self.bertname,
+                                                           hidden_dropout_prob=min(dropout, 0.2),
+                                                           attention_probs_dropout_prob=min(dropout, 0.1))
+
+        self.adapter = None
+        if self.encoder_model.config.hidden_size != decoder_config.d_model:
+            self.adapter = torch.nn.Linear(self.encoder_model.config.hidden_size, decoder_config.d_model, bias=False)
 
         self.out_mu = torch.nn.Linear(self.dim, int(self.dim/2))
         self.out_logvar = torch.nn.Linear(self.dim, int(self.dim/2))
         self.reset_parameters()
 
-    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
-        padmask = (tokens != 0)
-        _padmask = padmask
-        embs = self.dec_emb(tokens)     # (bs, seqlen, dim)
-        slots = self.slot_emb.weight[0][None, None].repeat(embs.size(0), embs.size(1), 1)     # (1, seqlen, dim)
-        if self.absposemb is not None:
-            posembs = self.absposemb(torch.arange(tokens.size(1)+1, device=tokens.device))[None]
-            embs = embs + posembs[:, :-1, :]
-            slots = slots + posembs[:, 1:, :]
+    def encode_source(self, x):
+        encmask = (x != 0)
         relpos = None
-        if self.relposemb is not None:      # compute relative positions
-            positions = torch.arange(tokens.size(1)+1, device=tokens.device)
-            positions = torch.cat([positions[:, None], positions[:, None]], 1).view(-1)
+        if self.encrelposemb is not None:      # compute relative positions
+            positions = torch.arange(x.size(1), device=x.device)
             relpos = positions[None, :] - positions[:, None]
-            relpos = relpos[1:-1, 1:-1]
             relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
             relpos = relpos[None, :, :, None]
-        embs = torch.cat([embs[:, :, None, :], slots[:, :, None, :]], 2).view(embs.size(0), -1, embs.size(2))
-        padmask = torch.cat([padmask[:, :, None], padmask[:, :, None]], 2).view(padmask.size(0), -1)
+        if relpos is not None:
+            encs = self.encoder_model(x, attention_mask=encmask, relpos=relpos)[0]
+        else:
+            encs = self.encoder_model(x, attention_mask=encmask)[0]
+        if self.adapter is not None:
+            encs = self.adapter(encs)
+        return encs, encmask
 
+    def reset_parameters(self):
+        pass
+        # self.posemb.weight.fill_(0.)
+
+    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
+        padmask = (tokens != 0)
+        embs = self.dec_emb(tokens)
+        if self.absposemb is not None:
+            posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
+            embs = embs + posembs
+        relpos = None
+        if self.relposemb is not None:      # compute relative positions
+            positions = torch.arange(tokens.size(1), device=tokens.device)
+            relpos = positions[None, :] - positions[:, None]
+            relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
+            relpos = relpos[None, :, :, None]
         if cache is not None:
-            embs = embs[:, -2:, :]
+            embs = embs[:, -1:, :]
             if relpos is not None:
-                relpos = relpos[:, -2:, :, :]
-
+                relpos = relpos[:, -1:, :, :]
         _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=True,
                      past_key_value_states=cache,
                      relpos=relpos)
         ret = _ret[0]
-        c = ret.view(ret.size(0), int(ret.size(1)/2), 2, ret.size(2))[:, :, 1, :]
+        c = ret
         cache = _ret[1]
         mu = self.out_mu(c)
         logvar = self.out_logvar(c)
 
         z = mu + torch.exp(0.5 * logvar) * torch.randn_like(mu) # (batsize, seqlen, dim/2)
         priorkls = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=-1)      # (bs, seqlen)
-        priorkls = priorkls * _padmask
+        priorkls = priorkls * padmask
         priorkl = priorkls.sum(-1)
 
         return z, priorkl, cache
@@ -136,7 +214,7 @@ class PTransformerDecoderCell(TransformerDecoderCell):
         return logits, cache
 
 
-class SeqDecoderBaseline(torch.nn.Module):
+class SeqDecoderOrderVAE(torch.nn.Module):
     # default_termination_mode = "sequence"
     # default_decode_mode = "serial"
 
@@ -146,14 +224,16 @@ class SeqDecoderBaseline(torch.nn.Module):
                  vocab=None,
                  max_size:int=100,
                  smoothing:float=0.,
+                 priorweight=1.,
                  tree_compare=None,
                  **kw):
-        super(SeqDecoderBaseline, self).__init__(**kw)
+        super(SeqDecoderOrderVAE, self).__init__(**kw)
         self.ptagger = ptagger
         self.qtagger = qtagger
         self.vocab = vocab
         self.max_size = max_size
         self.smoothing = smoothing
+        self.priorweight = priorweight
         if self.smoothing > 0:
             self.loss = q.SmoothedCELoss(reduction="none", ignore_index=0, smoothing=smoothing, mode="logprobs")
         else:
@@ -229,22 +309,23 @@ class SeqDecoderBaseline(torch.nn.Module):
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # extract a training example from y:
-        x, newy, tgt = self.extract_training_example(x, y)
+        x, qy, py, tgt = self.extract_training_example(x, y)
 
         # run through q
         enc, encmask = self.qtagger.encode_source(x)
         # run through tagger: the same for all versions
-        z, priorkl, _ = self.qtagger(tokens=newy, enc=enc, encmask=encmask, cache=None)
+        z, priorkl, _ = self.qtagger(tokens=qy, enc=enc, encmask=encmask, cache=None)
         # z: (bs, seqlen, dim/2), priorkl: (bs,)
 
         # run through p
         enc, encmask = self.ptagger.encode_source(x)
         # run through tagger: the same for all versions
         z = z[:, 1:, :]
-        logits, cache = self.ptagger(tokens=newy, z=z, enc=enc, encmask=encmask, cache=None)
+        logits, _ = self.ptagger(tokens=py, z=z, enc=enc, encmask=encmask, cache=None)
 
         # compute loss: different versions do different masking and different targets
         loss, acc = self.compute_loss(logits, tgt)
+        loss = self.priorweight * priorkl + loss
         return {"loss": loss, "priorkl": priorkl, "acc": acc}, logits
 
     def extract_training_example(self, x, y):
@@ -257,16 +338,10 @@ class SeqDecoderBaseline(torch.nn.Module):
         for i, ylen in zip(range(len(ylens)), ylens):
             newy[i, ylen+1] = self.vocab["@END@"]
 
-        goldy = newy[:, 1:]
-        # tgt = torch.zeros(goldy.size(0), goldy.size(1), self.vocab.number_of_ids(), device=goldy.device)
-        # tgt = tgt.scatter(2, goldy[:, :, None], 1.)
-        # tgtmask = (goldy != 0).float()
+        return x, newy[:, :-1], newy[:, :-2], newy[:, 1:-1]
 
-        newy = newy[:, :-1]
-        return x, newy, goldy
-
-    def sample_from_prior(self, bs, seqlen):
-        z = torch.randn(bs, seqlen, int(self.ptagger.dim / 2), device=x.device)
+    def sample_from_prior(self, bs, seqlen, device=torch.device("cpu")):
+        z = torch.randn(bs, seqlen, int(self.ptagger.dim / 2), device=device)
         return z
 
     def get_prediction(self, x:torch.Tensor):
@@ -284,9 +359,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         cache = None
         while step < self.max_size and not torch.all(ended):
             y = newy if newy is not None else y
-            # run tagger
-            # y = torch.cat([y, yend], 1)
-            z = self.sample_from_prior(y.size(0), y.size(1))
+            z = self.sample_from_prior(y.size(0), y.size(1), device=x.device)
             logits, cache = self.ptagger(tokens=y, z=z, enc=enc, encmask=encmask, cache=cache)
             _, preds = logits.max(-1)
             preds = preds[:, -1]
@@ -298,7 +371,6 @@ class SeqDecoderBaseline(torch.nn.Module):
             step += 1
             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
         return newy, steps_used.float()
-
 
 
 class Tokenizer(object):
@@ -712,13 +784,14 @@ def run(lr=0.0001,
         trainonvalid=False,
         trainonvalidonly=False,
         recomputedata=False,
+        priorweight=1.,
         ):
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compgen_baseline", config=settings, reinit=True)
+    wandb.init(project=f"compgen_ordervae", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -747,7 +820,8 @@ def run(lr=0.0001,
     ptagger = PTransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads,
                                       dropout=dropout,
                                       bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
-    decoder = SeqDecoderBaseline(qtagger=qtagger, ptagger=ptagger, vocab=fldic, max_size=maxsize, smoothing=smoothing, tree_compare=lambda x, y: reorderer.are_equal_trees(x, y))
+    decoder = SeqDecoderOrderVAE(qtagger=qtagger, ptagger=ptagger, vocab=fldic, max_size=maxsize, smoothing=smoothing,
+                                 priorweight=priorweight, tree_compare=lambda x, y: reorderer.are_equal_trees(x, y))
     print(f"one layer of decoder: \n {ptagger.decoder.block[0]}")
     tt.tock()
 
@@ -764,7 +838,7 @@ def run(lr=0.0001,
         tt.tock()
         tt.tock("testcode")
 
-    tloss = make_array_of_metrics("loss", "acc", reduction="mean")
+    tloss = make_array_of_metrics("loss", "priorkl", "acc", reduction="mean")
     tmetrics = make_array_of_metrics("treeacc", reduction="mean")
     vmetrics = make_array_of_metrics("treeacc", reduction="mean")
     xmetrics = make_array_of_metrics("treeacc", reduction="mean")
@@ -800,7 +874,7 @@ def run(lr=0.0001,
 
     def wandb_logger():
         d = {}
-        for name, loss in zip(["loss", "acc"], tloss):
+        for name, loss in zip(["loss", "priorkl", "acc"], tloss):
             d["train_"+name] = loss.get_epoch_error()
         for name, loss in zip(["tree_acc"], tmetrics):
             d["train_"+name] = loss.get_epoch_error()
@@ -922,6 +996,7 @@ def run_experiment(
         evaltrain=False,
         gpu=-1,
         recomputedata=False,
+        priorweight=-1.,
         ):
 
     settings = locals().copy()
@@ -934,7 +1009,7 @@ def run_experiment(
         "batsize": [60],
         "hdim": [768],
         "numheads": [12],
-        "numlayers": [6],
+        "numlayers": [5],
         "lr": [0.0001],
         "enclrmul": [0.1],                  # use 1.
         "smoothing": [0., 0.1],
@@ -942,6 +1017,7 @@ def run_experiment(
         # "warmup": [20],
         "validinter": [2],
         # "gradacc": [1],
+        "priorweight": [1., 0.1, 0.01, 0.001]
     }
 
     if bertname.startswith("none") or bertname == "vanilla":
@@ -950,7 +1026,7 @@ def run_experiment(
         ranges["epochs"] = [40]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
-        ranges["batsize"] = [96]
+        ranges["batsize"] = [64]
         ranges["validinter"] = [3]
 
         ranges["dropout"] = [0.1]
