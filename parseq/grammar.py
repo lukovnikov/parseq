@@ -1,6 +1,6 @@
 import re
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Dict
 
 from nltk import Tree, ParentedTree
 
@@ -428,7 +428,24 @@ class ActionTree(ParentedTree):
             return tree
 
 
-def are_equal_trees(self, other, orderless={"and", "or"}, unktoken="@UNK@", use_terminator=False):
+def are_equal_trees(self:Tree,
+                    other:Tree,
+                    orderless={"and", "or"},
+                    unktoken="@UNK@",
+                    use_terminator=False,
+                    varre:str=None,
+                    varmap:Dict[str,str]=None,
+                    ):
+    """
+    :param self:            the first tree
+    :param other:           the second tree
+    :param orderless:       a collection of labels of nodes whose children's order doesn't matter
+    :param unktoken:        the UNK token, if this one is encountered, the trees are not equal, even if the UNK is in the same place
+    :param use_terminator:  whether a terminator token is being used explicitly to terminate a list of siblings
+    :param varre:           regular expression to recognize a variable (variables in two different trees may have different names but still be equal trees)
+    :param varmap:          mapping of variable names in self to variable names in other
+    :return:
+    """
     if self is None or other is None:
         return False
     if not isinstance(other, Tree) or not isinstance(self, Tree):
@@ -466,6 +483,7 @@ def are_equal_trees(self, other, orderless={"and", "or"}, unktoken="@UNK@", use_
                 return False
             i += 1
         if len(selfchildren) == 0 and len(otherchildren) == 0:
+            # all the children from both sides found their match
             return True
         else:
             return False
