@@ -141,15 +141,16 @@ class SeqDecoderBaseline(torch.nn.Module):
     # default_decode_mode = "serial"
 
     def __init__(self,
-                 tagger:TransformerDecoderCell,
-                 qtagger:TransformerDecoderCell,
+                 ptagger:PTransformerDecoderCell,
+                 qtagger:QTransformerDecoderCell,
                  vocab=None,
                  max_size:int=100,
                  smoothing:float=0.,
                  tree_compare=None,
                  **kw):
         super(SeqDecoderBaseline, self).__init__(**kw)
-        self.tagger = tagger
+        self.ptagger = ptagger
+        self.qtagger = qtagger
         self.vocab = vocab
         self.max_size = max_size
         self.smoothing = smoothing
@@ -229,19 +230,29 @@ class SeqDecoderBaseline(torch.nn.Module):
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # extract a training example from y:
         x, newy, tgt = self.extract_training_example(x, y)
-        enc, encmask = self.tagger.encode_source(x)
+
+        # run through q
+        enc, encmask = self.qtagger.encode_source(x)
         # run through tagger: the same for all versions
-        logits, cache = self.tagger(tokens=newy, enc=enc, encmask=encmask, cache=None)
+        z, priorkl, _ = self.qtagger(tokens=newy, enc=enc, encmask=encmask, cache=None)
+        # z: (bs, seqlen, dim/2), priorkl: (bs,)
+
+        # run through p
+        enc, encmask = self.ptagger.encode_source(x)
+        # run through tagger: the same for all versions
+        z = z[:, 1:, :]
+        logits, cache = self.ptagger(tokens=newy, z=z, enc=enc, encmask=encmask, cache=None)
+
         # compute loss: different versions do different masking and different targets
         loss, acc = self.compute_loss(logits, tgt)
-        return {"loss": loss, "acc": acc}, logits
+        return {"loss": loss, "priorkl": priorkl, "acc": acc}, logits
 
     def extract_training_example(self, x, y):
         ymask = (y != 0).float()
         ylens = ymask.sum(1).long()
         newy = y
         newy = torch.cat([torch.ones_like(newy[:, 0:1]) * self.vocab["@START@"], newy], 1)
-        newy = torch.cat([newy, torch.zeros_like(newy[:, 0:1])], 1)       # append some zeros
+        newy = torch.cat([newy, torch.zeros_like(newy[:, 0:2])], 1)       # append some zeros
         # append EOS
         for i, ylen in zip(range(len(ylens)), ylens):
             newy[i, ylen+1] = self.vocab["@END@"]
@@ -254,6 +265,10 @@ class SeqDecoderBaseline(torch.nn.Module):
         newy = newy[:, :-1]
         return x, newy, goldy
 
+    def sample_from_prior(self, bs, seqlen):
+        z = torch.randn(bs, seqlen, int(self.ptagger.dim / 2), device=x.device)
+        return z
+
     def get_prediction(self, x:torch.Tensor):
         steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_size
         # initialize empty ys:
@@ -261,7 +276,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
 
         # run encoder
-        enc, encmask = self.tagger.encode_source(x)
+        enc, encmask = self.ptagger.encode_source(x)
 
         step = 0
         newy = None
@@ -271,7 +286,8 @@ class SeqDecoderBaseline(torch.nn.Module):
             y = newy if newy is not None else y
             # run tagger
             # y = torch.cat([y, yend], 1)
-            logits, cache = self.tagger(tokens=y, enc=enc, encmask=encmask, cache=cache)
+            z = self.sample_from_prior(y.size(0), y.size(1))
+            logits, cache = self.ptagger(tokens=y, z=z, enc=enc, encmask=encmask, cache=cache)
             _, preds = logits.max(-1)
             preds = preds[:, -1]
             newy = torch.cat([y, preds[:, None]], 1)
@@ -726,10 +742,13 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("model")
-    cell = TransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads, dropout=dropout,
+    qtagger = QTransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads, dropout=dropout,
                                   bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
-    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, tree_compare=lambda x, y: reorderer.are_equal_trees(x, y))
-    print(f"one layer of decoder: \n {cell.decoder.block[0]}")
+    ptagger = PTransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads,
+                                      dropout=dropout,
+                                      bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
+    decoder = SeqDecoderBaseline(qtagger=qtagger, ptagger=ptagger, vocab=fldic, max_size=maxsize, smoothing=smoothing, tree_compare=lambda x, y: reorderer.are_equal_trees(x, y))
+    print(f"one layer of decoder: \n {ptagger.decoder.block[0]}")
     tt.tock()
 
     if testcode:
@@ -777,7 +796,7 @@ def run(lr=0.0001,
     if patience < 0:
         patience = epochs
     eyt = q.EarlyStopper(vmetrics[0], patience=patience, min_epochs=30, more_is_better=True,
-                         remember_f=lambda: deepcopy(cell))
+                         remember_f=lambda: deepcopy(decoder))
 
     def wandb_logger():
         d = {}
@@ -790,7 +809,7 @@ def run(lr=0.0001,
         wandb.log(d)
 
     t_max = epochs
-    optim = get_optim(cell, lr, enclrmul)
+    optim = get_optim(decoder, lr, enclrmul)
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
         assert t_max > (warmup + 10)
@@ -799,7 +818,7 @@ def run(lr=0.0001,
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
-    trainbatch = partial(q.train_batch, on_before_optim_step=[lambda : clipgradnorm(_m=cell, _norm=gradnorm)])
+    trainbatch = partial(q.train_batch, on_before_optim_step=[lambda : clipgradnorm(_m=decoder, _norm=gradnorm)])
 
     if trainonvalidonly:
         traindl = validdl
@@ -931,7 +950,7 @@ def run_experiment(
         ranges["epochs"] = [40]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
-        ranges["batsize"] = [128]
+        ranges["batsize"] = [96]
         ranges["validinter"] = [3]
 
         ranges["dropout"] = [0.1]
@@ -963,5 +982,5 @@ def run_experiment(
 
 
 if __name__ == '__main__':
-    q.argprun(try_data)
-    # q.argprun(run_experiment)
+    # q.argprun(try_data)
+    q.argprun(run_experiment)
