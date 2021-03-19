@@ -607,6 +607,16 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
     tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
     return trainds, validds, testds, fldic, inpdic
 
+def collate_fn(x, pad_value=0, numtokens=5000):
+    lens = [len(xe[1]) for xe in x]
+    a = list(zip(lens, x))
+    a = sorted(a, key=lambda xe: xe[0], reverse=True)
+    maxnum = int(numtokens/max(lens))
+    b = a[:maxnum]
+    b = [be[1] for be in b]
+    ret = autocollate(b, pad_value=pad_value)
+    return ret
+
 
 def run(lr=0.0001,
         enclrmul=0.1,
@@ -866,7 +876,7 @@ def run_experiment(
     if bertname.startswith("none") or bertname == "vanilla":
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
-        ranges["epochs"] = [40]
+        ranges["epochs"] = [58]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
         ranges["batsize"] = [256]

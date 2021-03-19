@@ -15,6 +15,7 @@ import torch
 import numpy as np
 from nltk import Tree
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetLoader
 from transformers import AutoTokenizer, BertModel
@@ -600,6 +601,8 @@ class Reorderer(object):
                 yield ret
 
     def are_equal_trees(self, x:Tree, y:Tree, use_terminator=False):
+        if x is None or y is None:
+            return False
         _x = self.normalize_entities_and_variables(x, generic=True)
         _y = self.normalize_entities_and_variables(y, generic=True)
         # print(_x)
@@ -731,8 +734,47 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
     return trainds, validds, testds, fldic, inpdic, reorderer
 
 
-def try_data(dataset="cfq/mcd1", validfrac=0.1, bertname="vanilla", recompute=False, gpu=-1):
-    trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recompute)
+def try_data(dataset="cfq/mcd1", validfrac=0.1, bertname="vanilla", recompute=False):
+    trainds, validds, testds, fldic, inpdic, reorderer = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recompute)
+    longest_i = 0
+    longest_l = 0
+    lengths = [0 for _ in range(200)]
+    for i, x in tqdm(enumerate(trainds)):
+        lengths[len(x[1])] += 1
+        if len(x[1]) > longest_l:
+            longest_l = len(x[1])
+            longest_i = i
+
+    lengths = lengths[:longest_l+1]
+    x = trainds[longest_i]
+    print(inpdic.tostr(x[0]))
+    print(fldic.tostr(x[1]))
+    cumlens = np.cumsum(lengths)
+    for i in range(len(lengths)):
+        print(f"{i}, {lengths[i]}, {cumlens[i]}")
+
+
+    longest_i = 0
+    longest_l = 0
+    lengths = [0 for _ in range(200)]
+    for i, x in tqdm(enumerate(validds)):
+        lengths[len(x[1])] += 1
+        if len(x[1]) > longest_l:
+            longest_l = len(x[1])
+            longest_i = i
+
+    lengths = lengths[:longest_l+1]
+    x = validds[longest_i]
+    print(inpdic.tostr(x[0]))
+    print(fldic.tostr(x[1]))
+    cumlens = np.cumsum(lengths)
+    for i in range(len(lengths)):
+        print(f"{i}, {lengths[i]}, {cumlens[i]}")
+
+
+
+def _try_data(dataset="cfq/mcd1", validfrac=0.1, bertname="vanilla", recompute=False, gpu=-1):
+    trainds, validds, testds, fldic, inpdic, reorderer = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recompute)
     reorderer = Reorderer(inpD=inpdic, outD=fldic)
     ex1 = trainds[0]
     ex2 = trainds[0]
@@ -758,11 +800,23 @@ def try_data(dataset="cfq/mcd1", validfrac=0.1, bertname="vanilla", recompute=Fa
     tt.tock()
 
 
+def collate_fn(x, pad_value=0, numtokens=5000):
+    lens = [len(xe[1]) for xe in x]
+    a = list(zip(lens, x))
+    a = sorted(a, key=lambda xe: xe[0], reverse=True)
+    maxnum = int(numtokens/max(lens))
+    b = a[:maxnum]
+    b = [be[1] for be in b]
+    ret = autocollate(b, pad_value=pad_value)
+    return ret
+
+
 def run(lr=0.0001,
         enclrmul=0.1,
         smoothing=0.1,
         gradnorm=3,
         batsize=60,
+        tokperbatch=1000,
         epochs=16,
         patience=10,
         validinter=3,
@@ -805,9 +859,10 @@ def run(lr=0.0001,
         validds = testds
 
     tt.tick("dataloaders")
-    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
-    validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    collfn = partial(collate_fn, numtokens=tokperbatch)
+    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=collfn)
+    validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=collfn)
+    testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=collfn)
     # print(json.dumps(next(iter(trainds)), indent=3))
     # print(next(iter(traindl)))
     # print(next(iter(validdl)))
@@ -977,6 +1032,7 @@ def run_experiment(
         smoothing=-1.,
         gradnorm=2,
         batsize=-1,
+        tokperbatch=1000,
         epochs=-1,      # probably 11 is enough
         patience=100,
         validinter=-1,
@@ -1023,7 +1079,7 @@ def run_experiment(
     if bertname.startswith("none") or bertname == "vanilla":
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
-        ranges["epochs"] = [40]
+        ranges["epochs"] = [58]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
         ranges["batsize"] = [64]
