@@ -1784,7 +1784,14 @@ class TransformerTagger(TreeInsertionTagger):
         parent_positions = torch.zeros_like(tokens) - 1
         left_positions = torch.zeros_like(tokens) - 1
         right_positions = torch.zeros_like(tokens) - 1
+        _tokens = tokens
+        _attnmask = attnmask
+        _relpos = relpos
         tokens = torch.cat([tokens, torch.zeros_like(tokens[:, -1:]) + self.vocab[self.vocab.padtoken]], -1)
+        attnmask = torch.zeros(attnmask.size(0), attnmask.size(1)+1, attnmask.size(2)+1, dtype=attnmask.dtype, device=attnmask.device)
+        attnmask[:, :_attnmask.size(1), :_attnmask.size(2)] = _attnmask
+        relpos = torch.zeros(relpos.size(0), relpos.size(1)+1, relpos.size(2)+1, relpos.size(3), dtype=relpos.dtype, device=relpos.device)
+        relpos[:, :_relpos.size(1), :_relpos.size(2), :] = _relpos
         # backbone = torch.zeros_like(tokens)
         # backbone_attnmask = torch.zeros_like(attnmask)
         maxlen = 0
@@ -1810,7 +1817,10 @@ class TransformerTagger(TreeInsertionTagger):
                     backbone_positions[i, k] = j
                     backbone_revpositions[i, j] = k
                     k += 1
+
         backbone_positions = backbone_positions[:, :maxlen]
+        if backbone_positions.max() >= attnmask.size(1):
+            raise Exception("gather index too large")
         backbone_tokens = tokens.gather(1, backbone_positions)
         backbone_attnmask = attnmask.gather(1, backbone_positions[:, :, None].expand(-1, -1, attnmask.size(2)))
         backbone_attnmask = backbone_attnmask.gather(2, backbone_positions[:, None, :].expand(-1, backbone_attnmask.size(1), -1))
@@ -2527,8 +2537,8 @@ def run(domain="restaurants",
     assert(userelpos is True)
     settings = locals().copy()
     q.pp_dict(settings)
-    settings["version"] = "v2.1"
-    wandb.init(project=f"treeinsert_overnight_v2", config=settings, reinit=True)
+    settings["version"] = "v3"
+    wandb.init(project=f"treeinsert_overnight_v3", config=settings, reinit=True)
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -2763,10 +2773,11 @@ def run_experiment(domain="default",    #
     ranges["numlayers"] = [6]
     ranges["numheads"] = [12]
     ranges["probthreshold"] = [0.]
-    ranges["lr"] = [0.00001, 0.000025]
-    # ranges["lr"] = [0.00005]
+    # ranges["lr"] = [0.00001, 0.000025]
+    ranges["lr"] = [0.00005]
     ranges["enclrmul"] = [1.]
-    ranges["goldtemp"] = [1., 0.1, 10.]     # results use 0.1, default is 1.
+    # ranges["goldtemp"] = [1., 0.1, 10.]     # results use 0.1, default is 1.
+    ranges["goldtemp"] = [0.1]     # results use 0.1, default is 1.
 
     if usechildrels == "default":
         ranges["usechildrels"] = [True, False]
@@ -2814,3 +2825,4 @@ if __name__ == '__main__':
     # DONE: make baseline decoder use cached decoder states
     # DONE: in unsimplified Overnight, the filters are nested but are interchangeable! --> use simplify filters ?!
     # python overnight_seqinsert.py -gpu 0 -domain ? -lr 0.0001 -enclrmul 1. -hdim 768 -dropout 0.3 -numlayers 6 -numheads 12
+    # FINAL RESULTS COMPUTED USING?: ??? overnight_treeinsert_new.py -gpu 0 -numbered -batsize 10 -userelpos -domain publications -lr 0.00005 -oraclemix 1. -evaltrain -goldtemp 0.1 -cosinelr -epochs 201 -dropout 0.2 -numtraj 5
