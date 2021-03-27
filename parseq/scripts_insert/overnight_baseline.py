@@ -31,8 +31,8 @@ from transformers import BertTokenizer, BertModel
 ORDERLESS = {"op:and", "SW:concat", "filter", "call-SW:concat"}
 
 
-def tree_to_seq(x:Tree):
-    xstr = tree_to_lisp_tokens(x)
+def tree_to_seq(x:Tree, bracketize_leafs=False):
+    xstr = tree_to_lisp_tokens(x, _bracketize_leafs=bracketize_leafs)
     # xstr = ["@BOS@"] + xstr + ["@EOS@"]
     return xstr
 
@@ -48,7 +48,8 @@ def make_numbered_tokens(x:List[str]):
 
 
 def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
-            trainonvalid=False, noreorder=False, numbered=False):
+            trainonvalid=False, noreorder=False, numbered=False,
+            bracketize_leafs=False):
     """
     Creates a dataset of examples which have
     * NL question and tensor
@@ -119,7 +120,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
 
         if not noreorder:
             ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
-        ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
+        ds = ds.map(lambda x: (x[0], tree_to_seq(x[1], bracketize_leafs=bracketize_leafs), x[2]))
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
@@ -547,6 +548,7 @@ class TreeDecoderCell(SeqDecoderCell):
                 curdepth = prevdepth + 1
             else:
                 curdepth = prevdepth
+            curdepth = max(0, curdepth)
 
             # go backwards in time and find which state was parent, prev and child using levels
             prev_j = None
@@ -566,7 +568,7 @@ class TreeDecoderCell(SeqDecoderCell):
                             reduce_states[k][i] = paststates[-j][k][i]
                         reduce_state_found = True
                 elif depth == curdepth:  # prevstate
-                    if prev_j is not None:
+                    if prev_j is None:
                         prev_j = j
 
                 if (parent_state_found or curdepth == 0) and prev_j is not None:
@@ -673,7 +675,6 @@ class TreeDecoder(SeqDecoder):
                                     paststates=paststates,
                                     prev_summ=prev_summ,
                                     levels=levels)
-            paststates.append(state)
             logitses.append(logits[:, None])
         # compute loss: different versions do different masking and different targets
         logitses = torch.cat(logitses, 1)
@@ -690,21 +691,26 @@ class TreeDecoder(SeqDecoder):
         enc, encmask = self.cell.encode_source(x)
 
         step = 0
-        newy = None
         ended = torch.zeros_like(y).bool()
-        cache = None
-        paststates = []
         logitses = []
         outputses = []
+        paststates = []
+        prev_summ = None
+        levels = [[] for _ in range(x.size(0))]
+        y_tm2 = None
         while step < self.max_steps and not torch.all(ended): #(newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
-            y = newy if newy is not None else y
             # run tagger
-            logits, cache = self.cell(tokens=y, enc=enc, encmask=encmask, cache=cache)
-            states, summaries = cache
-            paststates.append(states)
+            logits, (paststates, prev_summ, levels) = \
+                self.cell(tokens=y,
+                          tokens_tm2=y_tm2,
+                          enc=enc, encmask=encmask,
+                          paststates=paststates,
+                          prev_summ=prev_summ,
+                          levels=levels)
             logitses.append(logits[:, None])
             bestpred = logits.max(1)[1]
-            newy = bestpred
+            y_tm2 = y
+            y = bestpred
             outputses.append(bestpred[:, None])
 
             _ended = bestpred == self.vocab["@EOS@"]
@@ -827,7 +833,8 @@ def run(domain="restaurants",
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid, noreorder=noreorder, numbered=False)
+    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid, noreorder=noreorder,
+                                                                 numbered=False, bracketize_leafs=mode.startswith("tree"))
     tt.tock("loaded")
 
     tdl_seq = DataLoader(tds_seq, batch_size=batsize, shuffle=True, collate_fn=autocollate)

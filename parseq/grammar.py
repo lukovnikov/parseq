@@ -306,9 +306,9 @@ def tree_to_lisp(x:Tree, brackets="()"):
         return x.label()
 
 
-def tree_to_lisp_tokens(x:Tree, brackets="()"):
-    if len(x) > 0:
-        children = [tree_to_lisp_tokens(xe, brackets=brackets) for xe in x]
+def tree_to_lisp_tokens(x:Tree, brackets="()", _bracketize_leafs=False):
+    if len(x) > 0 or _bracketize_leafs:
+        children = [tree_to_lisp_tokens(xe, brackets=brackets, _bracketize_leafs=_bracketize_leafs) for xe in x]
         return [brackets[0], x.label()] + [childe for child in children for childe in child] + [brackets[1]]
     else:
         return [x.label()]
