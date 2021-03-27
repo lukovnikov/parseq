@@ -513,6 +513,14 @@ def try_multilingual_geoquery_dataset_loader():
     print("done")
 
 
+class GeoDatasetLoader(object):
+    def __init__(self,
+                 p="../datasets/geo880dong",
+                 validfrac=0.1, **kw):
+        super(GeoDatasetLoader, self).__init__(**kw)
+        self._p = p
+        self.validfrac = validfrac
+
 
 class OvernightDatasetLoader(object):
     def __init__(self,

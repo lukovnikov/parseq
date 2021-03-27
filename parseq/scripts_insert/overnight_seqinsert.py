@@ -111,6 +111,8 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
         examples = examples[:len(splits)]
         examples = [(x[0], x[1], y) for x, y in zip(examples, splits)]
         ds = Dataset(examples)
+    elif domain == "geo":
+        ds = GeoDatasetLoader().load(trainonvalid=trainonvalid)
     else:
         ds = OvernightDatasetLoader(simplify_mode="none").load(domain=domain, trainonvalid=trainonvalid)
         # ds contains 3-tuples of (input, output tree, split name)
@@ -118,7 +120,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
         if not noreorder:
             ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
         ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
-        ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))
+        ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))     # TODO: wtf?
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
