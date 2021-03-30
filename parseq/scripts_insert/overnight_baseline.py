@@ -20,7 +20,7 @@ import qelos as q
 
 from parseq.datasets import OvernightDatasetLoader, autocollate, Dataset
 from parseq.eval import make_array_of_metrics
-from parseq.grammar import tree_to_lisp_tokens, are_equal_trees, lisp_to_tree
+from parseq.grammar import are_equal_trees, lisp_to_tree, tree_to_lisp_tokens
 from parseq.scripts_insert.overnight_treeinsert import extract_info
 from parseq.scripts_insert.util import reorder_tree, flatten_tree
 from parseq.transformer import TransformerConfig, TransformerStack
@@ -31,10 +31,11 @@ from transformers import BertTokenizer, BertModel
 ORDERLESS = {"op:and", "SW:concat", "filter", "call-SW:concat"}
 
 
-def tree_to_seq(x:Tree, bracketize_leafs=False):
-    xstr = tree_to_lisp_tokens(x, _bracketize_leafs=bracketize_leafs)
+def tree_to_seq(x:Tree):
+    xstr = tree_to_lisp_tokens(x, _bracketize_leafs=False)
     # xstr = ["@BOS@"] + xstr + ["@EOS@"]
     return xstr
+
 
 def make_numbered_tokens(x:List[str]):
     counts = {}
@@ -48,8 +49,7 @@ def make_numbered_tokens(x:List[str]):
 
 
 def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
-            trainonvalid=False, noreorder=False, numbered=False,
-            bracketize_leafs=False):
+            trainonvalid=False, noreorder=False, numbered=False):
     """
     Creates a dataset of examples which have
     * NL question and tensor
@@ -120,7 +120,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
 
         if not noreorder:
             ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
-        ds = ds.map(lambda x: (x[0], tree_to_seq(x[1], bracketize_leafs=bracketize_leafs), x[2]))
+        ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
@@ -281,17 +281,19 @@ class TokenOut(torch.nn.Module):
 
 
 class SeqDecoderCell(torch.nn.Module):
-    def __init__(self, dim, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
+    def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased",
                  vocab_factorized=False, mode="baseline", **kw):
         super(SeqDecoderCell, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
         self.dim = dim
+        self.indim = indim if indim is not None else dim
 
-        self.emb = TokenEmb(vocab, dim, factorized=vocab_factorized, pooler="sum")
+        self.emb = TokenEmb(vocab, self.indim, factorized=vocab_factorized, pooler="sum")
 
-        self.decoder = torch.nn.ModuleList([torch.nn.GRUCell((dim*2 if i == 0 else dim), dim) for i in range(numlayers)])
+        self.decoder = torch.nn.ModuleList([torch.nn.GRUCell((self.indim + self.dim if i == 0 else self.dim), self.dim)
+                                            for i in range(numlayers)])
         self.dropout = torch.nn.Dropout(dropout)
 
         self.preout = torch.nn.Linear(self.dim*2, self.dim)
@@ -312,8 +314,8 @@ class SeqDecoderCell(torch.nn.Module):
         # self.bert_model.apply(set_dropout)
 
         self.adapter = None
-        if self.bert_model.config.hidden_size != dim:
-            self.adapter = torch.nn.Linear(self.bert_model.config.hidden_size, dim, bias=False)
+        if self.bert_model.config.hidden_size != self.dim:
+            self.adapter = torch.nn.Linear(self.bert_model.config.hidden_size, self.dim, bias=False)
 
         self.reset_parameters()
 
@@ -489,7 +491,7 @@ class SeqDecoder(torch.nn.Module):
         preds, stepsused = self.get_prediction(x)
 
         def tensor_to_trees(x, vocab:Vocab):
-            xstrs = [vocab.tostr(x[i]).replace("@BOS@", "") for i in range(len(x))]
+            xstrs = [vocab.tostr(x[i]).replace("@BOS@", "").replace("@NT@", "") for i in range(len(x))]
             xstrs = [re.sub("::\d+", "", xstr) for xstr in xstrs]
             trees = []
             for xstr in xstrs:
@@ -523,19 +525,29 @@ class SeqDecoder(torch.nn.Module):
 
 
 class TreeDecoderCell(SeqDecoderCell):
-    def __init__(self, dim, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
+    def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased",
                  vocab_factorized=False, mode="baseline", **kw):
-        super(TreeDecoderCell, self).__init__(dim, vocab=vocab, numlayers=numlayers, dropout=dropout, bertname=bertname,
+        super(TreeDecoderCell, self).__init__(dim, indim=indim, vocab=vocab, numlayers=numlayers, dropout=dropout, bertname=bertname,
                                               vocab_factorized=vocab_factorized, mode=mode, **kw)
+        dims = self.get_dims(self.indim, self.dim, numlayers)
+        self.decoder = torch.nn.ModuleList(
+            [torch.nn.GRUCell(dims[i], dims[i+1]) for i in range(numlayers)])
         self.subtree_start = self.vocab["("]
         self.subtree_end = self.vocab[")"]
+
+    def get_dims(self, indim, dim, numlayers):
+        dims = [indim + dim]
+        for _ in range(numlayers):
+            dims.append(dim)
+        return dims
 
     def get_all_states(self, tokens_tm1, tokens_tm2=None, paststates=None, levels=None):
         # mix states from paststates according to levels and current token
         parent_states = [torch.zeros(tokens_tm1.size(0), self.dim, device=tokens_tm1.device) for _ in range(len(self.decoder))]
         prev_states = [torch.zeros(tokens_tm1.size(0), self.dim, device=tokens_tm1.device) for _ in range(len(self.decoder))]
         reduce_states = [torch.zeros(tokens_tm1.size(0), self.dim, device=tokens_tm1.device) for _ in range(len(self.decoder))]
+        movement = torch.zeros_like(tokens_tm1)
 
         newlevels = [[] for _ in range(len(levels))]
 
@@ -544,8 +556,12 @@ class TreeDecoderCell(SeqDecoderCell):
             prevdepth = levels_i[-1] if len(levels_i) > 0 else 0
             if tokens_tm1[i] == self.subtree_end:
                 curdepth = prevdepth - 1
-            elif tokens_tm2 is not None and tokens_tm2[i] == self.subtree_start:
+                movement[i] = -1
+            # elif tokens_tm2 is not None and tokens_tm2[i] == self.subtree_start:
+            #     curdepth = prevdepth + 1
+            elif tokens_tm1[i] == self.subtree_start:
                 curdepth = prevdepth + 1
+                movement[i] = +1
             else:
                 curdepth = prevdepth
             curdepth = max(0, curdepth)
@@ -580,14 +596,18 @@ class TreeDecoderCell(SeqDecoderCell):
                     break
 
             newlevels[i] = levels[i] + [curdepth]
-        return parent_states, prev_states, reduce_states, newlevels
+        return parent_states, prev_states, reduce_states, newlevels, movement
 
-    def merge_states(self, parent_states, prev_states, reduce_states):
+    def merge_states(self, parent_states, prev_states, reduce_states, movement):
         """ every of the input states is a list of number of layers of (batsize, dim) """
         ret_states = [parent_state + prev_state + reduce_state
                       for parent_state, prev_state, reduce_state
                       in zip(parent_states, prev_states, reduce_states)]
-        return ret_states
+        return ret_states, None
+
+    def get_rnn_inputs(self, embs, prev_summ, parent_states, reduce_states, movement):
+        ret = torch.cat([embs, prev_summ], 1)
+        return ret
 
     def forward(self, tokens:torch.Tensor=None, tokens_tm2=None, enc=None, encmask=None,
                 paststates=None, prev_summ=None, levels=None):
@@ -606,12 +626,12 @@ class TreeDecoderCell(SeqDecoderCell):
         if prev_summ is None:
             prev_summ = torch.zeros(tokens.size(0), self.dim, device=tokens.device)
 
-        parent_states, prev_states, reduce_states, newlevels = self.get_all_states(tokens, tokens_tm2, paststates, levels)
+        parent_states, prev_states, reduce_states, newlevels, movement = self.get_all_states(tokens, tokens_tm2, paststates, levels)
 
-        rnn_states = self.merge_states(parent_states, prev_states, reduce_states)
-
+        rnn_states = self.merge_states(parent_states, prev_states, reduce_states, movement)
+        inps = self.get_rnn_inputs(embs, prev_summ, parent_states, reduce_states, movement)
+        lower_rep = inps
         # pass through rnns
-        lower_rep = torch.cat([embs, prev_summ], 1)
         paststates.append([])
         for rnn_layer, rnn_state in zip(self.decoder, rnn_states):
             new_rnn_out = rnn_layer(lower_rep, rnn_state)
@@ -634,19 +654,64 @@ class TreeDecoderCell(SeqDecoderCell):
         return logits, (paststates, summaries, newlevels)
 
 
+class SeqTreeDecoderCell(TreeDecoderCell):
+    """ Tree decoder cell that actually is a normal sequence decoder"""
+    def merge_states(self, parent_states, prev_states, reduce_states, movement):
+        # if movement equals -1 then take reduce state because we just popped one
+        # if movement equals +1 then take parent state because we just pushed one
+        movement = movement.float()[:, None]
+        states = [(movement == -1) * reduce_state + (movement == +1) * parent_state + (movement == 0) * prev_state
+                  for reduce_state, parent_state, prev_state
+                  in zip(reduce_states, parent_states, prev_states)]
+        return states
+
+
 class SimpleTreeDecoderCell(TreeDecoderCell):
     """ Simple tree decoder cell.
         Completely discards the reduce states (from previous siblings's children),
-        and concatenates first half of parent state to second half of prev_states.
+        and concatenates parent state to input.
     """
-    def merge_states(self, parent_states, prev_states, reduce_states):
-        ret_states = []
-        for parent_state, prev_state in zip(parent_states, prev_states):
-            ret_state = torch.cat([parent_state[:, :parent_state.size(1)//2],
-                                   prev_state[:, parent_state.size(1)//2:]],
-                                  1)
-            ret_states.append(ret_state)
-        return ret_states
+    def get_dims(self, indim, dim, numlayers):
+        dims = [indim + dim + dim]
+        for _ in range(numlayers):
+            dims.append(dim)
+        return dims
+
+    def merge_states(self, parent_states, prev_states, reduce_states, movement):
+        movement = movement.float()[:, None]
+        states = [(movement != -1) * prev_state + (movement == +1) * parent_state
+                  for prev_state, parent_state in zip(prev_states, parent_states)]
+        return states
+
+    def get_rnn_inputs(self, embs, prev_summ, parent_states, reduce_states, movement):
+        ret = torch.cat([embs, prev_summ, parent_states[-1]], 1)
+        return ret
+
+
+class ReduceSummTreeDecoderCell(TreeDecoderCell):
+    """ Stack summary tree decoder cell.
+        Takes into account reduce states as inputs at timesteps where movement is downwards,
+        and concatenates parent state to input.
+    """
+
+    def get_dims(self, indim, dim, numlayers):
+        dims = [indim + dim]
+        for _ in range(numlayers):
+            dims.append(dim)
+        return dims
+
+    def merge_states(self, parent_states, prev_states, reduce_states, movement):
+        movement = movement.float()[:, None]
+        states = [(movement != +1) * prev_state + (movement == +1) * parent_state
+                  for prev_state, parent_state in zip(prev_states, parent_states)]
+        return states
+
+    def get_rnn_inputs(self, embs, prev_summ, parent_states, reduce_states, movement):
+        movement = movement.float()[:, None]
+        extra_embs = (movement == -1) * reduce_states[-1]
+        embs = embs + extra_embs
+        ret = torch.cat([embs, prev_summ], 1)
+        return ret
 
 
 class TreeDecoder(SeqDecoder):
@@ -701,9 +766,7 @@ class TreeDecoder(SeqDecoder):
         while step < self.max_steps and not torch.all(ended): #(newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
             # run tagger
             logits, (paststates, prev_summ, levels) = \
-                self.cell(tokens=y,
-                          tokens_tm2=y_tm2,
-                          enc=enc, encmask=encmask,
+                self.cell(tokens=y, tokens_tm2=y_tm2, enc=enc, encmask=encmask,
                           paststates=paststates,
                           prev_summ=prev_summ,
                           levels=levels)
@@ -833,8 +896,7 @@ def run(domain="restaurants",
 
     tt = q.ticktock("script")
     tt.tick("loading")
-    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid, noreorder=noreorder,
-                                                                 numbered=False, bracketize_leafs=mode.startswith("tree"))
+    tds_seq, vds_seq, xds_seq, nltok, flenc, orderless = load_ds(domain, trainonvalid=trainonvalid, noreorder=noreorder, numbered=False)
     tt.tock("loaded")
 
     tdl_seq = DataLoader(tds_seq, batch_size=batsize, shuffle=True, collate_fn=autocollate)
@@ -844,11 +906,18 @@ def run(domain="restaurants",
     # model
 
     if mode == "baseline":
-        tagger = SeqDecoderCell(hdim, flenc.vocab, numlayers, dropout=dropout, mode=mode)
+        tagger = SeqDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
         decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
-    elif mode == "tree":
-        tagger = SimpleTreeDecoderCell(hdim, flenc.vocab, numlayers, dropout=dropout, mode=mode)
+    elif "tree" in mode:
+        if mode == "simpletree":
+            tagger = SimpleTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
+        elif mode == "seqtree":
+            tagger = SeqTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
+        elif mode == "reducesummtree":
+            tagger = ReduceSummTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
         decoder = TreeDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
+
+    print(tagger.decoder)
 
     # test run
     if testcode:
@@ -890,7 +959,7 @@ def run(domain="restaurants",
 
     if patience < 0:
         patience = epochs
-    eyt = q.EarlyStopper(vmetrics[0], patience=patience, min_epochs=30, more_is_better=True, remember_f=lambda: deepcopy(tagger))
+    eyt = q.EarlyStopper(vmetrics[0], patience=int(round(patience/validinter)), min_epochs=int(round(30/validinter)), more_is_better=True, remember_f=lambda: deepcopy(tagger))
 
     def wandb_logger():
         d = {}
@@ -982,52 +1051,8 @@ def run(domain="restaurants",
     settings.update({"final_valid_steps_used": vmetrics[1].get_epoch_error()})
     settings.update({"final_test_steps_used": xmetrics[1].get_epoch_error()})
 
-    if mode != "baseline":
-        calibrate_end = False
-        if calibrate_end:
-            # calibrate END offset
-            tt.tick("running termination calibration")
-            end_offsets = [0., 0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
-            decoder.prob_threshold = 1.
-
-            end_offset_values = []
-
-            best_offset = 0.
-            best_offset_value = 0.
-            for end_offset in end_offsets:
-                tt.tick("rerunning validation")
-                decoder.end_offset = end_offset
-                validres = validepoch()
-                tt.tock(f"Validation results: {validres}")
-                end_offset_values.append(vmetrics[0].get_epoch_error())
-                if vmetrics[0].get_epoch_error() > best_offset_value:
-                    best_offset = end_offset
-                    best_offset_value = vmetrics[0].get_epoch_error()
-                tt.tock("done")
-            print(f"offset results: {dict(zip(end_offsets, end_offset_values))}")
-            print(f"best offset: {best_offset}")
-
-            decoder.end_offset = best_offset
-
-        # run different prob_thresholds:
-        # thresholds = [0., 0.3, 0.5, 0.6, 0.75, 0.85, 0.9, 0.95,  1.]
-        thresholds = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9, 0.95, 1.]
-        for threshold in thresholds:
-            tt.tick("running test for threshold " + str(threshold))
-            decoder.prob_threshold = threshold
-            testres = testepoch()
-            print(f"Test tree acc for threshold {threshold}: testres: {testres}")
-            settings.update({f"_thr{threshold}_acc": xmetrics[0].get_epoch_error()})
-            settings.update({f"_thr{threshold}_len": xmetrics[1].get_epoch_error()})
-            tt.tock("done")
-
-
     wandb.config.update(settings)
     q.pp_dict(settings)
-
-# TODO: EOS balancing ?!
-
-# TODO: model that follows predictive distribution during training and uses AnyToken loss
 
 
 def run_experiment(domain="default",    #
