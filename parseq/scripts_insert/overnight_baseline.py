@@ -450,7 +450,7 @@ class SeqDecoder(torch.nn.Module):
         # compute loss: different versions do different masking and different targets
         logitses = torch.cat(logitses, 1)
         loss, acc = self.compute_loss(logitses, tgt, mask=tgtmask)
-        return {"loss": loss, "acc": acc}, logits
+        return {"loss": loss, "acc": acc}, logitses
 
     def get_prediction(self, x:torch.Tensor):
         steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
@@ -567,7 +567,7 @@ class TreeDecoderCell(SeqDecoderCell):
             curdepth = max(0, curdepth)
 
             # go backwards in time and find which state was parent, prev and child using levels
-            prev_j = None
+            prev_state_found = False
             reduce_state_found = False
             parent_state_found = False
             for j in range(1, len(levels_i) + 1):
@@ -584,14 +584,12 @@ class TreeDecoderCell(SeqDecoderCell):
                             reduce_states[k][i] = paststates[-j][k][i]
                         reduce_state_found = True
                 elif depth == curdepth:  # prevstate
-                    if prev_j is None:
-                        prev_j = j
+                    if not prev_state_found:
+                        for k in range(len(prev_states)):
+                            prev_states[k][i] = paststates[-j][k][i]
+                        prev_state_found = True
 
-                if (parent_state_found or curdepth == 0) and prev_j is not None:
-                    # copy prev state if found one and parent state is found or current depth is 0
-                    for k in range(len(prev_states)):
-                        prev_states[k][i] = paststates[-prev_j][k][i]
-                if parent_state_found or (curdepth == 0 and prev_j is not None):
+                if parent_state_found or (curdepth == 0 and prev_state_found):
                     # stop looking if parent state found or current depth is 0 and previous state is found
                     break
 
@@ -622,7 +620,6 @@ class TreeDecoderCell(SeqDecoderCell):
         """
         padmask = (tokens != 0)
         embs = self.emb(tokens)
-        embs = self.dropout(embs)
         if prev_summ is None:
             prev_summ = torch.zeros(tokens.size(0), self.dim, device=tokens.device)
 
@@ -634,10 +631,12 @@ class TreeDecoderCell(SeqDecoderCell):
         # pass through rnns
         paststates.append([])
         for rnn_layer, rnn_state in zip(self.decoder, rnn_states):
+            lower_rep = self.dropout(lower_rep)
             new_rnn_out = rnn_layer(lower_rep, rnn_state)
             paststates[-1].append(new_rnn_out)
             lower_rep = new_rnn_out
-            lower_rep = self.dropout(lower_rep)
+
+        lower_rep = self.dropout(lower_rep)
 
         # use attention
         # (batsize, seqlen, dim) and (batsize, dim)
@@ -659,7 +658,7 @@ class SeqTreeDecoderCell(TreeDecoderCell):
     def merge_states(self, parent_states, prev_states, reduce_states, movement):
         # if movement equals -1 then take reduce state because we just popped one
         # if movement equals +1 then take parent state because we just pushed one
-        movement = movement.float()[:, None]
+        movement = movement[:, None]
         states = [(movement == -1) * reduce_state + (movement == +1) * parent_state + (movement == 0) * prev_state
                   for reduce_state, parent_state, prev_state
                   in zip(reduce_states, parent_states, prev_states)]
@@ -678,7 +677,7 @@ class SimpleTreeDecoderCell(TreeDecoderCell):
         return dims
 
     def merge_states(self, parent_states, prev_states, reduce_states, movement):
-        movement = movement.float()[:, None]
+        movement = movement[:, None]
         states = [(movement != -1) * prev_state + (movement == +1) * parent_state
                   for prev_state, parent_state in zip(prev_states, parent_states)]
         return states
@@ -701,7 +700,7 @@ class ReduceSummTreeDecoderCell(TreeDecoderCell):
         return dims
 
     def merge_states(self, parent_states, prev_states, reduce_states, movement):
-        movement = movement.float()[:, None]
+        movement = movement[:, None]
         states = [(movement != +1) * prev_state + (movement == +1) * parent_state
                   for prev_state, parent_state in zip(prev_states, parent_states)]
         return states
@@ -1097,6 +1096,7 @@ def run_experiment(domain="default",    #
         "validinter": [10],
         "gradacc": [1],
     }
+    ranges["domain"] = ["calendar", "recipes", "publications", "restaurants"]
 
     if mode == "baseline":        # baseline
         ranges["validinter"] = [1]
