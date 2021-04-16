@@ -5,8 +5,9 @@ import re
 import shelve
 from copy import deepcopy
 from functools import partial
-from typing import Dict
+from typing import Dict, List
 
+import sklearn
 import wandb
 
 import qelos as q
@@ -14,6 +15,7 @@ import torch
 import numpy as np
 from nltk.translate.bleu_score import sentence_bleu
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetLoader
 from transformers import AutoTokenizer, BertModel
@@ -23,6 +25,10 @@ from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree, tree_
 from parseq.scripts_compgen_new.transformer import TransformerConfig, TransformerStack
 from parseq.scripts_compgen_new.transformerdecoder import TransformerStack as TransformerStackDecoder
 from parseq.vocab import Vocab
+
+from matplotlib import pyplot as plt
+import plotly.express as px
+import pandas as pd
 
 
 def lcs(X, Y):
@@ -393,6 +399,7 @@ class SeqDecoderBaseline(torch.nn.Module):
                  max_size:int=100,
                  smoothing:float=0.,
                  mode="normal",
+                 mcdropout=-1,
                  **kw):
         super(SeqDecoderBaseline, self).__init__(**kw)
         self.tagger = tagger
@@ -406,6 +413,8 @@ class SeqDecoderBaseline(torch.nn.Module):
             self.loss = torch.nn.NLLLoss(reduction="none", ignore_index=0)
 
         self.logsm = torch.nn.LogSoftmax(-1)
+
+        self.mcdropout = mcdropout
 
     def forward(self, x, y):
         if self.training:
@@ -440,7 +449,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         return loss, acc.float(), elemacc
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-        preds, prednll, maxmaxnll, stepsused = self.get_prediction(x)
+        preds, prednll, maxmaxnll, entropy, total, stepsused = self.get_prediction(x)
 
         def tensor_to_trees(x, vocab:Vocab):
             xstrs = [vocab.tostr(x[i]).replace("@START@", "") for i in range(len(x))]
@@ -474,39 +483,62 @@ class SeqDecoderBaseline(torch.nn.Module):
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
 
-        # compute bleu scores
-        bleus = []
-        lcsf1s = []
-        for gold_tree, pred_tree in zip(gold_trees, pred_trees):
-            if pred_tree is None or gold_tree is None:
-                bleuscore = 0
-                lcsf1 = 0
-            else:
-                gold_str = tree_to_lisp(gold_tree)
-                pred_str = tree_to_lisp(pred_tree)
-                bleuscore = sentence_bleu([gold_str.split(" ")], pred_str.split(" "))
-                lcsn = lcs(gold_str, pred_str)
-                lcsrec = lcsn / len(gold_str)
-                lcsprec = lcsn / len(pred_str)
-                lcsf1 = 2 * lcsrec * lcsprec / (lcsrec + lcsprec)
-            bleus.append(bleuscore)
-            lcsf1s.append(lcsf1)
-        bleus = torch.tensor(bleus).to(x.device)
-        ret["bleu"] = bleus
-        ret["lcsf1"] = torch.tensor(lcsf1s).to(x.device)
+        # # compute bleu scores
+        # bleus = []
+        # lcsf1s = []
+        # for gold_tree, pred_tree in zip(gold_trees, pred_trees):
+        #     if pred_tree is None or gold_tree is None:
+        #         bleuscore = 0
+        #         lcsf1 = 0
+        #     else:
+        #         gold_str = tree_to_lisp(gold_tree)
+        #         pred_str = tree_to_lisp(pred_tree)
+        #         bleuscore = sentence_bleu([gold_str.split(" ")], pred_str.split(" "))
+        #         lcsn = lcs(gold_str, pred_str)
+        #         lcsrec = lcsn / len(gold_str)
+        #         lcsprec = lcsn / len(pred_str)
+        #         lcsf1 = 2 * lcsrec * lcsprec / (lcsrec + lcsprec)
+        #     bleus.append(bleuscore)
+        #     lcsf1s.append(lcsf1)
+        # bleus = torch.tensor(bleus).to(x.device)
+        # ret["bleu"] = bleus
+        # ret["lcsf1"] = torch.tensor(lcsf1s).to(x.device)
 
-        d, logits = self.train_forward(x, gold)
-        nll, acc, elemacc = d["loss"], d["acc"], d["elemacc"]
-        ret["nll"] = nll
-        ret["acc"] = acc
-        ret["elemacc"] = elemacc
+        # d, logits = self.train_forward(x, gold)
+        # nll, acc, elemacc = d["loss"], d["acc"], d["elemacc"]
+        # ret["nll"] = nll
+        # ret["acc"] = acc
+        # ret["elemacc"] = elemacc
 
         # d, logits = self.train_forward(x, preds[:, 1:])
         # decnll = d["loss"]
         # ret["decnll"] = decnll
+        if self.mcdropout > 0:
+            logitses = []
+            preds = preds[:, 1:]
+            self.train()
+            for i in range(self.mcdropout):
+                d, logits = self.train_forward(x, preds)
+                logitses.append(logits)
+            self.eval()
+            logits = sum(logitses) / len(logitses)
+            logits = logits[:, :-1]
+            probs = torch.softmax(logits, -1)
+            mask = preds > 0
+            nlls = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
+            nlls = -torch.log(nlls)
 
-        ret["decnll"] = prednll
-        ret["maxmaxnll"] = maxmaxnll
+            avgnll = (nlls * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
+            maxnll, _ = (nlls + (1 - mask.float()) * -10e6).max(-1)
+            entropy = (-torch.log(probs) * probs).sum(-1)
+            entropy = (entropy * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
+            ret["decnll"] = avgnll
+            ret["maxmaxnll"] = maxnll
+            ret["entropy"] = entropy
+        else:
+            ret["decnll"] = prednll
+            ret["maxmaxnll"] = maxmaxnll
+            ret["entropy"] = entropy
         return ret, pred_trees
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
@@ -552,29 +584,32 @@ class SeqDecoderBaseline(torch.nn.Module):
         cache = None
         maxprob_acc = None
         maxmaxnll = None
-        maxprob_tot = None
+        total = None
+        entropy = None
         while step < self.max_size and not torch.all(ended):
             y = newy if newy is not None else y
             # run tagger
             # y = torch.cat([y, yend], 1)
             logits, cache = self.tagger(tokens=y, enc=enc, encmask=encmask, cache=cache)
-            probs = torch.softmax(logits, -1)
+            probs = torch.softmax(logits[:, -1], -1)
             maxprobs, preds = probs.max(-1)
-            preds, maxprobs = preds[:, -1], maxprobs[:, -1]
+            _entropy = (-torch.log(probs.clamp(1e-6, 1)) * probs).sum(-1)
             newy = torch.cat([y, preds[:, None]], 1)
             y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
             newy = torch.where(ended[:, None], y__, newy)     # prevent terminated examples from changing
             _ended = (preds == self.vocab["@END@"])
             ended = ended | _ended
+            total = total if total is not None else torch.zeros_like(maxprobs)
+            total = total + torch.ones_like(maxprobs) * (~ended).float()
             maxprob_acc = maxprob_acc if maxprob_acc is not None else torch.zeros_like(maxprobs)
             maxprob_acc = maxprob_acc + -torch.log(maxprobs) * (~ended).float()
-            maxprob_tot = maxprob_tot if maxprob_tot is not None else torch.zeros_like(maxprobs)
-            maxprob_tot = maxprob_tot + torch.ones_like(maxprobs) * (~ended).float()
             maxmaxnll = maxmaxnll if maxmaxnll is not None else torch.zeros_like(maxprobs)
             maxmaxnll = torch.max(maxmaxnll, -torch.log(maxprobs))
+            entropy = entropy if entropy is not None else torch.zeros_like(_entropy)
+            entropy = entropy + _entropy * (~ended).float()
             step += 1
             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
-        return newy, maxprob_acc/maxprob_tot, maxmaxnll, steps_used.float()
+        return newy, maxprob_acc/total, maxmaxnll, entropy/total, total, steps_used.float()
 
 
 # def autocollate(x:Dict, pad_value=0):
@@ -716,7 +751,51 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
 
     tt.tock(f"loaded '{dataset}'")
     tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
+
+    tt.msg("Overlap of validation with train:")
+    overlaps = compute_overlaps(trainds, validds)
+    print(json.dumps(overlaps, indent=4))
+
+    tt.msg("Overlap of test with train:")
+    overlaps = compute_overlaps(trainds, testds)
+    print(json.dumps(overlaps, indent=4))
+
     return trainds, validds, testds, fldic, inpdic
+
+
+def compute_overlaps(train, test):
+    inp_overlap = []
+    out_overlap = []
+    both_overlap = []
+    traininps, trainouts, trainboths = set(), set(), set()
+    for i in tqdm(range(len(train))):
+        ex = train[i]
+        inpstr = list(ex[0].cpu().numpy())
+        inpstr = " ".join([str(exe) for exe in inpstr])
+        outstr = list(ex[1].cpu().numpy())
+        outstr = " ".join([str(exe) for exe in outstr])
+        traininps.add(inpstr)
+        trainouts.add(outstr)
+        trainboths.add(inpstr+"|"+outstr)
+
+    for i in tqdm(range(len(test))):
+        ex = test[i]
+        inpstr = list(ex[0].cpu().numpy())
+        inpstr = " ".join([str(exe) for exe in inpstr])
+        outstr = list(ex[1].cpu().numpy())
+        outstr = " ".join([str(exe) for exe in outstr])
+        if inpstr in traininps:
+            inp_overlap.append(inpstr)
+        if outstr in trainouts:
+            out_overlap.append(outstr)
+        if inpstr + "|" + outstr in trainboths:
+            both_overlap.append(inpstr + "|" + outstr)
+
+    ret = {"inps": len(inp_overlap)/len(test),
+           "outs": len(out_overlap)/len(test),
+           "both": len(both_overlap)/len(test),}
+    return ret
+
 
 
 def collate_fn(x, pad_value=0, numtokens=5000):
@@ -759,14 +838,15 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         smalltrainvalid=False,
-        version="v2"
+        mcdropout=-1,
+        version="v1"
         ):
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compgen_baseline", config=settings, reinit=True)
+    wandb.init(project=f"compood_baseline", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -809,7 +889,7 @@ def run(lr=0.0001,
     cell = TransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads,
                                   dropout=dropout, worddropout=worddropout, mode=mode,
                                   bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
-    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, mode=mode)
+    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, mode=mode, mcdropout=mcdropout)
     print(f"one layer of decoder: \n {cell.decoder.block[0]}")
     tt.tock()
 
@@ -826,10 +906,11 @@ def run(lr=0.0001,
         tt.tock()
         tt.tock("testcode")
 
-    tloss = make_array_of_metrics("loss", "acc", "elemacc", reduction="mean")
-    tmetrics = make_array_of_metrics("treeacc", "bleu", "lcsf1", "nll", "acc", "elemacc", "decnll", "maxmaxnll", reduction="mean")
-    vmetrics = make_array_of_metrics("treeacc", "bleu", "lcsf1", "nll", "acc", "elemacc", "decnll", "maxmaxnll", reduction="mean")
-    xmetrics = make_array_of_metrics("treeacc", "bleu", "lcsf1", "nll", "acc", "elemacc", "decnll", "maxmaxnll", reduction="mean")
+    tloss = make_array_of_metrics("loss", "elemacc", "acc", reduction="mean")
+    metricnames = ["treeacc", "decnll", "maxmaxnll", "entropy"]
+    tmetrics = make_array_of_metrics(*metricnames, reduction="mean")
+    vmetrics = make_array_of_metrics(*metricnames, reduction="mean")
+    xmetrics = make_array_of_metrics(*metricnames, reduction="mean")
 
     # region parameters
     def get_parameters(m, _lr, _enclrmul):
@@ -865,11 +946,11 @@ def run(lr=0.0001,
         for name, loss in zip(["loss", "acc"], tloss):
             d["train_"+name] = loss.get_epoch_error()
         if evaltrain:
-            for name, loss in zip(["tree_acc", "nll", "acc", "elemacc", "bleu", "decnll", "maxmaxnll"], tmetrics):
+            for name, loss in zip(metricnames, tmetrics):
                 d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc", "nll", "acc", "elemacc", "bleu", "decnll", "maxmaxnll"], vmetrics):
+        for name, loss in zip(metricnames, vmetrics):
             d["valid_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc", "nll", "acc", "elemacc", "bleu", "decnll", "maxmaxnll"], xmetrics):
+        for name, loss in zip(metricnames, xmetrics):
             d["test_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
@@ -922,6 +1003,10 @@ def run(lr=0.0001,
     else:
         validfs = [validepoch]
     validfs = validfs + [testepoch]
+
+    results = evaluate(decoder, validds, testds, batsize=batsize, device=device)
+    print(json.dumps(results, indent=4))
+
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=validfs,
                    max_epochs=epochs,
@@ -959,13 +1044,138 @@ def run(lr=0.0001,
     print(f"Test tree acc: {testres}")
     tt.tock()
 
+    results = evaluate(decoder, validds, testds, batsize=batsize, device=device)
+    print(json.dumps(results, indent=4))
+
     settings.update({"final_train_loss": tloss[0].get_epoch_error()})
     settings.update({"final_train_tree_acc": tmetrics[0].get_epoch_error()})
     settings.update({"final_valid_tree_acc": vmetrics[0].get_epoch_error()})
     settings.update({"final_test_tree_acc": xmetrics[0].get_epoch_error()})
+    for k, v in results.items():
+        for metric, ve in v.items():
+            settings.update({f"{k}_{metric}": ve})
 
     wandb.config.update(settings)
     q.pp_dict(settings)
+
+
+def cat_dicts(x:List[Dict]):
+    out = {}
+    for k, v in x[0].items():
+        out[k] = []
+    for xe in x:
+        for k, v in xe.items():
+            out[k].append(v)
+    for k, v in out.items():
+        out[k] = torch.cat(v, 0)
+    return out
+
+
+def evaluate(model, posds, negds, batsize=10, device=torch.device("cpu")):
+    """
+    :param model:       Decoder model
+    :param posds:     dataset with in-distribution examples
+    :param negds:      dataset with out-of-distribution examples
+    :return:
+    """
+    posdl = DataLoader(posds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    negdl = DataLoader(negds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+
+    _, posouts = q.eval_loop(model, posdl, device=device)
+    posouts = cat_dicts(posouts[0])
+    _, negouts = q.eval_loop(model, negdl, device=device)
+    negouts = cat_dicts(negouts[0])
+
+    decnll_res = compute_auc_and_fprs(posouts["decnll"], negouts["decnll"], "decnll")
+    maxnll_res = compute_auc_and_fprs(posouts["maxmaxnll"], negouts["maxmaxnll"], "maxmaxnll")
+    entropy_res = compute_auc_and_fprs(posouts["entropy"], negouts["entropy"], "entropy")
+    return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res}
+
+
+def is_outlier(points, thresh=3.5):
+    """
+    Returns a boolean array with True if points are outliers and False
+    otherwise.
+
+    Parameters:
+    -----------
+        points : An numobservations by numdimensions array of observations
+        thresh : The modified z-score to use as a threshold. Observations with
+            a modified z-score (based on the median absolute deviation) greater
+            than this value will be classified as outliers.
+
+    Returns:
+    --------
+        mask : A numobservations-length boolean array.
+
+    References:
+    ----------
+        Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+        Handle Outliers", The ASQC Basic References in Quality Control:
+        Statistical Techniques, Edward F. Mykytka, Ph.D., Editor.
+    """
+    if len(points.shape) == 1:
+        points = points[:,None]
+    median = np.median(points, axis=0)
+    diff = np.sum((points - median)**2, axis=-1)
+    diff = np.sqrt(diff)
+    med_abs_deviation = np.median(diff)
+
+    modified_z_score = 0.6745 * diff / med_abs_deviation
+
+    return modified_z_score > thresh
+
+
+def compute_auc_and_fprs(posscores, negscores, kind=""):
+    posscores = -posscores.detach().cpu().numpy()
+    negscores = -negscores.detach().cpu().numpy()
+    poslabels = np.ones_like(posscores)
+    neglabels = np.zeros_like(negscores)
+
+    labels = np.concatenate([poslabels, neglabels], 0)
+    scores = np.concatenate([posscores, negscores], 0)
+    df = np.stack([labels, scores], 1)
+    df = pd.DataFrame(df, columns=["Labels", "Scores"])
+
+    wandb.log({f"hist_{kind}": px.histogram(df, x="Scores", color="Labels", color_discrete_sequence=px.colors.qualitative.Plotly, nbins=50)})
+
+    fpr, tpr, thresholds = sklearn.metrics.roc_curve(labels, scores)
+
+    roc_df = pd.DataFrame(np.stack([fpr, tpr], 1), columns=["FPR", "TPR"])
+    wandb.log({f"aucroc_{kind}": px.line(roc_df, x="FPR", y="TPR", color_discrete_sequence=px.colors.qualitative.Plotly)})
+
+    aucroc = sklearn.metrics.auc(fpr, tpr)
+
+    # prec, rec, pr_thresholds = sklearn.metrics.precision_recall_curve(np.concatenate([poslabels, neglabels], 0), np.concatenate([posscores, negscores], 0))
+    # aucpr = sklearn.metrics.auc(prec, rec)
+
+    ret = {"aucroc": aucroc}
+    # compute FPR-K's
+    fpr, tpr = list(fpr), list(tpr)
+    ks = [80, 90, 95, 99]
+    for k in ks:
+        ret[f"fpr{k}"] = fpr[-1]
+    for k in ks:
+        for i in range(len(tpr)):
+            if tpr[i] >= k/100:
+                ret[f"fpr{k}"] = fpr[i]
+                break
+
+    # posscores = list(posscores)
+    # negscores = list(negscores)
+    #
+    # posscores = sorted(posscores)
+    # for k in ks:
+    #     ret[f"pred{k}"] = 1.
+    #     th = posscores[int(round((1-k/100)*len(posscores)))]
+    #     for i in range(len(thresholds)):
+    #         if thresholds[i] <= th:
+    #             ret[f"pred{k}"] = fpr[i]
+    #             break
+    # for k in ks:
+    #     poss
+
+    return ret
 
 
 def run_experiment(
@@ -996,6 +1206,7 @@ def run_experiment(
         evaltrain=False,
         gpu=-1,
         recomputedata=False,
+        mcdropout=-1,
         ):
 
     settings = locals().copy()
@@ -1022,14 +1233,14 @@ def run_experiment(
     if bertname.startswith("none") or bertname == "vanilla":
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
-        ranges["epochs"] = [58]
+        ranges["epochs"] = [15]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
         ranges["batsize"] = [256]
-        ranges["validinter"] = [3]
+        ranges["validinter"] = [1]
 
     if dataset.startswith("cfq"):
-        settings["maxsize"] = 160
+        settings["maxsize"] = 155
     elif dataset.startswith("scan"):
         settings["maxsize"] = 50
 
