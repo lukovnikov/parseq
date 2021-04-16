@@ -852,6 +852,13 @@ def run(lr=0.0001,
     np.random.seed(seed)
     device = torch.device("cpu") if gpu < 0 else torch.device("cuda", gpu)
 
+    if maxsize < 0:
+        if dataset.startswith("cfq"):
+            maxsize = 155
+        elif dataset.startswith("scan"):
+            maxsize = 50
+        print(f"maxsize: {maxsize}")
+
     tt = q.ticktock("script")
     tt.tick("data")
     trainvalidds = None
@@ -1238,11 +1245,6 @@ def run_experiment(
         ranges["numheads"] = [6]
         ranges["batsize"] = [256]
         ranges["validinter"] = [1]
-
-    if dataset.startswith("cfq"):
-        settings["maxsize"] = 155
-    elif dataset.startswith("scan"):
-        settings["maxsize"] = 50
 
     for k in ranges:
         if k in settings:
