@@ -556,6 +556,7 @@ class TransformerPreTrainedModel(PreTrainedModel):
 
 
 class TransformerStack(TransformerPreTrainedModel):
+    qsdf = 1
     def __init__(self, config:TransformerConfig, embed_tokens=None, rel_emb=False):
         """
         If rel_emb is False or None, no relative positioning added
@@ -628,7 +629,7 @@ class TransformerStack(TransformerPreTrainedModel):
         if past_key_value_states is not None:
             _seqlen = 1
             if self.is_decoder:
-                _seqlen = 2
+                _seqlen = self.qsdf
             assert seq_length == _seqlen, "Input shape is {}, but should be {} when using past_key_value_sates".format(
                 input_shape, (batch_size, _seqlen)
             )

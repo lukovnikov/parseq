@@ -228,6 +228,7 @@ class TransformerDecoderCell(torch.nn.Module):
                                       num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
 
         self.dec_emb = torch.nn.Embedding(self.vocabsize, decconfig.d_model)
+        self.slot_emb = torch.nn.Embedding(1, decconfig.d_model)
 
         self.relposemb = None
         if self.userelpos is True:
@@ -246,6 +247,7 @@ class TransformerDecoderCell(torch.nn.Module):
         decoder_config.is_decoder = True
         decoder_config.use_causal_mask = True
         self.decoder = TransformerStackDecoder(decoder_config, rel_emb=self.relposemb)
+        self.decoder.qsdf = 2
 
         self.out = torch.nn.Linear(self.dim, self.vocabsize)
 
@@ -327,30 +329,66 @@ class TransformerDecoderCell(torch.nn.Module):
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
         padmask = (tokens != 0)
-        embs = self.dec_emb(tokens)
+        tokens = self.worddropout(tokens)
+        embs = self.dec_emb(tokens)     # (bs, seqlen, dim)
+        slots = self.slot_emb.weight[0][None, None].repeat(embs.size(0), embs.size(1), 1)     # (1, seqlen, dim)
         if self.absposemb is not None:
-            posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
-            embs = embs + posembs
+            posembs = self.absposemb(torch.arange(tokens.size(1)+1, device=tokens.device))[None]
+            embs = embs + posembs[:, :-1, :]
+            slots = slots + posembs[:, 1:, :]
         relpos = None
         if self.relposemb is not None:      # compute relative positions
-            positions = torch.arange(tokens.size(1), device=tokens.device)
+            positions = torch.arange(tokens.size(1)+1, device=tokens.device)
+            positions = torch.cat([positions[:, None], positions[:, None]], 1).view(-1)
             relpos = positions[None, :] - positions[:, None]
+            relpos = relpos[1:-1, 1:-1]
             relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
             relpos = relpos[None, :, :, None]
+        embs = torch.cat([embs[:, :, None, :], slots[:, :, None, :]], 2).view(embs.size(0), -1, embs.size(2))
+        padmask = torch.cat([padmask[:, :, None], padmask[:, :, None]], 2).view(padmask.size(0), -1)
+
         if cache is not None:
-            embs = embs[:, -1:, :]
+            embs = embs[:, -2:, :]
             if relpos is not None:
-                relpos = relpos[:, -1:, :, :]
+                relpos = relpos[:, -2:, :, :]
+
         _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                      encoder_hidden_states=enc,
                      encoder_attention_mask=encmask, use_cache=True,
                      past_key_value_states=cache,
                      relpos=relpos)
         ret = _ret[0]
-        c = ret
+        c = ret.view(ret.size(0), int(ret.size(1)/2), 2, ret.size(2))[:, :, 1, :]
         cache = _ret[1]
         logits = self.out(c)
         return logits, cache
+
+    # def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
+    #     padmask = (tokens != 0)
+    #     embs = self.dec_emb(tokens)
+    #     if self.absposemb is not None:
+    #         posembs = self.absposemb(torch.arange(tokens.size(1), device=tokens.device))[None]
+    #         embs = embs + posembs
+    #     relpos = None
+    #     if self.relposemb is not None:      # compute relative positions
+    #         positions = torch.arange(tokens.size(1), device=tokens.device)
+    #         relpos = positions[None, :] - positions[:, None]
+    #         relpos = relpos.clamp(-self.relposrng, self.relposrng) + self.relposrng + 1
+    #         relpos = relpos[None, :, :, None]
+    #     if cache is not None:
+    #         embs = embs[:, -1:, :]
+    #         if relpos is not None:
+    #             relpos = relpos[:, -1:, :, :]
+    #     _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
+    #                  encoder_hidden_states=enc,
+    #                  encoder_attention_mask=encmask, use_cache=True,
+    #                  past_key_value_states=cache,
+    #                  relpos=relpos)
+    #     ret = _ret[0]
+    #     c = ret
+    #     cache = _ret[1]
+    #     logits = self.out(c)
+    #     return logits, cache
 
 
 class SeqDecoderBaseline(torch.nn.Module):
@@ -477,16 +515,16 @@ class SeqDecoderBaseline(torch.nn.Module):
         # decnll = d["loss"]
         # ret["decnll"] = decnll
         if self.mcdropout > 0:
-            probses = []
+            logitses = []
             preds = preds[:, 1:]
             self.train()
             for i in range(self.mcdropout):
                 d, logits = self.train_forward(x, preds)
-                probses.append(torch.softmax(logits, -1))
+                logitses.append(logits)
             self.eval()
-            probses = sum(probses) / len(probses)
-            probses = probses[:, :-1]
-            probs = probses
+            logits = sum(logitses) / len(logitses)
+            logits = logits[:, :-1]
+            probs = torch.softmax(logits, -1)
             mask = preds > 0
             nlls = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
             nlls = -torch.log(nlls)
@@ -802,14 +840,14 @@ def run(lr=0.0001,
         recomputedata=False,
         smalltrainvalid=False,
         mcdropout=-1,
-        version="v4"
+        version="v1"
         ):
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compood_baseline", config=settings, reinit=True)
+    wandb.init(project=f"compood_old_baseline", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -1186,8 +1224,8 @@ def run_experiment(
         "dropout": [0.1, 0.25, 0.5],
         "worddropout": [0.],
         "seed": [42, 87646464, 456852],
-        "epochs": [10],
-        "batsize": [50],
+        "epochs": [15],
+        "batsize": [60],
         "hdim": [768],
         "numheads": [12],
         "numlayers": [6],
@@ -1203,10 +1241,10 @@ def run_experiment(
     if bertname.startswith("none") or bertname == "vanilla":
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
-        ranges["epochs"] = [25]
+        ranges["epochs"] = [15]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
-        ranges["batsize"] = [50]
+        ranges["batsize"] = [256]
         ranges["validinter"] = [1]
 
     for k in ranges:

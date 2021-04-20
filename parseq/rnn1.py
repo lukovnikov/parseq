@@ -41,18 +41,23 @@ class Encoder(nn.Module):
             x (LongTensor): (src_len, batch, hidden_size * num_directions)
             hidden (LongTensor): (batch, enc_hid_dim)
         """
-        src_lengths = kwargs.get('src_lengths', '')
-        src_tokens = src_tokens.t()
+        src_lengths = kwargs.get('src_lengths', None)
+        if src_lengths is None:
+            src_lengths = torch.ones_like(src_tokens[:, 0]) * src_tokens.size(1)
+            if self.embed_tokens.padding_idx >= 0:
+                mask = src_tokens == self.embed_tokens.padding_idx
+                src_lengths = src_lengths - mask.sum(1)
+                src_lengths = src_lengths.long()
 
         x = self.embed_tokens(src_tokens)
-        x = F.dropout(x, p=self.dropout, training=self.training) # (src_len, batch, embed_dim)
+        x = F.dropout(x, p=self.dropout, training=self.training) # (batch, seqlen, embed_dim)
 
-        packed_x = nn.utils.rnn.pack_padded_sequence(x, src_lengths)
+        packed_x = nn.utils.rnn.pack_padded_sequence(x, src_lengths, batch_first=True, enforce_sorted=False)
 
         packed_outputs, hidden = self.gru(packed_x) # hidden: (n_layers * num_directions, batch, hidden_size)
 
-        x, _ = nn.utils.rnn.pad_packed_sequence(packed_outputs)
-        x = F.dropout(x, p=self.dropout, training=self.training)
+        x, _ = nn.utils.rnn.pad_packed_sequence(packed_outputs, batch_first=True)
+        # x = F.dropout(x, p=self.dropout, training=self.training)
 
         # input hidden for decoder is the final encoder hidden state
         # since rnn is bidirectional get last forward and backward hidden state
@@ -234,12 +239,14 @@ class Decoder(nn.Module):
 
         return outputs # , attentions
 
+
 def Embedding(num_embeddings, embedding_dim, padding_idx):
     """Embedding layer"""
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
     nn.init.uniform_(m.weight, -0.1, 0.1)
     nn.init.constant_(m.weight[padding_idx], 0)
     return m
+
 
 def Linear(in_features, out_features, bias=True):
     """Linear layer"""
