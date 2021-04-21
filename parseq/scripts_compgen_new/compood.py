@@ -1182,7 +1182,8 @@ def run_experiment(
     settings = locals().copy()
 
     ranges = {
-        "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
+        # "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
+        "dataset": ["cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
         "dropout": [0.1, 0.25, 0.5],
         "worddropout": [0.],
         "seed": [42, 87646464, 456852],
@@ -1203,7 +1204,8 @@ def run_experiment(
     if bertname.startswith("none") or bertname == "vanilla":
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
-        ranges["epochs"] = [25]
+        # ranges["epochs"] = [25]
+        ranges["epochs"] = [20]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
         ranges["batsize"] = [50]
