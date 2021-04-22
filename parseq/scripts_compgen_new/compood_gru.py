@@ -652,7 +652,7 @@ def run(lr=0.0001,
         recomputedata=False,
         smalltrainvalid=False,
         mcdropout=-1,
-        version="v5"
+        version="v4"
         ):
 
     settings = locals().copy()
