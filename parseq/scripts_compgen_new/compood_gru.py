@@ -392,7 +392,8 @@ class SeqDecoderBaseline(torch.nn.Module):
         enc, encmask = self.tagger.encode_source(x)
 
         step = 0
-        newy = torch.zeros(x.size(0), 0, dtype=torch.long, device=x.device)
+        # newy = torch.zeros(x.size(0), 0, dtype=torch.long, device=x.device)
+        newy = y[:, None]       # will be removed
         ended = torch.zeros_like(y).bool()
         cache = None
         maxprob_acc = None
@@ -651,7 +652,7 @@ def run(lr=0.0001,
         recomputedata=False,
         smalltrainvalid=False,
         mcdropout=-1,
-        version="v4"
+        version="v5"
         ):
 
     settings = locals().copy()
