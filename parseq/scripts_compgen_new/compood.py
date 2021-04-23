@@ -1210,11 +1210,8 @@ def run_experiment(
     if bertname.startswith("none") or bertname == "vanilla":
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
-        # ranges["epochs"] = [25]
-        ranges["epochs"] = [20]
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
-        ranges["batsize"] = [50]
 
     for k in ranges:
         if k in settings:
