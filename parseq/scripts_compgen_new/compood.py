@@ -1195,7 +1195,7 @@ def run_experiment(
         "dropout": [0.1, 0.25, 0.5],
         "worddropout": [0.],
         "seed": [42, 87646464, 456852],
-        "epochs": [15, 25],
+        "epochs": [20, 25],
         "batsize": [50],
         "hdim": [768],
         "numheads": [12],

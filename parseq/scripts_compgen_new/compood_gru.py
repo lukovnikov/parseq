@@ -1044,7 +1044,7 @@ def run_experiment(
         "seed": [42, 87646464, 456852],
         "epochs": [40, 25],
         # "epochs": [25],
-        "batsize": [256, 100],
+        "batsize": [256, 128],
         # "batsize": [100],
         "hdim": [384],
         "numheads": [12],
