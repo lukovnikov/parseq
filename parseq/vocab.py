@@ -127,7 +127,7 @@ class Vocab(_Vocab):
         """
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
-        x = list(np.vectorize(lambda e: self(e))(x))
+        x = list(np.vectorize(lambda e: self(e) if e in self.RD else "")(x))
         x = [e for e in x if e != self.padtoken]
         ret = []
         for xe in x:
@@ -137,7 +137,9 @@ class Vocab(_Vocab):
         if return_tokens:
             return ret
         else:
-            return " ".join(ret)
+            ret = " ".join(ret)
+            ret = ret.replace("\s+", " ")
+            return ret
 
 
 class FixedVocab(Vocab):

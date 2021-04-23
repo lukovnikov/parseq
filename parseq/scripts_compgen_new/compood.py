@@ -493,7 +493,7 @@ class SeqDecoderBaseline(torch.nn.Module):
 
             avgnll = (nlls * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
             maxnll, _ = (nlls + (1 - mask.float()) * -10e6).max(-1)
-            entropy = (-torch.log(probs) * probs).sum(-1)
+            entropy = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1)
             entropy = (entropy * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
             ret["decnll"] = avgnll
             ret["maxmaxnll"] = maxnll
@@ -556,7 +556,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             logits, cache = self.tagger(tokens=y, enc=enc, encmask=encmask, cache=cache)
             probs = torch.softmax(logits[:, -1], -1)
             maxprobs, preds = probs.max(-1)
-            _entropy = (-torch.log(probs.clamp(1e-6, 1)) * probs).sum(-1)
+            _entropy = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1)
             newy = torch.cat([y, preds[:, None]], 1)
             y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
             newy = torch.where(ended[:, None], y__, newy)     # prevent terminated examples from changing
@@ -800,16 +800,15 @@ def run(lr=0.0001,
         trainonvalid=False,
         trainonvalidonly=False,
         recomputedata=False,
-        smalltrainvalid=False,
         mcdropout=-1,
-        version="v4"
+        version="v1"
         ):
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compood_baseline", config=settings, reinit=True)
+    wandb.init(project=f"compood_baseline_v2", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -824,23 +823,27 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainvalidds = None
     trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recomputedata)
-    if smalltrainvalid:
+
+    # if smalltrainvalid:
+    if "mcd" in dataset.split("/")[1]:
         realtrainds = []
-        trainvalidds = []
+        indtestds = []
         splits = [True for _ in range(int(round(len(trainds) * 0.1)))]
         splits = splits + [False for _ in range(len(trainds)-len(splits))]
         random.shuffle(splits)
         for i in range(len(trainds)):
             if splits[i] is True:
-                trainvalidds.append(trainds[i])
+                indtestds.append(trainds[i])
             else:
                 realtrainds.append(trainds[i])
         trainds = Dataset(realtrainds)
-        trainvalidds = Dataset(trainvalidds)
-        validds = trainvalidds
-        tt.msg("split off 10% of training data instead of original validation data")
+        indtestds = Dataset(indtestds)
+        tt.msg("split off 10% of training data for in-distribution test set")
+    else:
+        indtestds = Dataset([x for x in validds.examples])
+        tt.msg("using validation set as in-distribution test set")
+    tt.msg(f"in-distribution: {len(indtestds)}, OOD: {len(testds)}")
     if trainonvalid:
         trainds = trainds + validds
         validds = testds
@@ -849,6 +852,7 @@ def run(lr=0.0001,
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
     validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
     testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    indtestdl = DataLoader(indtestds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
     # print(json.dumps(next(iter(trainds)), indent=3))
     # print(next(iter(traindl)))
     # print(next(iter(validdl)))
@@ -880,7 +884,8 @@ def run(lr=0.0001,
     metricnames = ["treeacc", "decnll", "maxmaxnll", "entropy"]
     tmetrics = make_array_of_metrics(*metricnames, reduction="mean")
     vmetrics = make_array_of_metrics(*metricnames, reduction="mean")
-    xmetrics = make_array_of_metrics(*metricnames, reduction="mean")
+    indxmetrics = make_array_of_metrics(*metricnames, reduction="mean")
+    oodxmetrics = make_array_of_metrics(*metricnames, reduction="mean")
 
     # region parameters
     def get_parameters(m, _lr, _enclrmul):
@@ -920,8 +925,10 @@ def run(lr=0.0001,
                 d["train_"+name] = loss.get_epoch_error()
         for name, loss in zip(metricnames, vmetrics):
             d["valid_"+name] = loss.get_epoch_error()
-        for name, loss in zip(metricnames, xmetrics):
-            d["test_"+name] = loss.get_epoch_error()
+        for name, loss in zip(metricnames, indxmetrics):
+            d["indtest_"+name] = loss.get_epoch_error()
+        for name, loss in zip(metricnames, oodxmetrics):
+            d["oodtest_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
     t_max = epochs
@@ -961,9 +968,14 @@ def run(lr=0.0001,
                          dataloader=validdl,
                          device=device,
                          on_end=on_end_v)
-    testepoch = partial(q.test_epoch,
+    indtestepoch = partial(q.test_epoch,
                          model=decoder,
-                         losses=xmetrics,
+                         losses=indxmetrics,
+                         dataloader=indtestdl,
+                         device=device)
+    oodtestepoch = partial(q.test_epoch,
+                         model=decoder,
+                         losses=oodxmetrics,
                          dataloader=testdl,
                          device=device)
 
@@ -972,9 +984,9 @@ def run(lr=0.0001,
         validfs = [trainevalepoch, validepoch]
     else:
         validfs = [validepoch]
-    validfs = validfs + [testepoch]
+    validfs = validfs + [indtestepoch, oodtestepoch]
 
-    results = evaluate(decoder, validds, testds, batsize=batsize, device=device)
+    results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device)
     print(json.dumps(results, indent=4))
 
     q.run_training(run_train_epoch=trainepoch,
@@ -985,13 +997,7 @@ def run(lr=0.0001,
     tt.tock("done training")
 
     tt.tick("running test before reloading")
-    testepoch = partial(q.test_epoch,
-                         model=decoder,
-                         losses=xmetrics,
-                         dataloader=testdl,
-                         device=device)
-
-    testres = testepoch()
+    testres = oodtestepoch()
     print(f"Test tree acc: {testres}")
     tt.tock("ran test")
 
@@ -1010,17 +1016,18 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("running test")
-    testres = testepoch()
+    testres = oodtestepoch()
     print(f"Test tree acc: {testres}")
     tt.tock()
 
-    results = evaluate(decoder, validds, testds, batsize=batsize, device=device)
+    results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device)
     print(json.dumps(results, indent=4))
 
     settings.update({"final_train_loss": tloss[0].get_epoch_error()})
     settings.update({"final_train_tree_acc": tmetrics[0].get_epoch_error()})
     settings.update({"final_valid_tree_acc": vmetrics[0].get_epoch_error()})
-    settings.update({"final_test_tree_acc": xmetrics[0].get_epoch_error()})
+    settings.update({"final_indtest_tree_acc": indxmetrics[0].get_epoch_error()})
+    settings.update({"final_oodtest_tree_acc": oodxmetrics[0].get_epoch_error()})
     for k, v in results.items():
         for metric, ve in v.items():
             settings.update({f"{k}_{metric}": ve})
@@ -1116,10 +1123,10 @@ def compute_auc_and_fprs(posscores, negscores, kind=""):
 
     aucroc = sklearn.metrics.auc(fpr, tpr)
 
-    # prec, rec, pr_thresholds = sklearn.metrics.precision_recall_curve(np.concatenate([poslabels, neglabels], 0), np.concatenate([posscores, negscores], 0))
-    # aucpr = sklearn.metrics.auc(prec, rec)
+    prec, rec, pr_thresholds = sklearn.metrics.precision_recall_curve(labels, scores)
+    aucpr = sklearn.metrics.auc(rec, prec)
 
-    ret = {"aucroc": aucroc}
+    ret = {"aucroc": aucroc, "aucpr": aucpr}
     # compute FPR-K's
     fpr, tpr = list(fpr), list(tpr)
     ks = [80, 90, 95, 99]
@@ -1172,7 +1179,6 @@ def run_experiment(
         testcode=False,
         userelpos=False,
         trainonvalidonly=False,
-        smalltrainvalid=False,
         evaltrain=False,
         gpu=-1,
         recomputedata=False,
@@ -1183,11 +1189,13 @@ def run_experiment(
 
     ranges = {
         # "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
-        "dataset": ["cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
+        # "dataset": ["cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
+        "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2",
+                    "scan/mcd3", "cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
         "dropout": [0.1, 0.25, 0.5],
         "worddropout": [0.],
         "seed": [42, 87646464, 456852],
-        "epochs": [10],
+        "epochs": [15, 25],
         "batsize": [50],
         "hdim": [768],
         "numheads": [12],
@@ -1195,10 +1203,8 @@ def run_experiment(
         "lr": [0.0001],
         "enclrmul": [0.01],                  # use 1.
         "smoothing": [0.],
-        # "patience": [-1],
-        # "warmup": [20],
         "validinter": [1],
-        # "gradacc": [1],
+        "mcdropout": [0, 5],
     }
 
     if bertname.startswith("none") or bertname == "vanilla":
@@ -1209,7 +1215,6 @@ def run_experiment(
         ranges["hdim"] = [384]
         ranges["numheads"] = [6]
         ranges["batsize"] = [50]
-        ranges["validinter"] = [1]
 
     for k in ranges:
         if k in settings:
@@ -1223,6 +1228,12 @@ def run_experiment(
             del settings[k]
 
     def checkconfig(spec):
+        if spec["dataset"].startswith("cfq"):
+            if spec["epochs"] != 20:
+                return False
+        elif spec["dataset"].startswith("scan"):
+            if spec["epochs"] != 25:
+                return False
         return True
 
     print(__file__)
