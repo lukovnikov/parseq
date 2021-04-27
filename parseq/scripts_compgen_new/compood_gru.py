@@ -645,7 +645,7 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v1"
+        version="v2"
         ):
 
     settings = locals().copy()
@@ -672,7 +672,7 @@ def run(lr=0.0001,
     trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname,
                                                       recompute=recomputedata)
     # if smalltrainvalid:
-    if "mcd" in dataset.split("/")[1]:
+    if True: # "mcd" in dataset.split("/")[1]:
         realtrainds = []
         indtestds = []
         splits = [True for _ in range(int(round(len(trainds) * 0.1)))]
@@ -686,9 +686,9 @@ def run(lr=0.0001,
         trainds = Dataset(realtrainds)
         indtestds = Dataset(indtestds)
         tt.msg("split off 10% of training data for in-distribution test set")
-    else:
-        indtestds = Dataset([x for x in validds.examples])
-        tt.msg("using validation set as in-distribution test set")
+    # else:
+    #     indtestds = Dataset([x for x in validds.examples])
+    #     tt.msg("using validation set as in-distribution test set")
     tt.msg(f"TRAIN DATA: {len(trainds)}")
     tt.msg(f"DEV DATA: {len(validds)}")
     tt.msg(f"TEST DATA: in-distribution: {len(indtestds)}, OOD: {len(testds)}")
@@ -1035,10 +1035,11 @@ def run_experiment(
     settings = locals().copy()
 
     ranges = {
-        "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3",
-                    "cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
+        # "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3",
+        #             "cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
         # "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
         # "dataset": ["cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
+        "dataset": ["scan/length", "scan/add_jump", "scan/add_turn_left"],
         "dropout": [0.1, 0.25, 0.5],
         "worddropout": [0.],
         "seed": [42, 87646464, 456852],
