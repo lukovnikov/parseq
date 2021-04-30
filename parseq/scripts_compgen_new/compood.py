@@ -801,14 +801,14 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v2"
+        version="v1"
         ):
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compood_baseline_v2", config=settings, reinit=True)
+    wandb.init(project=f"compood_baseline_v3", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)

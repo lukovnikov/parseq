@@ -645,7 +645,7 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v2"
+        version="v1"
         ):
 
     settings = locals().copy()
@@ -654,7 +654,7 @@ def run(lr=0.0001,
 
     # torch.backends.cudnn.enabled = False
 
-    wandb.init(project=f"compood_gru_baseline_v2", config=settings, reinit=True)
+    wandb.init(project=f"compood_gru_baseline_v3", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
