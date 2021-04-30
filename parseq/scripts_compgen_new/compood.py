@@ -1197,6 +1197,7 @@ def run_experiment(
         ):
 
     settings = locals().copy()
+    del settings["datasets"]
 
     ranges = {
         # "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
