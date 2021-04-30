@@ -916,8 +916,6 @@ def run(lr=0.0001,
     def clipgradnorm(_m=None, _norm=None):
         torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
 
-    if patience < 0:
-        patience = epochs
     eyt = q.EarlyStopper(vmetrics[0], patience=patience, min_epochs=30, more_is_better=True,
                          remember_f=lambda: deepcopy(cell))
 
