@@ -1195,9 +1195,9 @@ def run_experiment(
     ranges = {
         # "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
         # "dataset": ["cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
-        # "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2",
-        #             "scan/mcd3", "cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
-        "dataset": ["scan/mcd1", "scan/mcd2", "scan/mcd3"],
+        "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2",
+                    "scan/mcd3", "cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
+        # "dataset": ["scan/mcd1", "scan/mcd2", "scan/mcd3"],
         "dropout": [0.1, 0.25, 0.5],
         "worddropout": [0.],
         "seed": [42, 87646464, 456852],
