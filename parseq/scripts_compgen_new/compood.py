@@ -1001,7 +1001,7 @@ def run(lr=0.0001,
     print(f"Test tree acc: {testres}")
     tt.tock("ran test")
 
-    if eyt.remembered is not None:
+    if eyt.remembered is not None and patience >= 0:
         tt.msg("reloading best")
         decoder.tagger = eyt.remembered
         tagger = eyt.remembered
@@ -1015,9 +1015,14 @@ def run(lr=0.0001,
     print(f"Train tree acc: {trainres}")
     tt.tock()
 
-    tt.tick("running test")
+    tt.tick("running ID test")
+    testres = indtestepoch()
+    print(f"ID test tree acc: {testres}")
+    tt.tock()
+
+    tt.tick("running OOD test")
     testres = oodtestepoch()
-    print(f"Test tree acc: {testres}")
+    print(f"OOD test tree acc: {testres}")
     tt.tock()
 
     results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device)
@@ -1192,7 +1197,7 @@ def run_experiment(
         # "dataset": ["cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
         # "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2",
         #             "scan/mcd3", "cfq/mcd1", "cfq/mcd2", "cfq/mcd3"],
-        "dataset": ["scan/length", "scan/add_jump", "scan/add_turn_left"],
+        "dataset": ["scan/mcd1", "scan/mcd2", "scan/mcd3"],
         "dropout": [0.1, 0.25, 0.5],
         "worddropout": [0.],
         "seed": [42, 87646464, 456852],
