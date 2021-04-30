@@ -671,6 +671,11 @@ def run(lr=0.0001,
     tt.tick("data")
     trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname,
                                                       recompute=recomputedata)
+
+    if "mcd" in dataset.split("/")[1]:
+        print(f"Setting patience to -1 because MCD (was {patience})")
+        patience = -1
+
     # if smalltrainvalid:
     if True: # "mcd" in dataset.split("/")[1]:
         realtrainds = []
@@ -1019,6 +1024,7 @@ def run_experiment(
         warmup=3,
         cosinelr=False,
         dataset="default",
+        datasets="both",
         mode="normal",
         maxsize=-1,
         seed=-1,
@@ -1062,6 +1068,17 @@ def run_experiment(
         "validinter": [1],
         "mcdropout": [0, 5],
     }
+
+    if datasets == "both":
+        pass
+    elif datasets == "cfq":
+        ranges["dataset"] = ["cfq/mcd1", "cfq/mcd2", "cfq/mcd3"]
+    elif datasets == "scan":
+        ranges["dataset"] = ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"]
+    elif datasets == "mcd":
+        ranges["dataset"] = ["cfq/mcd1", "cfq/mcd2", "cfq/mcd3", "scan/mcd1", "scan/mcd2", "scan/mcd3"]
+    elif datasets == "nonmcd":
+        ranges["dataset"] = ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left"]
 
     for k in ranges:
         if k in settings:
