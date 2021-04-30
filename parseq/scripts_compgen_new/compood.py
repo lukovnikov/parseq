@@ -1112,54 +1112,60 @@ def is_outlier(points, thresh=3.5):
 
 
 def compute_auc_and_fprs(posscores, negscores, kind=""):
-    posscores = -posscores.detach().cpu().numpy()
-    negscores = -negscores.detach().cpu().numpy()
-    poslabels = np.ones_like(posscores)
-    neglabels = np.zeros_like(negscores)
+    try:
+        posscores = -posscores.detach().cpu().numpy()
+        negscores = -negscores.detach().cpu().numpy()
+        poslabels = np.ones_like(posscores)
+        neglabels = np.zeros_like(negscores)
 
-    labels = np.concatenate([poslabels, neglabels], 0)
-    scores = np.concatenate([posscores, negscores], 0)
-    df = np.stack([labels, scores], 1)
-    df = pd.DataFrame(df, columns=["Labels", "Scores"])
+        labels = np.concatenate([poslabels, neglabels], 0)
+        scores = np.concatenate([posscores, negscores], 0)
+        df = np.stack([labels, scores], 1)
+        df = pd.DataFrame(df, columns=["Labels", "Scores"])
 
-    wandb.log({f"hist_{kind}": px.histogram(df, x="Scores", color="Labels", color_discrete_sequence=px.colors.qualitative.Plotly, nbins=50)})
+        wandb.log({f"hist_{kind}": px.histogram(df, x="Scores", color="Labels", color_discrete_sequence=px.colors.qualitative.Plotly, nbins=50)})
 
-    fpr, tpr, thresholds = sklearn.metrics.roc_curve(labels, scores)
+        fpr, tpr, thresholds = sklearn.metrics.roc_curve(labels, scores)
 
-    roc_df = pd.DataFrame(np.stack([fpr, tpr], 1), columns=["FPR", "TPR"])
-    wandb.log({f"aucroc_{kind}": px.line(roc_df, x="FPR", y="TPR", color_discrete_sequence=px.colors.qualitative.Plotly)})
+        roc_df = pd.DataFrame(np.stack([fpr, tpr], 1), columns=["FPR", "TPR"])
+        wandb.log({f"aucroc_{kind}": px.line(roc_df, x="FPR", y="TPR", color_discrete_sequence=px.colors.qualitative.Plotly)})
 
-    aucroc = sklearn.metrics.auc(fpr, tpr)
+        aucroc = sklearn.metrics.auc(fpr, tpr)
 
-    prec, rec, pr_thresholds = sklearn.metrics.precision_recall_curve(labels, scores)
-    aucpr = sklearn.metrics.auc(rec, prec)
+        prec, rec, pr_thresholds = sklearn.metrics.precision_recall_curve(labels, scores)
+        aucpr = sklearn.metrics.auc(rec, prec)
 
-    ret = {"aucroc": aucroc, "aucpr": aucpr}
-    # compute FPR-K's
-    fpr, tpr = list(fpr), list(tpr)
-    ks = [80, 90, 95, 99]
-    for k in ks:
-        ret[f"fpr{k}"] = fpr[-1]
-    for k in ks:
-        for i in range(len(tpr)):
-            if tpr[i] >= k/100:
-                ret[f"fpr{k}"] = fpr[i]
-                break
+        ret = {"aucroc": aucroc, "aucpr": aucpr}
+        # compute FPR-K's
+        fpr, tpr = list(fpr), list(tpr)
+        ks = [80, 90, 95, 99]
+        for k in ks:
+            ret[f"fpr{k}"] = fpr[-1]
+        for k in ks:
+            for i in range(len(tpr)):
+                if tpr[i] >= k/100:
+                    ret[f"fpr{k}"] = fpr[i]
+                    break
 
-    # posscores = list(posscores)
-    # negscores = list(negscores)
-    #
-    # posscores = sorted(posscores)
-    # for k in ks:
-    #     ret[f"pred{k}"] = 1.
-    #     th = posscores[int(round((1-k/100)*len(posscores)))]
-    #     for i in range(len(thresholds)):
-    #         if thresholds[i] <= th:
-    #             ret[f"pred{k}"] = fpr[i]
-    #             break
-    # for k in ks:
-    #     poss
+        # posscores = list(posscores)
+        # negscores = list(negscores)
+        #
+        # posscores = sorted(posscores)
+        # for k in ks:
+        #     ret[f"pred{k}"] = 1.
+        #     th = posscores[int(round((1-k/100)*len(posscores)))]
+        #     for i in range(len(thresholds)):
+        #         if thresholds[i] <= th:
+        #             ret[f"pred{k}"] = fpr[i]
+        #             break
+        # for k in ks:
+        #     poss
 
+    except Exception as e:
+        ret = {"aucroc": 0., "aucpr": 0.}
+        ks = [80, 90, 95, 99]
+        for k in ks:
+            ret[f"fpr{k}"] = 1.
     return ret
 
 
