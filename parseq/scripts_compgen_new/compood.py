@@ -548,7 +548,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             maxprob_acc = maxprob_acc if maxprob_acc is not None else torch.zeros_like(maxprobs)
             maxprob_acc = maxprob_acc + -torch.log(maxprobs) * (~ended).float()
             maxmaxnll = maxmaxnll if maxmaxnll is not None else torch.zeros_like(maxprobs)
-            maxmaxnll = torch.max(maxmaxnll, -torch.log(maxprobs))
+            maxmaxnll = torch.max(maxmaxnll, torch.where(ended, torch.zeros_like(maxprobs), -torch.log(maxprobs)))
             entropy = entropy if entropy is not None else torch.zeros_like(_entropy)
             entropy = entropy + _entropy * (~ended).float()
             step += 1
@@ -782,7 +782,7 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v1"
+        version="v3"
         ):
 
     settings = locals().copy()
@@ -1039,28 +1039,32 @@ def cat_dicts(x:List[Dict]):
     return out
 
 
-def evaluate(model, posds, negds, batsize=10, device=torch.device("cpu")):
+def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu")):
     """
     :param model:       Decoder model
-    :param posds:     dataset with in-distribution examples
-    :param negds:      dataset with out-of-distribution examples
+    :param idds:     dataset with in-distribution examples
+    :param oodds:      dataset with out-of-distribution examples
     :return:
     """
-    posdl = DataLoader(posds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    negdl = DataLoader(negds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    iddl = DataLoader(idds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    ooddl = DataLoader(oodds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
-    _, posouts = q.eval_loop(model, posdl, device=device)
-    posouts = cat_dicts(posouts[0])
-    _, negouts = q.eval_loop(model, negdl, device=device)
-    negouts = cat_dicts(negouts[0])
+    _, idouts = q.eval_loop(model, iddl, device=device)
+    idouts = cat_dicts(idouts[0])
+    _, oodouts = q.eval_loop(model, ooddl, device=device)
+    oodouts = cat_dicts(oodouts[0])
 
-    decnll_res = compute_auc_and_fprs(posouts["decnll"], negouts["decnll"], "decnll")
-    sumnll_res = compute_auc_and_fprs(posouts["sumnll"], negouts["sumnll"], "sumnll")
-    maxnll_res = compute_auc_and_fprs(posouts["maxmaxnll"], negouts["maxmaxnll"], "maxmaxnll")
-    entropy_res = compute_auc_and_fprs(posouts["entropy"], negouts["entropy"], "entropy")
+    # decnll_res = compute_auc_and_fprs(idouts["decnll"], oodouts["decnll"], "decnll")
+    # sumnll_res = compute_auc_and_fprs(idouts["sumnll"], oodouts["sumnll"], "sumnll")
+    # maxnll_res = compute_auc_and_fprs(idouts["maxmaxnll"], oodouts["maxmaxnll"], "maxmaxnll")
+    # entropy_res = compute_auc_and_fprs(idouts["entropy"], oodouts["entropy"], "entropy")
+    decnll_res = compute_auc_and_fprs(oodouts["decnll"], idouts["decnll"], "decnll")
+    sumnll_res = compute_auc_and_fprs(oodouts["sumnll"], idouts["sumnll"], "sumnll")
+    maxnll_res = compute_auc_and_fprs(oodouts["maxmaxnll"], idouts["maxmaxnll"], "maxmaxnll")
+    entropy_res = compute_auc_and_fprs(oodouts["entropy"], idouts["entropy"], "entropy")
 
     # compute histogram of confidence vs accuracy --> 10 confidence bins, compute accuracy for each
-    df = np.stack([negouts["avgconf"].detach().cpu().numpy(), negouts["treeacc"].detach().cpu().numpy()], 1)
+    df = np.stack([oodouts["avgconf"].detach().cpu().numpy(), oodouts["treeacc"].detach().cpu().numpy()], 1)
     Nbins = 10
     rdf = np.zeros((Nbins, 2))
     np.nan_to_num(df, False)

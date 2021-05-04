@@ -24,6 +24,7 @@ from transformers import AutoTokenizer, BertModel
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree, tree_to_lisp
 from parseq.rnn1 import Encoder
+from parseq.scripts_compgen_new.compood import evaluate
 from parseq.scripts_compgen_new.transformer import TransformerConfig, TransformerStack
 from parseq.scripts_compgen_new.transformerdecoder import TransformerStack as TransformerStackDecoder
 from parseq.vocab import Vocab
@@ -387,7 +388,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             logmaxprob_acc = logmaxprob_acc if logmaxprob_acc is not None else torch.zeros_like(maxprobs)
             logmaxprob_acc = logmaxprob_acc + -torch.log(maxprobs) * (~ended).float()
             maxmaxnll = maxmaxnll if maxmaxnll is not None else torch.zeros_like(maxprobs)
-            maxmaxnll = torch.max(maxmaxnll, -torch.log(maxprobs))
+            maxmaxnll = torch.max(maxmaxnll, torch.where(ended, torch.zeros_like(maxprobs), -torch.log(maxprobs)))
             entropy = entropy if entropy is not None else torch.zeros_like(_entropy)
             entropy = entropy + _entropy * (~ended).float()
             step += 1
@@ -626,7 +627,7 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v2"
+        version="v3"
         ):
 
     settings = locals().copy()
@@ -871,6 +872,8 @@ def run(lr=0.0001,
     wandb.config.update(settings)
     q.pp_dict(settings)
 
+    return decoder, indtestds, testds
+
 
 def cat_dicts(x:List[Dict]):
     out = {}
@@ -882,137 +885,6 @@ def cat_dicts(x:List[Dict]):
     for k, v in out.items():
         out[k] = torch.cat(v, 0)
     return out
-
-
-def evaluate(model, posds, negds, batsize=10, device=torch.device("cpu")):
-    """
-    :param model:       Decoder model
-    :param posds:     dataset with in-distribution examples
-    :param negds:      dataset with out-of-distribution examples
-    :return:
-    """
-    posdl = DataLoader(posds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    negdl = DataLoader(negds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-
-    _, posouts = q.eval_loop(model, posdl, device=device)
-    posouts = cat_dicts(posouts[0])
-    _, negouts = q.eval_loop(model, negdl, device=device)
-    negouts = cat_dicts(negouts[0])
-
-    decnll_res = compute_auc_and_fprs(posouts["decnll"], negouts["decnll"], "decnll")
-    sumnll_res = compute_auc_and_fprs(posouts["sumnll"], negouts["sumnll"], "sumnll")
-    maxnll_res = compute_auc_and_fprs(posouts["maxmaxnll"], negouts["maxmaxnll"], "maxmaxnll")
-    entropy_res = compute_auc_and_fprs(posouts["entropy"], negouts["entropy"], "entropy")
-
-    # compute histogram of confidence vs accuracy --> 10 confidence bins, compute accuracy for each
-    df = np.stack([negouts["avgconf"].detach().cpu().numpy(), negouts["treeacc"].detach().cpu().numpy()], 1)
-    Nbins = 10
-    rdf = np.zeros((Nbins, 2))
-    np.nan_to_num(df, False)
-    for i in range(df.shape[0]):
-        bin = int(math.floor(df[i, 0]*Nbins))
-        rdf[bin, 0] += 1
-        rdf[bin, 1] += df[i, 1]
-    rdf[:, 1] = rdf[:, 1] / rdf[:, 0]
-    np.nan_to_num(rdf, False)
-    print("Calibration table:")
-    print(rdf)
-
-    wandb.log({"calibtable": wandb.Table(data=rdf, columns=["count", "treeacc"])})
-
-    return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res, "sumnll": sumnll_res}
-
-
-def is_outlier(points, thresh=3.5):
-    """
-    Returns a boolean array with True if points are outliers and False
-    otherwise.
-
-    Parameters:
-    -----------
-        points : An numobservations by numdimensions array of observations
-        thresh : The modified z-score to use as a threshold. Observations with
-            a modified z-score (based on the median absolute deviation) greater
-            than this value will be classified as outliers.
-
-    Returns:
-    --------
-        mask : A numobservations-length boolean array.
-
-    References:
-    ----------
-        Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
-        Handle Outliers", The ASQC Basic References in Quality Control:
-        Statistical Techniques, Edward F. Mykytka, Ph.D., Editor.
-    """
-    if len(points.shape) == 1:
-        points = points[:,None]
-    median = np.median(points, axis=0)
-    diff = np.sum((points - median)**2, axis=-1)
-    diff = np.sqrt(diff)
-    med_abs_deviation = np.median(diff)
-
-    modified_z_score = 0.6745 * diff / med_abs_deviation
-
-    return modified_z_score > thresh
-
-
-def compute_auc_and_fprs(posscores, negscores, kind=""):
-    try:
-        posscores = -posscores.detach().cpu().numpy()
-        negscores = -negscores.detach().cpu().numpy()
-        poslabels = np.ones_like(posscores)
-        neglabels = np.zeros_like(negscores)
-
-        labels = np.concatenate([poslabels, neglabels], 0)
-        scores = np.concatenate([posscores, negscores], 0)
-        df = np.stack([labels, scores], 1)
-        df = pd.DataFrame(df, columns=["Labels", "Scores"])
-
-        wandb.log({f"hist_{kind}": px.histogram(df, x="Scores", color="Labels", color_discrete_sequence=px.colors.qualitative.Plotly, nbins=50)})
-
-        fpr, tpr, thresholds = sklearn.metrics.roc_curve(labels, scores)
-
-        roc_df = pd.DataFrame(np.stack([fpr, tpr], 1), columns=["FPR", "TPR"])
-        wandb.log({f"aucroc_{kind}": px.line(roc_df, x="FPR", y="TPR", color_discrete_sequence=px.colors.qualitative.Plotly)})
-
-        aucroc = sklearn.metrics.auc(fpr, tpr)
-
-        prec, rec, pr_thresholds = sklearn.metrics.precision_recall_curve(labels, scores)
-        aucpr = sklearn.metrics.auc(rec, prec)
-
-        ret = {"aucroc": aucroc, "aucpr": aucpr}
-        # compute FPR-K's
-        fpr, tpr = list(fpr), list(tpr)
-        ks = [80, 90, 95, 99]
-        for k in ks:
-            ret[f"fpr{k}"] = fpr[-1]
-        for k in ks:
-            for i in range(len(tpr)):
-                if tpr[i] >= k/100:
-                    ret[f"fpr{k}"] = fpr[i]
-                    break
-
-        # posscores = list(posscores)
-        # negscores = list(negscores)
-        #
-        # posscores = sorted(posscores)
-        # for k in ks:
-        #     ret[f"pred{k}"] = 1.
-        #     th = posscores[int(round((1-k/100)*len(posscores)))]
-        #     for i in range(len(thresholds)):
-        #         if thresholds[i] <= th:
-        #             ret[f"pred{k}"] = fpr[i]
-        #             break
-        # for k in ks:
-        #     poss
-    except Exception as e:
-        ret = {"aucroc": 0., "aucpr": 0.}
-        ks = [80, 90, 95, 99]
-        for k in ks:
-            ret[f"fpr{k}"] = 1.
-
-    return ret
 
 
 def run_experiment(
