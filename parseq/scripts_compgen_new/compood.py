@@ -227,7 +227,7 @@ class TransformerDecoderCell(torch.nn.Module):
                                       d_kv=int(self.dim/numheads),
                                       num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
 
-        self.dec_emb = torch.nn.Embedding(self.vocabsize, decconfig.d_model)
+        self.dec_emb = torch.nn.Embedding(self.vocabsize+3, decconfig.d_model)
 
         self.relposemb = None
         if self.userelpos is True:
@@ -247,7 +247,7 @@ class TransformerDecoderCell(torch.nn.Module):
         decoder_config.use_causal_mask = True
         self.decoder = TransformerStackDecoder(decoder_config, rel_emb=self.relposemb)
 
-        self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        self.out = torch.nn.Linear(self.dim, self.vocabsize+3)
 
         vocab_mask = torch.ones(self.vocabsize)
         # for excl_token in self.exclude:
@@ -412,7 +412,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         return loss, acc.float(), elemacc
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-        preds, prednll, maxmaxnll, entropy, total, stepsused = self.get_prediction(x)
+        preds, prednll, maxmaxnll, entropy, total, avgconf, stepsused = self.get_prediction(x)
 
         def tensor_to_trees(x, vocab:Vocab):
             xstrs = [vocab.tostr(x[i]).replace("@START@", "") for i in range(len(x))]
@@ -458,9 +458,10 @@ class SeqDecoderBaseline(torch.nn.Module):
             probses = probses[:, :-1]
             probs = probses
             mask = preds > 0
-            nlls = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
-            nlls = -torch.log(nlls)
+            confs = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
+            nlls = -torch.log(confs)
 
+            avgconf = (confs * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
             avgnll = (nlls * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
             maxnll, _ = (nlls + (1 - mask.float()) * -10e6).max(-1)
             entropy = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1)
@@ -468,10 +469,12 @@ class SeqDecoderBaseline(torch.nn.Module):
             ret["decnll"] = avgnll
             ret["maxmaxnll"] = maxnll
             ret["entropy"] = entropy
+            ret["avgconf"] = avgconf
         else:
             ret["decnll"] = prednll
             ret["maxmaxnll"] = maxmaxnll
             ret["entropy"] = entropy
+            ret["avgconf"] = avgconf
         return ret, pred_trees
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
@@ -515,6 +518,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         newy = None
         ended = torch.zeros_like(y[:, 0]).bool()
         cache = None
+        conf_acc = None
         maxprob_acc = None
         maxmaxnll = None
         total = None
@@ -534,6 +538,8 @@ class SeqDecoderBaseline(torch.nn.Module):
             ended = ended | _ended
             total = total if total is not None else torch.zeros_like(maxprobs)
             total = total + torch.ones_like(maxprobs) * (~ended).float()
+            conf_acc = conf_acc if conf_acc is not None else torch.zeros_like(maxprobs)
+            conf_acc = conf_acc + maxprobs * (~ended).float()
             maxprob_acc = maxprob_acc if maxprob_acc is not None else torch.zeros_like(maxprobs)
             maxprob_acc = maxprob_acc + -torch.log(maxprobs) * (~ended).float()
             maxmaxnll = maxmaxnll if maxmaxnll is not None else torch.zeros_like(maxprobs)
@@ -542,7 +548,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             entropy = entropy + _entropy * (~ended).float()
             step += 1
             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
-        return newy, maxprob_acc/total, maxmaxnll, entropy/total, total, steps_used.float()
+        return newy, maxprob_acc/total, maxmaxnll, entropy/total, total, conf_acc/total, steps_used.float()
 
 
 # def autocollate(x:Dict, pad_value=0):

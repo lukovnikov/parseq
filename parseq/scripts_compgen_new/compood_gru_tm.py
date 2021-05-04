@@ -111,7 +111,7 @@ class GRUDecoderCell(torch.nn.Module):
         self.dim = dim
         self.mode = mode
 
-        self.dec_emb = torch.nn.Embedding(self.vocabsize+5, self.dim)
+        self.dec_emb = torch.nn.Embedding(self.vocabsize+3, self.dim)
         dims = [self.dim + self.dim] + [self.dim for _ in range(numlayers)]
         self.dec_stack = torch.nn.ModuleList([torch.nn.GRUCell(dims[i], dims[i+1]) for i in range(numlayers)])
         self.dropout = torch.nn.Dropout(dropout)
@@ -123,7 +123,7 @@ class GRUDecoderCell(torch.nn.Module):
         # self.attn_linV = torch.nn.Linear(self.dim, self.dim)
 
         self.preout = torch.nn.Linear(self.dim + self.dim, self.dim)
-        self.out = torch.nn.Linear(self.dim, self.vocabsize+5)
+        self.out = torch.nn.Linear(self.dim, self.vocabsize+3)
 
         inpvocabsize = inpvocab.number_of_ids()
         self.encoder_model = Encoder(inpvocabsize+5, self.dim, int(self.dim/2), num_layers=numlayers, dropout=dropout)
@@ -190,7 +190,8 @@ class GRUDecoderCell(torch.nn.Module):
 
 
 class HybridSeqDecoder(torch.nn.Module):
-    def __init__(self, *decoders, mcdropout=-1):
+    def __init__(self, *decoders, mcdropout=-1, **kw):
+        super(HybridSeqDecoder, self).__init__(**kw)
         self.maindecoder = decoders[0]
         self.alldecoders = decoders
         self.mcdropout = mcdropout
@@ -225,8 +226,8 @@ class HybridSeqDecoder(torch.nn.Module):
             return trees
 
         # compute loss and metrics
-        gold_trees = tensor_to_trees(gold, vocab=self.vocab)
-        pred_trees = tensor_to_trees(preds, vocab=self.vocab)
+        gold_trees = tensor_to_trees(gold, vocab=self.maindecoder.vocab)
+        pred_trees = tensor_to_trees(preds, vocab=self.maindecoder.vocab)
         treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
@@ -662,7 +663,8 @@ def run(lr=0.0001,
         enclrmul=0.01,
         smoothing=0.,
         gradnorm=3,
-        batsize=60,
+        tmbatsize=60,
+        grubatsize=60,
         tmepochs=16,
         gruepochs=16,
         patience=10,
@@ -690,20 +692,32 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v1"
+        version="grutm_v1"
         ):
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
+    device = torch.device("cpu") if gpu < 0 else torch.device("cuda", gpu)
 
     grusettings = {(k[3:] if k.startswith("gru") else k): v for k, v in settings.items() if not k.startswith("tm")}
     grudecoder, indtestds, oodtestds = run_gru(**grusettings)
 
-    tmsettings = {(k[3:] if k.startswith("tm") else k): v for k, v in settings.items() if not k.startswith("gru")}
+    tmsettings = {(k[2:] if k.startswith("tm") else k): v for k, v in settings.items() if not k.startswith("gru")}
     tmdecoder, _, _ = run_tm(**tmsettings)
 
     # create a model that uses tmdecoder to generate output and uses both to measure OOD
+    decoder = HybridSeqDecoder(tmdecoder, grudecoder, mcdropout=mcdropout)
+    results = evaluate(decoder, indtestds, oodtestds, batsize=tmbatsize, device=device)
+    print("Results of the hybrid OOD:")
+    print(json.dumps(results, indent=3))
 
+    wandb.init(project=f"compood_gru_tm_baseline_v3", config=settings, reinit=True)
+    for k, v in results.items():
+        for metric, ve in v.items():
+            settings.update({f"{k}_{metric}": ve})
+
+    wandb.config.update(settings)
+    q.pp_dict(settings)
 
 
 def run_gru(lr=0.0001,
@@ -735,7 +749,7 @@ def run_gru(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v1"
+        version="grutm_v1"
         ):
 
     settings = locals().copy()
@@ -744,7 +758,7 @@ def run_gru(lr=0.0001,
 
     # torch.backends.cudnn.enabled = False
 
-    wandb.init(project=f"compood_gru_tm_baseline_v3", config=settings, reinit=True)
+    wandb.init(project=f"compood_gru_baseline_v3", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -1198,12 +1212,24 @@ def run_experiment(
             del settings[k]
 
     def checkconfig(spec):
-        # if spec["dataset"].startswith("cfq"):
-        #     if spec["epochs"] != 25 or spec["batsize"] != 128:
-        #         return False
-        # elif spec["dataset"].startswith("scan"):
-        #     if spec["epochs"] != 40 or spec["batsize"] != 256:
-        #         return False
+        if spec["dataset"].startswith("cfq"):
+            if spec["gruepochs"] != 25:
+                return False
+        elif spec["dataset"].startswith("scan"):
+            if spec["gruepochs"] != 40:
+                return False
+        if spec["dataset"].startswith("cfq"):
+            if spec["grubatsize"] != 128:
+                return False
+        elif spec["dataset"].startswith("scan"):
+            if spec["grubatsize"] != 256:
+                return False
+        if spec["dataset"].startswith("cfq"):
+            if spec["tmepochs"] != 20:
+                return False
+        elif spec["dataset"].startswith("scan"):
+            if spec["tmepochs"] != 25:
+                return False
         return True
 
     print(__file__)
