@@ -25,7 +25,7 @@ from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree, tree_
 from parseq.rnn1 import Encoder
 from parseq.scripts_compgen_new.transformer import TransformerConfig, TransformerStack
 from parseq.scripts_compgen_new.transformerdecoder import TransformerStack as TransformerStackDecoder
-from parseq.scripts_compgen_new.compood import run as run_tm, compute_auc_and_fprs, ORDERLESS
+from parseq.scripts_compgen_new.compood import run as run_tm, compute_auc_and_fprs, ORDERLESS, evaluate
 from parseq.scripts_compgen_new.compood_gru import run as run_gru
 from parseq.vocab import Vocab
 
@@ -175,32 +175,6 @@ def cat_dicts(x:List[Dict]):
     for k, v in out.items():
         out[k] = torch.cat(v, 0)
     return out
-
-
-def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu")):
-    """
-    :param model:       Decoder model
-    :param idds:     dataset with in-distribution examples
-    :param oodds:      dataset with out-of-distribution examples
-    :return:
-    """
-    iddl = DataLoader(idds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    ooddl = DataLoader(oodds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-
-    _, idouts = q.eval_loop(model, iddl, device=device)
-    idouts = cat_dicts(idouts[0])
-    _, oodouts = q.eval_loop(model, ooddl, device=device)
-    oodouts = cat_dicts(oodouts[0])
-
-    # decnll_res = compute_auc_and_fprs(idouts["decnll"], oodouts["decnll"], "decnll")
-    # sumnll_res = compute_auc_and_fprs(idouts["sumnll"], oodouts["sumnll"], "sumnll")
-    # maxnll_res = compute_auc_and_fprs(idouts["maxmaxnll"], oodouts["maxmaxnll"], "maxmaxnll")
-    # entropy_res = compute_auc_and_fprs(idouts["entropy"], oodouts["entropy"], "entropy")
-    decnll_res = compute_auc_and_fprs(-oodouts["decnll"], -idouts["decnll"], "decnll")
-    sumnll_res = compute_auc_and_fprs(-oodouts["sumnll"], -idouts["sumnll"], "sumnll")
-    maxnll_res = compute_auc_and_fprs(-oodouts["maxmaxnll"], -idouts["maxmaxnll"], "maxmaxnll")
-    entropy_res = compute_auc_and_fprs(-oodouts["entropy"], -idouts["entropy"], "entropy")
-    return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res, "sumnll": sumnll_res}
 
 
 def run_experiment(

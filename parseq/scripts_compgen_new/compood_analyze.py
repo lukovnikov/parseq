@@ -32,12 +32,46 @@ def run(p=""):
     # aggdf = aggdf.drop(cols_to_drop, axis=1)
 
     # print("unique datasets")
-    for dataset in aggdf["dataset"].unique():
-        print(f"Dataset: {dataset}")
-        xdf = aggdf[aggdf["dataset"] == dataset]
-        print(xdf)
-    print(aggdf["valid_treeacc", "mean"])
-    print(aggdf.iloc[0])
+    print()
+    print(" SCAN RESULTS ")
+    print()
+    for mcdrop in aggdf["mcdropout"].unique():
+        for method in ["decnll", "entropy", "maxnll", "sumnll"]:
+            head = f"-mcdropout:{mcdrop}-method:{method}"
+            values = []
+            try:
+                for dataset in ["scan/add_jump", "scan/add_turn_left", "scan/length", "scan/mcd"]:
+                    for metric in ["aucroc", "aucpr", "fpr90"]:
+                        colname = (f"{method}_{metric}", "mean")
+                        row = aggdf[(aggdf["mcdropout"] == mcdrop) & (aggdf["dataset"] == dataset)]
+                        value = row[colname]
+                        assert(len(value) == 1)
+                        values.append(f"{float(value)*100:.1f}")
+                print(head)
+                print(" & " + " & ".join(values) + " \\\\")
+            except KeyError as e:
+                pass
+
+    print()
+    print(" CFQ RESULTS ")
+    print()
+    for mcdrop in aggdf["mcdropout"].unique():
+        for method in ["decnll", "entropy", "maxnll", "sumnll"]:
+            try:
+                head = f"-mcdropout:{mcdrop}-method:{method}"
+                values = []
+                for dataset in ["cfq/mcd"]:
+                    for metric in ["aucroc", "aucpr", "fpr90"]:
+                        colname = (f"{method}_{metric}", "mean")
+                        row = aggdf[(aggdf["mcdropout"] == mcdrop) & (aggdf["dataset"] == dataset)]
+                        value = row[colname]
+                        assert(len(value) == 1)
+                        values.append(f"{float(value)*100:.1f}")
+                print(head)
+                print(" & " + " & ".join(values) + " \\\\")
+            except KeyError as e:
+                pass
+
 
 
 if __name__ == '__main__':
