@@ -89,9 +89,10 @@ class HybridSeqDecoder(torch.nn.Module):
         probses = probses[:, :-1]
         probs = probses
         mask = preds > 0
-        nlls = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
-        nlls = -torch.log(nlls)
+        confs = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
+        nlls = -torch.log(confs)
 
+        avgconf = (confs + (1 - mask.float())).prod(-1)
         avgnll = (nlls * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
         sumnll = (nlls * mask).sum(-1)
         maxnll, _ = (nlls + (1 - mask.float()) * -10e6).max(-1)
@@ -101,6 +102,7 @@ class HybridSeqDecoder(torch.nn.Module):
         ret["sumnll"] = sumnll
         ret["maxmaxnll"] = maxnll
         ret["entropy"] = entropy
+        ret["avgconf"] = avgconf
         return ret, pred_trees
 
 
