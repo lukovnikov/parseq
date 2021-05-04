@@ -248,7 +248,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         return loss, acc.float(), elemacc
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-        preds, prednll, maxmaxnll, entropy, total, avgconf, stepsused = self.get_prediction(x)
+        preds, prednll, maxmaxnll, entropy, total, avgconf, sumnll, stepsused = self.get_prediction(x)
 
         def tensor_to_trees(x, vocab:Vocab):
             xstrs = [vocab.tostr(x[i]).replace("@START@", "") for i in range(len(x))]
@@ -297,17 +297,20 @@ class SeqDecoderBaseline(torch.nn.Module):
             confs = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
             nlls = -torch.log(confs)
 
-            avgconf = (confs * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
+            avgconf = (confs + (1-mask)).prod(-1)
             avgnll = (nlls * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
+            sumnll = (nlls * mask).sum(-1)
             maxnll, _ = (nlls + (1 - mask.float()) * -1e6).max(-1)
             entropy = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1)
             entropy = (entropy * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
             ret["decnll"] = avgnll
+            ret["sumnll"] = sumnll
             ret["maxmaxnll"] = maxnll
             ret["entropy"] = entropy
             ret["avgconf"] = avgconf
         else:
             ret["decnll"] = prednll
+            ret["sumnll"] = sumnll
             ret["maxmaxnll"] = maxmaxnll
             ret["entropy"] = entropy
             ret["avgconf"] = avgconf
@@ -378,8 +381,9 @@ class SeqDecoderBaseline(torch.nn.Module):
             ended = ended | _ended
             total = total if total is not None else torch.zeros_like(maxprobs)
             total = total + torch.ones_like(maxprobs) * (~ended).float()
-            conf_acc = conf_acc if conf_acc is not None else torch.zeros_like(maxprobs)
-            conf_acc = conf_acc + maxprobs * (~ended).float()
+            conf_acc = conf_acc if conf_acc is not None else torch.ones_like(maxprobs)
+            # conf_acc = conf_acc + maxprobs * (~ended).float()
+            conf_acc = conf_acc * torch.where(ended, torch.ones_like(maxprobs), maxprobs)
             logmaxprob_acc = logmaxprob_acc if logmaxprob_acc is not None else torch.zeros_like(maxprobs)
             logmaxprob_acc = logmaxprob_acc + -torch.log(maxprobs) * (~ended).float()
             maxmaxnll = maxmaxnll if maxmaxnll is not None else torch.zeros_like(maxprobs)
@@ -393,7 +397,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             newy = torch.cat([newy, preds[:, None]], 1)
 
             y = preds
-        return newy, logmaxprob_acc/total, maxmaxnll, entropy/total, total, conf_acc/total, steps_used.float()
+        return newy, logmaxprob_acc/total, maxmaxnll, entropy/total, total, conf_acc, logmaxprob_acc, steps_used.float()
 
 
 # def autocollate(x:Dict, pad_value=0):
@@ -896,6 +900,7 @@ def evaluate(model, posds, negds, batsize=10, device=torch.device("cpu")):
     negouts = cat_dicts(negouts[0])
 
     decnll_res = compute_auc_and_fprs(posouts["decnll"], negouts["decnll"], "decnll")
+    sumnll_res = compute_auc_and_fprs(posouts["sumnll"], negouts["sumnll"], "sumnll")
     maxnll_res = compute_auc_and_fprs(posouts["maxmaxnll"], negouts["maxmaxnll"], "maxmaxnll")
     entropy_res = compute_auc_and_fprs(posouts["entropy"], negouts["entropy"], "entropy")
 
@@ -915,7 +920,7 @@ def evaluate(model, posds, negds, batsize=10, device=torch.device("cpu")):
 
     wandb.log({"calibtable": wandb.Table(data=rdf, columns=["count", "treeacc"])})
 
-    return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res}
+    return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res, "sumnll": sumnll_res}
 
 
 def is_outlier(points, thresh=3.5):

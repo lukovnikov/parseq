@@ -198,7 +198,7 @@ class HybridSeqDecoder(torch.nn.Module):
 
     def forward(self, x: torch.Tensor,
                      gold: torch.Tensor = None):  # --> implement how decoder operates end-to-end
-        preds, prednll, maxmaxnll, entropy, total, stepsused = self.maindecoder.get_prediction(x)
+        preds, prednll, maxmaxnll, entropy, total, avgconf, sumnll, stepsused = self.maindecoder.get_prediction(x)
 
         def tensor_to_trees(x, vocab: Vocab):
             xstrs = [vocab.tostr(x[i]).replace("@START@", "") for i in range(len(x))]
@@ -252,10 +252,12 @@ class HybridSeqDecoder(torch.nn.Module):
         nlls = -torch.log(nlls)
 
         avgnll = (nlls * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
+        sumnll = (nlls * mask).sum(-1)
         maxnll, _ = (nlls + (1 - mask.float()) * -10e6).max(-1)
         entropy = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1)
         entropy = (entropy * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
         ret["decnll"] = avgnll
+        ret["sumnll"] = sumnll
         ret["maxmaxnll"] = maxnll
         ret["entropy"] = entropy
         return ret, pred_trees
@@ -1026,9 +1028,10 @@ def evaluate(model, posds, negds, batsize=10, device=torch.device("cpu")):
     negouts = cat_dicts(negouts[0])
 
     decnll_res = compute_auc_and_fprs(posouts["decnll"], negouts["decnll"], "decnll")
+    sumnll_res = compute_auc_and_fprs(posouts["sumnll"], negouts["sumnll"], "sumnll")
     maxnll_res = compute_auc_and_fprs(posouts["maxmaxnll"], negouts["maxmaxnll"], "maxmaxnll")
     entropy_res = compute_auc_and_fprs(posouts["entropy"], negouts["entropy"], "entropy")
-    return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res}
+    return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res, "sumnll": sumnll_res}
 
 
 def is_outlier(points, thresh=3.5):
