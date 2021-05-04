@@ -462,7 +462,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             confs = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
             nlls = -torch.log(confs)
 
-            avgconf = (confs + (1-mask)).prod(-1)
+            avgconf = (confs + (1-mask.float())).prod(-1)
             avgnll = (nlls * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
             sumnll = (nlls * mask).sum(-1)
             maxnll, _ = (nlls + (1 - mask.float()) * -10e6).max(-1)
@@ -1058,14 +1058,14 @@ def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu")):
     # sumnll_res = compute_auc_and_fprs(idouts["sumnll"], oodouts["sumnll"], "sumnll")
     # maxnll_res = compute_auc_and_fprs(idouts["maxmaxnll"], oodouts["maxmaxnll"], "maxmaxnll")
     # entropy_res = compute_auc_and_fprs(idouts["entropy"], oodouts["entropy"], "entropy")
-    decnll_res = compute_auc_and_fprs(oodouts["decnll"], idouts["decnll"], "decnll")
-    sumnll_res = compute_auc_and_fprs(oodouts["sumnll"], idouts["sumnll"], "sumnll")
-    maxnll_res = compute_auc_and_fprs(oodouts["maxmaxnll"], idouts["maxmaxnll"], "maxmaxnll")
-    entropy_res = compute_auc_and_fprs(oodouts["entropy"], idouts["entropy"], "entropy")
+    decnll_res = compute_auc_and_fprs(-oodouts["decnll"], -idouts["decnll"], "decnll")
+    sumnll_res = compute_auc_and_fprs(-oodouts["sumnll"], -idouts["sumnll"], "sumnll")
+    maxnll_res = compute_auc_and_fprs(-oodouts["maxmaxnll"], -idouts["maxmaxnll"], "maxmaxnll")
+    entropy_res = compute_auc_and_fprs(-oodouts["entropy"], -idouts["entropy"], "entropy")
 
     # compute histogram of confidence vs accuracy --> 10 confidence bins, compute accuracy for each
     df = np.stack([oodouts["avgconf"].detach().cpu().numpy(), oodouts["treeacc"].detach().cpu().numpy()], 1)
-    Nbins = 10
+    Nbins = 25
     rdf = np.zeros((Nbins, 2))
     np.nan_to_num(df, False)
     for i in range(df.shape[0]):

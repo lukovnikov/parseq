@@ -196,10 +196,10 @@ def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu")):
     # sumnll_res = compute_auc_and_fprs(idouts["sumnll"], oodouts["sumnll"], "sumnll")
     # maxnll_res = compute_auc_and_fprs(idouts["maxmaxnll"], oodouts["maxmaxnll"], "maxmaxnll")
     # entropy_res = compute_auc_and_fprs(idouts["entropy"], oodouts["entropy"], "entropy")
-    decnll_res = compute_auc_and_fprs(oodouts["decnll"], idouts["decnll"], "decnll")
-    sumnll_res = compute_auc_and_fprs(oodouts["sumnll"], idouts["sumnll"], "sumnll")
-    maxnll_res = compute_auc_and_fprs(oodouts["maxmaxnll"], idouts["maxmaxnll"], "maxmaxnll")
-    entropy_res = compute_auc_and_fprs(oodouts["entropy"], idouts["entropy"], "entropy")
+    decnll_res = compute_auc_and_fprs(-oodouts["decnll"], -idouts["decnll"], "decnll")
+    sumnll_res = compute_auc_and_fprs(-oodouts["sumnll"], -idouts["sumnll"], "sumnll")
+    maxnll_res = compute_auc_and_fprs(-oodouts["maxmaxnll"], -idouts["maxmaxnll"], "maxmaxnll")
+    entropy_res = compute_auc_and_fprs(-oodouts["entropy"], -idouts["entropy"], "entropy")
     return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res, "sumnll": sumnll_res}
 
 

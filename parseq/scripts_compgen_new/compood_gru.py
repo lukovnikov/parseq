@@ -298,7 +298,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             confs = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
             nlls = -torch.log(confs)
 
-            avgconf = (confs + (1-mask)).prod(-1)
+            avgconf = (confs + (1-mask.float())).prod(-1)
             avgnll = (nlls * mask).sum(-1) / mask.float().sum(-1).clamp(1e-6)
             sumnll = (nlls * mask).sum(-1)
             maxnll, _ = (nlls + (1 - mask.float()) * -1e6).max(-1)
