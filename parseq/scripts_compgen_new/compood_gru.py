@@ -281,47 +281,17 @@ class SeqDecoderBaseline(torch.nn.Module):
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
 
-        # # compute bleu scores
-        # bleus = []
-        # lcsf1s = []
-        # for gold_tree, pred_tree in zip(gold_trees, pred_trees):
-        #     if pred_tree is None or gold_tree is None:
-        #         bleuscore = 0
-        #         lcsf1 = 0
-        #     else:
-        #         gold_str = tree_to_lisp(gold_tree)
-        #         pred_str = tree_to_lisp(pred_tree)
-        #         bleuscore = sentence_bleu([gold_str.split(" ")], pred_str.split(" "))
-        #         lcsn = lcs(gold_str, pred_str)
-        #         lcsrec = lcsn / len(gold_str)
-        #         lcsprec = lcsn / len(pred_str)
-        #         lcsf1 = 2 * lcsrec * lcsprec / (lcsrec + lcsprec)
-        #     bleus.append(bleuscore)
-        #     lcsf1s.append(lcsf1)
-        # bleus = torch.tensor(bleus).to(x.device)
-        # ret["bleu"] = bleus
-        # ret["lcsf1"] = torch.tensor(lcsf1s).to(x.device)
-
-        # d, logits = self.train_forward(x, gold)
-        # nll, acc, elemacc = d["loss"], d["acc"], d["elemacc"]
-        # ret["nll"] = nll
-        # ret["acc"] = acc
-        # ret["elemacc"] = elemacc
-
-        # d, logits = self.train_forward(x, preds[:, 1:])
-        # decnll = d["loss"]
-        # ret["decnll"] = decnll
         if self.mcdropout > 0:
-            logitses = []
+            probses = []
             preds = preds[:, 1:]
             self.train()
             for i in range(self.mcdropout):
                 d, logits = self.train_forward(x, preds)
-                logitses.append(logits)
+                probses.append(torch.softmax(logits, -1))
             self.eval()
-            logits = sum(logitses) / len(logitses)
-            logits = logits[:, :-1]
-            probs = torch.softmax(logits, -1)
+            probses = sum(probses) / len(probses)
+            probses = probses[:, :-1]
+            probs = probses
             mask = preds > 0
             nlls = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
             nlls = -torch.log(nlls)
@@ -645,7 +615,7 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v1"
+        version="v2"
         ):
 
     settings = locals().copy()
