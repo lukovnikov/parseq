@@ -979,7 +979,7 @@ def run_experiment(
     print(__file__)
     p = __file__ + f".baseline.{dataset}"
     q.run_experiments_random(
-        run, ranges, path_prefix=p, check_config=checkconfig, **settings)
+        run, ranges, path_prefix=None, check_config=checkconfig, **settings)
 
 
 if __name__ == '__main__':
