@@ -1069,7 +1069,7 @@ def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu")):
     rdf = np.zeros((Nbins, 2))
     np.nan_to_num(df, False)
     for i in range(df.shape[0]):
-        bin = int(math.floor(df[i, 0]*Nbins))
+        bin = min(int(math.floor(df[i, 0]*Nbins)), Nbins-1)
         rdf[bin, 0] += 1
         rdf[bin, 1] += df[i, 1]
     rdf[:, 1] = rdf[:, 1] / rdf[:, 0]
