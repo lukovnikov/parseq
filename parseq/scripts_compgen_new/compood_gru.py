@@ -1028,7 +1028,7 @@ def run_experiment(
         # "dataset": ["scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd3"],
         "dropout": [0.1, 0.25, 0.5],
         "worddropout": [0.],
-        "seed": [42, 456852],
+        "seed": [42, 87646464, 456852],
         "epochs": [40, 25],
         # "epochs": [25],
         "batsize": [256, 128],
