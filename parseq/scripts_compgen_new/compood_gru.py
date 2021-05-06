@@ -819,7 +819,7 @@ def run(lr=0.0001,
     validfs = validfs + [indtestepoch, oodtestepoch]
 
     # results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device)
-    print(json.dumps(results, indent=4))
+    # print(json.dumps(results, indent=4))
 
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=validfs,
