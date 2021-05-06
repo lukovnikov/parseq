@@ -295,24 +295,24 @@ def run_experiment(
             del settings[k]
 
     def checkconfig(spec):
-        # if spec["dataset"].startswith("cfq"):
-        #     if spec["gruepochs"] != 25:
-        #         return False
-        # elif spec["dataset"].startswith("scan"):
-        #     if spec["gruepochs"] != 40:
-        #         return False
-        # if spec["dataset"].startswith("cfq"):
-        #     if spec["grubatsize"] != 128:
-        #         return False
-        # elif spec["dataset"].startswith("scan"):
-        #     if spec["grubatsize"] != 256:
-        #         return False
-        # if spec["dataset"].startswith("cfq"):
-        #     if spec["tmepochs"] != 20:
-        #         return False
-        # elif spec["dataset"].startswith("scan"):
-        #     if spec["tmepochs"] != 25:
-        #         return False
+        if spec["dataset"].startswith("cfq"):
+            if spec["gruepochs"] != 25:
+                return False
+        elif spec["dataset"].startswith("scan"):
+            if spec["gruepochs"] != 40:
+                return False
+        if spec["dataset"].startswith("cfq"):
+            if spec["grubatsize"] != 128:
+                return False
+        elif spec["dataset"].startswith("scan"):
+            if spec["grubatsize"] != 256:
+                return False
+        if spec["dataset"].startswith("cfq"):
+            if spec["tmepochs"] != 20:
+                return False
+        elif spec["dataset"].startswith("scan"):
+            if spec["tmepochs"] != 25:
+                return False
         return True
 
     print(__file__)
