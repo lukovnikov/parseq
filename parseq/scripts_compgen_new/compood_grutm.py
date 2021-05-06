@@ -54,11 +54,11 @@ class HybridSeqDecoder(torch.nn.Module):
 
         for k in newret:
             if k in ("treeacc", "stepsused"):
-                newret[k] = torch.mean(torch.stack(newret[k], 0))
+                newret[k] = torch.mean(torch.stack(newret[k], 1), 1)
             elif k in ("decnll", "sumnll", "maxmaxnll", "entropy"):
-                newret[k] = torch.max(torch.stack(newret[k], 0))
+                newret[k] = torch.max(torch.stack(newret[k], 1), 1)
             elif k in ("avgconf",):
-                newret[k] = torch.min(torch.stack(newret[k], 0))
+                newret[k] = torch.min(torch.stack(newret[k], 1), 1)
 
         return newret, pred_treeses[0]
 
