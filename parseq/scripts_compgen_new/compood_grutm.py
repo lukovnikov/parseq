@@ -54,11 +54,11 @@ class HybridSeqDecoder(torch.nn.Module):
 
         for k in newret:
             if k in ("treeacc", "stepsused"):
-                newret[k] = torch.mean(newret[k])
+                newret[k] = torch.mean(torch.stack(newret[k], 0))
             elif k in ("decnll", "sumnll", "maxmaxnll", "entropy"):
-                newret[k] = torch.max(newret[k])
+                newret[k] = torch.max(torch.stack(newret[k], 0))
             elif k in ("avgconf",):
-                newret[k] = torch.min(newret[k])
+                newret[k] = torch.min(torch.stack(newret[k], 0))
 
         return newret, pred_treeses[0]
 
@@ -166,7 +166,7 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="grutm_v3"
+        version="grutm_v1.1"
         ):
 
     settings = locals().copy()
@@ -185,7 +185,7 @@ def run(lr=0.0001,
     print("Results of the hybrid OOD:")
     print(json.dumps(results, indent=3))
 
-    wandb.init(project=f"compood_gru_tm_baseline_v3", config=settings, reinit=True)
+    wandb.init(project=f"compood_grutm_baseline", config=settings, reinit=True)
     for k, v in results.items():
         for metric, ve in v.items():
             settings.update({f"{k}_{metric}": ve})
