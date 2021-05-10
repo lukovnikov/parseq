@@ -15,7 +15,11 @@ def run(p=""):
              "scan/mcd1": "scan/mcd", "scan/mcd2": "scan/mcd", "scan/mcd3": "scan/mcd"}
     df["dataset"] = df["dataset"].replace(repld)
 
-    groupbycols = [x for x in df.columns if not (x in ["gpu", "seed", "Sweep", "Runtime", "Created", "Name", "State", "Nodes", "User", "Tags"] or x.endswith("acc") or x.endswith("entropy") or x.endswith("_aucroc") or x.endswith("_aucpr") or "_fpr" in x or x.endswith("_loss") or x.endswith("nll"))]
+    groupbycols = [x for x in df.columns if not
+            (x in ["gpu", "seed", "Sweep", "Runtime", "Created", "Name", "State", "Nodes", "User", "Tags"]
+             or x.endswith("acc") or x.endswith("entropy") or x.endswith("_aucroc")
+             or x.endswith("_aucpr") or x.endswith("_acc_gru") or x.endswith("_loss_gru") or "_fpr" in x or x.endswith("_loss")
+             or x.endswith("nll"))]
     print(groupbycols)
     # groupbycols = ["mcdropout", "dropout", "batsize", "dataset", "lr", "enclrmul", "gpu", "hdim", "gradnorm", "maxsize", "mode", "numheads", "numlayers", "patience", "smoothing", "warmup", "worddropout"]
     aggdf = df.groupby(groupbycols).aggregate([np.mean, np.std])

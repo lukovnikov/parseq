@@ -629,7 +629,8 @@ class TransformerStack(TransformerPreTrainedModel):
             mask_seq_length = seq_length
 
         if attention_mask is None:
-            attention_mask = torch.ones(batch_size, mask_seq_length).to(inputs_embeds.device)
+            # attention_mask = torch.ones(batch_size, mask_seq_length).to(inputs_embeds.device)
+            attention_mask = input_ids != 0
         if self.is_decoder and encoder_attention_mask is None and encoder_hidden_states is not None:
             encoder_seq_length = encoder_hidden_states.shape[1]
             encoder_attention_mask = torch.ones(batch_size, encoder_seq_length).to(inputs_embeds.device)

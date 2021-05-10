@@ -153,12 +153,12 @@ def run(lr=0.0001,
     tmdecoder, _, _ = run_tm(**tmsettings)
 
     # create a model that uses tmdecoder to generate output and uses both to measure OOD
+    wandb.init(project=f"compood_gru_tm_baseline_v3", config=settings, reinit=True)
     decoder = HybridSeqDecoder(tmdecoder, grudecoder, mcdropout=mcdropout)
     results = evaluate(decoder, indtestds, oodtestds, batsize=tmbatsize, device=device)
     print("Results of the hybrid OOD:")
     print(json.dumps(results, indent=3))
 
-    wandb.init(project=f"compood_gru_tm_baseline_v3", config=settings, reinit=True)
     for k, v in results.items():
         for metric, ve in v.items():
             settings.update({f"{k}_{metric}": ve})
