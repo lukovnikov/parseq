@@ -279,7 +279,6 @@ class TokenOut(torch.nn.Module):
         return scores
 
 
-
 class SeqDecoderCell(torch.nn.Module):
     def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased",
@@ -308,6 +307,7 @@ class SeqDecoderCell(torch.nn.Module):
         self.bert_model = BertModel.from_pretrained(self.bertname,
                                                     hidden_dropout_prob=min(dropout, 0.2),
                                                     attention_probs_dropout_prob=min(dropout, 0.1))
+        self.bert_tokenizer = BertTokenizer.from_pretrained(self.bertname)
         # def set_dropout(m:torch.nn.Module):
         #     if isinstance(m, torch.nn.Dropout):
         #         m.p = dropout
@@ -338,9 +338,7 @@ class SeqDecoderCell(torch.nn.Module):
         :param cache:       list of rnn states for every rnn layer
         :return:
         """
-        padmask = (tokens != 0)
         embs = self.emb(tokens)
-        embs = self.dropout(embs)
         if cache is None:
             rnn_states = [torch.zeros(tokens.size(0), self.dim, device=tokens.device) for _ in range(len(self.decoder))]
             prev_summ = torch.zeros(tokens.size(0), self.dim, device=tokens.device)
@@ -351,10 +349,10 @@ class SeqDecoderCell(torch.nn.Module):
         rnn_outs = []
         lower_rep = torch.cat([embs, prev_summ], 1)
         for rnn_layer, rnn_state in zip(self.decoder, rnn_states):
+            lower_rep = self.dropout(lower_rep)
             new_rnn_out = rnn_layer(lower_rep, rnn_state)
             rnn_outs.append(new_rnn_out)
             lower_rep = new_rnn_out
-            lower_rep = self.dropout(lower_rep)
 
         # use attention
         # (batsize, seqlen, dim) and (batsize, dim)
@@ -618,7 +616,6 @@ class TreeDecoderCell(SeqDecoderCell):
         :param levels:      (batsize, prevseqlen) specifies depth of previous states
         :return:
         """
-        padmask = (tokens != 0)
         embs = self.emb(tokens)
         if prev_summ is None:
             prev_summ = torch.zeros(tokens.size(0), self.dim, device=tokens.device)
@@ -665,7 +662,7 @@ class SeqTreeDecoderCell(TreeDecoderCell):
         return states
 
 
-class SimpleTreeDecoderCell(TreeDecoderCell):
+class SimpleTreeDecoderCell(TreeDecoderCell):    # TODO: verify this
     """ Simple tree decoder cell.
         Completely discards the reduce states (from previous siblings's children),
         and concatenates parent state to input.
@@ -678,7 +675,7 @@ class SimpleTreeDecoderCell(TreeDecoderCell):
 
     def merge_states(self, parent_states, prev_states, reduce_states, movement):
         movement = movement[:, None]
-        states = [(movement != -1) * prev_state + (movement == +1) * parent_state
+        states = [(movement != +1) * prev_state + (movement == +1) * parent_state
                   for prev_state, parent_state in zip(prev_states, parent_states)]
         return states
 
@@ -687,7 +684,7 @@ class SimpleTreeDecoderCell(TreeDecoderCell):
         return ret
 
 
-class ReduceSummTreeDecoderCell(TreeDecoderCell):
+class ReduceSummTreeDecoderCell(TreeDecoderCell):    # TODO: verify this
     """ Stack summary tree decoder cell.
         Takes into account reduce states as inputs at timesteps where movement is downwards,
         and concatenates parent state to input.
@@ -1083,17 +1080,17 @@ def run_experiment(domain="default",    #
 
     ranges = {
         "domain": ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"],
-        "dropout": [0.0, 0.1, 0.2, 0.3, 0.4],
+        "dropout": [0.0, 0.1, 0.25, 0.4],
         "epochs": [121],
         "batsize": [50],
-        "hdim": [366, 768],
-        "numlayers": [1, 2, 3],
-        "lr": [0.0001, 0.000025],
-        "enclrmul": [1., 0.1],                  # use 1.
+        "hdim": [768, ], # 366],
+        "numlayers": [2],
+        "lr": [0.001, ], #0.0001, 0.000025],
+        "enclrmul": [0.1],                  # use 1.
         "seed": [87646464],
         "patience": [-1],
         "warmup": [20],
-        "validinter": [10],
+        "validinter": [1],
         "gradacc": [1],
     }
     ranges["domain"] = ["calendar", "recipes", "publications", "restaurants"]
