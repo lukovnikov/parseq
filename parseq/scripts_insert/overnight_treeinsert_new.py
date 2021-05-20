@@ -2447,7 +2447,7 @@ def run(domain="restaurants",
                                    prob_threshold=probthreshold, tau=goldtemp, use_rel_pos=userelpos, oracle_mix=oraclemix,
                                    usechildrels=usechildrels, numtraj=numtraj)
 
-    print(decoder)
+    # print(decoder)
     # test run
     if testcode:
         batch = next(iter(tdl_seq))
