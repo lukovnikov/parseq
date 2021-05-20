@@ -542,10 +542,12 @@ class TreeDecoderCell(SeqDecoderCell):
 
     def get_all_states(self, tokens_tm1, tokens_tm2=None, paststates=None, levels=None):
         # mix states from paststates according to levels and current token
-        parent_states = [torch.zeros(tokens_tm1.size(0), self.dim, device=tokens_tm1.device) for _ in range(len(self.decoder))]
-        prev_states = [torch.zeros(tokens_tm1.size(0), self.dim, device=tokens_tm1.device) for _ in range(len(self.decoder))]
-        reduce_states = [torch.zeros(tokens_tm1.size(0), self.dim, device=tokens_tm1.device) for _ in range(len(self.decoder))]
-        movement = torch.zeros_like(tokens_tm1)
+        device = tokens_tm1.device
+        parent_states = [[torch.zeros(self.dim, device=device) for __ in range(tokens_tm1.size(0))] for _ in range(len(self.decoder))]
+        prev_states = [[torch.zeros(self.dim, device=device) for __ in range(tokens_tm1.size(0))] for _ in range(len(self.decoder))]
+        reduce_states = [[torch.zeros(self.dim, device=device) for __ in range(tokens_tm1.size(0))] for _ in range(len(self.decoder))]
+
+        movement = [0 for _ in range(tokens_tm1.size(0))]
 
         newlevels = [[] for _ in range(len(levels))]
 
@@ -592,6 +594,10 @@ class TreeDecoderCell(SeqDecoderCell):
                     break
 
             newlevels[i] = levels[i] + [curdepth]
+        parent_states = [torch.stack([ps_i for ps_i in ps], 0) for ps in parent_states]
+        prev_states = [torch.stack([ps_i for ps_i in ps], 0) for ps in prev_states]
+        reduce_states = [torch.stack([ps_i for ps_i in ps], 0) for ps in reduce_states]
+        movement = torch.tensor(movement, dtype=torch.long, device=device)
         return parent_states, prev_states, reduce_states, newlevels, movement
 
     def merge_states(self, parent_states, prev_states, reduce_states, movement):
