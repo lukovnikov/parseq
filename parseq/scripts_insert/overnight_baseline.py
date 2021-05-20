@@ -1058,6 +1058,7 @@ def run(domain="restaurants",
 
 
 def run_experiment(domain="default",    #
+                   domains="default",     # first or second
                    mode="baseline",         # "baseline", "ltr", "uniform", "binary"
         lr=-1.,
         enclrmul=-1.,
@@ -1083,6 +1084,7 @@ def run_experiment(domain="default",    #
         ):
 
     settings = locals().copy()
+    del settings["domains"]
 
     ranges = {
         "domain": ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"],
@@ -1099,7 +1101,12 @@ def run_experiment(domain="default",    #
         "validinter": [1],
         "gradacc": [1],
     }
-    ranges["domain"] = ["calendar", "recipes", "publications", "restaurants"]
+    if domains == "first":
+        ranges["domain"] = ["calendar", "recipes", "publications", "restaurants"]
+    elif domains == "second":
+        ranges["domain"] = ["blocks", "housing", "basketball", "socialnetwork"]
+    elif domains == "all" or domains == "default":
+        ranges["domain"] = ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
 
     if mode == "baseline":        # baseline
         ranges["validinter"] = [1]
@@ -1118,7 +1125,7 @@ def run_experiment(domain="default",    #
     print(__file__)
     p = __file__ + f".baseline.{domain}"
     q.run_experiments_random(
-        run, ranges, path_prefix=p, check_config=None, **settings)
+        run, ranges, path_prefix=None, check_config=None, **settings)
 
 
 
