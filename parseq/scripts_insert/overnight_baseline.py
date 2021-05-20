@@ -1095,7 +1095,7 @@ def run_experiment(domain="default",    #
         "numlayers": [2],
         "lr": [0.001, ], #0.0001, 0.000025],
         "enclrmul": [0.1],                  # use 1.
-        "seed": [87646464],
+        "seed": [87646464, 42, 456852],
         "patience": [-1],
         "warmup": [20],
         "validinter": [1],
