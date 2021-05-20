@@ -886,7 +886,7 @@ def run(domain="restaurants",
         usejoint=False,
         ):
     settings = locals().copy()
-    settings["version"] = "v1"
+    settings["version"] = "vcr"
     q.pp_dict(settings)
 
     wandb.init(project=f"baseline_overnight", config=settings, reinit=True)

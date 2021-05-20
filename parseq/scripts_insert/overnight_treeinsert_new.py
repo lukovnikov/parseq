@@ -2422,7 +2422,7 @@ def run(domain="restaurants",
 
     settings = locals().copy()
     q.pp_dict(settings)
-    settings["version"] = "v2.1"
+    settings["version"] = "vcr"
     wandb.init(project=f"treeinsert_overnight_v2", config=settings, reinit=True)
 
     random.seed(seed)
@@ -2633,7 +2633,7 @@ def run_experiment(domain="default",    #
         "numlayers": [6, 8, 12],
         "lr": [0.0001, 0.000025],
         "enclrmul": [1., 0.1],                  # use 1.
-        "seed": [87646464],
+        "seed": [87646464, 42, 456852],
         "patience": [-1],
         "warmup": [20],
         "validinter": [15],
@@ -2693,6 +2693,13 @@ def run_experiment(domain="default",    #
     q.run_experiments_random(
         run, ranges, path_prefix=p, check_config=checkconfig, **settings)
 
+
+# recipes:       overnight_treeinsert_new.py -gpu 1 -numbered -userelpos -noabspos -useoracle -evaltrain -lr 0.00001 -goldtemp 0.1 -dropout 0.2 -domain recipes
+# restaurants:   overnight_treeinsert_new.py -gpu 0 -numbered -batsize 10 -userelpos -domain restaurants,recipes,housing,blocks -lr 0.00005 -oraclemix 1. -evaltrain -goldtemp 0.1 -cosinelr -epochs 201 -dropout 0.2
+# housing:       overnight_treeinsert_new.py -gpu 0 -numbered -batsize 10 -userelpos -domain restaurants,recipes,housing,blocks -lr 0.00005 -oraclemix 1. -evaltrain -goldtemp 0.1 -cosinelr -epochs 201 -dropout 0.2
+# socialnetwork: overnight_treeinsert_new.py -gpu 0 -numbered -userelpos -evaltrain -lr 0.00005 -cosinelr -goldtemp 0.1 -oraclemix 1.0 -domain socialnetwork -dropout 0.2 -epochs 201
+# basketball:    overnight_treeinsert_new.py -gpu 0 -numbered -batsize 10 -userelpos -domain basketball -lr 0.00005 -oraclemix 1. -evaltrain -goldtemp 0.1 -cosinelr -epochs 201 -dropout 0.2
+# blocks:        overnight_treeinsert_new.py -gpu 0 -numbered -batsize 10 -userelpos -domain restaurants,recipes,housing,blocks -lr 0.00005 -oraclemix 1. -evaltrain -goldtemp 0.1 -cosinelr -epochs 201 -dropout 0.2
 
 
 if __name__ == '__main__':
