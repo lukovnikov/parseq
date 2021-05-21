@@ -174,7 +174,7 @@ class SeqInsertionTagger(torch.nn.Module):
 
 
 class TokenEmb(torch.nn.Module):
-    def __init__(self, vocab, dim, factorized=False, pooler="sum", **kw):
+    def __init__(self, vocab, dim, factorized=False, pooler="sum", padding_idx=0, **kw):
         super(TokenEmb, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -203,7 +203,7 @@ class TokenEmb(torch.nn.Module):
             self.token_emb = torch.nn.Embedding(max(self.token_vocab.values()) + 1, dim)
             self.number_emb = torch.nn.Embedding(max(self.number_vocab.values()) + 1, dim)
         else:
-            self.emb = torch.nn.Embedding(self.vocabsize, dim)
+            self.emb = torch.nn.Embedding(self.vocabsize, dim, padding_idx=padding_idx)
 
     def forward(self, x):
         if self.factorized:
@@ -369,7 +369,6 @@ class GRUDecoderCell(torch.nn.Module):
         return logits, (rnn_outs, summaries)
 
 
-
 class TMDecoderCell(torch.nn.Module):
     def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased",
@@ -389,7 +388,7 @@ class TMDecoderCell(torch.nn.Module):
         self.decoder = TransformerStack(decoderconfig, embed_tokens=None)
         self.dropout = torch.nn.Dropout(dropout)
 
-        self.preout = torch.nn.Linear(self.dim*2, self.dim)
+        self.preout = torch.nn.Linear(self.dim, self.dim)
         self.out = torch.nn.Linear(self.dim, self.vocabsize)
         vocab_mask = torch.ones(self.vocabsize)
         # for excl_token in self.exclude:
@@ -435,7 +434,7 @@ class TMDecoderCell(torch.nn.Module):
         embs = self.emb(tokens)
         padmask = tokens != 0
 
-        _ret = self.decoder(input_embeds=embs, attention_mask=padmask,
+        _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                             encoder_hidden_states=enc, encoder_attention_mask=encmask,
                             use_cache=True, past_key_value_states=cache)
 
@@ -517,16 +516,9 @@ class SeqDecoder(torch.nn.Module):
         x, newy, tgt, tgtmask = self.extract_training_example(x, y)
         enc, encmask = self.cell.encode_source(x)
         # run through tagger: the same for all versions
-        cache = None
-        paststates = []
-        logitses = []
-        for i in range(newy.size(1)):       # teacher forced
-            logits, cache = self.cell(newy[:, i], enc=enc, encmask=encmask, cache=cache)
-            states, summaries = cache
-            paststates.append(states)
-            logitses.append(logits[:, None])
+        ret = self.cell(newy, enc=enc, encmask=encmask, cache=None)
+        logitses = ret[0]
         # compute loss: different versions do different masking and different targets
-        logitses = torch.cat(logitses, 1)
         loss, acc = self.compute_loss(logitses, tgt, mask=tgtmask)
         return {"loss": loss, "acc": acc}, logitses
 
