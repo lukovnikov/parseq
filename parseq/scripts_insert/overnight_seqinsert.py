@@ -120,7 +120,7 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
         if not noreorder:
             ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
         ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
-        ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))     # TODO: wtf?
+        # ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))     # TODO: wtf?
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
@@ -1761,6 +1761,7 @@ def run_experiment(domain="default",    #
     if mode == "baseline":        # baseline
         ranges["validinter"] = [5]
     elif mode.startswith("predictive"):
+        assert False
         ranges["validinter"] = [1]
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
@@ -1825,6 +1826,10 @@ def run_experiment(domain="default",    #
     q.run_experiments_random(
         run, ranges, path_prefix=p, check_config=checkconfig, **settings)
 
+# For CR ACL: oraclemix 0.0
+# run with:             overnight_seqinsert.py -gpu 0 -mode binary/uniform -numbered -oraclemix 0 -batsize 30 -dropout 0.2 -lr 0.00005 -cosinelr -maxsteps 30 -enclrmul 1. -epochs 241
+# publications:         overnight_seqinsert.py -mode binary -domain publications -batsize 30 -gpu 0 -dropout 0. -numlayers 6 -hdim 768 -probthreshold 0.0 -enclrmul 1. -lr 0.00005 -numbered -epochs 201
+# restaurants:          overnight_seqinsert.py -mode binary -numbered -batsize 30 -gpu 0 -oraclemix 1.0 -lr 0.0001 -evaltrain -maxsteps 30 -cosinelr
 
 
 if __name__ == '__main__':
