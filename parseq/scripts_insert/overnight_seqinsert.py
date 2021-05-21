@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 
 import qelos as q
 
-from parseq.datasets import OvernightDatasetLoader, autocollate, Dataset
+from parseq.datasets import OvernightDatasetLoader, autocollate
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import tree_to_lisp_tokens, are_equal_trees, lisp_to_tree
 from parseq.scripts_insert.overnight_treeinsert import extract_info
@@ -61,66 +61,12 @@ def load_ds(domain="restaurants", nl_mode="bert-base-uncased",
     # orderless = {"op:and", "SW:concat"}     # only use in eval!!
     orderless = ORDERLESS
 
-    if domain.startswith("syn"):
-        if domain.startswith("syn-rep-"):
-            words = list(set(["cat", "dog", "person", "camera", "tv", "woman", "man", "sum", "ting", "wong", "blackbird",
-                     "plane", "computer", "pc", "bert", "captain", "slow", "went", "home", "car", "bike", "train", 
-                     "fox", "virus", "vaccine", "pharma", "company", "eu", "uk", "us", "israel", "iran", "syria", 
-                     "russia", "denmark", "capital", "wallstreetbets", "reddit", "option", "short", "squeeze"]))
-            
-            NUMTRAIN = 400
-            NUMVALID = 100
-            NUMTEST = 100
-            L = 30
-            assert L < len(set(words))
-            rep = int(domain[len("syn-rep-"):])
-            examples = []
-            for NUMEX, splitname in zip([NUMTRAIN, NUMVALID, NUMTEST], ["train", "valid", "test"]):
-                for i in range(NUMEX):
-                    words_i = words[:]
-                    random.shuffle(words_i)
-                    example = []
-                    k = 0
-                    for j in range(L):
-                        example.append(words_i.pop(0))
-                        k += 1
-                        if k == rep:
-                            example.append("and")
-                            k = 0
-                        if len(example) > L:
-                            break
-                    examples.append((" ".join(example), example, splitname))
-            ds = Dataset(examples)
-        else:
-            raise Exception(f"Unknown domain '{domain}'")
-    elif domain.startswith("top-eval"):
-        examples = []
-        with open("../../datasets/top/eval.tsv") as f:
-            lines = f.readlines()
-            for line in lines:
-                splits = line.strip().split("\t")
-                nl = splits[1]
-                if domain == "top-eval-nl":
-                    fl = nl.replace("'", "|").replace("\"", "|").replace("\s+", " ")
-                    fl = f"[ SENTENCE {fl} ]"
-                else:
-                    fl = splits[2].replace("'", "|").replace("\"", "|").replace("[", " [ ").replace("]", " ] ").replace("\s+", " ")
-                fl = lisp_to_tree(fl, brackets="[]")
-                examples.append((nl, tree_to_seq(fl)))
-        splits = ["train"]*500 + ["valid"]*50 + ["test"]*50
-        examples = examples[:len(splits)]
-        examples = [(x[0], x[1], y) for x, y in zip(examples, splits)]
-        ds = Dataset(examples)
-    elif domain == "geo":
-        ds = GeoDatasetLoader().load(trainonvalid=trainonvalid)
-    else:
-        ds = OvernightDatasetLoader(simplify_mode="none").load(domain=domain, trainonvalid=trainonvalid)
-        # ds contains 3-tuples of (input, output tree, split name)
+    ds = OvernightDatasetLoader(simplify_mode="none").load(domain=domain, trainonvalid=trainonvalid)
+    # ds contains 3-tuples of (input, output tree, split name)
 
-        if not noreorder:
-            ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
-        ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
-        # ds = ds.map(lambda x: (x[0], x[1][1:-1], x[2]))     # TODO: wtf?
+    if not noreorder:
+        ds = ds.map(lambda x: (x[0], reorder_tree(x[1], orderless=orderless), x[2]))
+    ds = ds.map(lambda x: (x[0], tree_to_seq(x[1]), x[2]))
 
     if numbered:
         ds = ds.map(lambda x: (x[0], make_numbered_tokens(x[1]), x[2]))
@@ -173,116 +119,9 @@ class SeqInsertionTagger(torch.nn.Module):
         pass
 
 
-class TokenEmb(torch.nn.Module):
-    def __init__(self, vocab, dim, factorized=False, pooler="sum", **kw):
-        super(TokenEmb, self).__init__(**kw)
-        self.vocab = vocab
-        self.vocabsize = vocab.number_of_ids()
-        self.factorized = factorized
-        self.pooler = pooler
-        if self.factorized:
-            self.token_vocab = {}
-            next_token_id = 0
-            self.number_vocab = {}
-            next_number_id = 0
-            self.register_buffer("id_to_token", torch.zeros(self.vocabsize, dtype=torch.long))
-            self.register_buffer("id_to_number", torch.zeros(self.vocabsize, dtype=torch.long))
-            for k, v in self.vocab.D.items():
-                if "::" in k:
-                    token, number = k.split("::")
-                else:
-                    token, number = k, "0"
-                if token not in self.token_vocab:
-                    self.token_vocab[token] = next_token_id
-                    next_token_id += 1
-                self.id_to_token[v] = self.token_vocab[token]
-                if number not in self.number_vocab:
-                    self.number_vocab[number] = next_number_id
-                    next_number_id += 1
-                self.id_to_number[v] = self.number_vocab[number]
-            self.token_emb = torch.nn.Embedding(max(self.token_vocab.values()) + 1, dim)
-            self.number_emb = torch.nn.Embedding(max(self.number_vocab.values()) + 1, dim)
-        else:
-            self.emb = torch.nn.Embedding(self.vocabsize, dim)
-
-    def forward(self, x):
-        if self.factorized:
-            token = self.id_to_token[x]
-            tokenemb = self.token_emb(token)
-            number = self.id_to_number[x]
-            numberemb = self.number_emb(number)
-            if self.pooler == "sum":
-                emb = tokenemb + numberemb
-            elif self.pooler == "max":
-                emb = torch.max(tokenemb, numberemb)
-            elif self.pooler == "mul":
-                emb = tokenemb * numberemb
-            else:
-                raise Exception(f"unknown pooler: '{self.pooler}'")
-        else:
-            emb = self.emb(x)
-        return emb
-
-
-class TokenOut(torch.nn.Module):
-    def __init__(self, dim, vocab, factorized=False, pooler="sum", **kw):
-        super(TokenOut, self).__init__(**kw)
-        self.vocab = vocab
-        self.vocabsize = vocab.number_of_ids()
-        self.factorized = factorized
-        self.pooler = pooler
-        if self.factorized:
-            self.token_vocab = {}
-            next_token_id = 0
-            self.number_vocab = {}
-            next_number_id = 0
-            self.register_buffer("token_to_id", torch.zeros(self.vocabsize, dtype=torch.long))
-            self.register_buffer("number_to_id", torch.zeros(self.vocabsize, dtype=torch.long))
-            self.register_buffer("id_to_token", torch.zeros(self.vocabsize, dtype=torch.long))
-            self.register_buffer("id_to_number", torch.zeros(self.vocabsize, dtype=torch.long))
-            for k, v in self.vocab.D.items():
-                if "::" in k:
-                    token, number = k.split("::")
-                else:
-                    token, number = k, "0"
-                if token not in self.token_vocab:
-                    self.token_vocab[token] = next_token_id
-                    next_token_id += 1
-                self.token_to_id[self.token_vocab[token]] = v
-                self.id_to_token[v] = self.token_vocab[token]
-                if number not in self.number_vocab:
-                    self.number_vocab[number] = next_number_id
-                    next_number_id += 1
-                self.number_to_id[self.number_vocab[number]] = v
-                self.id_to_number[v] = self.number_vocab[number]
-            self.token_lin = torch.nn.Linear(dim, max(self.token_vocab.values()) + 1)
-            self.number_lin = torch.nn.Linear(dim, max(self.number_vocab.values()) + 1)
-            self.token_to_id = self.token_to_id[:next_token_id]
-            self.number_to_id = self.number_to_id[:next_number_id]
-        else:
-            self.lin = torch.nn.Linear(dim, self.vocabsize)
-
-    def forward(self, x):
-        if self.factorized:
-            if self.pooler == "sum":
-                # compute scores for tokens and numbers separately
-                tokenscores = self.token_lin(x)     # (batsize, seqlen, numtok)
-                numberscores = self.number_lin(x)   # (batsize, seqlen, numnum)
-                # distribute them and sum up
-                tokenscores = torch.index_select(tokenscores, -1, self.id_to_token)
-                numberscores = torch.index_select(numberscores, -1, self.id_to_number)
-                scores = tokenscores + numberscores
-            else:
-                raise Exception(f'Pooler "{self.pooler}" is not supported yet.')
-        else:
-            scores = self.lin(x)
-        return scores
-
-
-
 class TransformerTagger(SeqInsertionTagger):
     def __init__(self, dim, vocab:Vocab=None, numlayers:int=6, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", baseline=False, vocab_factorized=False, **kw):
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased", baseline=False, **kw):
         super(TransformerTagger, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -292,7 +131,7 @@ class TransformerTagger(SeqInsertionTagger):
                                    num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
                                    use_relative_position=False)
 
-        self.emb = TokenEmb(vocab, config.d_model, factorized=vocab_factorized, pooler="sum")
+        self.emb = torch.nn.Embedding(config.vocab_size, config.d_model)
         self.posemb = torch.nn.Embedding(maxpos, config.d_model)
         decoder_config = deepcopy(config)
         decoder_config.is_decoder = True
@@ -302,8 +141,7 @@ class TransformerTagger(SeqInsertionTagger):
         if baseline:
             self.out = torch.nn.Linear(self.dim, self.vocabsize)
         else:
-            # self.out = torch.nn.Linear(self.dim * 2, self.vocabsize)
-            self.out = TokenOut(self.dim * 2, self.vocab, factorized=vocab_factorized, pooler="sum")
+            self.out = torch.nn.Linear(self.dim * 2, self.vocabsize)
         # self.out = MOS(self.dim, self.vocabsize, K=mosk)
 
         vocab_mask = torch.ones(self.vocabsize)
@@ -313,9 +151,7 @@ class TransformerTagger(SeqInsertionTagger):
         self.register_buffer("vocab_mask", vocab_mask)
 
         self.bertname = bertname
-        self.bert_model = BertModel.from_pretrained(self.bertname,
-                                                    hidden_dropout_prob=min(dropout, 0.2),
-                                                    attention_probs_dropout_prob=min(dropout, 0.1))
+        self.bert_model = BertModel.from_pretrained(self.bertname)
         # def set_dropout(m:torch.nn.Module):
         #     if isinstance(m, torch.nn.Dropout):
         #         m.p = dropout
@@ -381,8 +217,6 @@ class SeqInsertionDecoder(torch.nn.Module):
                  max_steps:int=20,
                  max_size:int=100,
                  end_offset=0.,
-                 oraclemix=0.,
-                 usejoint=False,
                  **kw):
         super(SeqInsertionDecoder, self).__init__(**kw)
         self.tagger = tagger
@@ -393,10 +227,6 @@ class SeqInsertionDecoder(torch.nn.Module):
         self.logsm = torch.nn.LogSoftmax(-1)
         self.prob_threshold = prob_threshold
         self.end_offset = end_offset
-
-        self.oraclemix = oraclemix
-
-        self.usejoint = usejoint
 
         # self.termination_mode = self.default_termination_mode if termination_mode == "default" else termination_mode
         # self.decode_mode = self.default_decode_mode if decode_mode == "default" else decode_mode
@@ -418,43 +248,13 @@ class SeqInsertionDecoder(torch.nn.Module):
         :param mask:        (batsize, seqlen)
         :return:
         """
-        if self.usejoint is True:
-            _logits = logits.view(logits.size(0), -1)
-            _tgt = tgt.view(tgt.size(0), -1)
-            if mask is not None:
-                _mask = mask[:,:, None].repeat(1, 1, logits.size(-1))
-                _mask = _mask.view(_mask.size(0), -1)
-                _tgt = _tgt * _mask
-            logprobs = self.logsm(_logits)
-            _tgt = _tgt / _tgt.sum(-1, keepdim=True)       # renormalize flattened target
-            kl = self.kldiv(logprobs, _tgt)
-            if mask is not None:
-                kl = kl * _mask
-            kl = kl.sum(-1)    # (batsize,)
-        else:
-            logprobs = self.logsm(logits)
-            kl = self.kldiv(logprobs, tgt)      # (batsize, seqlen, vocsize)
-            kl = kl.sum(-1)                     # (batsize, seqlen)
-            if mask is not None:
-                kl = kl * mask
-            kl = kl.sum(-1)
-
-
-        best_pred = logits.max(-1)[1]   # (batsize, seqlen)
-        best_gold = tgt.max(-1)[1]
-        same = best_pred == best_gold
+        logprobs = self.logsm(logits)
+        kl = self.kldiv(logprobs, tgt)      # (batsize, seqlen, vocsize)
+        kl = kl.sum(-1)                     # (batsize, seqlen)
         if mask is not None:
-            same = same | ~(mask.bool())
-        acc = same.all(-1)  # (batsize,)
-
-        # get probability of best predictions
-        tgt_probs = torch.gather(tgt, -1, best_pred.unsqueeze(-1))  # (batsize, seqlen, 1)
-        recall = (tgt_probs > 0).squeeze(-1)
-        if mask is not None:
-            recall = recall | ~(mask.bool())
-        recall = recall.all(-1)
-        return kl, acc.float(), recall.float()
-        # return kl
+            kl = kl * mask
+        kl = kl.sum(-1)
+        return kl
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # extract a training example from y:
@@ -463,8 +263,8 @@ class SeqInsertionDecoder(torch.nn.Module):
         # run through tagger: the same for all versions
         logits = self.tagger(tokens=newy, enc=enc, encmask=encmask)
         # compute loss: different versions do different masking and different targets
-        loss, acc, recall = self.compute_loss(logits, tgt[:, :-1], mask=tgtmask[:, :-1])
-        return {"loss": loss, "acc": acc, "recall": recall}, logits
+        loss = self.compute_loss(logits, tgt[:, :-1], mask=tgtmask[:, :-1])
+        return {"loss": loss}, logits
 
     def get_prediction(self, x:torch.Tensor):
         steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
@@ -579,40 +379,6 @@ class SeqInsertionDecoder(torch.nn.Module):
         return ret, pred_trees
 
 
-def compute_oracle_path_selects(y:torch.Tensor):
-    """
-    :param y:   integer tensor
-    :return:    list of lists of select indices of which positions have been selected at this decoding step
-    """
-    ylen = (y > 0).long().sum().cpu().item()
-    yindexes = range(ylen)
-    selects = [[]]      # in the first step, nothing was selected
-
-    segments = [yindexes[:]]
-
-    while len(segments) > 0:         # while not completely decoded
-        all_segments_empty = True
-        # select the middle for each segment
-        selects.append([])
-        selects[-1] = selects[-2][:]        # copy all previous selects
-        next_segments = []
-        for segment in segments:
-            # take middle, split in two
-            if len(segment) % 2 == 1:
-                middle_pos = int((len(segment) - 1)/2)
-            else:
-                middle_pos = (len(segment) - 1)/2
-                middle_pos = random.choice([int(math.floor(middle_pos)), int(math.ceil(middle_pos))])
-            selects[-1].append(segment[middle_pos])
-            left, right = segment[:middle_pos], segment[middle_pos+1:]
-            if len(left) > 0:
-                next_segments.append(left)
-            if len(right) > 0:
-                next_segments.append(right)
-        segments = next_segments
-    return selects
-
-
 class SeqInsertionDecoderUniform(SeqInsertionDecoder):
     # decode modes: "parallel", "serial" or "semiparallel":
     #    - parallel: execute actions at all slots simultaneously
@@ -657,16 +423,10 @@ class SeqInsertionDecoderUniform(SeqInsertionDecoder):
         tgt = torch.zeros(y.size(0), y.size(1) + 2, self.vocab.number_of_ids(), device=y.device)
         # 'tgt' contains target distributions
         for i in range(newy.size(0)):
-            if random.random() < self.oraclemix:
-                # assert self.numbered is True
-                selects = compute_oracle_path_selects(y[i])
-                select = random.choice(selects)
-                select = sorted(select)
-            else:
-                perm = torch.randperm(ytotallens[i].long().cpu().item())
-                perm = perm[:ylens[i].long().cpu().item()]
-                select, _ = perm.sort(-1)
-                select = list(select.cpu().numpy())
+            perm = torch.randperm(ytotallens[i].long().cpu().item())
+            perm = perm[:ylens[i].long().cpu().item()]
+            select, _ = perm.sort(-1)
+            select = list(select.cpu().numpy())
             k = 1  # k is where in the new sampled sequence we're at
 
             slotvalues_acc = []
@@ -707,44 +467,6 @@ class SeqInsertionDecoderUniform(SeqInsertionDecoder):
         return x, newy, tgt, tgtmask
 
 
-def cmp_to_key(mycmp):
-    'Convert a cmp= function into a key= function'
-    class K:
-        def __init__(self, obj, *args):
-            self.obj = obj
-        def __lt__(self, other):
-            return mycmp(self.obj, other.obj) < 0
-        def __gt__(self, other):
-            return mycmp(self.obj, other.obj) > 0
-        def __eq__(self, other):
-            return mycmp(self.obj, other.obj) == 0
-        def __le__(self, other):
-            return mycmp(self.obj, other.obj) <= 0
-        def __ge__(self, other):
-            return mycmp(self.obj, other.obj) >= 0
-        def __ne__(self, other):
-            return mycmp(self.obj, other.obj) != 0
-    return K
-
-
-def retsup_cmp(a, b):
-    """
-    :param a, b:
-    :return:
-    """
-    ret = b[1] - a[1]
-    if ret == 0:
-        al = a[0]
-        bl = b[0]
-        if al == bl:
-            ret = 0
-        elif al < bl:
-            ret = -1
-        else:
-            ret = 1
-    return ret
-
-
 class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
     """ Differs from Uniform only in computing and using non-uniform weights for gold output distributions """
     def __init__(self, tagger:SeqInsertionTagger,
@@ -752,16 +474,12 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
                  prob_threshold=0.,
                  max_steps:int=20,
                  max_size:int=100,
-                 oraclemix=0.,
                  tau=1.,
-                 usejoint=False,
                  **kw):
         super(SeqInsertionDecoderBinary, self).__init__(tagger, vocab=vocab,
                                                         max_steps=max_steps,
                                                         max_size=max_size,
                                                         prob_threshold=prob_threshold,
-                                                        oraclemix=oraclemix,
-                                                        usejoint=usejoint,
                                                         **kw)
         self.tau = tau
 
@@ -776,24 +494,10 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
             if slotvalue not in mindist_per_token:
                 mindist_per_token[slotvalue] = +9999
             mindist_per_token[slotvalue] = min(mindist_per_token[slotvalue], distance)
-
-        token_ranks = {}
-        prev_rank = -1
-        prev_dist = -1
-        sorted_tokendists = sorted(mindist_per_token.items(), key=cmp_to_key(retsup_cmp))[::-1]
-        for token, dist in sorted_tokendists:
-            if prev_rank > 0 and prev_dist == dist:
-                rank = prev_rank
-            else:
-                rank = prev_rank + 1
-            token_ranks[token] = rank
-            prev_rank = rank
-            prev_dist = dist
-
         mindistances = [d for d in distances]
         for i, (slotvalue, distance) in enumerate(zip(slotvalues, distances)):
             if distance == mindist_per_token[slotvalue]:
-                mindistances[i] = token_ranks[slotvalue]
+                mindistances[i] = distance
             else:
                 mindistances[i] = +99999
 
@@ -802,69 +506,69 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
         return probs
 
 
-# def get_slotvalues_maxspan(selected, yi):
-#     if len(selected) == 0:
-#         ret = [list(yi.cpu().detach().numpy())]
-#         return ret
-#     middle_j = int(len(selected)/2)
-#     yilen = (yi > 0).sum()
-#     yi = yi[:yilen]
-#     middle_k = int(len(yi)/2)
-#     left_selected, right_selected = selected[:middle_j], selected[middle_j+1:]
-#     # search for the midmost element in selected in yi
-#     yi_left, yi_right = None, None
-#     foundit = 0
-#
-#     # compute earliest possible position for the middle element of selected
-#     _left_selected = list(left_selected.cpu().detach().numpy())
-#     _right_selected = list(right_selected.cpu().detach().numpy())
-#     _yi = list(yi.cpu().detach().numpy())
-#
-#     i = 0
-#     for e in _left_selected:
-#         while e != _yi[i]:
-#             i += 1
-#         i += 1
-#     earliest_pos = i
-#
-#     _yi = _yi[::-1]
-#     i = 0
-#     for e in _right_selected[::-1]:
-#         while e != _yi[i]:
-#             i += 1
-#         i += 1
-#     latest_pos = len(_yi) - i
-#
-#     # compute latest possible position for the middle
-#     for l in range(math.ceil(len(yi)/2)+1):
-#         foundit = 0
-#         if len(yi) == 0 or len(selected) == 0:
-#             print("something wrong")
-#         if middle_k - l >= earliest_pos and middle_k - l < latest_pos and yi[middle_k - l] == selected[middle_j]:
-#             foundit = -1
-#         elif middle_k + l >= earliest_pos and middle_k + l < latest_pos and yi[middle_k + l] == selected[middle_j]:
-#             foundit = +1
-#
-#         if foundit != 0:
-#             splitpoint = middle_k + l*foundit
-#             yi_left, yi_right = yi[:splitpoint], yi[splitpoint + 1:]
-#             if len(left_selected) == 0:
-#                 left_slotvalueses = [list(yi_left.cpu().detach().numpy())]
-#             else:
-#                 left_slotvalueses = get_slotvalues_maxspan(left_selected, yi_left)
-#
-#             if len(right_selected) == 0:
-#                 right_slotvalueses = [list(yi_right.cpu().detach().numpy())]
-#             else:
-#                 right_slotvalueses = get_slotvalues_maxspan(right_selected, yi_right)
-#
-#             if left_slotvalueses is None or right_slotvalueses is None:
-#                 continue
-#
-#             ret = left_slotvalueses + right_slotvalueses
-#             return ret
-#     if foundit == 0:
-#         return None
+def get_slotvalues_maxspan(selected, yi):
+    if len(selected) == 0:
+        ret = [list(yi.cpu().detach().numpy())]
+        return ret
+    middle_j = int(len(selected)/2)
+    yilen = (yi > 0).sum()
+    yi = yi[:yilen]
+    middle_k = int(len(yi)/2)
+    left_selected, right_selected = selected[:middle_j], selected[middle_j+1:]
+    # search for the midmost element in selected in yi
+    yi_left, yi_right = None, None
+    foundit = 0
+
+    # compute earliest possible position for the middle element of selected
+    _left_selected = list(left_selected.cpu().detach().numpy())
+    _right_selected = list(right_selected.cpu().detach().numpy())
+    _yi = list(yi.cpu().detach().numpy())
+
+    i = 0
+    for e in _left_selected:
+        while e != _yi[i]:
+            i += 1
+        i += 1
+    earliest_pos = i
+
+    _yi = _yi[::-1]
+    i = 0
+    for e in _right_selected[::-1]:
+        while e != _yi[i]:
+            i += 1
+        i += 1
+    latest_pos = len(_yi) - i
+
+    # compute latest possible position for the middle
+    for l in range(math.ceil(len(yi)/2)+1):
+        foundit = 0
+        if len(yi) == 0 or len(selected) == 0:
+            print("something wrong")
+        if middle_k - l >= earliest_pos and middle_k - l < latest_pos and yi[middle_k - l] == selected[middle_j]:
+            foundit = -1
+        elif middle_k + l >= earliest_pos and middle_k + l < latest_pos and yi[middle_k + l] == selected[middle_j]:
+            foundit = +1
+
+        if foundit != 0:
+            splitpoint = middle_k + l*foundit
+            yi_left, yi_right = yi[:splitpoint], yi[splitpoint + 1:]
+            if len(left_selected) == 0:
+                left_slotvalueses = [list(yi_left.cpu().detach().numpy())]
+            else:
+                left_slotvalueses = get_slotvalues_maxspan(left_selected, yi_left)
+
+            if len(right_selected) == 0:
+                right_slotvalueses = [list(yi_right.cpu().detach().numpy())]
+            else:
+                right_slotvalueses = get_slotvalues_maxspan(right_selected, yi_right)
+
+            if left_slotvalueses is None or right_slotvalueses is None:
+                continue
+
+            ret = left_slotvalueses + right_slotvalueses
+            return ret
+    if foundit == 0:
+        return None
 
 
 # class SeqInsertionDecoderMaxspanBinary(SeqInsertionDecoderBinary):
@@ -936,8 +640,8 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
 #         tgtmask = tgtmask[:, :int(newlen)]
 #
 #         return x, newy, tgt, tgtmask
-
-
+#
+#
 # class SeqInsertionDecoderAny(SeqInsertionDecoderUniform):
 #     def get_slot_value_probs(self, slotvalues):     # uniform
 #         probs = [1. for _ in slotvalues]
@@ -959,8 +663,8 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
 #             loss = loss * mask.float()
 #         loss = loss.sum(-1)
 #         return loss
-
-
+#
+#
 # class SeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
 #     ### Follows gold policy !!
 #
@@ -1129,8 +833,8 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
 #             loss = None
 #         lossacc.requires_grad = True
 #         return {"loss": lossacc}, logitsacc
-
-
+#
+#
 # class OldSeqInsertionDecoderPredictiveBinary(SeqInsertionDecoderBinary):
 #     def train_forward(self, x:torch.Tensor, gold:torch.Tensor):
 #         enc, encmask = self.tagger.encode_source(x)
@@ -1474,19 +1178,10 @@ def run(domain="restaurants",
         maxsize=75,
         testcode=False,
         numbered=False,
-        betternumbered=False,
-        oraclemix=0.,
-        goldtemp=1.,
-        evaltrain=False,
-        cooldown=0,
-        usejoint=False,
         ):
-    if betternumbered:
-        numbered = True
-    settings = locals().copy()
-    settings["version"] = "vcr"
-    q.pp_dict(settings)
 
+    settings = locals().copy()
+    q.pp_dict(settings)
     wandb.init(project=f"seqinsert_overnight_v2", config=settings, reinit=True)
 
     random.seed(seed)
@@ -1504,28 +1199,22 @@ def run(domain="restaurants",
     xdl_seq = DataLoader(xds_seq, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
     # model
-    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, baseline=mode=="baseline", vocab_factorized=betternumbered)
+    tagger = TransformerTagger(hdim, flenc.vocab, numlayers, numheads, dropout, baseline=mode=="baseline")
 
     if mode == "baseline":
         decoder = SeqDecoderBaseline(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
     elif mode == "ltr":
         decoder = SeqInsertionDecoderLTR(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize)
     elif mode == "uniform":
-        decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold, oraclemix=oraclemix, usejoint=usejoint)
+        decoder = SeqInsertionDecoderUniform(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
     elif mode == "binary":
-        decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab,
-                                            max_steps=maxsteps,
-                                            max_size=maxsize,
-                                            prob_threshold=probthreshold,
-                                            oraclemix=oraclemix,
-                                            tau=goldtemp,
-                                            usejoint=usejoint)
-    # elif mode == "maxspanbinary":
-    #     decoder = SeqInsertionDecoderMaxspanBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
-    # elif mode == "predictivebinary":
-    #     decoder = SeqInsertionDecoderPredictiveBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
-    # elif mode == "any":
-    #     decoder = SeqInsertionDecoderAny(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+        decoder = SeqInsertionDecoderBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+    elif mode == "maxspanbinary":
+        decoder = SeqInsertionDecoderMaxspanBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+    elif mode == "predictivebinary":
+        decoder = SeqInsertionDecoderPredictiveBinary(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
+    elif mode == "any":
+        decoder = SeqInsertionDecoderAny(tagger, flenc.vocab, max_steps=maxsteps, max_size=maxsize, prob_threshold=probthreshold)
 
     # test run
     if testcode:
@@ -1535,7 +1224,7 @@ def run(domain="restaurants",
         decoder.train(False)
         out = decoder(*batch)
 
-    tloss = make_array_of_metrics("loss", "acc", "recall", reduction="mean")
+    tloss = make_array_of_metrics("loss", reduction="mean")
     tmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
     vmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
     xmetrics = make_array_of_metrics("treeacc", "stepsused", reduction="mean")
@@ -1583,8 +1272,7 @@ def run(domain="restaurants",
     optim = get_optim(tagger, lr, enclrmul)
     print(f"Total number of updates: {t_max} .")
     if cosinelr:
-        assert t_max > (warmup + cooldown + 10)
-        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(low=0., high=1.0, steps=t_max-warmup) >> (0. * lr)
+        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(steps=t_max-warmup) >> 0.
     else:
         lr_schedule = q.sched.Linear(steps=warmup) >> 1.
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
@@ -1616,12 +1304,9 @@ def run(domain="restaurants",
                          on_end=on_end_v)
 
     tt.tick("training")
-    if evaltrain:
-        valid_epoch_fs = [trainevalepoch, validepoch]
-    else:
-        valid_epoch_fs = [validepoch]
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=valid_epoch_fs,
+                   # run_valid_epoch=[trainevalepoch, validepoch], #[validepoch],
+                   run_valid_epoch=[validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter)
@@ -1706,7 +1391,6 @@ def run(domain="restaurants",
 
 # TODO: model that follows predictive distribution during training and uses AnyToken loss
 
-
 def run_experiment(domain="default",    #
                    mode="baseline",         # "baseline", "ltr", "uniform", "binary"
                    probthreshold=-1.,
@@ -1731,11 +1415,6 @@ def run_experiment(domain="default",    #
         maxsteps=90,
         maxsize=90,
         numbered=False,
-        betternumbered=False,
-        oraclemix=0.,
-        goldtemp=-1.,
-        evaltrain=False,
-        usejoint=False,
                    testcode=False,
         ):
 
@@ -1754,14 +1433,13 @@ def run_experiment(domain="default",    #
         "seed": [87646464, 42, 456852],
         "patience": [-1],
         "warmup": [20],
-        "validinter": [10],
+        "validinter": [15],
         "gradacc": [1],
     }
 
     if mode == "baseline":        # baseline
         ranges["validinter"] = [5]
     elif mode.startswith("predictive"):
-        assert False
         ranges["validinter"] = [1]
         ranges["lr"] = [0.0001]
         ranges["enclrmul"] = [1.]
@@ -1771,27 +1449,20 @@ def run_experiment(domain="default",    #
         ranges["numheads"] = [12]
         ranges["numbered"] = [False]
     else:
-        if settings["domain"] != "default":
-            domains = settings["domain"].split(",")
-            ranges["domain"] = domains
-            settings["domain"] = "default"
-        else:
-            # ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
-            # ranges["domain"] = ["calendar", "restaurants", "publications", "recipes"]
-            ranges["domain"] = ["blocks", "housing", "socialnetwork", "basketball"]
-        # ranges["domain"] = ["restaurants", "recipes"]
+        # ranges["domain"] = ["blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
+        # ranges["domain"] = ["calendar", "publications", "recipes"]
         ranges["batsize"] = [30]
-        ranges["dropout"] = [0.2, 0.1, 0.0]     # use 0.
+        ranges["dropout"] = [0.1]     # use 0.
         # ranges["lr"] = [0.0001]                 # use 0.000025
-        ranges["validinter"] = [10]
-        ranges["epochs"] = [161]
+        ranges["validinter"] = [20]
+        ranges["epochs"] = [301]
         ranges["hdim"] = [768]
         ranges["numlayers"] = [6]
         ranges["numheads"] = [12]
         ranges["probthreshold"] = [0.]
-        ranges["lr"] = [0.0001]
+        ranges["lr"] = [0.00005]
         ranges["enclrmul"] = [1.]
-        ranges["goldtemp"] = [1.0, 0.1]
+        ranges["numbered"] = [True]
 
     if mode == "ltr":
         ranges["lr"] = [0.0001, 0.000025]
@@ -1826,10 +1497,6 @@ def run_experiment(domain="default",    #
     q.run_experiments_random(
         run, ranges, path_prefix=p, check_config=checkconfig, **settings)
 
-# For CR ACL: oraclemix 0.0
-# run with:             overnight_seqinsert.py -gpu 0 -mode binary/uniform -numbered -oraclemix 0 -batsize 30 -dropout 0.2 -lr 0.00005 -cosinelr -maxsteps 30 -enclrmul 1. -epochs 241
-# publications:         overnight_seqinsert.py -mode binary -domain publications -batsize 30 -gpu 0 -dropout 0. -numlayers 6 -hdim 768 -probthreshold 0.0 -enclrmul 1. -lr 0.00005 -numbered -epochs 201
-# restaurants:          overnight_seqinsert.py -mode binary -numbered -batsize 30 -gpu 0 -oraclemix 1.0 -lr 0.0001 -evaltrain -maxsteps 30 -cosinelr
 
 
 if __name__ == '__main__':
