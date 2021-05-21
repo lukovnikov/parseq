@@ -1178,6 +1178,7 @@ def run(domain="restaurants",
         maxsize=75,
         testcode=False,
         numbered=False,
+        version="vcr",
         ):
 
     settings = locals().copy()
@@ -1454,7 +1455,7 @@ def run_experiment(domain="default",    #
         ranges["batsize"] = [30]
         ranges["dropout"] = [0.1]     # use 0.
         # ranges["lr"] = [0.0001]                 # use 0.000025
-        ranges["validinter"] = [20]
+        ranges["validinter"] = [10]
         ranges["epochs"] = [301]
         ranges["hdim"] = [768]
         ranges["numlayers"] = [6]

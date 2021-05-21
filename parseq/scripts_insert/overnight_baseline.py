@@ -279,11 +279,11 @@ class TokenOut(torch.nn.Module):
         return scores
 
 
-class SeqDecoderCell(torch.nn.Module):
+class GRUDecoderCell(torch.nn.Module):
     def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased",
                  vocab_factorized=False, mode="baseline", **kw):
-        super(SeqDecoderCell, self).__init__(**kw)
+        super(GRUDecoderCell, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
         self.dim = dim
@@ -369,8 +369,88 @@ class SeqDecoderCell(torch.nn.Module):
         return logits, (rnn_outs, summaries)
 
 
+
+class TMDecoderCell(torch.nn.Module):
+    def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
+                 dropout:float=0., maxpos=512, bertname="bert-base-uncased",
+                 vocab_factorized=False, mode="baseline", **kw):
+        super(TMDecoderCell, self).__init__(**kw)
+        self.vocab = vocab
+        self.vocabsize = vocab.number_of_ids()
+        self.dim = dim
+        self.indim = indim if indim is not None else dim
+
+        self.emb = TokenEmb(vocab, self.indim, factorized=vocab_factorized, pooler="sum")
+
+        decoderconfig = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim*4,
+                                          num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
+                                          use_relative_position=False, use_causal_mask=True)
+        decoderconfig.is_decoder = True
+        self.decoder = TransformerStack(decoderconfig, embed_tokens=None)
+        self.dropout = torch.nn.Dropout(dropout)
+
+        self.preout = torch.nn.Linear(self.dim*2, self.dim)
+        self.out = torch.nn.Linear(self.dim, self.vocabsize)
+        vocab_mask = torch.ones(self.vocabsize)
+        # for excl_token in self.exclude:
+        #     if excl_token in self.vocab:
+        #         vocab_mask[self.vocab[excl_token]] = 0
+        self.register_buffer("vocab_mask", vocab_mask)
+
+        self.bertname = bertname
+        self.bert_model = BertModel.from_pretrained(self.bertname,
+                                                    hidden_dropout_prob=min(dropout, 0.2),
+                                                    attention_probs_dropout_prob=min(dropout, 0.1))
+        self.bert_tokenizer = BertTokenizer.from_pretrained(self.bertname)
+        # def set_dropout(m:torch.nn.Module):
+        #     if isinstance(m, torch.nn.Dropout):
+        #         m.p = dropout
+        # self.bert_model.apply(set_dropout)
+
+        self.adapter = None
+        if self.bert_model.config.hidden_size != self.dim:
+            self.adapter = torch.nn.Linear(self.bert_model.config.hidden_size, self.dim, bias=False)
+
+        self.reset_parameters()
+
+    def encode_source(self, x):
+        encmask = (x != 0)
+        encs = self.bert_model(x, attention_mask=encmask)[0]
+        if self.adapter is not None:
+            encs = self.adapter(encs)
+        return encs, encmask
+
+    def reset_parameters(self):
+        pass
+        # self.posemb.weight.fill_(0.)
+
+    def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
+        """
+        :param tokens:      (batsize, ) int ids
+        :param enc:         (batsize, seqlen, dim)
+        :param encmask:     (batsize, seqlen)
+        :param cache:       list of rnn states for every rnn layer
+        :return:
+        """
+        embs = self.emb(tokens)
+        padmask = tokens != 0
+
+        _ret = self.decoder(input_embeds=embs, attention_mask=padmask,
+                            encoder_hidden_states=enc, encoder_attention_mask=encmask,
+                            use_cache=True, past_key_value_states=cache)
+
+        c = _ret[0]
+        cache = _ret[1]
+
+        c = self.preout(c)
+        c = torch.nn.functional.leaky_relu(c, 0.1)
+
+        logits = self.out(c)
+        return logits, cache
+
+
 class SeqDecoder(torch.nn.Module):
-    def __init__(self, cell:SeqDecoderCell,
+    def __init__(self, cell:GRUDecoderCell,
                  vocab=None,
                  max_steps:int=100,
                  usejoint=False,
@@ -522,7 +602,7 @@ class SeqDecoder(torch.nn.Module):
         return ret, pred_trees
 
 
-class TreeDecoderCell(SeqDecoderCell):
+class TreeDecoderCell(GRUDecoderCell):
     def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased",
                  vocab_factorized=False, mode="baseline", **kw):
@@ -907,8 +987,11 @@ def run(domain="restaurants",
 
     # model
 
-    if mode == "baseline":
-        tagger = SeqDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
+    if mode == "gru":
+        tagger = GRUDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
+        decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
+    elif mode == "tm":
+        tagger = TMDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
         decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
     elif "tree" in mode:
         if mode == "simpletree":
@@ -1059,7 +1142,7 @@ def run(domain="restaurants",
 
 def run_experiment(domain="default",    #
                    domains="default",     # first or second
-                   mode="baseline",         # "baseline", "ltr", "uniform", "binary"
+                   mode="tm",         # "baseline", "ltr", "uniform", "binary"
         lr=-1.,
         enclrmul=-1.,
         batsize=-1,
@@ -1108,8 +1191,10 @@ def run_experiment(domain="default",    #
     elif domains == "all" or domains == "default":
         ranges["domain"] = ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
 
-    if mode == "baseline":        # baseline
-        ranges["validinter"] = [1]
+    # if mode == "baseline":        # baseline
+    ranges["validinter"] = [1]
+    if mode == "tm":
+        ranges["numlayers"] = [6]
 
     for k in ranges:
         if k in settings:
