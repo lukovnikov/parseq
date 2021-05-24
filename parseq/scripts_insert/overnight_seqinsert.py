@@ -481,7 +481,7 @@ class SeqInsertionDecoderBinary(SeqInsertionDecoderUniform):
                                                         max_size=max_size,
                                                         prob_threshold=prob_threshold,
                                                         **kw)
-        self.tau = tau
+        self.tau = tau      # has no effect
 
     def get_slot_value_probs(self, slotvalues):
         # assign higher probability to tokens closer to centre
@@ -1437,6 +1437,13 @@ def run_experiment(domain="default",    #
         "validinter": [15],
         "gradacc": [1],
     }
+
+    if settings["domain"] != "default":
+        domains = settings["domain"].split(",")
+        ranges["domain"] = domains
+        settings["domain"] = "default"
+    else:
+        ranges["domain"] = ["socialnetwork", "blocks", "calendar", "housing", "restaurants", "publications", "recipes", "basketball"]
 
     if mode == "baseline":        # baseline
         ranges["validinter"] = [5]

@@ -330,6 +330,9 @@ class GRUDecoderCell(torch.nn.Module):
         pass
         # self.posemb.weight.fill_(0.)
 
+    def test_forward(self, tokens: torch.Tensor = None, enc=None, encmask=None, cache=None):
+        return self(tokens=tokens, enc=enc, encmask=encmask, cache=cache)
+
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
         """
         :param tokens:      (batsize, ) int ids
@@ -369,11 +372,10 @@ class GRUDecoderCell(torch.nn.Module):
         return logits, (rnn_outs, summaries)
 
 
-
 class TMDecoderCell(torch.nn.Module):
     def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased",
-                 vocab_factorized=False, mode="baseline", **kw):
+                 vocab_factorized=False, **kw):
         super(TMDecoderCell, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -384,12 +386,12 @@ class TMDecoderCell(torch.nn.Module):
 
         decoderconfig = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim*4,
                                           num_layers=numlayers, num_heads=numheads, dropout_rate=dropout,
-                                          use_relative_position=False, use_causal_mask=True)
+                                          use_relative_position=False, use_causal_mask=True, n_positions=maxpos)
         decoderconfig.is_decoder = True
         self.decoder = TransformerStack(decoderconfig, embed_tokens=None)
         self.dropout = torch.nn.Dropout(dropout)
 
-        self.preout = torch.nn.Linear(self.dim*2, self.dim)
+        self.preout = torch.nn.Linear(self.dim, self.dim)
         self.out = torch.nn.Linear(self.dim, self.vocabsize)
         vocab_mask = torch.ones(self.vocabsize)
         # for excl_token in self.exclude:
@@ -424,6 +426,10 @@ class TMDecoderCell(torch.nn.Module):
         pass
         # self.posemb.weight.fill_(0.)
 
+    def test_forward(self, tokens: torch.Tensor = None, enc=None, encmask=None, cache=None):
+        logits, cache = self(tokens=tokens[:, None], enc=enc, encmask=encmask, cache=cache)
+        return logits[:, 0], cache
+
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
         """
         :param tokens:      (batsize, ) int ids
@@ -435,7 +441,7 @@ class TMDecoderCell(torch.nn.Module):
         embs = self.emb(tokens)
         padmask = tokens != 0
 
-        _ret = self.decoder(input_embeds=embs, attention_mask=padmask,
+        _ret = self.decoder(inputs_embeds=embs, attention_mask=padmask,
                             encoder_hidden_states=enc, encoder_attention_mask=encmask,
                             use_cache=True, past_key_value_states=cache)
 
@@ -518,17 +524,10 @@ class SeqDecoder(torch.nn.Module):
         enc, encmask = self.cell.encode_source(x)
         # run through tagger: the same for all versions
         cache = None
-        paststates = []
-        logitses = []
-        for i in range(newy.size(1)):       # teacher forced
-            logits, cache = self.cell(newy[:, i], enc=enc, encmask=encmask, cache=cache)
-            states, summaries = cache
-            paststates.append(states)
-            logitses.append(logits[:, None])
+        logits, cache = self.cell(newy, enc=enc, encmask=encmask, cache=cache)
         # compute loss: different versions do different masking and different targets
-        logitses = torch.cat(logitses, 1)
-        loss, acc = self.compute_loss(logitses, tgt, mask=tgtmask)
-        return {"loss": loss, "acc": acc}, logitses
+        loss, acc = self.compute_loss(logits, tgt, mask=tgtmask)
+        return {"loss": loss, "acc": acc}, logits
 
     def get_prediction(self, x:torch.Tensor):
         steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_steps
@@ -543,16 +542,16 @@ class SeqDecoder(torch.nn.Module):
         newy = None
         ended = torch.zeros_like(y).bool()
         cache = None
-        paststates = []
-        logitses = []
+        # paststates = []
+        # logitses = []
         outputses = []
         while step < self.max_steps and not torch.all(ended): #(newy is None or not (y.size() == newy.size() and torch.all(y == newy))):
             y = newy if newy is not None else y
             # run tagger
-            logits, cache = self.cell(tokens=y, enc=enc, encmask=encmask, cache=cache)
-            states, summaries = cache
-            paststates.append(states)
-            logitses.append(logits[:, None])
+            logits, cache = self.cell.test_forward(tokens=y, enc=enc, encmask=encmask, cache=cache)
+            # states, summaries = cache
+            # paststates.append(states)
+            # logitses.append(logits[:, None])
             bestpred = logits.max(1)[1]
             newy = bestpred
             outputses.append(bestpred[:, None])
@@ -690,6 +689,11 @@ class TreeDecoderCell(GRUDecoderCell):
     def get_rnn_inputs(self, embs, prev_summ, parent_states, reduce_states, movement):
         ret = torch.cat([embs, prev_summ], 1)
         return ret
+
+    def test_forward(self, tokens:torch.Tensor=None, tokens_tm2=None, enc=None, encmask=None,
+                paststates=None, prev_summ=None, levels=None):
+        return self(tokens=tokens, tokens_tm2=tokens_tm2, enc=enc, encmask=encmask,
+                    paststates=paststates, prev_summ=prev_summ, levels=levels)
 
     def forward(self, tokens:torch.Tensor=None, tokens_tm2=None, enc=None, encmask=None,
                 paststates=None, prev_summ=None, levels=None):
@@ -948,6 +952,7 @@ def run(domain="restaurants",
         epochs=1000,
         hdim=366,
         numlayers=2,
+        numheads=6,
         dropout=0.1,
         noreorder=False,
         trainonvalid=False,
@@ -991,7 +996,7 @@ def run(domain="restaurants",
         tagger = GRUDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
         decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
     elif mode == "tm":
-        tagger = TMDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
+        tagger = TMDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode, numheads=numheads)
         decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
     elif "tree" in mode:
         if mode == "simpletree":
@@ -1149,6 +1154,7 @@ def run_experiment(domain="default",    #
         epochs=-1,
         hdim=-1,
         numlayers=-1,
+        numheads=-1,
         dropout=-1.,
         noreorder=False,
         trainonvalid=False,
@@ -1183,6 +1189,7 @@ def run_experiment(domain="default",    #
         "warmup": [20],
         "validinter": [1],
         "gradacc": [1],
+        "numheads": [12]
     }
     if domains == "first":
         ranges["domain"] = ["calendar", "recipes", "publications", "restaurants"]
