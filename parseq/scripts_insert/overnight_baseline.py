@@ -281,8 +281,8 @@ class TokenOut(torch.nn.Module):
 
 class GRUDecoderCell(torch.nn.Module):
     def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
-                 dropout:float=0., maxpos=512, bertname="bert-base-uncased",
-                 vocab_factorized=False, mode="baseline", **kw):
+                 dropout:float=0., bertname="bert-base-uncased",
+                 vocab_factorized=False, **kw):
         super(GRUDecoderCell, self).__init__(**kw)
         self.vocab = vocab
         self.vocabsize = vocab.number_of_ids()
@@ -460,7 +460,6 @@ class SeqDecoder(torch.nn.Module):
                  vocab=None,
                  max_steps:int=100,
                  usejoint=False,
-                 mode="baseline",
                  **kw):
         super(SeqDecoder, self).__init__(**kw)
         self.cell = cell
@@ -604,9 +603,9 @@ class SeqDecoder(torch.nn.Module):
 class TreeDecoderCell(GRUDecoderCell):
     def __init__(self, dim, indim=None, vocab:Vocab=None, numlayers:int=2, numheads:int=6,
                  dropout:float=0., maxpos=512, bertname="bert-base-uncased",
-                 vocab_factorized=False, mode="baseline", **kw):
+                 vocab_factorized=False, **kw):
         super(TreeDecoderCell, self).__init__(dim, indim=indim, vocab=vocab, numlayers=numlayers, dropout=dropout, bertname=bertname,
-                                              vocab_factorized=vocab_factorized, mode=mode, **kw)
+                                              vocab_factorized=vocab_factorized, **kw)
         dims = self.get_dims(self.indim, self.dim, numlayers)
         self.decoder = torch.nn.ModuleList(
             [torch.nn.GRUCell(dims[i], dims[i+1]) for i in range(numlayers)])
@@ -805,9 +804,8 @@ class TreeDecoder(SeqDecoder):
                  vocab=None,
                  max_steps:int=100,
                  usejoint=False,
-                 mode="baseline",
                  **kw):
-        super(TreeDecoder, self).__init__(cell, vocab=vocab, max_steps=max_steps, usejoint=usejoint, mode=mode, **kw)
+        super(TreeDecoder, self).__init__(cell, vocab=vocab, max_steps=max_steps, usejoint=usejoint, **kw)
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # extract a training example from y:
@@ -993,19 +991,19 @@ def run(domain="restaurants",
     # model
 
     if mode == "gru":
-        tagger = GRUDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
-        decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
+        tagger = GRUDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout)
+        decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps)
     elif mode == "tm":
-        tagger = TMDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode, numheads=numheads)
-        decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
+        tagger = TMDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, numheads=numheads)
+        decoder = SeqDecoder(tagger, flenc.vocab, max_steps=maxsteps)
     elif "tree" in mode:
         if mode == "simpletree":
-            tagger = SimpleTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
+            tagger = SimpleTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout)
         elif mode == "seqtree":
-            tagger = SeqTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
+            tagger = SeqTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout)
         elif mode == "reducesummtree":
-            tagger = ReduceSummTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout, mode=mode)
-        decoder = TreeDecoder(tagger, flenc.vocab, max_steps=maxsteps, mode=mode)
+            tagger = ReduceSummTreeDecoderCell(hdim, vocab=flenc.vocab, numlayers=numlayers, dropout=dropout)
+        decoder = TreeDecoder(tagger, flenc.vocab, max_steps=maxsteps)
 
     print(tagger.decoder)
 
