@@ -19,3 +19,5 @@ To run the BERT+TreeGRU baseline on domain $DOMAIN, run this:
 ```shell script
 python overnight_baseline.py -gpu $GPU -mode simpletree -domain $DOMAIN -dropout 0.25 -lr 0.001
 ```
+
+The output of the `pip freeze` command for an environment where some of the experiments have been run is provided in the file `local_pipfreeze`.

@@ -12,7 +12,7 @@ def run(p=""):
     print(df.columns)
 
     # replace mcdX with mcd
-    df = df[df["State"] == "finished"]
+    # df = df[df["State"] == "finished"]
 
     averagecols = ['seed', 'gpu', 'Name', 'State', 'Notes', 'User', 'Tags', 'Created', 'Updated', 'Runtime', 'GPU Type', 'evaltrain', 'final_test_steps_used', 'final_test_tree_acc', 'final_train_CE', 'final_train_steps_used', 'final_train_tree_acc', 'final_valid_steps_used', 'final_valid_tree_acc', 'testcode', 'version', 'train_CE', 'train_stepsused', 'train_tree_acc', 'valid_stepsused', 'valid_tree_acc']
 
@@ -34,6 +34,8 @@ def run(p=""):
     domains = ["calendar", "blocks", "housing", "restaurants", "publications", "recipes", "socialnetwork", "basketball"]
     domains2 = ["calendar", "restaurants", "publications", "recipes"]
 
+    ignorecols = ["epochs"]
+
     settings = set()
     for i in range(len(aggdf)):
         setting = tuple(sorted([(k, aggdf[k][i]) for k in aggdf.columns if k[0] not in averagecols and k[0] != "domain"]))
@@ -43,7 +45,8 @@ def run(p=""):
     for setting in settings:
         for k, v in setting:
             assert k[1] == ''
-            seldf = seldf[seldf[k[0]] == v]
+            if k[0] not in ignorecols:
+                seldf = seldf[seldf[k[0]] == v]
         means, stds = [], []
         steps_means, steps_stds = [], []
         for domain in domains:
@@ -64,8 +67,9 @@ def run(p=""):
         print(setting)
         print('(a)')
         print(domains)
-        line = ' & ' + ' & '.join([f"{m*100:.1f}" for m in means[:-1]]) + f' $\\pm$ {100*means[-1]:.1f}' + ' \\\\'
+        line = ' & ' + ' & '.join([f"{m*100:.1f}" for m in means[:-1]]) + f' \\footnotesize{{$\\pm$ {100*means[-1]:.1f}}}' + ' \\\\'
         print(line)
+        print(stds)
 
 
         means, stds = [], []
@@ -88,6 +92,8 @@ def run(p=""):
         print(domains2)
         line = ' & ' + ' & '.join([f"{m*100:.1f} & {s:.1f} ($\\times$ ? )" for m, s in zip(means, steps_means)]) + '\\\\'
         print(line)
+        print(stds)
+        print(steps_stds)
 
 
 
