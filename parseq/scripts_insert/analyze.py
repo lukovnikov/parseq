@@ -61,7 +61,7 @@ def run(p=""):
         means.append(np.mean(means))
         means.append(np.mean(stds))
 
-        steps_means.append(np.mean(teststeps_mean))
+        steps_means.append(np.mean(steps_means))
 
         print("RESULTS FOR:")
         print(setting)
@@ -86,7 +86,7 @@ def run(p=""):
         means.append(np.mean(means))
         # means.append(np.mean(stds))
 
-        steps_means.append(np.mean(teststeps_mean))
+        steps_means.append(np.mean(steps_means))
 
         print('(b)')
         print(domains2)
