@@ -4,6 +4,7 @@ import os
 import random
 import re
 import shutil
+import sys
 import tarfile
 import timeit
 import urllib
@@ -48,7 +49,10 @@ class Dataset(object):
 
     @property
     def rootds(self):
-        return self
+        if hasattr(self, "baseds"):
+            return self.baseds.rootds
+        else:
+            return self
 
     def __len__(self):
         return len(self._examples)
@@ -165,10 +169,6 @@ class MappedDataset(Dataset, CachedDataset):
         ret = [self[i] for i in range(len(self))]
         return ret
 
-    @property
-    def rootds(self):
-        return self.baseds.rootds
-
     def filter(self, f):
         newbase = self.baseds.filter(lambda ex: self._example_fits_filter(self.f(ex), f))
         ret = newbase.map(self.f)
@@ -191,6 +191,59 @@ class MappedDataset(Dataset, CachedDataset):
                 if self.use_cache:
                     self._examples_cache[item] = ret
                 return ret
+
+
+class IterableDataset(Dataset, torch.utils.data.IterableDataset):
+    def __init__(self, **kw):
+        super(IterableDataset, self).__init__(**kw)
+
+    def __len__(self):
+        return sys.maxsize
+
+    @property
+    def examples(self):
+        return None
+
+    def __iter__(self):
+        return self
+
+    def filter(self, f):
+        return FilteredIterableDataset(self, f)
+
+    def map(self, f):
+        return IterableMappedDataset(self, f)
+
+
+class FilteredIterableDataset(IterableDataset):
+    def __init__(self, baseds:IterableDataset, f):
+        self.baseds = baseds
+        self.f = f
+
+    def __next__(self):
+        ret = None
+        while ret is None:
+            ret = next(self.baseds)
+            if not self.f(ret):
+                ret = None
+        return ret
+
+
+class IterableMappedDataset(IterableDataset):
+    def __init__(self, baseds:IterableDataset, f, **kw):
+        self._kw = copy(kw)
+        super(IterableMappedDataset, self).__init__(**kw)
+        self.baseds = baseds
+        self.f = f
+
+    def filter(self, f):
+        newbase = self.baseds.filter(lambda ex: self._example_fits_filter(self.f(ex), f))
+        ret = newbase.map(self.f)
+        return ret
+
+    def __next__(self):
+        example = next(self.baseds)
+        ret = self.f(example)
+        return ret
 
 
 class GeneratedDataset(Dataset, CachedDataset):
@@ -376,8 +429,8 @@ class PCFGBuilder(object):
             children = [self.grammarify(xe, parents=parents+(x,)) for xe in x]
             children = [
                 Tree(f"NT-{x.label()}-ARG{i}", [xe])
-                    if x.label() not in self.orderless else
-                Tree(f"NT-{x.label()}-ARG", [xe])
+                        if x.label() not in self.orderless else
+                        Tree(f"NT-{x.label()}-ARG", [xe])
                 for i, xe in enumerate(children)]
             children = [x.label()] + children
             t = Tree(f"NT-{x.label()}", children)
@@ -1523,6 +1576,75 @@ def try_top_dataset():
     print(nl_tokenizer.get_vocab())
     print(gds._pcfg.productions)
 
+
+def try_iterable_ds():
+    class RandomIterableDataset(IterableDataset):
+        def __init__(self, seed=42, **kw):
+            super(RandomIterableDataset, self).__init__(**kw)
+            self.seed = seed
+            self.rng = random.Random(seed)
+
+        def reset_seed(self):
+            self.rng = random.Random(self.seed)
+
+        def __next__(self):
+            return self.rng.random()
+
+    baseds = RandomIterableDataset()
+    # dsiter = iter(baseds)
+    print(len(baseds))
+    print("random values")
+    first = []
+    for i in range(10):
+        x = next(baseds)
+        print(x)
+        first.append(x)
+
+    # dsiter = iter(baseds)
+    baseds.reset_seed()
+    second = []
+    print("random values again")
+    for i in range(10):
+        x = next(baseds)
+        print(x)
+        second.append(x)
+
+    assert np.allclose(first, second)
+    print("reset seed works")
+
+    baseds.reset_seed()
+    fds = baseds.filter(lambda x: x > 0.5)
+    first = []
+    for i in range(10):
+        x = next(fds)
+        print(x)
+        first.append(x)
+    print("filtering works")
+
+    baseds.reset_seed()
+    mfds = fds.map(lambda x: x - 0.5)
+    first = []
+    for i in range(10):
+        x = next(mfds)
+        print(x)
+        first.append(x)
+    print("mapping works")
+
+    baseds.reset_seed()
+    fmfds = mfds.filter(lambda x: x*4 < 0.5)
+    first = []
+    for i in range(10):
+        x = next(fmfds)
+        print(x)
+        first.append(x)
+    print("mapping works")
+
+
+
+
+
+
+
 if __name__ == '__main__':
     # import filelock
     # try_tokenizer_dataset()
@@ -1538,4 +1660,5 @@ if __name__ == '__main__':
     # print(govd.examples)
     # print(try_multilingual_geoquery_dataset_loader())
     # try_scan()
-    try_cfq()
+    # try_cfq()
+    try_iterable_ds()

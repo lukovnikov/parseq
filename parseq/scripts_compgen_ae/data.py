@@ -1,6 +1,7 @@
 import os
 import random
 
+from nltk import Nonterminal, ProbabilisticProduction, PCFG
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import json
@@ -10,7 +11,8 @@ import torch
 import qelos as q
 
 
-from parseq.datasets import Dataset, SCANDatasetLoader, CFQDatasetLoader, autocollate
+from parseq.datasets import Dataset, SCANDatasetLoader, CFQDatasetLoader, autocollate, IterableDataset, PCFGBuilder
+from parseq.grammar import lisp_to_tree
 from parseq.vocab import Vocab
 
 from transformers import AutoTokenizer
@@ -40,17 +42,28 @@ class Tokenizer(object):
             self._inpvocab = value
 
     def tokenize(self, inps, outs):
-        if self.berttok is not None:
-            inptoks = self.berttok.tokenize(inps)
+        if inps is not None:
+            if self.berttok is not None:
+                inptoks = self.berttok.tokenize(inps)
+            else:
+                inptoks = ["@START@"] + self.get_toks(inps) + ["@END@"]
+
+            if self.berttok is not None:
+                inptensor = self.berttok.encode(inps, return_tensors="pt")[0]
+            else:
+                inptensor = self.tensorize_output(inptoks, self._inpvocab)
         else:
-            inptoks = ["@START@"] + self.get_toks(inps) + ["@END@"]
-        outtoks = self.get_toks(outs)
-        if self.berttok is not None:
-            inptensor = self.berttok.encode(inps, return_tensors="pt")[0]
+            inptoks, inptensor = None, None
+
+        if outs is not None:
+            # outtoks = ["@START@"] + self.get_toks(outs) + ["@END@"]
+            outtoks = self.get_toks(outs)
+            outtensor = self.tensorize_output(outtoks, self.outvocab)
         else:
-            inptensor = self.tensorize_output(inptoks, self._inpvocab)
+            outtoks, outtensor = None, None
+
         ret = {"inps": inps, "outs":outs, "inptoks": inptoks, "outtoks": outtoks,
-               "inptensor": inptensor, "outtensor": self.tensorize_output(outtoks, self.outvocab)}
+               "inptensor": inptensor, "outtensor": outtensor}
         ret = (ret["inptensor"], ret["outtensor"])
         return ret
 
@@ -85,7 +98,10 @@ def load_ds(dataset="scan/random", validfrac=0.1, splitseed=42, recompute=False)
             else:
                 shelved = shelf[key]
                 trainex, validex, testex, fldic = shelved["trainex"], shelved["validex"], shelved["testex"], shelved["fldic"]
+                if "inpdic" not in shelved or "tokenizer" not in shelved:
+                    recompute = True
                 inpdic = shelved["inpdic"] if "inpdic" in shelved else None
+                tokenizer = shelved["tokenizer"] if "tokenizer" in shelved else None
                 trainds, validds, testds = Dataset(trainex), Dataset(validex), Dataset(testex)
                 tt.tock("loaded from shelf")
 
@@ -145,6 +161,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, splitseed=42, recompute=False)
                 "testex": testds.examples,
                 "fldic": fldic,
                 "inpdic": inpdic,
+                "tokenizer": tokenizer,
             }
             shelf[key] = shelved
         tt.tock("shelved")
@@ -160,7 +177,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, splitseed=42, recompute=False)
     overlaps = compute_overlaps(trainds, testds)
     print(json.dumps(overlaps, indent=4))
 
-    return trainds, validds, testds, fldic, inpdic
+    return trainds, validds, testds, tokenizer
 
 
 def compute_overlaps(train, test):
@@ -208,26 +225,133 @@ def collate_fn(x, pad_value=0, numtokens=5000):
     return ret
 
 
-class RandomAugData(object):
+class RandomAugDataset(IterableDataset):
+    def __init__(self, words, probs=None, minlen=1, maxlen=100, seed=42, **kw):
+        """
+        :param dic:     dictionary mapping tokens to integer ids
+        :param probs:   dictionary mapping tokens to probabilities. Default: None = uniform
+                        Can be partially filled (not contain all tokens).
+                        The remaining probability mass is distributed uniformly over remaining tokens.
+        :param minlen: minimum length
+        :param maxlen: maximum length
+        :param kw:
+        """
+        super(RandomAugDataset, self).__init__(**kw)
+        self.words = list(words)
+        self.probs = {k: v for k, v in probs.items()}
+        if self.probs is None:
+            self.probs = {}
+
+        totprobs = 0
+        wordswithprobs = 0
+        for word in self.words:
+            if word in self.probs:
+                totprobs += self.probs[word]
+                wordswithprobs += 1
+        assert totprobs <= 1.0
+        if wordswithprobs < len(self.words):
+            prob = (1 - totprobs) / (len(words) - wordswithprobs)
+            for k in self.words:
+                if k not in self.probs:
+                    self.probs[k] = prob
+        totprobs = sum(self.probs.values())
+        assert np.isclose(totprobs, 1.0)
+        self.minlen = minlen
+        self.maxlen = maxlen
+        assert self.maxlen > self.minlen
+
+        self.seed = seed
+        self.reset_seed()
+
+    def reset_seed(self):
+        self.rng = np.random.RandomState(self.seed)
+
+    def __iter__(self):
+        self.reset_seed()
+        return self
+
+    def __next__(self):
+        return self.sample()
+
+    def sample(self):
+        # 1. sample a length
+        len = int(round(random.random() * (self.maxlen - self.minlen))) + self.minlen
+
+        # 2. sample a sequence of tokens
+        toks = list(self.words)
+        probs = [self.probs[tok] for tok in toks]
+        seq = np.random.choice(toks, len, True, probs)
+        seq = " ".join(seq)
+        return seq
 
 
+class NoiseAdder(object):
+    def __init__(self, p=0.2, plen=(0.8, 0.15, 0.05), repl="@MASK@", seed=42, **kw):
+        super(NoiseAdder, self).__init__(**kw)
+        self.p = p
+        self.plen = plen
+        self.repl = repl
+        self.seed = seed
+        self.reset_seed()
 
-def get_dataloaders(dataset="scan/mcd1", augmode="none", batsize=10, validfrac=0.1, recompute=False, auglen=100):
+    def reset_seed(self):
+        self.rng = np.random.RandomState(self.seed)
+
+    def __call__(self, x):
+        xs = x.split(" ")
+        repl = [self.rng.random() < self.p for _ in xs]
+        ys = []
+        i = 0
+        while i < len(xs):
+            if repl[i] == True:
+                ys.append(self.repl)
+                # sample how many tokens to replace
+                howmany = self.rng.choice(list(range(1, len(self.plen) + 1)), None, False, self.plen)
+                i += howmany
+            else:
+                ys.append(xs[i])
+                i += 1
+        ret = " ".join(ys)
+        return ret
+
+
+def get_dataloaders(dataset="scan/mcd1", augmode="none", batsize=10, validfrac=0.1, recompute=False, auglen=-1, noisep=0.2):
     tt = q.ticktock("data")
     tt.tick("getting dataloaders")
     tt.tick("loading data")
-    trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset,
+    trainds, validds, testds, tokenizer = load_ds(dataset=dataset,
                                                       validfrac=validfrac,
                                                       recompute=recompute)
 
-    if augmode == "none" or augmode is None:
+    if auglen < 0:
+        if dataset.startswith("cfq"):
+            auglen = 175
+        elif dataset.startswith("scan"):
+            auglen = 75
+
+    if augmode is not None and augmode != "none":
+        if augmode == "random":
+            probs = {"@PAD@": 0, "@UNK@": 0, "@START@": 0, "@END@": 0, "@MASK@": 0}
+            auginpds = RandomAugDataset(tokenizer.inpvocab.D.keys(), probs=probs, maxlen=auglen)
+            augoutds = RandomAugDataset(tokenizer.outvocab.D.keys(), probs=probs, maxlen=auglen)
+
+        elif augmode == "random-pcfg":      # works only for CFQ
+            assert dataset.startswith("cfq"), "works only for cfq"
+            probs = {"@PAD@": 0, "@UNK@": 0, "@START@": 0, "@END@": 0, "@MASK@": 0}
+            auginpds = RandomAugDataset(tokenizer.inpvocab.D.keys(), probs=probs, maxlen=auglen)
+            # TODO: PCFGAugDataset from given trees
+        else:
+            raise Exception(f"Unknown augmode: '{augmode}'")
+        noisef = NoiseAdder(p=noisep, plen=(0.8, 0.15, 0.05), repl="@MASK@")
+        auginpds = auginpds.map(lambda x: (noisef(x), x))
+        augoutds = augoutds.map(lambda x: (noisef(x), x))
+        auginpds = auginpds.map(lambda x: (tokenizer.tokenize(x[0], None)[0], tokenizer.tokenize(x[1], None)[0]))
+        augoutds = augoutds.map(lambda x: (tokenizer.tokenize(None, x[0])[1], tokenizer.tokenize(None, x[1])[1]))
+        auginpdl = DataLoader(auginpds, batch_size=batsize, collate_fn=autocollate)
+        augoutdl = DataLoader(augoutds, batch_size=batsize, collate_fn=autocollate)
+    else:
         auginpdl = None
         augoutdl = None
-    elif augmode == "random":
-        auginpds = RandomAugData(inpdic, maxlen=auglen)
-        augoutds = RandomAugData(fldic, maxlen=auglen)
-        auginpdl = DataLoader(auginpds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
-        augoutdl = DataLoader(augoutds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
 
     tt.tock("data loaded")
     tt.msg(f"TRAIN DATA: {len(trainds)}")
@@ -241,7 +365,7 @@ def get_dataloaders(dataset="scan/mcd1", augmode="none", batsize=10, validfrac=0
     tt.tock()
     tt.tock("got dataloaders")
 
-    return traindl, validdl, testdl, auginpdl, augoutdl, fldic, inpdic
+    return traindl, validdl, testdl, auginpdl, augoutdl, tokenizer
 
 
 def tst_tokenizer():
@@ -258,10 +382,145 @@ def tst_scan_loader():
                                                       recompute=False)
 
 def tst_data_loader(dataset="scan/mcd1", batsize=10):
-    traindl, validdl, testdl, fldic, inpdic = get_dataloaders(dataset, batsize=batsize)
+    traindl, validdl, testdl, auginpdl, augoutdl, tokenizer \
+        = get_dataloaders(dataset, augmode="random", batsize=batsize, auglen=50)
+
+    print(len(auginpdl))
+    i = 0
+    for batch in auginpdl:
+        print(batch)
+        for j in range(len(batch[0])):
+            print(tokenizer.inpvocab.tostr(batch[0][j]))
+        if i == 10:
+            break
+        i += 1
+
+
+def try_aug_dataset():
+    d = {"A": 1, "B": 2, "C": 3, "D": 4}
+    ds = RandomAugDataset(d)
+
+    print(len(ds))
+    iter(ds)
+    for i in range(10):
+        print(next(ds))
+    iter(ds)
+    for i in range(10):
+        print(next(ds))
+
+
+def correct_cfq_pcfg(pcfg, D):
+    _variables = set([f"?x{i}" for i in range(100)])
+    _placeholders = set([f"m{i}" for i in range(100)])
+
+    variables = set()
+    placeholders = set()
+    rels = set()
+    entities = set()
+    # rels.add("a")
+    for k in D:
+        kp = None
+        if k in _variables:
+            variables.add(k)
+            continue
+        elif k in _placeholders:
+            placeholders.add(k)
+            continue
+        elif k.startswith("ns:"):
+            kp = k[3:]
+        elif k.startswith("^ns:"):
+            kp = k[4:]
+        else:
+            kp = None
+
+        if kp is not None:
+            if kp.startswith("m."):
+                entities.add(k)
+            elif len(kp.split(".")) == 2:
+                entities.add(k)
+            else:
+                rels.add(k)
+
+    print(f"{len(placeholders)} placeholders")
+    print(f"{len(variables)} variables")
+    print(f"{len(rels)} rels")
+    print(f"{len(entities)} entities")
+
+    print("Remaining:")
+    print(set(D.keys()) - variables - placeholders - entities - rels)
+
+    newproductions = []
+    orprob = 0
+    aprob = 0
+    for production in pcfg.productions():
+        if production.lhs() == Nonterminal("NT-@COND-ARG0") \
+            or production.lhs() == Nonterminal("NT-@COND-ARG1") \
+            or production.lhs() == Nonterminal("NT-@COND-ARG2") \
+            or production.lhs() == Nonterminal("NT-filter-ARG0") \
+            or production.lhs() == Nonterminal("NT-filter-ARG2") \
+            or production.lhs() == Nonterminal("NT-@OR-ARG"):
+            pass
+            if production.lhs() == Nonterminal("NT-@COND-ARG1") \
+                    and Nonterminal("NT-@OR") in production.rhs():
+                newproductions.append(production)
+                orprob = production.prob()
+            elif production.lhs() == Nonterminal("NT-@COND-ARG1") \
+                    and "a" in production.rhs():
+                newproductions.append(production)
+                aprob = production.prob()
+        else:
+            newproductions.append(production)
+
+    # add cond-arg and filter-arg productions manually
+    for entity in entities:
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-@COND-ARG2"), [entity], prob=1/(len(entities)+len(variables)+len(placeholders))))
+    for entity in rels:
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-@COND-ARG1"), [entity], prob=(1-orprob-aprob)/(len(rels))))
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-@OR-ARG"), [entity], prob=1/(len(rels))))
+    for entity in variables:
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-@COND-ARG0"), [entity],
+                                                      prob=1 / (len(variables) + len(placeholders))))
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-@COND-ARG2"), [entity],
+                                                      prob=1 / (len(entities) + len(variables) + len(placeholders))))
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-filter-ARG0"), [entity],
+                                                      prob=1 / (len(variables) + len(placeholders))))
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-filter-ARG2"), [entity],
+                                                      prob=1 / (len(variables) + len(placeholders))))
+    for entity in placeholders:
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-@COND-ARG0"), [entity],
+                                                      prob=1 / (len(variables) + len(placeholders))))
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-@COND-ARG2"), [entity],
+                                                      prob=1 / (len(entities) + len(variables) + len(placeholders))))
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-filter-ARG0"), [entity],
+                                                      prob=1 / (len(variables) + len(placeholders))))
+        newproductions.append(ProbabilisticProduction(Nonterminal("NT-filter-ARG2"), [entity],
+                                                      prob=1 / (len(variables) + len(placeholders))))
+
+    newpcfg = PCFG(pcfg.start(), newproductions)
+    return newpcfg
+
+
+def try_pcfg_builder(dataset="cfq/mcd1", validfrac=0.2, recompute=False):
+    assert dataset.startswith("cfq")
+    trainds, validds, testds, tokenizer = load_ds(dataset=dataset,
+                                                      validfrac=validfrac,
+                                                      recompute=recompute)
+
+    ystrs = []
+    for ex in tqdm(trainds):
+        ystr = tokenizer.outvocab.tostr(ex[1])
+        ystrs.append(lisp_to_tree(ystr))
+        if len(ystrs) == 10000:
+            break
+
+    pcfg = PCFGBuilder(("@OR", "@WHERE", "@AND")).build(ystrs)
+    pcfg = correct_cfq_pcfg(pcfg, tokenizer.outvocab.D)
+
 
 
 if __name__ == '__main__':
     # tst_tokenizer()
     # tst_scan_loader()
-    tst_data_loader()
+    # tst_data_loader()
+    # try_aug_dataset()
+    try_pcfg_builder()
