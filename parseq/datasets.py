@@ -432,7 +432,7 @@ class PCFGBuilder(object):
                         if x.label() not in self.orderless else
                         Tree(f"NT-{x.label()}-ARG", [xe])
                 for i, xe in enumerate(children)]
-            children = [x.label()] + children
+            children = ["(", x.label()] + children + [")"]
             t = Tree(f"NT-{x.label()}", children)
             # t = Tree(f"S", [t])
         else:

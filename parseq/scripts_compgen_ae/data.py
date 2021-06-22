@@ -1,7 +1,7 @@
 import os
 import random
 
-from nltk import Nonterminal, ProbabilisticProduction, PCFG
+from nltk import Nonterminal, ProbabilisticProduction, PCFG, Tree
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import json
@@ -79,16 +79,22 @@ class Tokenizer(object):
 ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY", "(@WHERE", "(@OR", "(@AND", "(@QUERY"}
 
 
-def load_ds(dataset="scan/random", validfrac=0.1, splitseed=42, recompute=False):
+def load_ds(dataset="scan/random", tokenizer="vanilla", validfrac=0.1, splitseed=42, recompute=False):
+    l = locals().copy()
     tt = q.ticktock("data")
+
+    assert tokenizer == "vanilla"
+
+    del l["recompute"]
     tt.tick(f"loading '{dataset}'")
     if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
-        key = f"{dataset}|tokenizer=vanilla"
+        del l["validfrac"]
+        del l["splitseed"]
         print(f"validfrac is ineffective with dataset '{dataset}'")
-    else:
-        key = f"{dataset}|validfrac={validfrac}(seed={splitseed})|tokenizer=vanilla"
 
-    shelfname = os.path.basename(__file__) + ".cache.shelve"
+    key = str(l)
+
+    shelfname = os.path.basename(__file__) + ".ds.cache.shelve"
     if not recompute:
         tt.tick(f"loading from shelf (key '{key}')")
         with shelve.open(shelfname) as shelf:
@@ -97,13 +103,16 @@ def load_ds(dataset="scan/random", validfrac=0.1, splitseed=42, recompute=False)
                 tt.tock("couldn't load from shelf")
             else:
                 shelved = shelf[key]
-                trainex, validex, testex, fldic = shelved["trainex"], shelved["validex"], shelved["testex"], shelved["fldic"]
-                if "inpdic" not in shelved or "tokenizer" not in shelved:
-                    recompute = True
-                inpdic = shelved["inpdic"] if "inpdic" in shelved else None
-                tokenizer = shelved["tokenizer"] if "tokenizer" in shelved else None
+                trainex, validex, testex, tokenizer, validoverlaps, testoverlaps = \
+                    [shelved[x] for x in ["trainex", "validex", "testex", "tokenizer", "validoverlaps", "testoverlaps"]]
                 trainds, validds, testds = Dataset(trainex), Dataset(validex), Dataset(testex)
                 tt.tock("loaded from shelf")
+
+                tt.msg("Stored overlap stats:")
+                tt.msg("Overlap of validation with train:")
+                print(json.dumps(validoverlaps, indent=4))
+                tt.msg("Overlap of test with train:")
+                print(json.dumps(testoverlaps, indent=4))
 
     if recompute:
         tt.tick("loading data")
@@ -153,29 +162,29 @@ def load_ds(dataset="scan/random", validfrac=0.1, splitseed=42, recompute=False)
         # ds = ds.map(lambda x: tokenizer.tokenize(x[0], x[1]) + (x[2],)).cache(True)
         tt.tock("tensorized")
 
+        tt.tock(f"loaded '{dataset}'")
+        tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
+
+        tt.msg("Overlap of validation with train:")
+        validoverlaps = compute_overlaps(trainds, validds)
+        print(json.dumps(validoverlaps, indent=4))
+
+        tt.msg("Overlap of test with train:")
+        testoverlaps = compute_overlaps(trainds, testds)
+        print(json.dumps(testoverlaps, indent=4))
+
         tt.tick("shelving")
         with shelve.open(shelfname) as shelf:
             shelved = {
                 "trainex": trainds.examples,
                 "validex": validds.examples,
                 "testex": testds.examples,
-                "fldic": fldic,
-                "inpdic": inpdic,
                 "tokenizer": tokenizer,
+                "validoverlaps": validoverlaps,
+                "testoverlaps": testoverlaps,
             }
             shelf[key] = shelved
         tt.tock("shelved")
-
-    tt.tock(f"loaded '{dataset}'")
-    tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
-
-    tt.msg("Overlap of validation with train:")
-    overlaps = compute_overlaps(trainds, validds)
-    print(json.dumps(overlaps, indent=4))
-
-    tt.msg("Overlap of test with train:")
-    overlaps = compute_overlaps(trainds, testds)
-    print(json.dumps(overlaps, indent=4))
 
     return trainds, validds, testds, tokenizer
 
@@ -225,7 +234,17 @@ def collate_fn(x, pad_value=0, numtokens=5000):
     return ret
 
 
-class RandomAugDataset(IterableDataset):
+class Seeded(object):
+    def __init__(self, seed=42, **kw):
+        super(Seeded, self).__init__(**kw)
+        self.seed = seed
+        self.reset_seed()
+
+    def reset_seed(self):
+        self.rng = np.random.RandomState(self.seed)
+
+
+class RandomAugDataset(IterableDataset, Seeded):
     def __init__(self, words, probs=None, minlen=1, maxlen=100, seed=42, **kw):
         """
         :param dic:     dictionary mapping tokens to integer ids
@@ -236,12 +255,13 @@ class RandomAugDataset(IterableDataset):
         :param maxlen: maximum length
         :param kw:
         """
-        super(RandomAugDataset, self).__init__(**kw)
+        super(RandomAugDataset, self).__init__(seed=seed, **kw)
         self.words = list(words)
         self.probs = {k: v for k, v in probs.items()}
         if self.probs is None:
             self.probs = {}
 
+        # redistribute remaining probability mass uniformly over words not mentioned in 'probs'
         totprobs = 0
         wordswithprobs = 0
         for word in self.words:
@@ -256,17 +276,17 @@ class RandomAugDataset(IterableDataset):
                     self.probs[k] = prob
         totprobs = sum(self.probs.values())
         assert np.isclose(totprobs, 1.0)
+
         self.minlen = minlen
         self.maxlen = maxlen
         assert self.maxlen > self.minlen
 
-        self.seed = seed
-        self.reset_seed()
-
-    def reset_seed(self):
-        self.rng = np.random.RandomState(self.seed)
+        self._sampled = 0       # number of outside calls to sample()
+        self._rejected = 0      # number of rejections while sampling
 
     def __iter__(self):
+        self._sampled = 0
+        self._rejected = 0
         self.reset_seed()
         return self
 
@@ -274,6 +294,7 @@ class RandomAugDataset(IterableDataset):
         return self.sample()
 
     def sample(self):
+        self._sampled += 1
         # 1. sample a length
         len = int(round(random.random() * (self.maxlen - self.minlen))) + self.minlen
 
@@ -283,6 +304,58 @@ class RandomAugDataset(IterableDataset):
         seq = np.random.choice(toks, len, True, probs)
         seq = " ".join(seq)
         return seq
+
+
+class PCFGAugDataset(IterableDataset, Seeded):
+    def __init__(self, pcfg:PCFG, maxlen=250, seed=42, **kw):
+        super(PCFGAugDataset, self).__init__(seed=seed, **kw)
+        self.pcfg = pcfg
+        self.maxlen = maxlen
+        self._sampled = 0       # number of outside calls to sample()
+        self._rejected = 0      # number of rejections while sampling
+
+    def __iter__(self):
+        self._sampled = 0
+        self._rejected = 0
+        self.reset_seed()
+        return self
+
+    def __next__(self):
+        return self.sample()
+
+    def sample(self, _resample=False)->Tree:
+        """
+        Samples a tree according to the set 'pcfg'.
+        The return tree contains at most 'maxlen' tokens and will not contain non-terminals
+        (all samples longer than specified length are rejected and resampled).
+        :return: nltk.Tree
+        """
+        if _resample is False:
+            self._sampled += 1
+        start = self.pcfg.start()
+        seq = [start]
+        while True:
+            allterminal = True
+            newseq = []
+            for x in seq:
+                if isinstance(x, Nonterminal):
+                    productions = self.pcfg.productions(lhs=x)
+                    prodprobs = [prod.prob() for prod in productions]
+                    sampledprod = np.random.choice(list(range(len(productions))), size=None, replace=False, p=prodprobs)
+                    sampledprod = productions[sampledprod]
+                    for y in sampledprod.rhs():
+                        if isinstance(y, Nonterminal):
+                            allterminal = False
+                        newseq.append(y)
+                else:
+                    newseq.append(x)
+            seq = newseq
+            if allterminal or len(seq) > self.maxlen:
+                break
+        if len(seq) > self.maxlen:
+            self._rejected += 1
+            seq = self.sample(_resample=True)
+        return " ".join(seq).replace("( ", "(")
 
 
 class NoiseAdder(object):
@@ -315,34 +388,95 @@ class NoiseAdder(object):
         return ret
 
 
-def get_dataloaders(dataset="scan/mcd1", augmode="none", batsize=10, validfrac=0.1, recompute=False, auglen=-1, noisep=0.2):
-    tt = q.ticktock("data")
-    tt.tick("getting dataloaders")
-    tt.tick("loading data")
-    trainds, validds, testds, tokenizer = load_ds(dataset=dataset,
-                                                      validfrac=validfrac,
-                                                      recompute=recompute)
+def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", batsize=10, validfrac=0.1,
+                    recompute=False, auglen=-1, noisep=0.2, splitseed=42, seed=42, recomputeds=False):
+    l = locals().copy()
+    tt = q.ticktock("dataload")
 
+    assert tokenizer == "vanilla"
+
+    tt.tick(f"loading '{dataset}'")
+    del l["seed"]
+    del l["recompute"]
+    del l["recomputeds"]
+    del l["batsize"]
+    del l["auglen"]
+    if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
+        del l["validfrac"]
+        del l["splitseed"]
+        print(f"validfrac and splitseed are ineffective with dataset '{dataset}'")
+
+    key = str(l)
     if auglen < 0:
         if dataset.startswith("cfq"):
-            auglen = 175
+            auglen = (50, 250)
         elif dataset.startswith("scan"):
-            auglen = 75
+            auglen = (25, 75)
+    elif isinstance(auglen, int):
+        auglen = (auglen, auglen)
+
+    assert isinstance(auglen, (tuple, list))
+    assert len(auglen) == 2
+
+    tt.tick("loading dataset")
+    trainds, validds, testds, tokenizer = load_ds(dataset=dataset,
+                                                  validfrac=validfrac,
+                                                  recompute=recomputeds,
+                                                  tokenizer=tokenizer)
+    tt.tock("dataset loaded")
+    tt.tick("getting dataloaders")
+
+    shelfname = os.path.basename(__file__) + "dl.cache.shelve"
+    if not recompute:
+        tt.tick(f"loading aug data from shelf (key '{key}')")
+        with shelve.open(shelfname) as shelf:
+            if key not in shelf:
+                recompute = True
+                tt.tock("couldn't load from shelf. recomputing.")
+            else:
+                shelved = shelf[key]
+                auginpd, augoutd = [shelved[x] for x in ["auginpd", "augoutd"]]
+                tt.tock("loaded from shelf")
+
+    if recompute:
+        if augmode == "random":
+            auginpd, augoutd = None, None
+        elif augmode == "random-pcfg":
+            # build pcfg from given training trees
+            tt.tick("getting trees")
+            ystrs = [lisp_to_tree(tokenizer.outvocab.tostr(ex[1])) for ex in tqdm(trainds)]
+            tt.tock("got trees")
+            tt.tick("building pcfg")
+            pcfg = PCFGBuilder(("@OR", "@WHERE", "@AND")).build(ystrs)
+            pcfg = correct_cfq_pcfg(pcfg, tokenizer.outvocab.D)
+            tt.tock("built pcfg")
+            auginpd, augoutd = None, pcfg
+        else:
+            raise Exception(f"Unknown augmode: '{augmode}'")
+
+        tt.tick("shelving")
+        with shelve.open(shelfname) as shelf:
+            shelved = {
+                "auginpd": auginpd,
+                "augoutd": augoutd
+            }
+            shelf[key] = shelved
+        tt.tock("shelved")
 
     if augmode is not None and augmode != "none":
         if augmode == "random":
             probs = {"@PAD@": 0, "@UNK@": 0, "@START@": 0, "@END@": 0, "@MASK@": 0}
-            auginpds = RandomAugDataset(tokenizer.inpvocab.D.keys(), probs=probs, maxlen=auglen)
-            augoutds = RandomAugDataset(tokenizer.outvocab.D.keys(), probs=probs, maxlen=auglen)
-
+            auginpds = RandomAugDataset(tokenizer.inpvocab.D.keys(), probs=probs, maxlen=auglen[0], seed=seed)
+            augoutds = RandomAugDataset(tokenizer.outvocab.D.keys(), probs=probs, maxlen=auglen[1], seed=seed)
         elif augmode == "random-pcfg":      # works only for CFQ
             assert dataset.startswith("cfq"), "works only for cfq"
             probs = {"@PAD@": 0, "@UNK@": 0, "@START@": 0, "@END@": 0, "@MASK@": 0}
-            auginpds = RandomAugDataset(tokenizer.inpvocab.D.keys(), probs=probs, maxlen=auglen)
-            # TODO: PCFGAugDataset from given trees
+            auginpds = RandomAugDataset(tokenizer.inpvocab.D.keys(), probs=probs, maxlen=auglen[0], seed=seed)
+            augoutds = PCFGAugDataset(augoutd, maxlen=auglen[1], seed=seed)
         else:
             raise Exception(f"Unknown augmode: '{augmode}'")
-        noisef = NoiseAdder(p=noisep, plen=(0.8, 0.15, 0.05), repl="@MASK@")
+
+        noisef = NoiseAdder(p=noisep, plen=(0.8, 0.15, 0.05), repl="@MASK@", seed=seed)
         auginpds = auginpds.map(lambda x: (noisef(x), x))
         augoutds = augoutds.map(lambda x: (noisef(x), x))
         auginpds = auginpds.map(lambda x: (tokenizer.tokenize(x[0], None)[0], tokenizer.tokenize(x[1], None)[0]))
@@ -510,12 +644,42 @@ def try_pcfg_builder(dataset="cfq/mcd1", validfrac=0.2, recompute=False):
     for ex in tqdm(trainds):
         ystr = tokenizer.outvocab.tostr(ex[1])
         ystrs.append(lisp_to_tree(ystr))
-        if len(ystrs) == 10000:
+        if len(ystrs) == 10000:     # TODO: remove this to use all examples
             break
 
     pcfg = PCFGBuilder(("@OR", "@WHERE", "@AND")).build(ystrs)
     pcfg = correct_cfq_pcfg(pcfg, tokenizer.outvocab.D)
 
+    ds = PCFGAugDataset(pcfg, seed=42)
+    print(next(iter(ds)))
+
+
+def tst_data_loader_pcfg(dataset="cfq/mcd1", batsize=10):
+    traindl, validdl, testdl, auginpdl, augoutdl, tokenizer \
+        = get_dataloaders(dataset, augmode="random-pcfg", batsize=batsize)
+
+    print(len(auginpdl))
+    i = 0
+    for batch in auginpdl:
+        print(batch)
+        for j in range(len(batch[0])):
+            print(tokenizer.inpvocab.tostr(batch[0][j]))
+        if i == 10:
+            break
+        i += 1
+
+    print(len(augoutdl))
+    i = 0
+    for batch in augoutdl:
+        print(batch)
+        for j in range(len(batch[0])):
+            print(tokenizer.outvocab.tostr(batch[0][j]))
+        if i == 10:
+            break
+        i += 1
+
+    print(f"Sampled: {augoutdl.dataset.rootds._sampled}")
+    print(f"Rejected: {augoutdl.dataset.rootds._rejected}")
 
 
 if __name__ == '__main__':
@@ -523,4 +687,5 @@ if __name__ == '__main__':
     # tst_scan_loader()
     # tst_data_loader()
     # try_aug_dataset()
-    try_pcfg_builder()
+    # try_pcfg_builder()
+    tst_data_loader_pcfg()
