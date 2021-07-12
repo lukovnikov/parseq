@@ -389,7 +389,8 @@ class NoiseAdder(object):
 
 
 def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", batsize=10, validfrac=0.1,
-                    recompute=False, auglen=-1, noisep=0.2, splitseed=42, seed=42, recomputeds=False):
+                    recompute=False, auglen=-1, noisep=0.2, splitseed=42, seed=42, recomputeds=False,
+                    checkpcfg=True):
     l = locals().copy()
     tt = q.ticktock("dataload")
 
@@ -401,6 +402,7 @@ def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", ba
     del l["recomputeds"]
     del l["batsize"]
     del l["auglen"]
+    del l["checkpcfg"]
     if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
         del l["validfrac"]
         del l["splitseed"]
@@ -463,6 +465,16 @@ def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", ba
             shelf[key] = shelved
         tt.tock("shelved")
 
+    if checkpcfg and augmode == "random-pcfg":
+        pcfg = augoutd
+        print("Checking coverage of constructed PCFG")
+        train_check_results = check_pcfg(pcfg, trainds, tokenizer)
+        print(f"PCFG covers {100 * train_check_results['frac']} of training examples.")
+        valid_check_results = check_pcfg(pcfg, validds, tokenizer)
+        print(f"PCFG covers {100 * valid_check_results['frac']} of validation examples.")
+        test_check_results = check_pcfg(pcfg, testds, tokenizer)
+        print(f"PCFG covers {100 * test_check_results['frac']} of test examples.")
+
     if augmode is not None and augmode != "none":
         if augmode == "random":
             probs = {"@PAD@": 0, "@UNK@": 0, "@START@": 0, "@END@": 0, "@MASK@": 0}
@@ -500,6 +512,11 @@ def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", ba
     tt.tock("got dataloaders")
 
     return traindl, validdl, testdl, auginpdl, augoutdl, tokenizer
+
+
+def check_pcfg(pcfg:PCFG, ds, tokenizer):
+    # TODO: check how many training, valid and test examples can be reconstructed based on the pcfg
+    return {'frac': 1.}
 
 
 def tst_tokenizer():
