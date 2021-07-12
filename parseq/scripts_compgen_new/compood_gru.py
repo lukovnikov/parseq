@@ -24,7 +24,7 @@ from transformers import AutoTokenizer, BertModel
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree, tree_to_lisp
 from parseq.rnn1 import Encoder
-from parseq.scripts_compgen_new.compood import evaluate
+from parseq.scripts_compgen_new.compood import evaluate, Inspector
 from parseq.scripts_compgen_new.transformer import TransformerConfig, TransformerStack
 from parseq.scripts_compgen_new.transformerdecoder import TransformerStack as TransformerStackDecoder
 from parseq.vocab import Vocab
@@ -216,6 +216,8 @@ class SeqDecoderBaseline(torch.nn.Module):
 
         self.mcdropout = mcdropout
 
+        self.inspect = False
+
     def forward(self, x, y):
         if self.training:
             return self.train_forward(x, y)
@@ -249,7 +251,8 @@ class SeqDecoderBaseline(torch.nn.Module):
         return loss, acc.float(), elemacc
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-        preds, prednll, maxmaxnll, entropy, total, avgconf, sumnll, stepsused = self.get_prediction(x)
+        preds, prednll, maxmaxnll, entropy, total, avgconf, sumnll, stepsused, allprobs, allmask\
+            = self.get_prediction(x)
 
         def tensor_to_trees(x, vocab:Vocab):
             xstrs = [vocab.tostr(x[i]).replace("@START@", "") for i in range(len(x))]
@@ -315,6 +318,13 @@ class SeqDecoderBaseline(torch.nn.Module):
             ret["maxmaxnll"] = maxmaxnll
             ret["entropy"] = entropy
             ret["avgconf"] = avgconf
+
+            if self.inspect:
+                ret["inspect_x"] = x
+                ret["inspect_gold"] = gold
+                ret["inspect_pred"] = preds[:, 1:]
+                ret["inspect_probs"] = allprobs
+                ret["inspect_mask"] = allmask
         return ret, pred_trees
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
@@ -373,13 +383,17 @@ class SeqDecoderBaseline(torch.nn.Module):
         maxmaxnll = None
         total = None
         entropy = None
+        allprobs = []
+        allmask = []
         while step < self.max_size and not torch.all(ended):
             logits, cache = self.tagger(tokens=y, enc=enc, encmask=encmask, cache=cache)
             probs = torch.softmax(logits, -1)
+            allprobs.append(probs)
             maxprobs, preds = probs.max(-1)
             _entropy = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1)
             _ended = (preds == self.vocab["@END@"])
             ended = ended | _ended
+            allmask.append((~ended).long())
             total = total if total is not None else torch.zeros_like(maxprobs)
             total = total + torch.ones_like(maxprobs) * (~ended).float()
             conf_acc = conf_acc if conf_acc is not None else torch.ones_like(maxprobs)
@@ -398,7 +412,9 @@ class SeqDecoderBaseline(torch.nn.Module):
             newy = torch.cat([newy, preds[:, None]], 1)
 
             y = preds
-        return newy, logmaxprob_acc/total, maxmaxnll, entropy/total, total, conf_acc, logmaxprob_acc, steps_used.float()
+        allprobs = torch.stack(allprobs, 1)
+        allmask = torch.stack(allmask, 1)
+        return newy, logmaxprob_acc/total, maxmaxnll, entropy/total, total, conf_acc, logmaxprob_acc, steps_used.float(), allprobs, allmask
 
 
 # def autocollate(x:Dict, pad_value=0):
@@ -627,7 +643,7 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v3"
+        version="v4"
         ):
 
     settings = locals().copy()
@@ -636,7 +652,10 @@ def run(lr=0.0001,
 
     # torch.backends.cudnn.enabled = False
 
-    wandb.init(project=f"compood_gru_baseline_v3", config=settings, reinit=True)
+    projectname = f"compood_gru_baseline_v3"
+    wandb.init(project=projectname, config=settings, reinit=True)
+    runname = wandb.run.name
+
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -650,6 +669,8 @@ def run(lr=0.0001,
         print(f"maxsize: {maxsize}")
 
     tt = q.ticktock("script")
+    tt.msg(f"Run name: {runname}")
+
     tt.tick("data")
     trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname,
                                                       recompute=recomputedata)
@@ -857,7 +878,9 @@ def run(lr=0.0001,
     print(f"OOD test tree acc: {testres}")
     tt.tock()
 
-    results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device)
+    results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device,
+                       savep=f"{projectname}.{version}.{runname}.outputs.json",
+                       inpdic=inpdic, fldic=fldic)
     print(json.dumps(results, indent=4))
 
     settings.update({"final_train_loss": tloss[0].get_epoch_error()})
@@ -969,10 +992,10 @@ def run_experiment(
 
     def checkconfig(spec):
         if spec["dataset"].startswith("cfq"):
-            if spec["epochs"] != 25 or spec["batsize"] != 128:
+            if spec["epochs"] not in (25, 1, 0) or spec["batsize"] != 128:
                 return False
         elif spec["dataset"].startswith("scan"):
-            if spec["epochs"] != 40 or spec["batsize"] != 256:
+            if spec["epochs"] not in (40, 1, 0) or spec["batsize"] != 256:
                 return False
         return True
 

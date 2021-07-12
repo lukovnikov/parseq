@@ -32,6 +32,27 @@ import plotly.express as px
 import pandas as pd
 
 
+class Inspector(object):
+    def __init__(self, **kw):
+        super(Inspector, self).__init__(**kw)
+        self.epochs = []
+        self.is_on = False
+        self.new_epoch()
+
+    def turn_on(self):
+        self.is_on = True
+
+    def turn_off(self):
+        self.is_on = False
+
+    def add_batch(self, data):
+        self.epochs[-1].append(data)
+
+    def new_epoch(self):
+        self.epochs.append([])
+
+
+
 def lcs(X, Y):
     # find the length of the strings
     m = len(X)
@@ -1035,11 +1056,55 @@ def cat_dicts(x:List[Dict]):
         for k, v in xe.items():
             out[k].append(v)
     for k, v in out.items():
-        out[k] = torch.cat(v, 0)
+        if not k.startswith("inspect_"):
+            out[k] = torch.cat(v, 0)
     return out
 
 
-def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu")):
+def save_outputs(idouts, oodouts, inpdic, fldic):
+    """
+    :param idouts:       contains output dictionary for in-distribution data
+    :param oodouts:      contains output dictionary for out-of-distribution data
+    :return:    {"id": {...}, "ood": {...}} of transformed outputs
+    """
+    ret = {"id": save_outputs_one(idouts, inpdic, fldic),
+           "ood": save_outputs_one(oodouts, inpdic, fldic)}
+    return ret
+
+
+def save_outputs_one(outs, inpdic, fldic):
+    """
+    :param outs:    dictionary containing "inspect_x", "inspect_gold", "inspect_pred", "inspect_probs", "inspect_mask"
+    :return:        list of dicts with keys     "input":List[str],
+                                                "gold":List[str],
+                                                "pred":List[str],
+                                                "entropies": List[float]
+                                                "bestprobs": List[float] ]
+    """
+    ret = []
+    for batch_id in range(len(outs["inspect_x"])):
+        for i in range(len(outs["inspect_x"][batch_id])):
+            inp_tokens = inpdic.tostr(outs["inspect_x"][batch_id][i]).split()
+            gold_tokens = fldic.tostr(outs["inspect_gold"][batch_id][i]).split()
+            pred_tokens = fldic.tostr(outs["inspect_pred"][batch_id][i]).split()
+            mask = outs["inspect_mask"][batch_id][i]
+            numtokens = mask.sum().item()
+            assert numtokens == len(pred_tokens)
+            probs = outs["inspect_probs"][batch_id][i]
+            entropies = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1).detach().cpu().numpy()[:numtokens]
+            bestprobs = probs.max(-1)[0].detach().cpu().numpy()[:numtokens]
+            ret.append({
+                "input": inp_tokens,
+                "gold": gold_tokens,
+                "pred": pred_tokens,
+                "entropies": [float(n) for n in entropies],
+                "bestprobs": [float(n) for n in bestprobs],
+            })
+    return ret
+
+
+def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu"),
+             savep=None, inpdic=None, fldic=None):
     """
     :param model:       Decoder model
     :param idds:     dataset with in-distribution examples
@@ -1049,10 +1114,12 @@ def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu")):
     iddl = DataLoader(idds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
     ooddl = DataLoader(oodds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
 
-    _, idouts = q.eval_loop(model, iddl, device=device)
-    idouts = cat_dicts(idouts[0])
-    _, oodouts = q.eval_loop(model, ooddl, device=device)
-    oodouts = cat_dicts(oodouts[0])
+    model.inspect = True
+
+    _, _idouts = q.eval_loop(model, iddl, device=device)
+    idouts = cat_dicts(_idouts[0])
+    _, _oodouts = q.eval_loop(model, ooddl, device=device)
+    oodouts = cat_dicts(_oodouts[0])
 
     # decnll_res = compute_auc_and_fprs(idouts["decnll"], oodouts["decnll"], "decnll")
     # sumnll_res = compute_auc_and_fprs(idouts["sumnll"], oodouts["sumnll"], "sumnll")
@@ -1078,6 +1145,13 @@ def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu")):
     print(rdf)
 
     wandb.log({"calibtable": wandb.Table(data=rdf, columns=["count", "treeacc"])})
+
+    if savep is not None and inpdic is not None and fldic is not None:
+        print("Saving outputs")
+        analysis = save_outputs(idouts, oodouts, inpdic, fldic)
+        with open(savep, "w") as f:
+            json.dump(analysis, f, indent=3)
+            print("Saved outputs")
 
     return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res, "sumnll": sumnll_res}
 
