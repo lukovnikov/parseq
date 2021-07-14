@@ -401,6 +401,8 @@ class SeqDecoderBaseline(torch.nn.Module):
 
         self.mcdropout = mcdropout
 
+        self.inspect = False
+
     def forward(self, x, y):
         if self.training:
             return self.train_forward(x, y)
@@ -408,6 +410,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             return self.test_forward(x, y)
 
     def compute_loss(self, logits, tgt):
+
         """
         :param logits:      (batsize, seqlen, vocsize)
         :param tgt:         (batsize, seqlen)
@@ -434,7 +437,8 @@ class SeqDecoderBaseline(torch.nn.Module):
         return loss, acc.float(), elemacc
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-        preds, prednll, maxmaxnll, entropy, total, avgconf, sumnll, stepsused = self.get_prediction(x)
+        preds, prednll, maxmaxnll, entropy, total, avgconf, sumnll, stepsused, allprobs, allmask\
+            = self.get_prediction(x)
 
         def tensor_to_trees(x, vocab:Vocab):
             xstrs = [vocab.tostr(x[i]).replace("@START@", "") for i in range(len(x))]
@@ -500,6 +504,13 @@ class SeqDecoderBaseline(torch.nn.Module):
             ret["maxmaxnll"] = maxmaxnll
             ret["entropy"] = entropy
             ret["avgconf"] = avgconf
+
+            if self.inspect:
+                ret["inspect_x"] = x
+                ret["inspect_gold"] = gold
+                ret["inspect_pred"] = preds[:, 1:]
+                ret["inspect_probs"] = allprobs
+                ret["inspect_mask"] = allmask
         return ret, pred_trees
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
@@ -548,12 +559,15 @@ class SeqDecoderBaseline(torch.nn.Module):
         maxmaxnll = None
         total = None
         entropy = None
+        allprobs = []
+        allmask = []
         while step < self.max_size and not torch.all(ended):
             y = newy if newy is not None else y
             # run tagger
             # y = torch.cat([y, yend], 1)
             logits, cache = self.tagger(tokens=y, enc=enc, encmask=encmask, cache=cache)
             probs = torch.softmax(logits[:, -1], -1)
+            allprobs.append(probs)
             maxprobs, preds = probs.max(-1)
             _entropy = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1)
             newy = torch.cat([y, preds[:, None]], 1)
@@ -561,6 +575,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             newy = torch.where(ended[:, None], y__, newy)     # prevent terminated examples from changing
             _ended = (preds == self.vocab["@END@"])
             ended = ended | _ended
+            allmask.append((~ended).long())
             total = total if total is not None else torch.zeros_like(maxprobs)
             total = total + torch.ones_like(maxprobs) * (~ended).float()
             conf_acc = conf_acc if conf_acc is not None else torch.ones_like(maxprobs)
@@ -574,7 +589,9 @@ class SeqDecoderBaseline(torch.nn.Module):
             entropy = entropy + _entropy * (~ended).float()
             step += 1
             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
-        return newy, maxprob_acc/total, maxmaxnll, entropy/total, total, conf_acc, maxprob_acc, steps_used.float()
+        allprobs = torch.stack(allprobs, 1)
+        allmask = torch.stack(allmask, 1)
+        return newy, maxprob_acc/total, maxmaxnll, entropy/total, total, conf_acc, maxprob_acc, steps_used.float(), allprobs, allmask
 
 
 # def autocollate(x:Dict, pad_value=0):
@@ -803,14 +820,17 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v3"
+        version="v4"
         ):
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compood_baseline_v3", config=settings, reinit=True)
+    projectname = f"compood_baseline_v3"
+    wandb.init(project=projectname, config=settings, reinit=True)
+    runname = wandb.run.name
+
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -824,6 +844,7 @@ def run(lr=0.0001,
         print(f"maxsize: {maxsize}")
 
     tt = q.ticktock("script")
+    tt.msg(f"Run name: {runname}")
     tt.tick("data")
     trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recomputedata)
 
@@ -989,7 +1010,7 @@ def run(lr=0.0001,
         validfs = [trainevalepoch, validepoch]
     else:
         validfs = [validepoch]
-    validfs = validfs + [indtestepoch, oodtestepoch]
+    # validfs = validfs + [indtestepoch, oodtestepoch]
 
     # results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device)
     # print(json.dumps(results, indent=4))
@@ -1030,7 +1051,9 @@ def run(lr=0.0001,
     print(f"OOD test tree acc: {testres}")
     tt.tock()
 
-    results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device)
+    results = evaluate(decoder, indtestds, testds, batsize=batsize, device=device,
+                       savep=f"{projectname}.{version}.{runname}.outputs.json",
+                       inpdic=inpdic, fldic=fldic)
     print(json.dumps(results, indent=4))
 
     settings.update({"final_train_loss": tloss[0].get_epoch_error()})
@@ -1089,7 +1112,7 @@ def save_outputs_one(outs, inpdic, fldic):
             pred_tokens = fldic.tostr(outs["inspect_pred"][batch_id][i]).split()
             mask = outs["inspect_mask"][batch_id][i]
             numtokens = mask.sum().item()
-            assert numtokens == len(pred_tokens)
+            # assert numtokens == len(pred_tokens)
             probs = outs["inspect_probs"][batch_id][i]
             entropies = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1).detach().cpu().numpy()[:numtokens]
             bestprobs = probs.max(-1)[0].detach().cpu().numpy()[:numtokens]
@@ -1151,7 +1174,7 @@ def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu"),
         analysis = save_outputs(idouts, oodouts, inpdic, fldic)
         with open(savep, "w") as f:
             json.dump(analysis, f, indent=3)
-            print("Saved outputs")
+            print(f"Saved outputs in {savep}")
 
     return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res, "sumnll": sumnll_res}
 
@@ -1333,10 +1356,10 @@ def run_experiment(
 
     def checkconfig(spec):
         if spec["dataset"].startswith("cfq"):
-            if spec["epochs"] != 20:
+            if spec["epochs"] not in (20, 1, 0):
                 return False
         elif spec["dataset"].startswith("scan"):
-            if spec["epochs"] != 25:
+            if spec["epochs"] not in (25, 1, 0):
                 return False
         return True
 
