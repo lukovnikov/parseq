@@ -11,7 +11,7 @@ import torch.nn.functional as F
 class Encoder(nn.Module):
     """Encoder"""
     def __init__(self, vocsize, embed_dim=256, hidden_size=512,
-                 num_layers=2, dropout=0.5, bidirectional=True):
+                 num_layers=2, dropout=0.5, bidirectional=True, useskip=False):
         super().__init__()
         self.num_layers = num_layers
         self.bidirectional = bidirectional
@@ -28,6 +28,7 @@ class Encoder(nn.Module):
             bidirectional=bidirectional
         )
         self.linear_out = nn.Linear(hidden_size * 2, hidden_size)
+        self.useskip = useskip
 
     def forward(self, src_tokens, **kwargs):
         """
@@ -56,7 +57,7 @@ class Encoder(nn.Module):
 
         packed_outputs, hidden = self.gru(packed_x) # hidden: (n_layers * num_directions, batch, hidden_size)
 
-        x, _ = nn.utils.rnn.pad_packed_sequence(packed_outputs, batch_first=True)
+        x2, _ = nn.utils.rnn.pad_packed_sequence(packed_outputs, batch_first=True)
         # x = F.dropout(x, p=self.dropout, training=self.training)
 
         # input hidden for decoder is the final encoder hidden state
@@ -65,9 +66,12 @@ class Encoder(nn.Module):
         last_backward = hidden[-1, :, :]
         hidden = torch.cat((last_forward, last_backward), dim=1)
 
+        if self.useskip:
+            x2 = x2 + x
+
         hidden = torch.tanh(self.linear_out(hidden)) # (batch, enc_hid_dim)
 
-        return x, hidden
+        return x2, hidden
 
 
 class Attention(nn.Module):

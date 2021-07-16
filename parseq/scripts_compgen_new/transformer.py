@@ -566,6 +566,10 @@ class TransformerStack(TransformerPreTrainedModel):
 
         if isinstance(self.rel_emb, nn.Module):
             self.rel_emb = torch.nn.ModuleList([self.rel_emb for _ in range(config.num_layers)])
+        elif isinstance(self.rel_emb, (list, tuple)):
+            assert len(self.rel_emb) == config.num_layers
+            assert isinstance(self.rel_emb[0], nn.Module)
+            self.rel_emb = torch.nn.ModuleList(self.rel_emb)
         elif self.rel_emb is False or self.rel_emb is None:
             self.rel_emb = [None for _ in range(config.num_layers)]
 

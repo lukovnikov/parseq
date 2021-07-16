@@ -562,7 +562,7 @@ class TransformerStack(TransformerPreTrainedModel):
         If rel_emb is False or None, no relative positioning added
         If rel_emb is int: layer-wise separate embeddings created at every layer
         If rel_emb is Module: module will be shared as relpos embeddings across all layers
-        If rel_emb is List[Module]
+        If rel_emb is List[Module]: modules will be distributed over layers
         """
         super().__init__(config)
         self.output_attentions = config.output_attentions
@@ -574,6 +574,10 @@ class TransformerStack(TransformerPreTrainedModel):
 
         if isinstance(self.rel_emb, nn.Module):
             self.rel_emb = torch.nn.ModuleList([self.rel_emb for _ in range(config.num_layers)])
+        elif isinstance(self.rel_emb, (list, tuple)):
+            assert len(self.rel_emb) == config.num_layers
+            assert isinstance(self.rel_emb[0], nn.Module)
+            self.rel_emb = torch.nn.ModuleList(self.rel_emb)
         elif self.rel_emb is False or self.rel_emb is None:
             self.rel_emb = [None for _ in range(config.num_layers)]
 

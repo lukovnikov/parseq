@@ -104,7 +104,7 @@ class WordDropout(torch.nn.Module):
 class GRUDecoderCell(torch.nn.Module):
     def __init__(self, dim, vocab:Vocab=None, inpvocab:Vocab=None, numlayers:int=6,
                  mode="normal",
-                 dropout:float=0., worddropout:float=0., **kw):
+                 dropout:float=0., worddropout:float=0., useskip=False, **kw):
         super(GRUDecoderCell, self).__init__(**kw)
         self.vocab = vocab
         self.inpvocab = inpvocab
@@ -123,11 +123,13 @@ class GRUDecoderCell(torch.nn.Module):
         # self.attn_linK = torch.nn.Linear(self.dim, self.dim)
         # self.attn_linV = torch.nn.Linear(self.dim, self.dim)
 
+        self.useskip = useskip
+
         self.preout = torch.nn.Linear(self.dim + self.dim, self.dim)
         self.out = torch.nn.Linear(self.dim, self.vocabsize+3)
 
         inpvocabsize = inpvocab.number_of_ids()
-        self.encoder_model = Encoder(inpvocabsize+5, self.dim, int(self.dim/2), num_layers=numlayers, dropout=dropout)
+        self.encoder_model = Encoder(inpvocabsize+5, self.dim, int(self.dim/2), num_layers=numlayers, dropout=dropout, useskip=self.useskip)
 
         self.adapter = None
         self.inpworddropout = WordDropout(worddropout, self.inpvocab[self.inpvocab.masktoken],
@@ -637,6 +639,7 @@ def run(lr=0.0001,
         bertname="bert-base-uncased",
         testcode=False,
         userelpos=False,
+        useskip=False,
         gpu=-1,
         evaltrain=False,
         trainonvalid=False,
@@ -716,7 +719,7 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("model")
-    cell = GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout, mode=mode)
+    cell = GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout, mode=mode, useskip=useskip)
     decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, mode=mode, mcdropout=mcdropout)
     # print(f"one layer of decoder: \n {cell.decoder.block[0]}")
     print(decoder)
@@ -934,6 +937,7 @@ def run_experiment(
         bertname="vanilla",
         testcode=False,
         userelpos=False,
+        useskip=False,
         trainonvalidonly=False,
         evaltrain=False,
         gpu=-1,

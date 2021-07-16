@@ -82,10 +82,14 @@ class TransformerEmbeddings(torch.nn.Module):
     """
 
     def __init__(self, vocab_size, hidden_size, dropout=0., pad_token_id=0, max_position_embeddings=512,
-                 layer_norm_eps=1e-12, useabspos=True):
+                 layer_norm_eps=1e-12, useabspos=True, usesinpos=False):
         super().__init__()
         self.word_embeddings = torch.nn.Embedding(vocab_size, hidden_size, padding_idx=pad_token_id)
-        self.position_embeddings = torch.nn.Embedding(max_position_embeddings, hidden_size)
+
+        if usesinpos:
+            self.position_embeddings = PositionalEncoding(hidden_size, max_position_embeddings)
+        else:
+            self.position_embeddings = torch.nn.Embedding(max_position_embeddings, hidden_size)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
@@ -122,8 +126,9 @@ class TransformerEmbeddings(torch.nn.Module):
 
 class BasicRelPosEmb(torch.nn.Module):
     ## Note: Even if this is shared across layers, keep the execution separate between layers because attention weights are different
-    def __init__(self, dim, rng=10, **kw):
+    def __init__(self, dim, rng=10, dropout=0., **kw):
         super(BasicRelPosEmb, self).__init__(**kw)
+        self.dropout = torch.nn.Dropout(dropout)
 
         self.D = ["@PAD@"] + [str(i-rng) for i in range(rng)] + [str(i) for i in range(rng+1)]
         self.D = dict(zip(self.D, range(len(self.D))))
@@ -161,6 +166,7 @@ class BasicRelPosEmb(torch.nn.Module):
         for n in range(relpos.size(-1)):
             indexes = torch.arange(0, self.emb.num_embeddings, device=query.device).long()
             embs = self.emb(indexes)# (numindexes, dim)
+            embs = self.dropout(embs)
             embs = embs.view(embs.size(0), query.size(1), query.size(-1))        # (numindexes, numheads, dimperhead)
             relpos_ = relpos[:, :, :, n]
             scores = torch.einsum("bhqd,nhd->bhqn", query, embs)  # (batsize, numheads, qlen, numindexes)
@@ -208,6 +214,7 @@ class BasicRelPosEmb(torch.nn.Module):
 
             # get embeddings and update ret
             embs = self.embv(relpos_unique).view(relpos_unique.size(0), numheads, -1)        # (numunique, numheads, dimperhead)
+            embs = self.dropout(embs)
             relposemb = torch.einsum("bhqn,nhd->bhqd", gathered, embs)
             if ret is None:
                 ret = torch.zeros_like(relposemb)
@@ -231,8 +238,28 @@ class WordDropout(torch.nn.Module):
         return x
 
 
+class PositionalEncoding(torch.nn.Module):
+    "Implement the PE function."
+
+    def __init__(self, d_model, maxlen=5000):
+        super(PositionalEncoding, self).__init__()
+
+        # Compute the positional encodings once in log space.
+        pe = torch.zeros(maxlen, d_model)
+        position = torch.arange(0, maxlen).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) *
+                             -(math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        posenc = self.pe.index_select(0, x)
+        return posenc
+
+
 class TransformerDecoderCell(torch.nn.Module):
-    def __init__(self, dim, vocab:Vocab=None, inpvocab:Vocab=None, numlayers:int=6, numheads:int=6, userelpos=False, useabspos=True,
+    def __init__(self, dim, vocab:Vocab=None, inpvocab:Vocab=None, numlayers:int=6, numheads:int=6, userelpos=False, usesinpos=False, useabspos=True,
                  relposmode="basic", relposrng=10, mode="normal",
                  dropout:float=0., worddropout:float=0., maxpos=512, bertname="bert-base-uncased", **kw):
         super(TransformerDecoderCell, self).__init__(**kw)
@@ -243,6 +270,7 @@ class TransformerDecoderCell(torch.nn.Module):
         self.userelpos = userelpos
         self.relposrng = relposrng
         self.useabspos = useabspos
+        self.usesinpos = usesinpos
         self.mode = mode
 
         decconfig = TransformerConfig(vocab_size=self.vocabsize, d_model=self.dim, d_ff=self.dim * 4,
@@ -254,15 +282,20 @@ class TransformerDecoderCell(torch.nn.Module):
         self.relposemb = None
         if self.userelpos is True:
             if relposmode == "basic":
-                self.relposemb = BasicRelPosEmb(self.dim, relposrng)
-            # elif relposmode == "mod":
-            #     self.relposemb = ModRelPosEmb(self.dim, relposrng, levels=4)
+                print("using basic relative position encoding")
+                # self.relposemb = [BasicRelPosEmb(self.dim, relposrng, dropout=dropout) for _ in range(decconfig.num_layers)]
+                self.relposemb = BasicRelPosEmb(self.dim, relposrng, dropout=dropout)
             else:
                 raise Exception(f"Unrecognized relposmode '{relposmode}'")
 
         self.absposemb = None
         if self.relposemb is None or self.useabspos is True:
-            self.absposemb = torch.nn.Embedding(maxpos, decconfig.d_model)
+            if self.usesinpos:
+                print("using sinusoid absolute position encoding")
+                self.absposemb = PositionalEncoding(decconfig.d_model, maxlen=maxpos)
+            else:
+                print("using learned absolute position encoding")
+                self.absposemb = torch.nn.Embedding(maxpos, decconfig.d_model)
 
         decoder_config = deepcopy(decconfig)
         decoder_config.is_decoder = True
@@ -282,9 +315,8 @@ class TransformerDecoderCell(torch.nn.Module):
         if self.bertname.startswith("none") or self.bertname == "vanilla":
             if self.userelpos is True:
                 if relposmode == "basic":
-                    self.encrelposemb = BasicRelPosEmb(self.dim, relposrng)
-                # elif relposmode == "mod":
-                #     self.relposemb = ModRelPosEmb(self.dim, relposrng, levels=4)
+                    # self.encrelposemb = [BasicRelPosEmb(self.dim, relposrng, dropout=dropout) for _ in range(numlayers)]
+                    self.encrelposemb = BasicRelPosEmb(self.dim, relposrng, dropout=dropout)
                 else:
                     raise Exception(f"Unrecognized relposmode '{relposmode}'")
             bname = "bert" + self.bertname[4:]
@@ -299,7 +331,7 @@ class TransformerDecoderCell(torch.nn.Module):
             encconfig = TransformerConfig(vocab_size=inpvocabsize, d_model=self.dim, d_ff=self.dim * 4,
                                           d_kv=int(self.dim/numheads),
                                           num_layers=numlayers, num_heads=numheads, dropout_rate=dropout)
-            encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout, max_position_embeddings=maxpos, useabspos=useabspos)
+            encemb = TransformerEmbeddings(encconfig.vocab_size, encconfig.d_model, dropout=dropout, max_position_embeddings=maxpos, useabspos=useabspos, usesinpos=usesinpos)
             self.encoder_model = TransformerStack(encconfig, encemb, rel_emb=self.encrelposemb)
         else:
             self.encoder_model = BertModel.from_pretrained(self.bertname,
@@ -813,6 +845,7 @@ def run(lr=0.0001,
         worddropout=0.,
         bertname="bert-base-uncased",
         testcode=False,
+        usesinpos=False,
         userelpos=False,
         gpu=-1,
         evaltrain=False,
@@ -851,6 +884,7 @@ def run(lr=0.0001,
 
     if "mcd" in dataset.split("/")[1]:
         print(f"Setting patience to -1 because MCD (was {patience})")
+        print(f"This means there is no early stopping.")
         patience = -1
 
     # if smalltrainvalid:
@@ -890,7 +924,7 @@ def run(lr=0.0001,
     tt.tick("model")
     cell = TransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads,
                                   dropout=dropout, worddropout=worddropout, mode=mode,
-                                  bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
+                                  bertname=bertname, userelpos=userelpos, usesinpos=usesinpos, useabspos=not userelpos)
     decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, mode=mode, mcdropout=mcdropout)
     print(f"one layer of decoder: \n {cell.decoder.block[0]}")
     tt.tock()
@@ -1295,6 +1329,7 @@ def run_experiment(
         bertname="vanilla",
         testcode=False,
         userelpos=False,
+        usesinpos=False,
         trainonvalidonly=False,
         evaltrain=False,
         gpu=-1,
@@ -1356,10 +1391,10 @@ def run_experiment(
 
     def checkconfig(spec):
         if spec["dataset"].startswith("cfq"):
-            if spec["epochs"] not in (20, 1, 0):
+            if spec["epochs"] not in (20, 1, 0, 30, 15, 10):
                 return False
         elif spec["dataset"].startswith("scan"):
-            if spec["epochs"] not in (25, 1, 0):
+            if spec["epochs"] not in (25, 1, 0, 30, 15, 10):
                 return False
         return True
 
