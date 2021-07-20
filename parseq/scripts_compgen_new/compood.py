@@ -254,7 +254,7 @@ class PositionalEncoding(torch.nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        posenc = self.pe.index_select(0, x)
+        posenc = self.pe[x]
         return posenc
 
 
@@ -679,7 +679,8 @@ class Tokenizer(object):
 ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY", "(@WHERE", "(@OR", "(@AND", "(@QUERY"}
 
 
-def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="bert-base-uncased"):
+def load_ds(dataset="scan/random", validfrac=0.1, recompute=False,
+            bertname="bert-base-uncased", jumpdiffpos=False):
     tt = q.ticktock("data")
     tt.tick(f"loading '{dataset}'")
     if bertname.startswith("none"):
@@ -762,6 +763,26 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, bertname="ber
             }
             shelf[key] = shelved
         tt.tock("shelved")
+
+    if dataset == "scan/add_jump" and jumpdiffpos:
+        # change primitive jump examples to examples where jump occurs on different positions
+        maxlen = 0
+        newexamples = []
+        jumpinp = torch.tensor([inpdic["@START@"], inpdic["jump"], inpdic["@END@"]])
+        jumpout = torch.tensor([fldic["(@R@"], fldic["I_JUMP"], fldic[")"]])
+        for inp, out in trainds.examples:
+            maxlen = max(maxlen, len(inp), len(out))
+        for inp, out in trainds.examples:
+            if inp.shape == jumpinp.shape and out.shape == jumpout.shape \
+                    and torch.all(inp == jumpinp) and torch.all(out == jumpout):
+                # this is a primitive jump example
+                numbermasks = random.sample(range(0, maxlen-3), 1)[0]
+                newinp = [inpdic["@START@"]] + [inpdic["@PAD@"]] * numbermasks + [inpdic["jump"]] + [inpdic["@END@"]]
+                newout = [fldic["(@R@"]] + [fldic["@PAD@"]] * numbermasks + [fldic["I_JUMP"]] + [fldic[")"]]
+                newexamples.append((torch.tensor(newinp), torch.tensor(newout)))
+            else:
+                newexamples.append((inp, out))
+        trainds._examples = newexamples
 
     tt.tock(f"loaded '{dataset}'")
     tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
@@ -847,6 +868,7 @@ def run(lr=0.0001,
         testcode=False,
         usesinpos=False,
         userelpos=False,
+        jumpdiffpos=False,
         gpu=-1,
         evaltrain=False,
         trainonvalid=False,
@@ -879,7 +901,7 @@ def run(lr=0.0001,
     tt = q.ticktock("script")
     tt.msg(f"Run name: {runname}")
     tt.tick("data")
-    trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recomputedata)
+    trainds, validds, testds, fldic, inpdic = load_ds(dataset=dataset, validfrac=validfrac, bertname=bertname, recompute=recomputedata, jumpdiffpos=jumpdiffpos)
 
 
     if "mcd" in dataset.split("/")[1]:
@@ -1330,6 +1352,7 @@ def run_experiment(
         testcode=False,
         userelpos=False,
         usesinpos=False,
+        jumpdiffpos=False,
         trainonvalidonly=False,
         evaltrain=False,
         gpu=-1,
