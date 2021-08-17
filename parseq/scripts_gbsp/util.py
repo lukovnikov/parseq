@@ -200,12 +200,36 @@ def tst_supervise_edges_ones(N=8):
     print((weights*out).sum().item())
 
 
+def tst_supervise_edges_interleave(num=2, reps=6):
+    s = " ".join([f"({i} ({i} " for i in range(1, num+1)])
+    print(s)
+    s = s * (reps//2) + " ".join([")" * (reps * num)])
+    print(s)
+
+    tree = Tree.fromstring(s)
+    treemaplabel(tree, lambda x: int(x))
+    print(tree)
+    weights = torch.rand(num*reps, num*reps)
+    labels = [[i for i in range(1, num+1)] for _ in range(reps)]
+    labels = [i for ii in labels for i in ii]
+    labels = torch.tensor(labels).long()
+    print(labels)
+
+    out, score = supervise_edges(tree, weights, labels)
+    print(out)
+    print(weights)
+    print(score)
+    print((weights*out).sum().item())
+
+
+
 if __name__ == '__main__':
     # tst_supervise_edges_line()
     # tst_supervise_edges_multichild()
     # tst_supervise_edges_simple_ambig()
     # tst_supervise_edges_abbaa()
     N = 10
-    res = timeit(partial(tst_supervise_edges_ones, 8), number=N)
+    # res = timeit(partial(tst_supervise_edges_ones, 8), number=N)
+    res = timeit(partial(tst_supervise_edges_interleave, 1, 8), number=N)
     print("results")
     print(res/N)
