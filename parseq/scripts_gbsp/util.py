@@ -3,6 +3,7 @@ import os
 import time
 from copy import deepcopy, copy
 from functools import partial
+from multiprocessing import Pool
 from timeit import timeit
 from typing import List
 
@@ -135,6 +136,27 @@ def load_geo(split="orig", inptokenizer="vanilla", batsize=16):
     return (tdl, vdl, xdl), (inpvocab, outvocab, outedgevocab)
 
 
+def supervise_edges_batch(trees:List[Tree], scores:torch.Tensor, labels:torch.LongTensor, pool=None):
+    """
+    Parallel computation of batch supervision
+    :param trees:
+    :param scores:
+    :param labels:
+    :return:
+    """
+    # with Pool() as pool:
+    # pool = Pool(4)
+    args = list(zip(trees, scores.detach().cpu().unbind(0), labels.detach().cpu().unbind(0)))
+    if pool is not None:
+        ret = pool.starmap(supervise_edges, args)
+    else:
+        ret = [supervise_edges(*argses) for argses in args]
+    outs, masks, scores = zip(*ret)
+    outs = torch.stack(outs, 0)
+    masks = torch.stack(masks, 0)
+    return outs, masks, scores
+
+
 def supervise_edges(tree:Tree, scores:torch.Tensor, labels:torch.LongTensor):
     """
     Computes supervision for edge structure decisions.
@@ -149,23 +171,29 @@ def supervise_edges(tree:Tree, scores:torch.Tensor, labels:torch.LongTensor):
     assert labels.dtype == torch.long
     assert scores.dim() == 2
     assert scores.dtype == torch.float
+    origsize = scores.size(0)
+    treesize = tree_size(tree)
+    _scores = scores[:treesize, :treesize]
+    _labels = labels[:treesize]
 
     # build dictionary mapping labels to positions in the matrix
     label2pos = {}
-    labels = list(labels.cpu().numpy())
-    for i, k in enumerate(labels):
+    _labels = list(_labels.cpu().numpy())
+    for i, k in enumerate(_labels):
         if k not in label2pos:
             label2pos[k] = set()
         label2pos[k].add(i)
 
     print(label2pos)
 
-    bestscore, bestimpl, _label2pos, bound = _supervise_edges_rec(None, tree, scores, label2pos)
+    bestscore, bestimpl, _label2pos, bound = _supervise_edges_rec(None, tree, _scores, label2pos)
 
     out = torch.zeros_like(scores)
     for (a, b) in bestimpl:
         out[a, b] = 1
-    return out, bestscore
+    mask = torch.zeros_like(scores).bool()
+    mask[:treesize, :treesize] = 1
+    return out, mask, bestscore
 
 
 def _supervise_edges_rec(frompos, tree, scores, label2pos, fromscore=0, bound=np.infty):
@@ -378,14 +406,19 @@ def tst_geo_supervise_edges():
     dls, vocabs = load_geo("len")
     print(len(dls))
 
-
+    # pool = Pool(8)
+    pool = None
     maxambis = []
     start = time.time()
     for dl in dls:
         for batch in dl:
             # print(batch)
             examples = list(zip(*batch))
+            batsize = len(examples)
             # print(examples[0])
+            treearg = []
+            maxsize = 0
+            labelsarg = []
             for example in examples:
                 labels, tree = example[1], example[2]
                 label_multiplicities = build_label_multiplicities(tree)
@@ -397,19 +430,20 @@ def tst_geo_supervise_edges():
                     print(tree)
                     maxambis.append(maxambi)
                 treesize = tree_size(tree)
-                weights = torch.ones(treesize, treesize)
+                # weights = torch.ones(treesize, treesize)
                 _labels = []
                 _labels = [label for label in labels for _ in range(label_multiplicities[label])]
                 _labels = torch.tensor(_labels)
-                out, score = supervise_edges(tree, weights, _labels)
+                treearg.append(tree)
+                labelsarg.append((_labels,))
+                maxsize = max(maxsize, treesize)
+            weightsarg = torch.ones(batsize, maxsize, maxsize)
+            labelsarg = autocollate(labelsarg)[0]
+            out, masks, score = supervise_edges_batch(treearg, weightsarg, labelsarg, pool=pool)
     end = time.time()
-    print(f"Done in {end-start} seconds.")
+    print(f"Done in {end-start:.3f} seconds.")
     print(f"Number of ambi: {len(maxambis)}, max ambi: {max(maxambis)}")
     print(vocabs[1].D)
-
-
-
-
 
 
 if __name__ == '__main__':
