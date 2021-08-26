@@ -8,8 +8,12 @@ from timeit import timeit
 from typing import List
 
 import numpy as np
+import psutil
+import ray
 from nltk import Tree
 import torch
+from scipy.optimize import linear_sum_assignment
+
 from parseq.datasets import Dataset, autocollate
 from parseq.grammar import lisp_to_tree, prolog_to_tree, tree_size
 from parseq.vocab import Vocab
@@ -136,6 +140,31 @@ def load_geo(split="orig", inptokenizer="vanilla", batsize=16):
     return (tdl, vdl, xdl), (inpvocab, outvocab, outedgevocab)
 
 
+def supervise_tokens_batch(targets:List[List[int]], scores:torch.Tensor, inpmask:torch.Tensor, none_id=1):
+    asses = []
+    for targetse, scorese, inpmaske in zip(targets, scores.unbind(0), inpmask.unbind(0)):
+        # append as many NONEs to targetse to match non-masked input elements
+        assert inpmaske.sum().item() >= len(targetse)
+        targetse += [none_id] * (inpmaske.sum().item() - len(targetse))
+        ass = supervise_tokens(targetse, scorese)
+        asses.append((ass,))
+    ret = autocollate(asses)
+    return ret
+
+
+def supervise_tokens(targets:List[int], scores:torch.Tensor):
+    assert scores.dim() == 2        # (seqlen, numclass)
+    realsize = len(targets)
+    targets = torch.tensor(targets).to(scores.device)
+    _scores = scores[:realsize]     # (numtargets, numclass)
+    _scores = _scores[:, targets]   # (numtargets, numtargets)
+    _scores = _scores.detach().cpu().numpy()
+    rows, cols = linear_sum_assignment(-_scores)
+    assert np.allclose(rows, np.arange(0, rows.shape[0]))
+    outs = targets[torch.tensor(cols)]
+    return outs
+
+
 def supervise_edges_batch(trees:List[Tree], scores:torch.Tensor, labels:torch.LongTensor, pool=None):
     """
     Parallel computation of batch supervision
@@ -144,6 +173,16 @@ def supervise_edges_batch(trees:List[Tree], scores:torch.Tensor, labels:torch.Lo
     :param labels:
     :return:
     """
+    # # parallel implementation with ray
+    # args = list(zip(trees, scores.detach().cpu().unbind(0), labels.detach().cpu().unbind(0)))
+    # futures = [supervise_edges_ray.remote(*argses) for argses in args]
+    # ret = ray.get(futures)
+    # outs, masks, scores = zip(*ret)
+    # outs = torch.stack(outs, 0)
+    # masks = torch.stack(masks, 0)
+    # return outs, masks, scores
+
+    # normal implementations
     # with Pool() as pool:
     # pool = Pool(4)
     args = list(zip(trees, scores.detach().cpu().unbind(0), labels.detach().cpu().unbind(0)))
@@ -155,6 +194,11 @@ def supervise_edges_batch(trees:List[Tree], scores:torch.Tensor, labels:torch.Lo
     outs = torch.stack(outs, 0)
     masks = torch.stack(masks, 0)
     return outs, masks, scores
+
+
+@ray.remote
+def supervise_edges_ray(tree:Tree, scores:torch.Tensor, labels:torch.LongTensor):
+    return supervise_edges(tree, scores, labels)
 
 
 def supervise_edges(tree:Tree, scores:torch.Tensor, labels:torch.LongTensor):
@@ -406,6 +450,9 @@ def tst_geo_supervise_edges():
     dls, vocabs = load_geo("len")
     print(len(dls))
 
+    # numcpu = psutil.cpu_count(logical=False)
+    # ray.init(num_cpus=numcpu)
+
     # pool = Pool(8)
     pool = None
     maxambis = []
@@ -446,6 +493,58 @@ def tst_geo_supervise_edges():
     print(vocabs[1].D)
 
 
+def tst_supervise_tokens():
+    tokens = [1, 1, 1, 2, 2, 3]
+    scores = torch.rand(10, 5)
+    ass = supervise_tokens(tokens, scores)
+    print(ass)
+
+
+def tst_supervise_tokens_batch():
+    tokens = [[2, 2, 2, 3, 3, 4, 4], [2, 3, 4], [2, 3, 3, 4, 4]]
+    scores = torch.rand(3, 10, 5)
+    inpmask = torch.tensor([[1, 1, 1, 1, 1, 1, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
+    asses = supervise_tokens_batch(tokens, scores, inpmask)
+    print(asses)
+
+
+def tst_geo_supervise_tokens():
+    # load geo length based split
+
+    dls, vocabs = load_geo("len")
+    print(len(dls))
+
+    # numcpu = psutil.cpu_count(logical=False)
+    # ray.init(num_cpus=numcpu)
+
+    # pool = Pool(8)
+    pool = None
+    maxambis = []
+    start = time.time()
+    for dl in dls:
+        for batch in dl:
+            # print(batch)
+            examples = list(zip(*batch))
+            batsize = len(examples)
+            inpmask = []
+            labelsarg = []
+            alllabels = set()
+            for example in examples:
+                question, labels = example[0], example[1]
+                alllabels |= set(labels)
+                labelsarg.append(sorted(labels[:]))
+                inpmask.append((torch.ones(len(question.split(" ")) * 2, dtype=torch.long),))
+            inpmask = autocollate(inpmask)[0]
+            assert 1 not in alllabels
+            weights = torch.rand(batsize, inpmask.size(1), max(alllabels) + 1)
+            asses = supervise_tokens_batch(labelsarg, weights, inpmask, vocabs[1].D["@NONE@"])
+            print(asses)
+    end = time.time()
+    print(f"Done in {end-start:.3f} seconds.")
+    print(vocabs[1].D)
+
+
+
 if __name__ == '__main__':
     # tst_supervise_edges_line()
     # tst_supervise_edges_multichild()
@@ -453,8 +552,9 @@ if __name__ == '__main__':
 
     # tst_supervise_edges_abbaa()
 
-    tst_geo_supervise_edges()
-
+    # tst_geo_supervise_edges()
+    # tst_supervise_tokens_batch()
+    tst_geo_supervise_tokens()
     # N = 10
     # # res = timeit(partial(tst_supervise_edges_ones, 8), number=N)
     # res = timeit(partial(tst_supervise_edges_interleave, 1, 8), number=N)
