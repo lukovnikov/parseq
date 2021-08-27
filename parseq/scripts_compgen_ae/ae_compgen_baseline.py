@@ -14,7 +14,7 @@ import torch
 import numpy as np
 from nltk.translate.bleu_score import sentence_bleu
 from parseq.scripts_compgen_ae.data import get_dataloaders
-from parseq.scripts_compgen_ae.models.dec import SeqDecoderBaseline, SeqDecoderAE
+from parseq.scripts_compgen_ae.models.dec import SeqDecoderBaseline
 from parseq.scripts_compgen_ae.models.rnn import GRUDecoderCell
 from parseq.scripts_compgen_ae.models.tm import TransformerDecoderCell
 from torch.utils.data import DataLoader
@@ -68,10 +68,6 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         smalltrainvalid=False,
-        maincontrib=0.5,
-        use_reverse=False,
-        use_i2i=False,
-        use_o2o=False,
         version="v1"
         ):
 
@@ -92,34 +88,18 @@ def run(lr=0.0001,
                                                               batsize=batsize, recompute=recomputedata, recomputeds=recomputedata,
                                                               seed=seed, validfrac=validfrac)
     inpdic, fldic = tokenizer.inpvocab, tokenizer.outvocab
-    # TODO: merge traindl, auginpdl and augoutdl to create a concatenated alltraindl for actual training
     tt.tock()
 
     tt.tick("model")
     if model == "rnn":
-        celli2o = GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
-        cello2i = GRUDecoderCell(hdim, vocab=inpdic, inpvocab=fldic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
-        celli2i = GRUDecoderCell(hdim, vocab=inpdic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
-        celli2i.encoder = celli2o.encoder
-        celli2i.decoder = cello2i.decoder
-        cello2o = GRUDecoderCell(hdim, vocab=fldic, inpvocab=fldic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
-        cello2o.encoder = cello2i.encoder
-        cello2o.decoder = celli2o.decoder
-        print(celli2o)
+        cell = GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
+        print(cell)
     elif model == "tm":
-        raise NotImplementedError()
         cell = TransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads,
                                       dropout=dropout, worddropout=worddropout,
                                       bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
         print(f"one layer of decoder: \n {cell.decoder.block[0]}")
-
-    # TODO: compute and specify contribs
-    i2i_contrib = 0.
-    o2o_contrib = 0.
-    rev_contrib = 0.
-    decoder = SeqDecoderAE(celli2o, cello2i, celli2i, cello2o,
-                           vocab=fldic, inpvocab=inpdic, max_size=maxsize, smoothing=smoothing,
-                           main_contrib=maincontrib, i2i_contrib=i2i_contrib, o2o_contrib=o2o_contrib, rev_contrib=rev_contrib)
+    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing)
     decoder = Model(decoder)
     tt.tock()
 
@@ -136,19 +116,17 @@ def run(lr=0.0001,
         tt.tock()
         tt.tock("testcode")
 
-    namestolog = ["loss", "acc", "loss_m"]
-    namestolog += [a+"_"+b for a in ["loss", "acc"] for b in ["i", "o", "r"]]
-    tloss = make_array_of_metrics(*namestolog, reduction="mean")
-    tmetrics = make_array_of_metrics("treeacc", "bleu", "nll", reduction="mean")
-    vmetrics = make_array_of_metrics("treeacc", "bleu", "nll", reduction="mean")
-    xmetrics = make_array_of_metrics("treeacc", "bleu", "nll", reduction="mean")
+    tloss = make_array_of_metrics("loss", "acc", "elemacc", reduction="mean")
+    tmetrics = make_array_of_metrics("treeacc", "bleu", "nll", "acc", "elemacc", reduction="mean")
+    vmetrics = make_array_of_metrics("treeacc", "bleu", "nll", "acc", "elemacc", reduction="mean")
+    xmetrics = make_array_of_metrics("treeacc", "bleu", "nll", "acc", "elemacc", reduction="mean")
 
     # region parameters
     def get_parameters(m, _lr, _enclrmul):
         bertparams = []
         otherparams = []
         for k, v in m.named_parameters():
-            if "encoder_model." in k:
+            if k.startswith("model.cell.encoder"):
                 bertparams.append(v)
             else:
                 otherparams.append(v)
@@ -308,10 +286,6 @@ def run_experiment(
         evaltrain=False,
         gpu=-1,
         recomputedata=False,
-        maincontrib=0.5,
-        use_reverse=False,
-        use_i2i=False,
-        use_o2o=False,
         ):
 
     settings = locals().copy()

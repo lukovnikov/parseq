@@ -390,7 +390,7 @@ class NoiseAdder(object):
 
 def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", batsize=10, validfrac=0.1,
                     recompute=False, auglen=-1, noisep=0.2, splitseed=42, seed=42, recomputeds=False,
-                    checkpcfg=True):
+                    checkpcfg=False):
     l = locals().copy()
     tt = q.ticktock("dataload")
 
@@ -466,6 +466,7 @@ def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", ba
         tt.tock("shelved")
 
     if checkpcfg and augmode == "random-pcfg":
+        raise NotImplementedError()
         pcfg = augoutd
         print("Checking coverage of constructed PCFG")
         train_check_results = check_pcfg(pcfg, trainds, tokenizer)
