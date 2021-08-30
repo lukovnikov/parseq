@@ -34,19 +34,19 @@ class SeqDecoderBaseline(torch.nn.Module):
 
         self.logsm = torch.nn.LogSoftmax(-1)
 
-    def forward(self, x, y):
+    def forward(self, x, y, mask=None):
         if self.training:
-            return self.train_forward(x, y)
+            return self.train_forward(x, y, mask=mask)
         else:
             return self.test_forward(x, y)
 
-    def compute_loss(self, logits, tgt):
+    def compute_loss(self, logits, tgt, mask=None):
         """
         :param logits:      (batsize, seqlen, vocsize)
         :param tgt:         (batsize, seqlen)
         :return:
         """
-        mask = (tgt != 0).float()
+        mask = (tgt != 0).float() if mask is None else mask.float()
 
         logprobs = self.logsm(logits)
         if self.smoothing > 0:
@@ -121,14 +121,14 @@ class SeqDecoderBaseline(torch.nn.Module):
         ret["elemacc"] = elemacc
         return ret, pred_trees
 
-    def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of cell
+    def train_forward(self, x:torch.Tensor, y:torch.Tensor, mask=None):  # --> implement one step training of cell
         # extract a training example from y:
         x, newy, tgt = self.extract_training_example(x, y)
         enc, encmask = self.cell.encode_source(x)
         # run through cell: the same for all versions
         logits, cache = self.cell(tokens=newy, enc=enc, encmask=encmask, cache=None, _full_sequence=True)
         # compute loss: different versions do different masking and different targets
-        loss, acc, elemacc = self.compute_loss(logits, tgt)
+        loss, acc, elemacc = self.compute_loss(logits, tgt, mask=mask)
         return {"loss": loss, "acc": acc, "elemacc": elemacc}, logits
 
     def extract_training_example(self, x, y):
@@ -192,21 +192,21 @@ class SeqDecoderAE(torch.nn.Module):
         self.main_contrib, self.rev_contrib, self.i2i_contrib, self.o2o_contrib \
             = main_contrib, rev_contrib, i2i_contrib, o2o_contrib
 
-    def forward(self, x, y, xi, yi, xo, yo):
+    def forward(self, x, y, xi=None, yi=None, maski=None, xo=None, yo=None, masko=None):
         if self.training:
-            return self.train_forward(x, y, xi, yi, xo, yo)
+            return self.train_forward(x, y, xi, yi, maski, xo, yo, masko)
         else:
             return self.test_forward(x, y)
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor,
-                      xi:torch.Tensor, yi:torch.Tensor,
-                      xo:torch.Tensor, yo:torch.Tensor):  # --> implement one step training of cell
+                      xi:torch.Tensor=None, yi:torch.Tensor=None, maski:torch.Tensor=None,
+                      xo:torch.Tensor=None, yo:torch.Tensor=None, masko:torch.Tensor=None):  # --> implement one step training of cell
         # extract a training example from y:
-        blank_ret = {"loss": 0, "acc": -1, "elemacc": -1}
-        ret, logits = self.i2o.train_forward(x, y) if self.main_contrib > 0 else blank_ret, None
-        reti, _ = self.i2i.train_forward(xi, yi) if self.i2i_contrib > 0 else blank_ret, None
-        reto, _ = self.o2o.train_forward(xo, yo) if self.o2o_contrib > 0 else blank_ret, None
-        retr, _ = self.o2i.train_forward(y, x) if self.rev_contrib > 0 else blank_ret, None
+        blank_ret = {"loss": torch.tensor([0.]), "acc": torch.tensor([-1.]), "elemacc": torch.tensor([-1.])}    # TODO: fix
+        ret, logits = self.i2o.train_forward(x, y) if self.main_contrib > 0 else (blank_ret, None)
+        reti, _ = self.i2i.train_forward(xi, yi, mask=maski) if self.i2i_contrib > 0 else (blank_ret, None)
+        reto, _ = self.o2o.train_forward(xo, yo, mask=masko) if self.o2o_contrib > 0 else (blank_ret, None)
+        retr, _ = self.o2i.train_forward(y, x) if self.rev_contrib > 0 else (blank_ret, None)
         loss = ret["loss"] * self.main_contrib + reti["loss"] * self.i2i_contrib \
                + reto["loss"] * self.o2o_contrib + retr["loss"] * self.rev_contrib
         return {"loss": loss, "acc": ret["acc"], "elemacc": ret["elemacc"],

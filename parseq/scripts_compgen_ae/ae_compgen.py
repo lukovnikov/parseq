@@ -13,10 +13,11 @@ import qelos as q
 import torch
 import numpy as np
 from nltk.translate.bleu_score import sentence_bleu
-from parseq.scripts_compgen_ae.data import get_dataloaders
+from parseq.scripts_compgen_ae.data import get_datasets
 from parseq.scripts_compgen_ae.models.dec import SeqDecoderBaseline, SeqDecoderAE
 from parseq.scripts_compgen_ae.models.rnn import GRUDecoderCell
 from parseq.scripts_compgen_ae.models.tm import TransformerDecoderCell
+from parseq.util import CatDataset
 from torch.utils.data import DataLoader
 
 from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetLoader
@@ -88,11 +89,17 @@ def run(lr=0.0001,
     tt = q.ticktock("script")
     tt.tick("data")
     trainvalidds = None
-    traindl, validdl, testdl, auginpdl, augoutdl, tokenizer = get_dataloaders(dataset=dataset, augmode=augmode, tokenizer="vanilla",
-                                                              batsize=batsize, recompute=recomputedata, recomputeds=recomputedata,
-                                                              seed=seed, validfrac=validfrac)
+    trainds, validds, testds, auginpds, augoutds, tokenizer = get_datasets(dataset=dataset, augmode=augmode, tokenizer="vanilla",
+                                                                           batsize=batsize, recompute=recomputedata, recomputeds=recomputedata,
+                                                                           seed=seed, validfrac=validfrac)
+
+    trainds = CatDataset.create(trainds, auginpds, augoutds)
+
+    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
+    validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+
     inpdic, fldic = tokenizer.inpvocab, tokenizer.outvocab
-    # TODO: merge traindl, auginpdl and augoutdl to create a concatenated alltraindl for actual training
     tt.tock()
 
     tt.tick("model")
@@ -113,10 +120,11 @@ def run(lr=0.0001,
                                       bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
         print(f"one layer of decoder: \n {cell.decoder.block[0]}")
 
-    # TODO: compute and specify contribs
+    # TODO: compute contribs
     i2i_contrib = 0.
     o2o_contrib = 0.
     rev_contrib = 0.
+
     decoder = SeqDecoderAE(celli2o, cello2i, celli2i, cello2o,
                            vocab=fldic, inpvocab=inpdic, max_size=maxsize, smoothing=smoothing,
                            main_contrib=maincontrib, i2i_contrib=i2i_contrib, o2o_contrib=o2o_contrib, rev_contrib=rev_contrib)
@@ -148,7 +156,7 @@ def run(lr=0.0001,
         bertparams = []
         otherparams = []
         for k, v in m.named_parameters():
-            if "encoder_model." in k:
+            if "encoder" in k.split("."):
                 bertparams.append(v)
             else:
                 otherparams.append(v)

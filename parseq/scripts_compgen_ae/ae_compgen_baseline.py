@@ -13,7 +13,7 @@ import qelos as q
 import torch
 import numpy as np
 from nltk.translate.bleu_score import sentence_bleu
-from parseq.scripts_compgen_ae.data import get_dataloaders
+from parseq.scripts_compgen_ae.data import get_datasets
 from parseq.scripts_compgen_ae.models.dec import SeqDecoderBaseline
 from parseq.scripts_compgen_ae.models.rnn import GRUDecoderCell
 from parseq.scripts_compgen_ae.models.tm import TransformerDecoderCell
@@ -84,9 +84,9 @@ def run(lr=0.0001,
     tt = q.ticktock("script")
     tt.tick("data")
     trainvalidds = None
-    traindl, validdl, testdl, auginpdl, augoutdl, tokenizer = get_dataloaders(dataset=dataset, augmode=augmode, tokenizer="vanilla",
-                                                              batsize=batsize, recompute=recomputedata, recomputeds=recomputedata,
-                                                              seed=seed, validfrac=validfrac)
+    traindl, validdl, testdl, auginpdl, augoutdl, tokenizer = get_datasets(dataset=dataset, augmode=augmode, tokenizer="vanilla",
+                                                                           batsize=batsize, recompute=recomputedata, recomputeds=recomputedata,
+                                                                           seed=seed, validfrac=validfrac)
     inpdic, fldic = tokenizer.inpvocab, tokenizer.outvocab
     tt.tock()
 

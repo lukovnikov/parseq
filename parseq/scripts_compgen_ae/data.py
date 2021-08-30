@@ -1,5 +1,6 @@
 import os
 import random
+from typing import List
 
 from nltk import Nonterminal, ProbabilisticProduction, PCFG, Tree
 from torch.utils.data import DataLoader
@@ -47,25 +48,57 @@ class Tokenizer(object):
                 inptoks = self.berttok.tokenize(inps)
             else:
                 inptoks = ["@START@"] + self.get_toks(inps) + ["@END@"]
-
-            if self.berttok is not None:
-                inptensor = self.berttok.encode(inps, return_tensors="pt")[0]
-            else:
-                inptensor = self.tensorize_output(inptoks, self._inpvocab)
         else:
-            inptoks, inptensor = None, None
-
+            inptoks = None
         if outs is not None:
             # outtoks = ["@START@"] + self.get_toks(outs) + ["@END@"]
             outtoks = self.get_toks(outs)
+        else:
+            outtoks = None
+        return inptoks, outtoks
+
+    def tensorize(self, inptoks, outtoks):
+        if inptoks is not None:
+            if self.berttok is not None:
+                inptensor = self.berttok.encode(inptoks, return_tensors="pt")[0]    # TODO
+            else:
+                inptensor = self.tensorize_output(inptoks, self._inpvocab)
+        else:
+            inptensor = None
+        if outtoks is not None:
             outtensor = self.tensorize_output(outtoks, self.outvocab)
         else:
-            outtoks, outtensor = None, None
+            outtensor = None
+        return inptensor, outtensor
 
-        ret = {"inps": inps, "outs":outs, "inptoks": inptoks, "outtoks": outtoks,
-               "inptensor": inptensor, "outtensor": outtensor}
-        ret = (ret["inptensor"], ret["outtensor"])
-        return ret
+    def tokenize_and_tensorize(self, inps, outs):
+        inptoks, outtoks = self.tokenize(inps, outs)
+        inptensors, outtensors = self.tensorize(inptoks, outtoks)
+        return inptensors, outtensors
+        # if inps is not None:
+        #     if self.berttok is not None:
+        #         inptoks = self.berttok.tokenize(inps)
+        #     else:
+        #         inptoks = ["@START@"] + self.get_toks(inps) + ["@END@"]
+        #
+        #     if self.berttok is not None:
+        #         inptensor = self.berttok.encode(inps, return_tensors="pt")[0]
+        #     else:
+        #         inptensor = self.tensorize_output(inptoks, self._inpvocab)
+        # else:
+        #     inptoks, inptensor = None, None
+        #
+        # if outs is not None:
+        #     # outtoks = ["@START@"] + self.get_toks(outs) + ["@END@"]
+        #     outtoks = self.get_toks(outs)
+        #     outtensor = self.tensorize_output(outtoks, self.outvocab)
+        # else:
+        #     outtoks, outtensor = None, None
+        #
+        # ret = {"inps": inps, "outs":outs, "inptoks": inptoks, "outtoks": outtoks,
+        #        "inptensor": inptensor, "outtensor": outtensor}
+        # ret = (ret["inptensor"], ret["outtensor"])
+        # return ret
 
     def get_toks(self, x):
         return x.strip().split(" ")
@@ -156,9 +189,9 @@ def load_ds(dataset="scan/random", tokenizer="vanilla", validfrac=0.1, splitseed
         if tokenizer.berttok is None:
             tokenizer._inpvocab = inpdic
         tokenizer.outvocab = fldic
-        trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-        validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-        testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+        trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize_and_tensorize(x[0], x[1])).cache(True)
+        validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize_and_tensorize(x[0], x[1])).cache(True)
+        testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize_and_tensorize(x[0], x[1])).cache(True)
         # ds = ds.map(lambda x: tokenizer.tokenize(x[0], x[1]) + (x[2],)).cache(True)
         tt.tock("tensorized")
 
@@ -359,10 +392,10 @@ class PCFGAugDataset(IterableDataset, Seeded):
 
 
 class NoiseAdder(object):
-    def __init__(self, p=0.2, plen=(0.8, 0.15, 0.05), repl="@MASK@", seed=42, **kw):
+    def __init__(self, p=0.2, plen=None, repl="@MASK@", seed=42, **kw):
         super(NoiseAdder, self).__init__(**kw)
         self.p = p
-        self.plen = plen
+        self.plen = plen if plen is not None else (1.,)
         self.repl = repl
         self.seed = seed
         self.reset_seed()
@@ -370,27 +403,34 @@ class NoiseAdder(object):
     def reset_seed(self):
         self.rng = np.random.RandomState(self.seed)
 
-    def __call__(self, x):
-        xs = x.split(" ")
+    def __call__(self, xs:List[str]):
+        # xs = x.split(" ")
         repl = [self.rng.random() < self.p for _ in xs]
         ys = []
+        mask = []
         i = 0
+        prevrepl = False
         while i < len(xs):
             if repl[i] == True:
-                ys.append(self.repl)
+                if prevrepl is False:
+                    ys.append(self.repl)
                 # sample how many tokens to replace
                 howmany = self.rng.choice(list(range(1, len(self.plen) + 1)), None, False, self.plen)
+                mask += [True] * howmany
                 i += howmany
+                prevrepl = True
             else:
                 ys.append(xs[i])
+                mask.append(False)
                 i += 1
-        ret = " ".join(ys)
-        return ret
+                prevrepl = False
+        # ret = " ".join(ys)
+        return ys, xs, mask
 
 
-def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", batsize=10, validfrac=0.1,
-                    recompute=False, auglen=-1, noisep=0.2, splitseed=42, seed=42, recomputeds=False,
-                    checkpcfg=False):
+def get_datasets(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", batsize=10, validfrac=0.1,
+                 recompute=False, auglen=-1, noisep=0.2, splitseed=42, seed=42, recomputeds=False,
+                 checkpcfg=False):
     l = locals().copy()
     tt = q.ticktock("dataload")
 
@@ -489,30 +529,32 @@ def get_dataloaders(dataset="scan/mcd1", augmode="none", tokenizer="vanilla", ba
         else:
             raise Exception(f"Unknown augmode: '{augmode}'")
 
-        noisef = NoiseAdder(p=noisep, plen=(0.8, 0.15, 0.05), repl="@MASK@", seed=seed)
-        auginpds = auginpds.map(lambda x: (noisef(x), x))
-        augoutds = augoutds.map(lambda x: (noisef(x), x))
-        auginpds = auginpds.map(lambda x: (tokenizer.tokenize(x[0], None)[0], tokenizer.tokenize(x[1], None)[0]))
-        augoutds = augoutds.map(lambda x: (tokenizer.tokenize(None, x[0])[1], tokenizer.tokenize(None, x[1])[1]))
-        auginpdl = DataLoader(auginpds, batch_size=batsize, collate_fn=autocollate)
-        augoutdl = DataLoader(augoutds, batch_size=batsize, collate_fn=autocollate)
+        auginpds = auginpds.map(lambda x: tokenizer.tokenize(x, None)[0])
+        augoutds = augoutds.map(lambda x: tokenizer.tokenize(None, x)[1])
+        noisef = NoiseAdder(p=noisep, repl="@MASK@", seed=seed)
+        auginpds = auginpds.map(lambda x: noisef(x))
+        augoutds = augoutds.map(lambda x: noisef(x))
+        auginpds = auginpds.map(lambda x: (tokenizer.tensorize(x[0], None)[0], tokenizer.tensorize(x[1], None)[0], torch.tensor(x[2]).long()))
+        augoutds = augoutds.map(lambda x: (tokenizer.tensorize(None, x[0])[1], tokenizer.tensorize(None, x[1])[1], torch.tensor(x[2]).long()))
+        # auginpdl = DataLoader(auginpds, batch_size=batsize, collate_fn=autocollate)
+        # augoutdl = DataLoader(augoutds, batch_size=batsize, collate_fn=autocollate)
     else:
-        auginpdl = None
-        augoutdl = None
+        auginpds = None
+        augoutds = None
 
     tt.tock("data loaded")
     tt.msg(f"TRAIN DATA: {len(trainds)}")
     tt.msg(f"DEV DATA: {len(validds)}")
     tt.msg(f"TEST DATA: {len(testds)}")
 
-    tt.tick("dataloaders")
-    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
-    validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-    tt.tock()
-    tt.tock("got dataloaders")
+    # tt.tick("dataloaders")
+    # traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
+    # validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    # testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
+    # tt.tock()
+    # tt.tock("got dataloaders")
 
-    return traindl, validdl, testdl, auginpdl, augoutdl, tokenizer
+    return trainds, validds, testds, auginpds, augoutds, tokenizer
 
 
 def check_pcfg(pcfg:PCFG, ds, tokenizer):
@@ -535,7 +577,7 @@ def tst_scan_loader():
 
 def tst_data_loader(dataset="scan/mcd1", batsize=10):
     traindl, validdl, testdl, auginpdl, augoutdl, tokenizer \
-        = get_dataloaders(dataset, augmode="random", batsize=batsize, auglen=50)
+        = get_datasets(dataset, augmode="random", batsize=batsize, auglen=50)
 
     print(len(auginpdl))
     i = 0
@@ -673,8 +715,11 @@ def try_pcfg_builder(dataset="cfq/mcd1", validfrac=0.2, recompute=False):
 
 
 def tst_data_loader_pcfg(dataset="cfq/mcd1", batsize=10):
-    traindl, validdl, testdl, auginpdl, augoutdl, tokenizer \
-        = get_dataloaders(dataset, augmode="random-pcfg", batsize=batsize)
+    trainds, validds, testds, auginpds, augoutds, tokenizer \
+        = get_datasets(dataset, augmode="random-pcfg", batsize=batsize)
+
+    auginpdl = DataLoader(auginpds, batch_size=batsize, collate_fn=autocollate)
+    augoutdl = DataLoader(augoutds, batch_size=batsize, collate_fn=autocollate)
 
     print(len(auginpdl))
     i = 0
