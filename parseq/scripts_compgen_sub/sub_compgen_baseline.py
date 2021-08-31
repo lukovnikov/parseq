@@ -13,11 +13,10 @@ import qelos as q
 import torch
 import numpy as np
 from nltk.translate.bleu_score import sentence_bleu
-from parseq.scripts_compgen_ae.data import get_datasets
-from parseq.scripts_compgen_ae.models.dec import SeqDecoderBaseline, SeqDecoderAE
-from parseq.scripts_compgen_ae.models.rnn import GRUDecoderCell
-from parseq.scripts_compgen_ae.models.tm import TransformerDecoderCell
-from parseq.util import CatDataset
+from parseq.scripts_compgen_sub.data import get_datasets
+from parseq.scripts_compgen_sub.models.dec import SeqDecoderBaseline
+from parseq.scripts_compgen_sub.models.rnn import GRUDecoderCell
+from parseq.scripts_compgen_sub.models.tm import TransformerDecoderCell
 from torch.utils.data import DataLoader
 
 from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetLoader
@@ -69,10 +68,7 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         smalltrainvalid=False,
-        maincontrib=0.5,
-        use_reverse=False,
-        use_i2i=False,
-        use_o2o=False,
+        decoderonly=False,
         version="v1"
         ):
 
@@ -80,7 +76,7 @@ def run(lr=0.0001,
     q.pp_dict(settings, indent=3)
     # wandb.init()
 
-    wandb.init(project=f"compgen_ae", config=settings, reinit=True)
+    wandb.init(project=f"compgen_sub", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -89,53 +85,26 @@ def run(lr=0.0001,
     tt = q.ticktock("script")
     tt.tick("data")
     trainvalidds = None
-    trainds, validds, testds, auginpds, augoutds, tokenizer = get_datasets(dataset=dataset, augmode=augmode, tokenizer="vanilla",
+    trainds, validds, testds, tokenizer = get_datasets(dataset=dataset, tokenizer="vanilla",
                                                                            batsize=batsize, recompute=recomputedata, recomputeds=recomputedata,
                                                                            seed=seed, validfrac=validfrac)
-
-    trainds = CatDataset.create(trainds, auginpds, augoutds)
 
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate)
     validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
     testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate)
-
     inpdic, fldic = tokenizer.inpvocab, tokenizer.outvocab
     tt.tock()
 
     tt.tick("model")
     if model == "rnn":
-        celli2o = GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
-        cello2i = GRUDecoderCell(hdim, vocab=inpdic, inpvocab=fldic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
-        celli2i = GRUDecoderCell(hdim, vocab=inpdic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
-        celli2i.encoder = celli2o.encoder
-        celli2i.decoder = cello2i.decoder
-        cello2o = GRUDecoderCell(hdim, vocab=fldic, inpvocab=fldic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
-        cello2o.encoder = cello2i.encoder
-        cello2o.decoder = celli2o.decoder
-        print(celli2o)
+        cell = GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout)
+        print(cell)
     elif model == "tm":
-        raise NotImplementedError()
         cell = TransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads,
                                       dropout=dropout, worddropout=worddropout,
                                       bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
         print(f"one layer of decoder: \n {cell.decoder.block[0]}")
-
-    # compute contribs
-    assert 0. <= maincontrib <= 1.
-    othercontrib = 1. - maincontrib
-    rev_contrib, i2i_contrib, o2o_contrib = 0., 0., 0.
-    if use_reverse:
-        rev_contrib, maincontrib = maincontrib / 2, maincontrib / 2
-    if use_o2o and use_i2i:
-        i2i_contrib, o2o_contrib = othercontrib / 2, othercontrib / 2
-    elif use_i2i:
-        i2i_contrib = othercontrib
-    elif use_o2o:
-        o2o_contrib = othercontrib
-
-    decoder = SeqDecoderAE(celli2o, cello2i, celli2i, cello2o,
-                           vocab=fldic, inpvocab=inpdic, max_size=maxsize, smoothing=smoothing,
-                           main_contrib=maincontrib, i2i_contrib=i2i_contrib, o2o_contrib=o2o_contrib, rev_contrib=rev_contrib)
+    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, decoder_only=decoderonly)
     decoder = Model(decoder)
     tt.tock()
 
@@ -152,9 +121,7 @@ def run(lr=0.0001,
         tt.tock()
         tt.tock("testcode")
 
-    namestolog = ["loss", "acc", "loss_m"]
-    namestolog += [a+"_"+b for a in ["loss", "acc"] for b in ["i", "o", "r"]]
-    tloss = make_array_of_metrics(*namestolog, reduction="mean")
+    tloss = make_array_of_metrics("loss", "acc", "elemacc", reduction="mean")
     tmetrics = make_array_of_metrics("treeacc", "bleu", "nll", reduction="mean")
     vmetrics = make_array_of_metrics("treeacc", "bleu", "nll", reduction="mean")
     xmetrics = make_array_of_metrics("treeacc", "bleu", "nll", reduction="mean")
@@ -164,7 +131,7 @@ def run(lr=0.0001,
         bertparams = []
         otherparams = []
         for k, v in m.named_parameters():
-            if "encoder" in k.split("."):
+            if k.startswith("model.cell.encoder"):
                 bertparams.append(v)
             else:
                 otherparams.append(v)
@@ -324,10 +291,7 @@ def run_experiment(
         evaltrain=False,
         gpu=-1,
         recomputedata=False,
-        maincontrib=0.5,
-        use_reverse=False,
-        use_i2i=False,
-        use_o2o=False,
+        decoderonly=False,
         ):
 
     settings = locals().copy()

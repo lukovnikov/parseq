@@ -21,6 +21,7 @@ class SeqDecoderBaseline(torch.nn.Module):
                  vocab=None,
                  max_size:int=100,
                  smoothing:float=0.,
+                 decoder_only=False,
                  **kw):
         super(SeqDecoderBaseline, self).__init__(**kw)
         self.cell = cell
@@ -33,6 +34,7 @@ class SeqDecoderBaseline(torch.nn.Module):
             self.loss = torch.nn.NLLLoss(reduction="none", ignore_index=0)
 
         self.logsm = torch.nn.LogSoftmax(-1)
+        self.decoder_only = decoder_only
 
     def forward(self, x, y, mask=None):
         if self.training:
@@ -125,6 +127,9 @@ class SeqDecoderBaseline(torch.nn.Module):
         # extract a training example from y:
         x, newy, tgt, newmask = self.extract_training_example(x, y, supmask=mask)
         enc, encmask = self.cell.encode_source(x)
+        if self.decoder_only:
+            enc = torch.zeros_like(enc[:, 0:1, :])
+            encmask = torch.ones_like(encmask[:, 0:1])
         # run through cell: the same for all versions
         logits, cache = self.cell(tokens=newy, enc=enc, encmask=encmask, cache=None, _full_sequence=True)
         # compute loss: different versions do different masking and different targets
@@ -154,13 +159,15 @@ class SeqDecoderBaseline(torch.nn.Module):
         return x, newy, goldy, newmask
 
     def get_prediction(self, x:torch.Tensor):
-        steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_size
         # initialize empty ys:
         y = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@START@"]
         # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
 
         # run encoder
         enc, encmask = self.cell.encode_source(x)
+        if self.decoder_only:
+            enc = torch.zeros_like(enc[:, 0:1, :])
+            encmask = torch.ones_like(encmask[:, 0:1])
 
         step = 0
         newy = None
