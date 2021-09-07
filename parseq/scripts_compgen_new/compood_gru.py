@@ -1048,10 +1048,10 @@ def run_experiment(
 
     def checkconfig(spec):
         if spec["dataset"].startswith("cfq"):
-            if spec["epochs"] not in (25, 1, 0) or spec["batsize"] != 128:
+            if spec["epochs"] not in (25, 1, 0, 60) or spec["batsize"] != 128:
                 return False
         elif spec["dataset"].startswith("scan"):
-            if spec["epochs"] not in (40, 1, 0) or spec["batsize"] != 256:
+            if spec["epochs"] not in (40, 1, 0, 60) or spec["batsize"] != 256:
                 return False
         return True
 
