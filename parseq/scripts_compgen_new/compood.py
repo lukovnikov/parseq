@@ -1479,5 +1479,8 @@ def run_experiment(
         run, ranges, path_prefix=None, check_config=checkconfig, **settings)
 
 
+# python compood.py -epochs 25 -datasets scan -gpu 0 -dropout 0.25 -ensemble 5 -mcdropout 0 -innerensemble -batsize 60
+
+
 if __name__ == '__main__':
     q.argprun(run_experiment)

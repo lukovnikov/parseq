@@ -1,0 +1,199 @@
+absl-py==0.12.0
+alembic==1.4.3
+argon2-cffi @ file:///C:/ci/argon2-cffi_1596826740294/work
+ase==3.21.1
+async-generator==1.10
+attrs @ file:///tmp/build/80754af9/attrs_1600298409949/work
+backcall==0.2.0
+bleach @ file:///tmp/build/80754af9/bleach_1600439572647/work
+cached-property==1.5.2
+cachetools==4.2.1
+certifi==2020.6.20
+cffi @ file:///C:/ci/cffi_1600681203656/work
+chardet==3.0.4
+click==7.1.2
+cliff==3.4.0
+cmaes==0.7.0
+cmd2==1.3.11
+colorama @ file:///tmp/build/80754af9/colorama_1603211150991/work
+colorlog==4.4.0
+configparser==5.0.1
+cycler==0.10.0
+dataclasses==0.8
+datasets==1.2.1
+decorator==4.4.2
+defusedxml==0.6.0
+dgl-cu101==0.4.3.post2
+dill==0.3.3
+docker-pycreds==0.4.0
+entrypoints==0.3
+filelock==3.0.12
+fire==0.3.1
+future==0.18.2
+gitdb==4.0.5
+GitPython==3.1.9
+google-api-core==1.26.0
+google-auth==1.26.1
+google-auth-oauthlib==0.4.3
+google-cloud-core==1.6.0
+google-cloud-storage==1.36.0
+google-crc32c==1.1.2
+google-resumable-media==1.2.0
+googleapis-common-protos==1.52.0
+googledrivedownloader==0.4
+grpcio==1.36.1
+h5py==3.1.0
+idna==2.10
+importlib-metadata @ file:///tmp/build/80754af9/importlib-metadata_1602276842396/work
+importlib-resources==5.1.2
+ipykernel @ file:///C:/ci/ipykernel_1596206775157/work/dist/ipykernel-5.3.4-py3-none-any.whl
+ipython @ file:///C:/ci/ipython_1593446240034/work
+ipython-genutils==0.2.0
+ipywidgets @ file:///tmp/build/80754af9/ipywidgets_1601490159889/work
+isodate==0.6.0
+jedi @ file:///C:/ci/jedi_1596472773465/work
+Jinja2==2.11.2
+joblib @ file:///tmp/build/80754af9/joblib_1601912903842/work
+jsonschema @ file:///tmp/build/80754af9/jsonschema_1602607155483/work
+jupyter==1.0.0
+jupyter-client @ file:///tmp/build/80754af9/jupyter_client_1601311786391/work
+jupyter-console @ file:///tmp/build/80754af9/jupyter_console_1598884538475/work
+jupyter-core==4.6.3
+jupyterlab-pygments @ file:///tmp/build/80754af9/jupyterlab_pygments_1601490720602/work
+kaleido==0.2.1
+kiwisolver==1.2.0
+-e git+https://github.com/lukovnikov/ldgnn.git@3e436792439c25c7b929bc4ff0341da96aa1381d#egg=ldgnn
+littleutils==0.2.2
+llvmlite==0.36.0
+Mako==1.1.3
+Markdown==3.3.4
+MarkupSafe==1.1.1
+matplotlib @ file:///C:/ci/matplotlib-base_1603357981283/work
+mistune==0.8.4
+mkl-fft==1.2.0
+mkl-random==1.1.1
+mkl-service==2.3.0
+multiprocess==0.70.11.1
+nbclient @ file:///tmp/build/80754af9/nbclient_1602783176460/work
+nbconvert @ file:///C:/ci/nbconvert_1601896775581/work
+nbformat @ file:///tmp/build/80754af9/nbformat_1602783287752/work
+nest-asyncio @ file:///tmp/build/80754af9/nest-asyncio_1601499549014/work
+networkx @ file:///tmp/build/80754af9/networkx_1598376031484/work
+nltk @ file:///tmp/build/80754af9/nltk_1592496090529/work
+notebook @ file:///C:/ci/notebook_1601498601160/work
+numba==0.53.0
+numexpr==2.7.3
+numpy @ file:///C:/ci/numpy_and_numpy_base_1596233948451/work
+oauthlib==3.1.0
+ogb==1.3.0
+olefile==0.46
+optuna==2.2.0
+orca==1.6
+outdated==0.2.0
+packaging==20.4
+pandas @ file:///C:/ci/pandas_1602088210462/work
+pandocfilters==1.4.2
+-e git+https://github.com/lukovnikov/parseq.git@b25348b4db98e8457dda357f7af093866cfda376#egg=parseq
+parso==0.7.0
+pathtools==0.1.2
+pbr==5.5.1
+pdfminer.six==20200517
+pdfplumber==0.5.28
+pickleshare==0.7.5
+Pillow @ file:///C:/ci/pillow_1602785322033/work
+plotly==4.14.3
+portalocker==2.0.0
+prettytable==0.7.2
+prometheus-client==0.8.0
+promise==2.3
+prompt-toolkit==3.0.11
+protobuf==3.13.0
+psutil==5.7.2
+pyarrow==3.0.0
+pyasn1==0.4.8
+pyasn1-modules==0.2.8
+pybind11==2.6.2
+pycparser @ file:///tmp/build/80754af9/pycparser_1594388511720/work
+pycryptodome==3.10.1
+Pygments @ file:///tmp/build/80754af9/pygments_1600458456400/work
+pyparsing==2.4.7
+pyperclip==1.8.1
+pyreadline==2.1
+pyrsistent @ file:///C:/ci/pyrsistent_1600141799440/work
+python-dateutil==2.8.1
+python-editor==1.0.4
+python-louvain==0.15
+pytorch-lightning==0.7.3
+pytz==2020.1
+pywin32==227
+pywinpty==0.5.7
+PyYAML==5.3.1
+pyzmq==19.0.2
+-e git+https://github.com/lukovnikov/qelos-util.git@48c7f45763f7fee8e7e91c7f7bd55c5e40c5bd8c#egg=qelos_util
+qtconsole @ file:///tmp/build/80754af9/qtconsole_1600870028330/work
+QtPy==1.9.0
+rdflib==5.0.0
+regex @ file:///C:/ci/regex_1602770568056/work
+requests==2.24.0
+requests-oauthlib==1.3.0
+retrying==1.3.3
+rouge-score==0.0.4
+rsa==4.7.1
+sacrebleu==1.5.1
+sacremoses==0.0.43
+scikit-learn==0.23.2
+scipy==1.5.3
+seaborn @ file:///tmp/build/80754af9/seaborn_1600553570093/work
+Send2Trash==1.5.0
+sentencepiece==0.1.94
+sentry-sdk==0.19.1
+seqeval==1.2.2
+shortuuid==1.0.1
+six==1.15.0
+smmap==3.0.4
+sortedcontainers==2.4.0
+SPARQL-parser==0.0.2
+SQLAlchemy==1.3.20
+stevedore==3.2.2
+style==1.1.0
+subprocess32==3.5.4
+tables==3.6.1
+tabulate==0.8.9
+tensorboard==2.4.1
+tensorboard-plugin-wit==1.8.0
+tensorboardX==2.1
+tensorflow-datasets==4.2.0
+tensorflow-metadata==0.28.0
+termcolor==1.1.0
+terminado==0.9.1
+testpath==0.4.4
+threadpoolctl==2.1.0
+tokenizers==0.7.0
+toolz==0.11.1
+torch==1.6.0
+torch-cluster==1.5.9
+torch-geometric==1.6.3
+torch-scatter==2.0.6
+torch-sparse==0.6.9
+torch-spline-conv==1.2.1
+torchvision==0.7.0
+tornado==6.0.4
+tqdm==4.49.0
+traitlets==4.3.3
+-e git+https://github.com/lukovnikov/transformers.git@54101e7033c4ec31320b90a4a9a7a34634aee360#egg=transformers
+typing-extensions==3.7.4.3
+ujson==4.0.1
+Unidecode==1.1.1
+update==0.0.1
+urllib3==1.25.11
+Wand==0.6.6
+wandb==0.10.25
+watchdog==0.10.3
+wcwidth @ file:///tmp/build/80754af9/wcwidth_1593447189090/work
+webencodings==0.5.1
+Werkzeug==1.0.1
+widgetsnbextension==3.5.1
+wincertstore==0.2
+xxhash==2.0.0
+zipp @ file:///tmp/build/80754af9/zipp_1604001098328/work
+zss==1.2.0
