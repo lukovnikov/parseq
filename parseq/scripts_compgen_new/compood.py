@@ -1480,7 +1480,7 @@ def run_experiment(
 
 
 # python compood.py -epochs 25 -datasets scan -gpu 0 -dropout 0.25 -ensemble 5 -mcdropout 0 -innerensemble -batsize 60
-
+# python compood.py -epochs 20 -dataset cfq/mcd1 -gpu 3 -dropout 0.25 -ensemble 5 -mcdropout 0 -innerensemble -batsize 50
 
 if __name__ == '__main__':
     q.argprun(run_experiment)

@@ -202,6 +202,7 @@ class SeqDecoderBaseline(torch.nn.Module):
                  smoothing:float=0.,
                  mode="normal",
                  mcdropout=-1,
+                 innerensemble=False,
                  **kw):
         super(SeqDecoderBaseline, self).__init__(**kw)
         self.tagger = tagger
@@ -217,6 +218,10 @@ class SeqDecoderBaseline(torch.nn.Module):
         self.logsm = torch.nn.LogSoftmax(-1)
 
         self.mcdropout = mcdropout
+        self.innerensemble = innerensemble
+        self.ensemble = len(self.tagger) if isinstance(self.tagger, torch.nn.ModuleList) else -1
+
+        assert not (self.ensemble > 0 and self.mcdropout > 0), "can't have both mc dropout and regular ensemble"
 
         self.inspect = False
 
@@ -288,16 +293,22 @@ class SeqDecoderBaseline(torch.nn.Module):
                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
 
-        if self.mcdropout > 0:
+        if (self.mcdropout > 0 or self.ensemble > 0) and not self.innerensemble:
             probses = []
             preds = preds[:, 1:]
-            self.train()
-            for i in range(self.mcdropout):
-                d, logits = self.train_forward(x, preds)
-                probses.append(torch.softmax(logits, -1))
-            self.eval()
-            probses = sum(probses) / len(probses)
-            probses = probses[:, :-1]
+            if self.mcdropout > 0:
+                self.train()
+                for i in range(self.mcdropout):
+                    d, logits = self.train_forward(x, preds)
+                    probses.append(torch.softmax(logits, -1))
+                self.eval()
+                probses = sum(probses) / len(probses)
+                probses = probses[:, :-1]
+            elif self.ensemble > 0:
+                d, logitses = self.train_forward(x, preds)
+                probses = [torch.softmax(logits, -1) for logits in logitses]
+                probses = sum(probses) / len(probses)
+                probses = probses[:, :-1]
             probs = probses
             mask = preds > 0
             confs = torch.gather(probs, 2, preds[:, :, None])[:, :, 0]
@@ -330,14 +341,24 @@ class SeqDecoderBaseline(torch.nn.Module):
         return ret, pred_trees
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
+        taggers = [self.tagger] if self.ensemble <= 0 else self.tagger
+        outdict = {"loss": 0, "acc": 0, "elemacc": 0}
+        outlogits = []
         # extract a training example from y:
         x, newy, tgt = self.extract_training_example(x, y)
-        enc, encmask = self.tagger.encode_source(x)
-        # run through tagger: the same for all versions
-        logits = self.get_prediction_train(newy, enc, encmask)
-        # compute loss: different versions do different masking and different targets
-        loss, acc, elemacc = self.compute_loss(logits, tgt)
-        return {"loss": loss, "acc": acc, "elemacc": elemacc}, logits
+        for tagger in taggers:
+            enc, encmask = self.tagger.encode_source(x)
+            # run through tagger: the same for all versions
+            logits = self.get_prediction_train(newy, enc, encmask)
+            # compute loss: different versions do different masking and different targets
+            loss, acc, elemacc = self.compute_loss(logits, tgt)
+            outdict["loss"] += loss
+            outdict["acc"] += acc
+            outdict["elemacc"] += elemacc
+            outlogits.append(logits)
+        outdict["acc"] /= len(taggers)
+        outdict["elemacc"] /= len(taggers)
+        return outdict, outlogits
 
     def get_prediction_train(self, tokens: torch.Tensor, enc: torch.Tensor, encmask=None):
         cache = None
@@ -372,14 +393,30 @@ class SeqDecoderBaseline(torch.nn.Module):
         y = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.vocab["@START@"]
         # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
 
+        if self.ensemble > 0:
+            if self.innerensemble:
+                taggers = self.tagger   # if inner ensemble, average at every time step
+            else:
+                taggers = [self.tagger[0]]  # if not inner, use only one for prediction
+        elif self.mcdropout > 0:
+            if self.innerensemble:
+                taggers = [self.tagger for _ in range(self.mcdropout)]
+                wastraining = self.tagger.training
+                self.tagger.train()
+            else:
+                taggers = [self.tagger]
+        else:
+            taggers = [self.tagger]
+
         # run encoder
-        enc, encmask = self.tagger.encode_source(x)
+        encs, encmasks = zip(*[tagger.encode_source(x) for tagger in taggers])
+
 
         step = 0
         # newy = torch.zeros(x.size(0), 0, dtype=torch.long, device=x.device)
         newy = y[:, None]       # will be removed
         ended = torch.zeros_like(y).bool()
-        cache = None
+        caches = [None for _ in taggers]
         conf_acc = None
         logmaxprob_acc = None
         maxmaxnll = None
@@ -388,8 +425,10 @@ class SeqDecoderBaseline(torch.nn.Module):
         allprobs = []
         allmask = []
         while step < self.max_size and not torch.all(ended):
-            logits, cache = self.tagger(tokens=y, enc=enc, encmask=encmask, cache=cache)
-            probs = torch.softmax(logits, -1)
+            logitses, caches = zip(*[tagger(tokens=y, enc=encs[i], encmask=encmasks[i], cache=caches[i]) for i, tagger in enumerate(taggers)])
+            probses = [torch.softmax(logits[:, -1], -1) for logits in logitses]
+            probs = sum(probses) / len(probses)     # average over all ensemble elements
+
             allprobs.append(probs)
             maxprobs, preds = probs.max(-1)
             _entropy = (-torch.log(probs.clamp_min(1e-7)) * probs).sum(-1)
@@ -416,6 +455,10 @@ class SeqDecoderBaseline(torch.nn.Module):
             y = preds
         allprobs = torch.stack(allprobs, 1)
         allmask = torch.stack(allmask, 1)
+
+        if self.mcdropout > 0 and self.innerensemble and not wastraining:
+            self.tagger.eval()
+
         return newy, logmaxprob_acc/total, maxmaxnll, entropy/total, total, conf_acc, logmaxprob_acc, steps_used.float(), allprobs, allmask
 
 
@@ -646,7 +689,8 @@ def run(lr=0.0001,
         trainonvalidonly=False,
         recomputedata=False,
         mcdropout=-1,
-        version="v4"
+        ensemble=-1,
+        version="v5"
         ):
 
     settings = locals().copy()
@@ -719,8 +763,11 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("model")
-    cell = GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout, mode=mode, useskip=useskip)
-    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, mode=mode, mcdropout=mcdropout)
+    if ensemble < 0:
+        cell = GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout, mode=mode, useskip=useskip)
+    else:
+        cell = torch.nn.ModuleList([GRUDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, dropout=dropout, worddropout=worddropout, mode=mode, useskip=useskip) for _ in range(ensemble)])
+    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing, mode=mode, mcdropout=mcdropout, innerensemble=ensemble > 0)
     # print(f"one layer of decoder: \n {cell.decoder.block[0]}")
     print(decoder)
     tt.tock()
@@ -943,6 +990,7 @@ def run_experiment(
         gpu=-1,
         recomputedata=False,
         mcdropout=-1,
+        ensemble=-1,
         ):
 
     settings = locals().copy()
