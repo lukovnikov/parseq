@@ -430,7 +430,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         allmask = []
         while step < self.max_size and not torch.all(ended):
             logitses, caches = zip(*[tagger(tokens=y, enc=encs[i], encmask=encmasks[i], cache=caches[i]) for i, tagger in enumerate(taggers)])
-            probses = [torch.softmax(logits[:, -1], -1) for logits in logitses]
+            probses = [torch.softmax(logits, -1) for logits in logitses]
             probs = sum(probses) / len(probses)     # average over all ensemble elements
 
             allprobs.append(probs)
