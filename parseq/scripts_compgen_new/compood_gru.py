@@ -153,7 +153,7 @@ class GRUDecoderCell(torch.nn.Module):
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
         padmask = (tokens != 0)
-        if tokens.max() >= self.dec_emb.number_of_ids():
+        if tokens.max() >= self.dec_emb.num_embeddings:
             print(tokens)
             raise Exception()
         embs = self.dec_emb(tokens)
