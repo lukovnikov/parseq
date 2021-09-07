@@ -347,7 +347,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         # extract a training example from y:
         x, newy, tgt = self.extract_training_example(x, y)
         for tagger in taggers:
-            enc, encmask = self.tagger.encode_source(x)
+            enc, encmask = tagger.encode_source(x)
             # run through tagger: the same for all versions
             logits = self.get_prediction_train(newy, enc, encmask)
             # compute loss: different versions do different masking and different targets
@@ -360,11 +360,12 @@ class SeqDecoderBaseline(torch.nn.Module):
         outdict["elemacc"] /= len(taggers)
         return outdict, outlogits
 
-    def get_prediction_train(self, tokens: torch.Tensor, enc: torch.Tensor, encmask=None):
+    def get_prediction_train(self, tokens: torch.Tensor, enc: torch.Tensor, encmask=None, tagger=None):
+        tagger = self.tagger if tagger is None else tagger
         cache = None
         logitses = []
         for i in range(tokens.size(1)):
-            logits, cache = self.tagger(tokens=tokens[:, i], enc=enc, encmask=encmask, cache=cache)
+            logits, cache = tagger(tokens=tokens[:, i], enc=enc, encmask=encmask, cache=cache)
             logitses.append(logits)
         logitses = torch.stack(logitses, 1)
         return logitses
@@ -1055,6 +1056,10 @@ def run_experiment(
     p = __file__ + f".baseline.{dataset}"
     q.run_experiments_random(
         run, ranges, path_prefix=None, check_config=checkconfig, **settings)
+
+
+# python compood.py -epochs 40 -datasets scan/mcd1 -gpu 0 -dropout 0.25 -ensemble 5 -mcdropout 0 -innerensemble -batsize 128
+# python compood.py -epochs 25 -dataset cfq/mcd1 -gpu 3 -dropout 0.25 -ensemble 5 -mcdropout 0 -innerensemble -batsize 128
 
 
 if __name__ == '__main__':
