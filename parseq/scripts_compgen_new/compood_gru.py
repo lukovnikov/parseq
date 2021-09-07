@@ -349,7 +349,7 @@ class SeqDecoderBaseline(torch.nn.Module):
         for tagger in taggers:
             enc, encmask = tagger.encode_source(x)
             # run through tagger: the same for all versions
-            logits = self.get_prediction_train(newy, enc, encmask)
+            logits = self.get_prediction_train(newy, enc, encmask, tagger=tagger)
             # compute loss: different versions do different masking and different targets
             loss, acc, elemacc = self.compute_loss(logits, tgt)
             outdict["loss"] += loss
