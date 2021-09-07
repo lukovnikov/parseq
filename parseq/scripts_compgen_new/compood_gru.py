@@ -153,6 +153,9 @@ class GRUDecoderCell(torch.nn.Module):
 
     def forward(self, tokens:torch.Tensor=None, enc=None, encmask=None, cache=None):
         padmask = (tokens != 0)
+        if tokens.max() >= self.dec_emb.number_of_ids():
+            print(tokens)
+            raise Exception()
         embs = self.dec_emb(tokens)
         if cache is None:
             cache = {"states": [{"h_tm1": torch.zeros(enc.size(0), self.dim, device=enc.device)} for _ in self.dec_stack],
