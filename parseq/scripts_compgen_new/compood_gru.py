@@ -1061,8 +1061,8 @@ def run_experiment(
         run, ranges, path_prefix=None, check_config=checkconfig, **settings)
 
 
-# python compood.py -epochs 40 -datasets scan/mcd1 -gpu 0 -dropout 0.25 -ensemble 5 -mcdropout 0 -innerensemble -batsize 128
-# python compood.py -epochs 25 -dataset cfq/mcd1 -gpu 3 -dropout 0.25 -ensemble 5 -mcdropout 0 -innerensemble -batsize 128
+# python compood_gru.py -epochs 40 -datasets scan/mcd1 -gpu 0 -dropout 0.25/0.1 -ensemble 5 -mcdropout 0
+# python compood_gru.py -epochs 25 -dataset cfq/mcd1 -gpu 3 -dropout 0.25/0.1 -ensemble 5 -mcdropout 0
 
 
 if __name__ == '__main__':
