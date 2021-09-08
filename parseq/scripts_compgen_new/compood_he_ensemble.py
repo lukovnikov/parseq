@@ -197,9 +197,10 @@ def run(tmlr=0.0001,
         ensemble=1,
         version="he_v1"
         ):
-
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
+
+    tt = q.ticktock("HE_script")
     device = torch.device("cpu") if gpu < 0 else torch.device("cuda", gpu)
     settings["tminnerensemble"] = True
 
@@ -212,8 +213,38 @@ def run(tmlr=0.0001,
     # create a model that uses tmdecoder to generate output and uses both to measure OOD
     wandb.init(project=f"compood_he_ensemble", config=settings, reinit=True)
     decoder = HybridSeqDecoder(tmdecoder, grudecoder)
+
+
+    testdl = DataLoader(oodtestds, batch_size=tmbatsize, shuffle=False, collate_fn=autocollate)
+    indtestdl = DataLoader(indtestds, batch_size=tmbatsize, shuffle=False, collate_fn=autocollate)
+
+    metricnames = ["treeacc", "decnll", "maxmaxnll", "entropy"]
+    indxmetrics = make_array_of_metrics(*metricnames, reduction="mean")
+    oodxmetrics = make_array_of_metrics(*metricnames, reduction="mean")
+
+    indtestepoch = partial(q.test_epoch,
+                         model=decoder,
+                         losses=indxmetrics,
+                         dataloader=indtestdl,
+                         device=device)
+    oodtestepoch = partial(q.test_epoch,
+                         model=decoder,
+                         losses=oodxmetrics,
+                         dataloader=testdl,
+                         device=device)
+
+    tt.tick("running ID test for Hybrid")
+    testres = indtestepoch()
+    print(f"ID test tree acc: {testres}")
+    tt.tock()
+
+    tt.tick("running OOD test for Hybrid")
+    testres = oodtestepoch()
+    print(f"OOD test tree acc: {testres}")
+    tt.tock()
+
     results = evaluate(decoder, indtestds, oodtestds, batsize=tmbatsize, device=device)
-    print("Results of the hybrid OOD:")
+    print("Results of the hybrid OOD detection:")
     print(json.dumps(results, indent=3))
 
     for k, v in results.items():
