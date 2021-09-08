@@ -917,9 +917,9 @@ def run(lr=0.0001,
         validres = validepoch()
         tt.tock(f"Validation results: {validres}")
 
-    tt.tick("running train")
-    trainres = trainevalepoch()
-    print(f"Train tree acc: {trainres}")
+    tt.tick("not running train")
+    # trainres = trainevalepoch()
+    # print(f"Train tree acc: {trainres}")
     tt.tock()
 
     tt.tick("running ID test")
