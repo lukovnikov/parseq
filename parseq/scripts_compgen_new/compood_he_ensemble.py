@@ -382,7 +382,7 @@ def run_experiment(
         run, ranges, path_prefix=None, check_config=checkconfig, **settings)
 
 
-# python compood_he_ensemble.py -dataset scan/mcd1 -gpu 0 -tmdropout 0.25 -grudropout 0.1 -gruepochs 1 -tmepochs 1
+# python compood_he_ensemble.py -dataset scan/mcd1 -gpu 0 -tmdropout 0.25 -grudropout 0.1 -ensemble 3
 
 
 if __name__ == '__main__':
