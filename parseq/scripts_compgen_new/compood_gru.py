@@ -303,7 +303,7 @@ class SeqDecoderBaseline(torch.nn.Module):
                 self.train()
                 for i in range(self.mcdropout):
                     d, logits = self.train_forward(x, preds)
-                    probses.append(torch.softmax(logits, -1))
+                    probses.append(torch.softmax(logits[0], -1))
                 self.eval()
                 probses = sum(probses) / len(probses)
                 probses = probses[:, :-1]
