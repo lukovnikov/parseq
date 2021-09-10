@@ -826,6 +826,23 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False,
                 newexamples.append((inp, out))
         trainds._examples = newexamples
 
+    examples = trainds.examples + validds.examples + testds.examples
+
+    inpsizes = []
+    outsizes = []
+    for inp, out in examples:
+        inpsizes.append(len(inp))
+        outsizes.append(len(out))
+
+    inpsizecounts = dict(zip(list(range(max(inpsizes)+1)), [0 for _ in range(max(inpsizes)+1)]))
+    for inpsize in inpsizes:
+        inpsizecounts[inpsize] += 1
+    outsizecounts = dict(zip(list(range(max(outsizes)+1)), [0 for _ in range(max(outsizes)+1)]))
+    for outsize in outsizes:
+        outsizecounts[outsize] += 1
+
+    tt.msg(f"avg(max) inp size: {np.mean(inpsizes)}({max(inpsizes)}), avg(max) out sizes: {np.mean(outsizes)}({max(outsizes)})")
+
     tt.tock(f"loaded '{dataset}'")
     tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
 
@@ -898,7 +915,7 @@ def run(lr=0.0001,
         cosinelr=False,
         dataset="scan/length",
         mode="normal",          # "normal", "noinp"
-        maxsize=50,
+        maxsize=-1,
         seed=42,
         hdim=768,
         numlayers=6,
