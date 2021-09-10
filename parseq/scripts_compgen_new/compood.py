@@ -1275,12 +1275,15 @@ def evaluate(model, idds, oodds, batsize=10, device=torch.device("cpu"),
 
     wandb.log({"calibtable": wandb.Table(data=rdf, columns=["count", "treeacc"])})
 
-    if savep is not None and inpdic is not None and fldic is not None:
-        print("Saving outputs")
-        analysis = save_outputs(idouts, oodouts, inpdic, fldic)
-        with open(savep, "w") as f:
-            json.dump(analysis, f, indent=3)
-            print(f"Saved outputs in {savep}")
+    try:
+        if savep is not None and inpdic is not None and fldic is not None:
+            print("Saving outputs")
+            analysis = save_outputs(idouts, oodouts, inpdic, fldic)
+            with open(savep, "w") as f:
+                json.dump(analysis, f, indent=3)
+                print(f"Saved outputs in {savep}")
+    except Exception as e:
+        print("Failed to save outputs.")
 
     return {"decnll": decnll_res, "maxnll": maxnll_res, "entropy": entropy_res, "sumnll": sumnll_res}
 
