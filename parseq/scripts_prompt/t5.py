@@ -1,4 +1,7 @@
 import copy
+from functools import partial
+from typing import List
+
 import torch
 import qelos as q
 from torch import nn
@@ -11,7 +14,7 @@ from transformers.models.t5.modeling_t5 import T5Stack, T5Block, T5LayerNorm, lo
 # use 100k LM pre-trained T5 weights instead of normal weights! --> https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md
 
 
-class T5BlockPT(torch.nn.Module):       # wrapper for T5 Blocks with PT
+class T5PTBlock(torch.nn.Module):       # wrapper for T5 Blocks with PT
     def __init__(self, block:T5Block,
                  dim=None,
                  pt_type="default",
@@ -50,8 +53,14 @@ class T5BlockPT(torch.nn.Module):       # wrapper for T5 Blocks with PT
         else:
             raise NotImplementedError("use static")
 
+    def get_pt_params(self):
+        ret = []
+        if hasattr(self, "pt_emb"):
+            ret += list(self.pt_emb.parameters())
+        return ret
 
-class T5BlockPTEncoder(T5BlockPT):
+
+class T5PTEncoderBlock(T5PTBlock):
     """ An encoder-side T5 transformer block for prompt-tuning"""
     def forward(
         self,
@@ -68,14 +77,15 @@ class T5BlockPTEncoder(T5BlockPT):
         output_attentions=False,
         return_dict=True,
     ):
-        if self.first or self.deep:
-            # take hidden states, compute prefix and integrate prefix between first hidden states and the rest
-            prefix = self.pt_emb.weight[None, :, :].repeat(hidden_states.size(0), 1, 1)
+        if not self.dynamic:
+            if self.first or self.deep:
+                # take hidden states, compute prefix and integrate prefix between first hidden states and the rest
+                prefix = self.pt_emb.weight[None, :, :].repeat(hidden_states.size(0), 1, 1)
 
-            if self.first or self.replace: # replace
-                hidden_states[:, :self.pt_size, :] = prefix
-            else:
-                hidden_states[:, :self.pt_size, :] = hidden_states[:, :self.pt_size, :] + prefix
+                if self.first or self.replace: # replace
+                    hidden_states[:, :self.pt_size, :] = prefix
+                else:
+                    hidden_states[:, :self.pt_size, :] = hidden_states[:, :self.pt_size, :] + prefix
 
         ret = self.block(hidden_states,
                    attention_mask=attention_mask,
@@ -93,7 +103,7 @@ class T5BlockPTEncoder(T5BlockPT):
         return ret
 
 
-class T5StackPTEncoder(T5Stack):
+class T5PTEncoderStack(T5Stack):
     """ Wraps a T5Stack from the encoder to support prompt tuning """
     DUMMYID = 0
 
@@ -132,10 +142,17 @@ class T5StackPTEncoder(T5Stack):
             insert_embeds = torch.zeros(inputs_embeds.size(0), self.pt_size, inputs_embeds.size(2),
                                         dtype=inputs_embeds.dtype, device=inputs_embeds.device)
             inputs_embeds = torch.cat([insert_embeds, inputs_embeds], 1)
-        if input_ids is not None or inputs_embeds is not None:
-            insert_attention_mask = torch.ones(attention_mask.size(0), self.pt_size, dtype=attention_mask.dtype, device=attention_mask.device)
-            attention_mask = torch.cat([insert_attention_mask, attention_mask], 1)
-        ret = super(T5StackPTEncoder, self).forward(
+
+        if attention_mask is not None:
+            inplen = input_ids.size(1) \
+                if input_ids is not None \
+                else inputs_embeds.size(1)
+            if attention_mask.size(1) < inplen:
+                assert inplen - attention_mask.size(1) == self.pt_size
+                insert_attention_mask = torch.ones(attention_mask.size(0), self.pt_size, dtype=attention_mask.dtype, device=attention_mask.device)
+                attention_mask = torch.cat([insert_attention_mask, attention_mask], 1)
+
+        ret = super(T5PTEncoderStack, self).forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             encoder_hidden_states=encoder_hidden_states,
@@ -156,12 +173,16 @@ class T5PTGen(T5ForConditionalGeneration):
     DUMMYID = 5
     def adapt(self,
               out_vocab_size=None,
-              pt_type="default",               # de(ep)/sh(allow)+a(dd)/r(epl)+st(atic)/dy(namic)      default: deep+static+add
+              pt_type="default",               # "default" or "inoutonly" or "de(ep)/sh(allow)+a(dd)/r(epl)+st(atic)/dy(namic)"      default: deep+static+add
               pt_size=5,                    # number of prefix/prompt pseudo-tokens
               ):
         self.pt_size = pt_size
         self.pt_type = pt_type
         self.out_vocab_size = out_vocab_size
+
+        if self.pt_type == "inoutonly":
+            assert out_vocab_size is not None
+
         if out_vocab_size is not None:
             # change input embeddings and output layer
             self.decoder.embed_tokens = torch.nn.Embedding(out_vocab_size, self.shared.embedding_dim)
@@ -169,12 +190,21 @@ class T5PTGen(T5ForConditionalGeneration):
 
         dim = self.shared.embedding_dim
 
-        # adapt the transformer layers -- every adapted layer is responsible for generating its own prompt
-        for i, block in enumerate(self.encoder.block):      # encoder layers
-            block = T5BlockPTEncoder(block, pt_type=pt_type, pt_size=pt_size, first=i==0, dim=dim)
-            self.encoder.block[i] = block
+        if not (self.pt_type is None or self.pt_type == "inoutonly"):
+            # adapt the transformer layers -- every adapted layer is responsible for generating its own prompt
+            for i, block in enumerate(self.encoder.block):      # encoder layers
+                block = T5PTEncoderBlock(block, pt_type=pt_type, pt_size=pt_size, first=i == 0, dim=dim)
+                self.encoder.block[i] = block
 
-        self.encoder = T5StackPTEncoder.cast(self.encoder, pt_type=pt_type, pt_size=pt_size)
+            self.encoder = T5PTEncoderStack.cast(self.encoder, pt_type=pt_type, pt_size=pt_size)
+        self.shared = None      # make sure self.shared is not used!
+
+    def get_pt_params(self):
+        ret = []
+        if self.out_vocab_size is not None:
+            ret += list(self.lm_head.parameters())
+            ret += list(self.decoder.embed_tokens.parameters())
+        return ret
 
     def forward(
             self,
@@ -195,12 +225,12 @@ class T5PTGen(T5ForConditionalGeneration):
             output_hidden_states=None,
             return_dict=None,
     ):
-        if encoder_outputs is not None:
-            # assumption: encoder_outputs is None when doing training and is not None when doing generation.
-            # => in case encoder_outputs is not None, we still need to fix the attention mask over the input!
-            # insert attention mask here as well because during generation, decoder is called with old attention mask while hidden states are from extended
-            insert_attention_mask = torch.ones(attention_mask.size(0), self.pt_size, dtype=attention_mask.dtype, device=attention_mask.device)
-            attention_mask = torch.cat([insert_attention_mask, attention_mask], 1)
+        # ALWAYS fix input attention mask here because it goes into decoder only from here!
+        # assumption: encoder_outputs is None when doing training and is not None when doing generation.
+        # => in case encoder_outputs is not None, we still need to fix the attention mask over the input!
+        # insert attention mask here as well because during generation, decoder is called with old attention mask while hidden states are from extended
+        insert_attention_mask = torch.ones(attention_mask.size(0), self.pt_size, dtype=attention_mask.dtype, device=attention_mask.device)
+        attention_mask = torch.cat([insert_attention_mask, attention_mask], 1)
         ret = super(T5PTGen, self).forward(input_ids=input_ids,
                                      attention_mask=attention_mask,
                                      decoder_input_ids=decoder_input_ids,
@@ -230,7 +260,74 @@ def try_generate(inp:str=None, model=None, tokenizer=None):
     print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
 
-def load_t5(modelsize="small",  use_lm100k=True):
+def try_train(inps:List[str], outs:List[str], model=None, tokenizer=None):
+    params = get_tunable_params(model)
+    set_requires_grad(model, params)
+
+    inputs = tokenizer(inps, return_tensors='pt', padding=True)
+    outputs = tokenizer(outs, return_tensors='pt', padding=True)
+
+    modelout = model(input_ids=inputs.input_ids,
+                 attention_mask=inputs.attention_mask,
+                 labels=outputs.input_ids)
+
+    print(f"Loss: {modelout.loss}")
+
+    modelout.loss.backward()
+    print("done backward")
+
+
+def _get_pt_params(m, out=None):
+    if hasattr(m, "get_pt_params"):
+        out.extend(m.get_pt_params())
+
+
+def get_tunable_params(model:T5PTGen):
+    collectedparams = []
+    model.apply(partial(_get_pt_params, out=collectedparams))
+    return collectedparams
+
+
+def set_requires_grad(model:torch.nn.Module, params):
+    for param in model.parameters():
+        computegrad = False
+        for tunableparam in params:
+            if param is tunableparam:
+                computegrad = True
+        param.requires_grad = computegrad
+
+
+def load_t5_tokenizer(modelsize="small"):
+    print(f"Transformers version: {transformers.__version__}")
+    tt = q.ticktock("script")
+    modelname = f"google/t5-v1_1-{modelsize}"
+    tt.msg(f"modelname: {modelname}")
+    tt.tick("loading tokenizer")
+    tokenizer = T5Tokenizer.from_pretrained(modelname)
+    tt.tock("loaded")
+    return tokenizer
+
+
+def load_t5(modelsize="small", use_lm100k=True, pt_type=None, pt_size=None, out_vocab_size=None):
+    """
+    :param modelsize:       "small" / "base" / "large" / "xl" / "xxl"
+    :param use_lm100k:      use the LM100k pretraind T5 or not
+    :param pt_type:         None --> original T5 returned
+                            "inoutonly" --> adapted T5 is returned but with the decoder input and
+                                            output replaced by vanilla networks. 'out_vocab_size' must be specified.
+                            "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)":
+                                "shallow" vs "deep" :   shallow affects only input to lowest encoder block,
+                                                        deep affects input for all encoder blocks
+                                "replace" vs "add":     replace replaces the prefix part from previous layer, add adds
+                                                        (this only makes sense in "deep" mode; first encoder block is always in "replace" mode)
+                                "static" vs "dynamic":  static just uses fixed params at every adapted encoder block
+                                                        dynamic computes the prefix vectors based on the input (not implemented)
+    :param pt_size:         how long prefix is
+    :param out_vocab_size:  number of tokens in new decoder vocabulary.
+                            If None, input and output layers of decoder are not replaced
+                            If not None, input and output layers of decoder are replaced with randomly initialized layers
+    :return:
+    """
     print(f"Transformers version: {transformers.__version__}")
     tt = q.ticktock("script")
     tt.tick(f"loading {modelsize} T5-LM100k")
@@ -240,22 +337,38 @@ def load_t5(modelsize="small",  use_lm100k=True):
     tokenizer = T5Tokenizer.from_pretrained(modelname)
     tt.tock("loaded")
     config = T5Config.from_pretrained(modelname)
-    # model = T5PTGen.from_pretrained(modelname)
     if use_lm100k:
-        tt.tick("loading 100k-LM T5 model from checkpoint")
-        model = T5PTGen.from_pretrained(f"../../t5lm100k/t5.1.1.lm100k.{modelsize}/model.ckpt-1100000.index", from_tf=True, config=config)
+        if pt_type is not None:
+            tt.tick(f"loading PT-adapted 100k-LM T5-{modelsize} model from checkpoint")
+            model = T5PTGen.from_pretrained(f"../../t5lm100k/t5.1.1.lm100k.{modelsize}/model.ckpt-1100000.index",
+                                            from_tf=True, config=config)
+        else:
+            tt.tick(f"loading normal 100k-LM T5-{modelsize} model from checkpoint")
+            model = T5ForConditionalGeneration.from_pretrained(f"../../t5lm100k/t5.1.1.lm100k.{modelsize}/model.ckpt-1100000.index",
+                                            from_tf=True, config=config)
     else:
-        tt.tick("loading T5 from huggingface")
-        model = T5PTGen.from_pretrained(modelname)
+        if pt_type is not None:
+            tt.tick(f"loading PT-adapted T5-{modelsize} from huggingface")
+            model = T5PTGen.from_pretrained(modelname)
+        else:
+            tt.tick(f"loading normal T5-{modelsize} from huggingface")
+            model = T5ForConditionalGeneration.from_pretrained(modelname)
     tt.tock("loaded")
     tt.tock("loaded everything")
+    if pt_type is not None:
+        tt.msg(f"adapting to PT mode {pt_type}, PT size {pt_size}")
+        model.adapt(pt_type=pt_type, pt_size=pt_size, out_vocab_size=out_vocab_size)
     return tokenizer, model, config
 
 
 def main(lr=0.001):
-    tokenizer, model, _ = load_t5("small")
-    model.adapt(out_vocab_size=50)
-    try_generate(model=model, tokenizer=tokenizer)
+    out_vocab_size = 50000
+    tokenizer, model, _ = load_t5("small", pt_type="default", pt_size=5, out_vocab_size=out_vocab_size)
+
+    # try_generate(model=model, tokenizer=tokenizer)
+    inps = ["Hello, my name is", "I will find you"]
+    outs = ["Hallo, mijn naam is", "Ik zal je vinden"]
+    try_train(inps, outs, model=model, tokenizer=tokenizer)
 
     # inputs = tokenizer(['0 translate English to German: The house is wonderful.', 'translate English to German: the house is.'], return_tensors='pt', truncation=True, padding=True)
     # decinp = tokenizer(['0 Das Haus ist wunderbar', '0 Das haus'], return_tensors='pt', truncation=True, padding=True)
