@@ -33,6 +33,10 @@ class T5PTBlock(torch.nn.Module):       # wrapper for T5 Blocks with PT
 
         self.first = first
 
+        self.dynamic = False
+        self.replace = False
+        self.deep = False
+
         for x in self.pt_type.split("+"):
             if x.startswith("a"):
                 self.replace = False
@@ -362,10 +366,11 @@ def load_t5(modelsize="small", use_lm100k=True, pt_type=None, pt_size=None, out_
 
 
 def main(lr=0.001):
-    out_vocab_size = 50000
+    out_vocab_size = None
     tokenizer, model, _ = load_t5("small", pt_type="default", pt_size=5, out_vocab_size=out_vocab_size)
 
     # try_generate(model=model, tokenizer=tokenizer)
+
     inps = ["Hello, my name is", "I will find you"]
     outs = ["Hallo, mijn naam is", "Ik zal je vinden"]
     try_train(inps, outs, model=model, tokenizer=tokenizer)

@@ -5,7 +5,7 @@ import re
 import shelve
 from copy import deepcopy
 from functools import partial
-from typing import Dict
+from typing import Dict, Callable
 
 import wandb
 
@@ -18,168 +18,117 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
-from parseq.scripts_prompt.t5 import load_t5_tokenizer
+from parseq.scripts_prompt.t5 import load_t5_tokenizer, load_t5
 from parseq.vocab import Vocab
 
 
-# class SeqDecoderBaseline(torch.nn.Module):
-#     # default_termination_mode = "sequence"
-#     # default_decode_mode = "serial"
-#
-#     def __init__(self, tagger:TransformerDecoderCell,
-#                  vocab=None,
-#                  max_size:int=100,
-#                  smoothing:float=0.,
-#                  **kw):
-#         super(SeqDecoderBaseline, self).__init__(**kw)
-#         self.tagger = tagger
-#         self.vocab = vocab
-#         self.max_size = max_size
-#         self.smoothing = smoothing
-#         if self.smoothing > 0:
-#             self.loss = q.SmoothedCELoss(reduction="none", ignore_index=0, smoothing=smoothing, mode="logprobs")
-#         else:
-#             self.loss = torch.nn.NLLLoss(reduction="none", ignore_index=0)
-#
-#         self.logsm = torch.nn.LogSoftmax(-1)
-#
-#     def forward(self, x, y):
-#         if self.training:
-#             return self.train_forward(x, y)
-#         else:
-#             return self.test_forward(x, y)
-#
-#     def compute_loss(self, logits, tgt):
-#         """
-#         :param logits:      (batsize, seqlen, vocsize)
-#         :param tgt:         (batsize, seqlen)
-#         :return:
-#         """
-#         mask = (tgt != 0).float()
-#
-#         logprobs = self.logsm(logits)
-#         if self.smoothing > 0:
-#             loss = self.loss(logprobs, tgt)
-#         else:
-#             loss = self.loss(logprobs.permute(0, 2, 1), tgt)      # (batsize, seqlen)
-#         loss = loss * mask
-#         loss = loss.sum(-1)
-#
-#         best_pred = logits.max(-1)[1]   # (batsize, seqlen)
-#         best_gold = tgt
-#         same = best_pred == best_gold
-#         same = same | ~(mask.bool())
-#         acc = same.all(-1)  # (batsize,)
-#         return loss, acc.float()
-#
-#     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-#         preds, stepsused = self.get_prediction(x)
-#
-#         def tensor_to_trees(x, vocab:Vocab):
-#             xstrs = [vocab.tostr(x[i]).replace("@START@", "") for i in range(len(x))]
-#             xstrs = [re.sub("::\d+", "", xstr) for xstr in xstrs]
-#             trees = []
-#             for xstr in xstrs:
-#                 # drop everything after @END@, if present
-#                 xstr = xstr.split("@END@")
-#                 xstr = xstr[0]
-#                 # add an opening parentheses if not there
-#                 xstr = xstr.strip()
-#                 if len(xstr) == 0 or xstr[0] != "(":
-#                     xstr = "(" + xstr
-#                 # balance closing parentheses
-#                 parenthese_imbalance = xstr.count("(") - xstr.count(")")
-#                 xstr = xstr + ")" * max(0, parenthese_imbalance)        # append missing closing parentheses
-#                 xstr = "(" * -min(0, parenthese_imbalance) + xstr       # prepend missing opening parentheses
-#                 try:
-#                     tree = taglisp_to_tree(xstr)
-#                     if isinstance(tree, tuple) and len(tree) == 2 and tree[0] is None:
-#                         tree = None
-#                 except Exception as e:
-#                     tree = None
-#                 trees.append(tree)
-#             return trees
-#
-#         # compute loss and metrics
-#         gold_trees = tensor_to_trees(gold, vocab=self.vocab)
-#         pred_trees = tensor_to_trees(preds, vocab=self.vocab)
-#         treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
-#                     for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
-#         ret = {"treeacc": torch.tensor(treeaccs).to(x.device), "stepsused": stepsused}
-#         return ret, pred_trees
-#
-#     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
-#         # extract a training example from y:
-#         x, newy, tgt = self.extract_training_example(x, y)
-#         enc, encmask = self.tagger.encode_source(x)
-#         # run through tagger: the same for all versions
-#         logits, cache = self.tagger(tokens=newy, enc=enc, encmask=encmask, cache=None)
-#         # compute loss: different versions do different masking and different targets
-#         loss, acc = self.compute_loss(logits, tgt)
-#         return {"loss": loss, "acc": acc}, logits
-#
-#     def extract_training_example(self, x, y):
-#         ymask = (y != 0).float()
-#         ylens = ymask.sum(1).long()
-#         newy = y
-#         newy = torch.cat([torch.ones_like(newy[:, 0:1]) * self.vocab["@START@"], newy], 1)
-#         newy = torch.cat([newy, torch.zeros_like(newy[:, 0:1])], 1)       # append some zeros
-#         # append EOS
-#         for i, ylen in zip(range(len(ylens)), ylens):
-#             newy[i, ylen+1] = self.vocab["@END@"]
-#
-#         goldy = newy[:, 1:]
-#         # tgt = torch.zeros(goldy.size(0), goldy.size(1), self.vocab.number_of_ids(), device=goldy.device)
-#         # tgt = tgt.scatter(2, goldy[:, :, None], 1.)
-#         # tgtmask = (goldy != 0).float()
-#
-#         newy = newy[:, :-1]
-#         return x, newy, goldy
-#
-#     def get_prediction(self, x:torch.Tensor):
-#         steps_used = torch.ones(x.size(0), device=x.device, dtype=torch.long) * self.max_size
-#         # initialize empty ys:
-#         y = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@START@"]
-#         # yend = torch.ones(x.size(0), 1, device=x.device, dtype=torch.long) * self.vocab["@EOS@"]
-#
-#         # run encoder
-#         enc, encmask = self.tagger.encode_source(x)
-#
-#         step = 0
-#         newy = None
-#         ended = torch.zeros_like(y[:, 0]).bool()
-#         cache = None
-#         while step < self.max_size and not torch.all(ended):
-#             y = newy if newy is not None else y
-#             # run tagger
-#             # y = torch.cat([y, yend], 1)
-#             logits, cache = self.tagger(tokens=y, enc=enc, encmask=encmask, cache=cache)
-#             _, preds = logits.max(-1)
-#             preds = preds[:, -1]
-#             newy = torch.cat([y, preds[:, None]], 1)
-#             y__ = torch.cat([y, torch.zeros_like(newy[:, :newy.size(1) - y.size(1)])], 1)
-#             newy = torch.where(ended[:, None], y__, newy)     # prevent terminated examples from changing
-#             _ended = (preds == self.vocab["@END@"])
-#             ended = ended | _ended
-#             step += 1
-#             steps_used = torch.min(steps_used, torch.where(_ended, torch.ones_like(steps_used) * step, steps_used))
-#         return newy, steps_used.float()
+class SeqDecoderT5(torch.nn.Module):
+
+    def __init__(self, model,
+                 max_size:int=100,
+                 batch_to_strs:Callable=None,
+                 dropout=0.,
+                 **kw):
+        super(SeqDecoderT5, self).__init__(**kw)
+        self.model = model
+        self.max_size = max_size
+        self.batch_to_strs = batch_to_strs
+        self.dropout = dropout
+        # TODO: use dropout!
+
+    def forward(self, x, y):
+        if self.training:
+            return self.train_forward(x, y)
+        else:
+            return self.test_forward(x, y)
+
+    def tensor_to_trees(self, x):
+        xstrs = self.batch_to_strs(x)
+        xstrs = [xi.replace("@START@", "") for xi in xstrs]
+        xstrs = [re.sub("::\d+", "", xstr) for xstr in xstrs]
+        trees = []
+        for xstr in xstrs:
+            # drop everything after @END@, if present
+            xstr = xstr.split("@END@")[0].strip()
+            if len(xstr) == 0 or xstr[0] != "(":
+                xstr = "(" + xstr
+            # balance closing parentheses
+            parenthese_imbalance = xstr.count("(") - xstr.count(")")
+            xstr = xstr + ")" * max(0, parenthese_imbalance)  # append missing closing parentheses
+            xstr = "(" * -min(0, parenthese_imbalance) + xstr  # prepend missing opening parentheses
+            try:
+                tree = taglisp_to_tree(xstr)
+                if isinstance(tree, tuple) and len(tree) == 2 and tree[0] is None:
+                    tree = None
+            except Exception as e:
+                tree = None
+            trees.append(tree)
+        return trees
+
+    def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
+        preds = self.model.generate(x, max_length=self.max_size)
+
+        # compute loss and metrics
+        gold_trees = self.tensor_to_trees(gold)
+        pred_trees = self.tensor_to_trees(preds)
+        treeaccs = [float(are_equal_trees(gold_tree, pred_tree, orderless=ORDERLESS, unktoken="@UNK@"))
+                    for gold_tree, pred_tree in zip(gold_trees, pred_trees)]
+        ret = {"treeacc": torch.tensor(treeaccs).to(x.device)}
+        return ret, pred_trees
+
+    def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
+        modelout = self.model(
+            input_ids=x,
+            attention_mask=(x!=0).long(),
+            labels=y
+        )
+        loss, logits = modelout.loss, modelout.logits
+        _, preds = logits.max(-1)
+        same = (preds == y) & (y != 0)
+        elemacc = same.float().sum(1) / (y != 0).sum(1)
+        elemacc = elemacc.mean(0)
+        same |= (y == 0)
+        seqacc = torch.all(same, 1).float().mean(0)
+        return {"loss": loss, "acc": seqacc}, logits
+
+    def extract_training_example(self, x, y):
+        ymask = (y != 0).float()
+        ylens = ymask.sum(1).long()
+        newy = y
+        newy = torch.cat([torch.ones_like(newy[:, 0:1]) * self.vocab["@START@"], newy], 1)
+        newy = torch.cat([newy, torch.zeros_like(newy[:, 0:1])], 1)       # append some zeros
+        # append EOS
+        for i, ylen in zip(range(len(ylens)), ylens):
+            newy[i, ylen+1] = self.vocab["@END@"]
+
+        goldy = newy[:, 1:]
+        # tgt = torch.zeros(goldy.size(0), goldy.size(1), self.vocab.number_of_ids(), device=goldy.device)
+        # tgt = tgt.scatter(2, goldy[:, :, None], 1.)
+        # tgtmask = (goldy != 0).float()
+
+        newy = newy[:, :-1]
+        return x, newy, goldy
 
 
 class Tokenizer(object):
-    def __init__(self, inptok=None, outvocab:Vocab=None, **kw):
+    def __init__(self, inptok=None, outtok=None, outvocab:Vocab=None, **kw):
         super(Tokenizer, self).__init__(**kw)
         self.inptok = inptok
+        self.outtok = outtok
         self.outvocab = outvocab
 
     def tokenize(self, inps:str, outs):
         # input:
         inputs = self.inptok(inps, return_tensors='pt')
+        inptensor = inputs.input_ids[0]
 
-        outtoks = self.get_out_toks(outs)
-        ret = {"inps": inps, "outs":outs, "outtoks": outtoks,
-               "inptensor": inputs.input_ids[0],
-               "outtensor": self.tensorize_output(outtoks, self.outvocab)}
+        if self.outtok is None:
+            outtoks = self.get_out_toks(outs)
+            outtensor = self.tensorize_output(outtoks, self.outvocab)
+        else:
+            outputs = self.outtok(outs.lower(), return_tensors='pt')
+            outtensor = outputs.input_ids[0]
+        ret = {"inps": inps, "outs":outs, "inptensor": inptensor, "outtensor": outtensor}
         ret = (ret["inptensor"], ret["outtensor"])
         return ret
 
@@ -198,17 +147,17 @@ class Tokenizer(object):
 ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY", "(@WHERE", "(@OR", "(@AND", "(@QUERY"}
 
 
-def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=None):
+def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=None, originalinout=False):
     tt = q.ticktock("data")
     tt.tick(f"loading '{dataset}'")
 
     inptok = load_t5_tokenizer(inptok_name)
 
     if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
-        key = f"{dataset}|inptok=t5-{inptok_name}"
+        key = f"{dataset}|inptok=t5-{inptok_name}|originalinout={originalinout}"
         print(f"validfrac is ineffective with dataset '{dataset}'")
     else:
-        key = f"{dataset}|validfrac={validfrac}|inptok=t5-{inptok_name}"
+        key = f"{dataset}|validfrac={validfrac}|inptok=t5-{inptok_name}|originalinout={originalinout}"
 
     shelfname = os.path.basename(__file__) + ".cache.shelve"
     if not recompute:
@@ -237,28 +186,43 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
             raise Exception(f"Unknown dataset: '{dataset}'")
         tt.tock("loaded data")
 
-        tt.tick("creating tokenizer")
-        tokenizer = Tokenizer(inptok=inptok)
-        tt.tock("created tokenizer")
+        if not originalinout:
+            tt.tick("creating tokenizer")
+            tokenizer = Tokenizer(inptok=inptok)
+            tt.tock("created tokenizer")
 
-        print(len(ds))
+            print(len(ds))
 
-        tt.tick("dictionaries")
-        inplens, outlens = [0], []
-        fldic = Vocab()
-        for x in ds:
-            outtoks = tokenizer.get_out_toks(x[1])
-            outlens.append(len(outtoks))
-            for tok in outtoks:
-                fldic.add_token(tok, seen=x[2] == "train")
-        fldic.finalize(min_freq=0, top_k=np.infty)
-        print(
-            f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
-        print(f"output vocabulary size: {len(fldic.D)} at output")
-        tt.tock()
+            tt.tick("dictionaries")
+            inplens, outlens = [0], []
+            fldic = Vocab()
+            for x in ds:
+                inplens.append(len(tokenizer.inptok(x[0]).input_ids))
+                outtoks = tokenizer.get_out_toks(x[1])
+                outlens.append(len(outtoks))
+                for tok in outtoks:
+                    fldic.add_token(tok, seen=x[2] == "train")
+            fldic.finalize(min_freq=0, top_k=np.infty)
+            tokenizer.outvocab = fldic
+            print(
+                f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
+            print(f"output vocabulary size: {len(fldic.D)} at output")
+            tt.tock("built dictionaries")
+        else:
+            tt.tick("creating tokenizer")
+            tokenizer = Tokenizer(inptok=inptok, outtok=inptok)
+            tt.tock("created tokenizer")
+
+            tt.msg("using input tokenizer for output")
+            inplens, outlens = [0], []
+            for x in ds:
+                inplens.append(len(tokenizer.inptok(x[0]).input_ids))
+                outlens.append(len(tokenizer.outtok(x[1]).input_ids))
+            print(
+                f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
+            fldic = None
 
         tt.tick("tensorizing")
-        tokenizer.outvocab = fldic
         trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
         validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
         testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
@@ -305,6 +269,7 @@ def run(lr=0.0001,
         cosinelr=False,
         modelsize="small",
         ftmode="ft",  # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
+        originalinout=False,
         ptsize=5,  # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
         dataset="scan/length",
         maxsize=50,
@@ -323,6 +288,7 @@ def run(lr=0.0001,
     :param modelsize:      what size of T5 model to use
     :param ftmode:      "ft" --> finetune entire model, pretrained weights are secondary params (lr=lr*lrmul)
                         otherwise --> see docs of load_t5() in t5.py
+    :param originalinout:  if True, the original input and output layers of the original T5 decoder are used
     :param ptsize:
     :param testcode:
     :param evaltrain:
@@ -343,7 +309,11 @@ def run(lr=0.0001,
     tt = q.ticktock("script")
     tt.tick("data")
     trainds, validds, testds, fldic = \
-        load_ds(dataset=dataset, validfrac=validfrac, inptok_name=modelsize, recompute=recomputedata)
+        load_ds(dataset=dataset,
+                validfrac=validfrac,
+                inptok_name=modelsize,
+                originalinout=originalinout,
+                recompute=recomputedata)
     if trainonvalid:
         tt.msg("TRAINING ON TRAIN+VALID, VALIDATING ON TEST !!!!!!!")
         trainds = trainds + validds
@@ -360,10 +330,23 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("model")
-    cell = TransformerDecoderCell(hdim, vocab=fldic, inpvocab=inpdic, numlayers=numlayers, numheads=numheads, dropout=dropout,
-                                  bertname=bertname, userelpos=userelpos, useabspos=not userelpos)
-    decoder = SeqDecoderBaseline(cell, vocab=fldic, max_size=maxsize, smoothing=smoothing)
-    print(f"one layer of decoder: \n {cell.decoder.block[0]}")
+    out_vocab_size = None
+    if fldic is not None:
+        out_vocab_size = fldic.number_of_ids()
+    else:
+        assert originalinout
+    pt_type = ftmode
+    if ftmode == "ft":
+        if originalinout:
+            pt_type = None
+        else:
+            pt_type = "inoutonly"
+    t5tok, t5, _ = load_t5(modelsize=modelsize, use_lm100k=True, pt_type=pt_type, pt_size=ptsize, out_vocab_size=out_vocab_size)
+    if fldic is None:
+        batchtostrs = lambda x: t5tok.decode(x)     # TODO: test
+    else:
+        batchtostrs = lambda x: [fldic.tostr(x[i]) for i in range(len(x))]
+    decoder = SeqDecoderT5(t5, max_size=maxsize, batch_to_strs=batchtostrs, dropout=dropout)
     tt.tock()
 
     if testcode:
@@ -525,6 +508,7 @@ def run_experiment(
         cosinelr=False,
         modelsize="small",
         ftmode="ft",        # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
+        originalinout=False,
         ptsize=5,           # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
         dataset="default",
         maxsize=-1,
@@ -557,7 +541,10 @@ def run_experiment(
     if dataset.startswith("cfq"):
         settings["maxsize"] = 160
     elif dataset.startswith("scan"):
-        settings["maxsize"] = 50
+        if originalinout:
+            settings["maxsize"] = 300
+        else:
+            settings["maxsize"] = 55
 
     for k in ranges:
         if k in settings:
