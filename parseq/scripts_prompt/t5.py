@@ -233,8 +233,9 @@ class T5PTGen(T5ForConditionalGeneration):
         # assumption: encoder_outputs is None when doing training and is not None when doing generation.
         # => in case encoder_outputs is not None, we still need to fix the attention mask over the input!
         # insert attention mask here as well because during generation, decoder is called with old attention mask while hidden states are from extended
-        insert_attention_mask = torch.ones(attention_mask.size(0), self.pt_size, dtype=attention_mask.dtype, device=attention_mask.device)
-        attention_mask = torch.cat([insert_attention_mask, attention_mask], 1)
+        if self.pt_type != "inoutonly":
+            insert_attention_mask = torch.ones(attention_mask.size(0), self.pt_size, dtype=attention_mask.dtype, device=attention_mask.device)
+            attention_mask = torch.cat([insert_attention_mask, attention_mask], 1)
         ret = super(T5PTGen, self).forward(input_ids=input_ids,
                                      attention_mask=attention_mask,
                                      decoder_input_ids=decoder_input_ids,
