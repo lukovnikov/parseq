@@ -3,6 +3,7 @@ from functools import partial
 from typing import List
 
 import torch
+import numpy as np
 import qelos as q
 from torch import nn
 import transformers
@@ -12,6 +13,23 @@ from transformers.models.t5.modeling_t5 import T5Stack, T5Block, T5LayerNorm, lo
 
 
 # use 100k LM pre-trained T5 weights instead of normal weights! --> https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md
+
+
+
+class CosineWithRestart(q.sched.Cosine):
+    def _get_lr(self, i):
+        perc = (i / (self.num_steps / self.cycles)) % 1.0
+        ret = (np.cos((perc / 2 + self.phase) * 2 * np.pi) * self._scale) + self._add
+        return ret
+
+
+def try_cosine():
+    import matplotlib.pyplot as plt
+    sched = CosineWithRestart(cycles=3, steps=100) * q.sched.Linear(1, 0, steps=100)
+    x = list(range(100))
+    y = [sched.get_lr(i) for i in x]
+    plt.plot(x, y)
+    plt.show()
 
 
 class T5PTBlock(torch.nn.Module):       # wrapper for T5 Blocks with PT
@@ -410,4 +428,5 @@ def main(lr=0.001):
 
 
 if __name__ == '__main__':
-    q.argprun(main)
+    # q.argprun(main)
+    try_cosine()

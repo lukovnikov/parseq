@@ -18,7 +18,8 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
-from parseq.scripts_prompt.t5 import load_t5_tokenizer, load_t5, T5PTGen, get_tunable_params, set_custom_dropouts
+from parseq.scripts_prompt.t5 import load_t5_tokenizer, load_t5, T5PTGen, get_tunable_params, set_custom_dropouts, \
+    CosineWithRestart
 from parseq.vocab import Vocab
 
 
@@ -272,7 +273,7 @@ def run(lr=0.0001,
         validinter=3,
         validfrac=0.1,
         warmup=3,
-        cosinelr=False,
+        cosinecycles=0,
         modelsize="small",
         ftmode="ft",  # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
         originalinout=False,
@@ -286,7 +287,7 @@ def run(lr=0.0001,
         gpu=-1,
         trainonvalidonly=False,
         recomputedata=False,
-        version="v2",
+        version="v3",
         ):
     """
     :param lrmul:       multiplier for learning rate for secondary parameters
@@ -431,17 +432,21 @@ def run(lr=0.0001,
             d["valid_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
-    t_max = epochs
+    t_max = epochs * len(traindl)
     optim = get_optim(decoder, lr, lrmul, ftmode, originalinout)
     print(f"Total number of updates: {t_max} .")
-    if cosinelr:
-        assert t_max > (warmup + 10)
-        lr_schedule = q.sched.Linear(steps=warmup) >> q.sched.Cosine(low=0., high=1.0, steps=t_max-warmup) >> (0. * lr)
+    warmupsteps = warmup * t_max
+    if cosinecycles == 0:       # constant lr
+        lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> 1.
     else:
-        lr_schedule = q.sched.Linear(steps=warmup) >> 1.
+        lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> (CosineWithRestart(cycles=cosinecycles, steps=t_max-warmupsteps)) >> 0.000001
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
-    trainbatch = partial(q.train_batch, on_before_optim_step=[lambda : clipgradnorm(_m=decoder, _norm=gradnorm)])
+    trainbatch = partial(q.train_batch,
+                         on_before_optim_step=[
+                             lambda : clipgradnorm(_m=decoder, _norm=gradnorm),
+                             lambda : lr_schedule.step()
+                         ])
 
     if trainonvalidonly:
         tt.msg("TRAINING ON IID VALID ONLY, VALIDATING ON TEST !!!!!!!")
@@ -453,8 +458,7 @@ def run(lr=0.0001,
                          optim=optim,
                          losses=tloss,
                          device=device,
-                         _train_batch=trainbatch,
-                         on_end=[lambda: lr_schedule.step()])
+                         _train_batch=trainbatch)
 
     trainevalepoch = partial(q.test_epoch,
                              model=decoder,
@@ -549,8 +553,8 @@ def run_experiment(
         batsize=-1,
         epochs=-1,
         validinter=-1,
-        warmup=5,
-        cosinelr=False,
+        warmup=0.1,
+        cosinecycles=0,
         modelsize="small",
         ftmode="ft",        # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
         originalinout=False,
