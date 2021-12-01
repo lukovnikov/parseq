@@ -272,7 +272,7 @@ def run(lr=0.0001,
         epochs=16,
         validinter=3,
         validfrac=0.1,
-        warmup=3,
+        warmup=0.1,
         cosinecycles=0,
         modelsize="small",
         ftmode="ft",  # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
@@ -434,8 +434,8 @@ def run(lr=0.0001,
 
     t_max = epochs * len(traindl)
     optim = get_optim(decoder, lr, lrmul, ftmode, originalinout)
-    print(f"Total number of updates: {t_max} .")
-    warmupsteps = warmup * t_max
+    warmupsteps = int(round(warmup * t_max))
+    print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
     if cosinecycles == 0:       # constant lr
         lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> 1.
     else:
