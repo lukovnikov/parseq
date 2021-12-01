@@ -18,7 +18,7 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
-from parseq.scripts_prompt.t5 import load_t5_tokenizer, load_t5, T5PTGen, get_tunable_params
+from parseq.scripts_prompt.t5 import load_t5_tokenizer, load_t5, T5PTGen, get_tunable_params, set_custom_dropouts
 from parseq.vocab import Vocab
 
 
@@ -27,14 +27,11 @@ class SeqDecoderT5(torch.nn.Module):
     def __init__(self, model,
                  max_size:int=100,
                  batch_to_strs:Callable=None,
-                 dropout=0.,
                  **kw):
         super(SeqDecoderT5, self).__init__(**kw)
         self.model = model
         self.max_size = max_size
         self.batch_to_strs = batch_to_strs
-        self.dropout = dropout
-        # TODO: use dropout!
 
     def forward(self, x, y):
         if self.training:
@@ -148,16 +145,24 @@ ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY", "(@WHERE", "(@OR", "(@AND", "(@Q
 
 
 def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=None, originalinout=False):
+    """
+    :param dataset:
+    :param validfrac:       how much of the original IID train set is used for IID validation set
+    :param recompute:
+    :param inptok_name:
+    :param originalinout:
+    :return:
+    """
     tt = q.ticktock("data")
     tt.tick(f"loading '{dataset}'")
 
     inptok = load_t5_tokenizer(inptok_name)
 
+    iidvalidisoodvalid = False
     if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
-        key = f"{dataset}|inptok=t5-{inptok_name}|originalinout={originalinout}"
-        print(f"validfrac is ineffective with dataset '{dataset}'")
-    else:
-        key = f"{dataset}|validfrac={validfrac}|inptok=t5-{inptok_name}|originalinout={originalinout}"
+        iidvalidisoodvalid = True
+
+    key = f"{dataset}|validfrac={validfrac}|inptok=t5-{inptok_name}|originalinout={originalinout}"
 
     shelfname = os.path.basename(__file__) + ".cache.shelve"
     if not recompute:
@@ -168,9 +173,9 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
                 tt.tock("couldn't load from shelf")
             else:
                 shelved = shelf[key]
-                trainex, validex, testex, fldic = shelved["trainex"], shelved["validex"], shelved["testex"], shelved["fldic"]
+                trainex, iidvalidex, oodvalidex, testex, fldic = shelved["trainex"], shelved["iidvalidex"], shelved["oodvalidex"], shelved["testex"], shelved["fldic"]
                 _inptok_name = shelved["inptok_name"]
-                trainds, validds, testds = Dataset(trainex), Dataset(validex), Dataset(testex)
+                trainds, iidvalidds, oodvalidds, testds = Dataset(trainex), Dataset(iidvalidex), Dataset(oodvalidex), Dataset(testex)
                 tt.tock("loaded from shelf")
 
     if recompute:
@@ -181,7 +186,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
         if dataset == "scan":
             ds = SCANDatasetLoader().load(split, validfrac=validfrac)
         elif dataset == "cfq":
-            ds = CFQDatasetLoader().load(split + "/modent")
+            ds = CFQDatasetLoader().load(split + "/modent", validfrac=validfrac)
         else:
             raise Exception(f"Unknown dataset: '{dataset}'")
         tt.tock("loaded data")
@@ -224,7 +229,8 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
 
         tt.tick("tensorizing")
         trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-        validds = ds.filter(lambda x: x[-1] == "valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+        iidvalidds = ds.filter(lambda x: x[-1] == "iidvalid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
+        oodvalidds = ds.filter(lambda x: x[-1] == "oodvalid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
         testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
         # ds = ds.map(lambda x: tokenizer.tokenize(x[0], x[1]) + (x[2],)).cache(True)
         tt.tock("tensorized")
@@ -233,7 +239,8 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
         with shelve.open(shelfname) as shelf:
             shelved = {
                 "trainex": trainds.examples,
-                "validex": validds.examples,
+                "iidvalidex": iidvalidds.examples,
+                "oodvalidex": oodvalidds.examples,
                 "testex": testds.examples,
                 "fldic": fldic,
                 "inptok_name": inptok_name,
@@ -242,8 +249,8 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
         tt.tock("shelved")
 
     tt.tock(f"loaded '{dataset}'")
-    tt.msg(f"#train={len(trainds)}, #valid={len(validds)}, #test={len(testds)}")
-    return trainds, validds, testds, fldic
+    tt.msg(f"#train={len(trainds)}, #iidvalid={len(iidvalidds)}, #oodvalid={len(oodvalidds)}, #test={len(testds)}")
+    return trainds, iidvalidds, oodvalidds, testds, fldic
 
 
 def collate_fn(x, pad_value=0, numtokens=5000):
@@ -262,7 +269,6 @@ def run(lr=0.0001,
         gradnorm=3,
         batsize=60,
         epochs=16,
-        patience=10,
         validinter=3,
         validfrac=0.1,
         warmup=3,
@@ -274,11 +280,10 @@ def run(lr=0.0001,
         dataset="scan/length",
         maxsize=50,
         seed=42,
-        dropout=0.1,
+        dropout=0.,
+        dropoutpassive=0.,
         testcode=False,
         gpu=-1,
-        evaltrain=False,
-        trainonvalid=False,
         trainonvalidonly=False,
         recomputedata=False,
         version="v1",
@@ -308,21 +313,19 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, validds, testds, fldic = \
+    trainds, iidvalidds, oodvalidds, testds, fldic = \
         load_ds(dataset=dataset,
                 validfrac=validfrac,
                 inptok_name=modelsize,
                 originalinout=originalinout,
                 recompute=recomputedata)
-    if trainonvalid:
-        tt.msg("TRAINING ON TRAIN+VALID, VALIDATING ON TEST !!!!!!!")
-        trainds = trainds + validds
-        validds = testds
 
     tt.tick("dataloaders")
-    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=4)
-    validdl = DataLoader(validds, batch_size=batsize, shuffle=False, collate_fn=autocollate, num_workers=4)
-    testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate, num_workers=4)
+    NUMWORKERS = 0
+    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
+    iidvaliddl = DataLoader(iidvalidds, batch_size=batsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    oodvaliddl = DataLoader(oodvalidds, batch_size=batsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     # print(json.dumps(next(iter(trainds)), indent=3))
     # print(next(iter(traindl)))
     # print(next(iter(validdl)))
@@ -342,11 +345,20 @@ def run(lr=0.0001,
         else:
             pt_type = "inoutonly"
     t5tok, t5, _ = load_t5(modelsize=modelsize, use_lm100k=True, pt_type=pt_type, pt_size=ptsize, out_vocab_size=out_vocab_size)
+
+    # set dropouts:
+    def _set_dropout(x=None, _p=None):
+        if isinstance(x, torch.nn.Dropout):
+            x.p = _p
+
+    t5.apply(partial(_set_dropout, _p=dropoutpassive))           # set all dropouts to passive dropout rate (zero by default)
+    set_custom_dropouts(t5, p=dropout)
+
     if fldic is None:
         batchtostrs = lambda x: t5tok.batch_decode(x)     # TODO: test
     else:
         batchtostrs = lambda x: [fldic.tostr(x[i]) for i in range(len(x))]
-    decoder = SeqDecoderT5(t5, max_size=maxsize, batch_to_strs=batchtostrs, dropout=dropout)
+    decoder = SeqDecoderT5(t5, max_size=maxsize, batch_to_strs=batchtostrs)
     tt.tock()
 
     if testcode:
@@ -364,7 +376,8 @@ def run(lr=0.0001,
 
     tloss = make_array_of_metrics("loss", "acc", reduction="mean")
     tmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    vmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    iidvmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    oodvmetrics = make_array_of_metrics("treeacc", reduction="mean")
     xmetrics = make_array_of_metrics("treeacc", reduction="mean")
 
     # region parameters
@@ -400,10 +413,11 @@ def run(lr=0.0001,
     def clipgradnorm(_m=None, _norm=None):
         torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
 
-    if patience < 0:
-        patience = epochs
-    eyt = q.EarlyStopper(vmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
+    patience = epochs
+    iideyt = q.EarlyStopper(iidvmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
                          remember_f=lambda: deepcopy(decoder.model))
+    oodeyt = q.EarlyStopper(oodvmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
+                            remember_f=lambda: deepcopy(decoder.model))
 
     def wandb_logger():
         d = {}
@@ -411,7 +425,9 @@ def run(lr=0.0001,
             d["train_"+name] = loss.get_epoch_error()
         for name, loss in zip(["tree_acc"], tmetrics):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], vmetrics):
+        for name, loss in zip(["tree_acc"], iidvmetrics):
+            d["valid_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["tree_acc"], oodvmetrics):
             d["valid_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
@@ -428,8 +444,8 @@ def run(lr=0.0001,
     trainbatch = partial(q.train_batch, on_before_optim_step=[lambda : clipgradnorm(_m=decoder, _norm=gradnorm)])
 
     if trainonvalidonly:
-        tt.msg("TRAINING ON VALID ONLY, VALIDATING ON TEST !!!!!!!")
-        traindl = validdl
+        tt.msg("TRAINING ON IID VALID ONLY, VALIDATING ON TEST !!!!!!!")
+        traindl = iidvaliddl
         validdl = testdl
 
     trainepoch = partial(q.train_epoch, model=decoder,
@@ -446,25 +462,30 @@ def run(lr=0.0001,
                              dataloader=traindl,
                              device=device)
 
-    on_end_v = [lambda: eyt.on_epoch_end(), lambda: wandb_logger()]
-    validepoch = partial(q.test_epoch,
+    iidvalidepoch = partial(q.test_epoch,
                          model=decoder,
-                         losses=vmetrics,
-                         dataloader=validdl,
+                         losses=iidvmetrics,
+                         dataloader=iidvaliddl,
                          device=device,
-                         on_end=on_end_v)
+                         on_end=[lambda: iideyt.on_epoch_end()])
+
+    oodvalidepoch = partial(q.test_epoch,
+                            model=decoder,
+                            losses=oodvmetrics,
+                            dataloader=oodvaliddl,
+                            device=device,
+                            on_end=[lambda: oodeyt.on_epoch_end(), lambda: wandb_logger()])
 
     tt.tick("training")
-    if evaltrain:
-        validfs = [trainevalepoch, validepoch]
-    else:
-        validfs = [validepoch]
+    validfs = [iidvalidepoch, oodvalidepoch]
     q.run_training(run_train_epoch=trainepoch,
                    run_valid_epoch=validfs,
                    max_epochs=epochs,
-                   check_stop=[lambda: eyt.check_stop()],
+                   check_stop=[lambda: iideyt.check_stop() and oodeyt.check_stop()],
                    validinter=validinter)
     tt.tock("done training")
+
+    settings.update({"train_loss_at_end": tloss[0].get_epoch_error()})
 
     tt.tick("running test before reloading")
     testepoch = partial(q.test_epoch,
@@ -474,32 +495,48 @@ def run(lr=0.0001,
                          device=device)
 
     testres = testepoch()
-    print(f"Test tree acc: {testres}")
-    tt.tock("ran test")
+    settings.update({"test_tree_acc_at_end": xmetrics[0].get_epoch_error()})
+    tt.tock(f"Test tree acc: {testres}")
 
-    if eyt.remembered is not None:
-        tt.msg("reloading best")
-        decoder.model = eyt.remembered
-        model = eyt.remembered
+    if iideyt.remembered is not None:
+        tt.msg("reloading model with best IID validation accuracy")
+        decoder.model = iideyt.remembered
+        model = iideyt.remembered
+
+        tt.tick("running train")
+        trainres = trainevalepoch()
+        settings.update({"train_tree_acc_at_iidearly": tmetrics[0].get_epoch_error()})
+        tt.tock(f"Train tree acc: {trainres}")
 
         tt.tick("rerunning validation")
-        validres = validepoch()
-        tt.tock(f"Validation results: {validres}")
+        iidvalidres = iidvalidepoch()
+        settings.update({"iidvalid_tree_acc_at_iidearly": iidvmetrics[0].get_epoch_error()})
+        tt.tock(f"IID validation results: {iidvalidres}")
 
-    tt.tick("running train")
-    trainres = trainevalepoch()
-    print(f"Train tree acc: {trainres}")
-    tt.tock()
+        tt.tick("running test")
+        testres = testepoch()
+        settings.update({"test_tree_acc_at_iidearly": xmetrics[0].get_epoch_error()})
+        tt.tock(f"Test tree acc: {testres}")
 
-    tt.tick("running test")
-    testres = testepoch()
-    print(f"Test tree acc: {testres}")
-    tt.tock()
+    if iideyt.remembered is not None:
+        tt.msg("reloading model with best OOD validation accuracy")
+        decoder.model = oodeyt.remembered
+        model = oodeyt.remembered
 
-    settings.update({"final_train_loss": tloss[0].get_epoch_error()})
-    settings.update({"final_train_tree_acc": tmetrics[0].get_epoch_error()})
-    settings.update({"final_valid_tree_acc": vmetrics[0].get_epoch_error()})
-    settings.update({"final_test_tree_acc": xmetrics[0].get_epoch_error()})
+        tt.tick("running train")
+        trainres = trainevalepoch()
+        settings.update({"train_tree_acc_at_oodearly": tmetrics[0].get_epoch_error()})
+        tt.tock(f"Train tree acc: {trainres}")
+
+        tt.tick("rerunning validation")
+        oodvalidres = oodvalidepoch()
+        settings.update({"oodvalid_tree_acc_at_oodearly": oodvmetrics[0].get_epoch_error()})
+        tt.tock(f"IID validation results: {oodvalidres}")
+
+        tt.tick("running test")
+        testres = testepoch()
+        settings.update({"test_tree_acc_at_oodearly": xmetrics[0].get_epoch_error()})
+        tt.tock(f"Test tree acc: {testres}")
 
     wandb.config.update(settings)
     q.pp_dict(settings)
@@ -511,9 +548,8 @@ def run_experiment(
         gradnorm=2,
         batsize=-1,
         epochs=-1,
-        patience=100,
         validinter=-1,
-        warmup=3,
+        warmup=5,
         cosinelr=False,
         modelsize="small",
         ftmode="ft",        # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
@@ -523,9 +559,9 @@ def run_experiment(
         maxsize=-1,
         seed=-1,
         dropout=-1.,
+        dropoutpassive=-1.,
         testcode=False,
         trainonvalidonly=False,
-        evaltrain=False,
         gpu=-1,
         recomputedata=False,
         ):
@@ -534,11 +570,12 @@ def run_experiment(
 
     ranges = {
         "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
-        "dropout": [0.1, 0.25, 0.5],
+        "dropout": [0.1],
+        "dropoutpassive": [0.1],
         "seed": [42, 87646464, 456852],
-        "epochs": [15],
+        "epochs": [50],
         "batsize": [60],
-        "lr": [0.0001],
+        "lr": [0.001],
         "lrmul": [0.1],
         "modelsize": ["small", "base", "large"],
         # "patience": [-1],
@@ -566,13 +603,14 @@ def run_experiment(
                 # raise Exception(f"something wrong with setting '{k}'")
             del settings[k]
 
+    if dataset.endswith("/mcd"):
+        ranges["dataset"] = [dataset + f"{i}" for i in range(1, 4)]
+
     def checkconfig(spec):
         return True
 
-    print(__file__)
-    p = __file__ + f".baseline.{dataset}"
     q.run_experiments_random(
-        run, ranges, path_prefix=p, check_config=checkconfig, **settings)
+        run, ranges, path_prefix=None, check_config=checkconfig, **settings)
 
 
 if __name__ == '__main__':

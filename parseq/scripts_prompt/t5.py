@@ -20,9 +20,11 @@ class T5PTBlock(torch.nn.Module):       # wrapper for T5 Blocks with PT
                  pt_type="default",
                  pt_size=5,
                  first=False,
+                 prompt_dropout=0.,
                  ):
         super().__init__()
         self.block = block
+        self.prompt_dropout = torch.nn.Dropout(prompt_dropout)
 
         if pt_type == "default":
             pt_type = "shallow+static+add"
@@ -57,6 +59,9 @@ class T5PTBlock(torch.nn.Module):       # wrapper for T5 Blocks with PT
         else:
             raise NotImplementedError("use static")
 
+    def set_custom_dropout(self, p=0.):
+        self.prompt_dropout.p = p
+
     def get_pt_params(self):
         ret = []
         if hasattr(self, "pt_emb"):
@@ -85,6 +90,7 @@ class T5PTEncoderBlock(T5PTBlock):
             if self.first or self.deep:
                 # take hidden states, compute prefix and integrate prefix between first hidden states and the rest
                 prefix = self.pt_emb.weight[None, :, :].repeat(hidden_states.size(0), 1, 1)
+                prefix = self.dropout(prefix)
 
                 if self.first or self.replace: # replace
                     hidden_states[:, :self.pt_size, :] = prefix
@@ -187,7 +193,7 @@ class T5PTGen(T5ForConditionalGeneration):
         if self.pt_type == "inoutonly":
             assert out_vocab_size is not None
 
-        if out_vocab_size is not None:
+        if self.out_vocab_size is not None:
             # change input embeddings and output layer
             self.decoder.embed_tokens = torch.nn.Embedding(out_vocab_size, self.shared.embedding_dim)
             self.lm_head = torch.nn.Linear(self.lm_head.in_features, out_vocab_size, bias=False)
@@ -202,6 +208,10 @@ class T5PTGen(T5ForConditionalGeneration):
 
             self.encoder = T5PTEncoderStack.cast(self.encoder, pt_type=pt_type, pt_size=pt_size)
         self.shared = None      # make sure self.shared is not used!
+
+    def set_custom_dropout(self, p=0.):
+        if self.out_vocab_size is not None:     # we use vanilla initialized input and output layers in decoder
+            self.decoder.dropout.p = p
 
     def get_pt_params(self):
         ret = []
@@ -291,6 +301,16 @@ def get_tunable_params(model:T5PTGen):
     collectedparams = []
     model.apply(partial(_get_pt_params, out=collectedparams))
     return collectedparams
+
+
+def _set_custom_dropouts(m:torch.nn.Module=None, p=0.):
+    if hasattr(m, "set_custom_dropout"):
+        m.set_custom_dropout(p)
+
+
+def set_custom_dropouts(model:T5PTGen, p=0.):
+    model.apply(partial(_set_custom_dropouts, p=p))
+    return model
 
 
 def set_requires_grad(model:torch.nn.Module, params):

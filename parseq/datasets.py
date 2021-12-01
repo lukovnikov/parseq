@@ -1169,7 +1169,7 @@ class CFQDatasetLoader(object):
         shutil.rmtree(os.path.join(self.p, "cfq"))
         self.tt.tock()
 
-    def load(self, split="random/modent", verbose=True, lispify=True):
+    def load(self, split="random/modent", validfrac=0.1, seed=42, verbose=True, lispify=True):
         """
                 :param split: which split to use (see self.available_splits)
                 must be of the form "split/version" where "split" part can be "mcdX" or "random" or other
@@ -1188,6 +1188,25 @@ class CFQDatasetLoader(object):
         examples = []
         splitidxs = json.load(open(os.path.join(self.p, f"{split}.json")))
         splitidxs = {self.remap[k]: v for k, v in splitidxs.items()}
+
+        trainidxs = splitidxs["train"]
+
+        if validfrac > 0:
+            if verbose:
+                print(f"splitting off a random {validfrac*100:.0f}% of 'train' for 'iidvalid' using seed {seed}")
+            rnd = random.Random(seed)
+            rnd.shuffle(trainidxs)
+            numvalid = round(validfrac * len(trainidxs))
+            valididxs = trainidxs[:numvalid]
+            trainidxs = trainidxs[numvalid:]
+            splitidxs["train"] = trainidxs
+            splitidxs["iidvalid"] = valididxs
+
+        if "valid" in splitidxs:        # rename provided validation set "oodvalid"
+            splitidxs["oodvalid"] = splitidxs["valid"]
+            del splitidxs["valid"]
+        else:                           # copy "iidvalid" to "oodvalid"
+            splitidxs["oodvalid"] = splitidxs["iidvalid"]
 
         all_lines = open(os.path.join(self.p, "_data.jsonl")).readlines()
         all_lines = [x.strip() for x in all_lines]
@@ -1341,7 +1360,7 @@ class SCANDatasetLoader(object):
             print("file missing, downloading")
             download_url(self.fullp, os.path.join(self.p, "all.txt"))
 
-    def load(self, split="random", lispify=True, validfrac=0.1, seed=42, verbose=True):
+    def load(self, split="random", validfrac=0.1, seed=42, verbose=True, lispify=True):
         """
         :param split: which split to use (see self.available_splits)
         :return:
@@ -1353,19 +1372,24 @@ class SCANDatasetLoader(object):
         splitidxs = json.load(open(os.path.join(self.p, f"{split}.json")))
         splitidxs = {self.remap[k]: v for k, v in splitidxs.items()}
 
-        validpresent = "valid" in splitidxs
         trainidxs = splitidxs["train"]
 
-        if not validpresent and validfrac >= 0:
+        if validfrac > 0:
             if verbose:
-                print(f"splitting off a random {validfrac*100:.0f}% of 'train' for 'valid' using seed {seed}")
+                print(f"splitting off a random {validfrac*100:.0f}% of 'train' for 'iidvalid' using seed {seed}")
             rnd = random.Random(seed)
             rnd.shuffle(trainidxs)
             numvalid = round(validfrac * len(trainidxs))
             valididxs = trainidxs[:numvalid]
             trainidxs = trainidxs[numvalid:]
             splitidxs["train"] = trainidxs
-            splitidxs["valid"] = valididxs
+            splitidxs["iidvalid"] = valididxs
+
+        if "valid" in splitidxs:        # rename provided validation set "oodvalid"
+            splitidxs["oodvalid"] = splitidxs["valid"]
+            del splitidxs["valid"]
+        else:                           # copy "iidvalid" to "oodvalid"
+            splitidxs["oodvalid"] = splitidxs["iidvalid"]
 
         all_lines = open(os.path.join(self.p, "all.txt")).readlines()
         all_lines = [x.strip() for x in all_lines]
