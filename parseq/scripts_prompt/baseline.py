@@ -30,11 +30,13 @@ class SeqDecoderT5(torch.nn.Module):
     def __init__(self, model,
                  max_size:int=100,
                  batch_to_strs:Callable=None,
+                 eos_token_id=None,
                  **kw):
         super(SeqDecoderT5, self).__init__(**kw)
         self.model = model
         self.max_size = max_size
         self.batch_to_strs = batch_to_strs
+        self.eos_token_id = eos_token_id
 
     def forward(self, x, y):
         if self.training:
@@ -66,7 +68,7 @@ class SeqDecoderT5(torch.nn.Module):
         return trees
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-        preds = self.model.generate(x, max_length=self.max_size)
+        preds = self.model.generate(x, max_length=self.max_size, eos_token_id=self.eos_token_id)
 
         # compute loss and metrics
         gold_trees = self.tensor_to_trees(gold)
@@ -77,6 +79,8 @@ class SeqDecoderT5(torch.nn.Module):
         return ret, pred_trees
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
+        # replace padded positions with -100 --> internally, T5 code ignores index -100 in CE loss
+        y = y - 100 * (y == 0).long()
         modelout = self.model(
             input_ids=x,
             attention_mask=(x!=0).long(),
@@ -91,23 +95,23 @@ class SeqDecoderT5(torch.nn.Module):
         seqacc = torch.all(same, 1).float().mean(0)
         return {"loss": loss, "acc": seqacc}, logits
 
-    def extract_training_example(self, x, y):
-        ymask = (y != 0).float()
-        ylens = ymask.sum(1).long()
-        newy = y
-        newy = torch.cat([torch.ones_like(newy[:, 0:1]) * self.vocab["@START@"], newy], 1)
-        newy = torch.cat([newy, torch.zeros_like(newy[:, 0:1])], 1)       # append some zeros
-        # append EOS
-        for i, ylen in zip(range(len(ylens)), ylens):
-            newy[i, ylen+1] = self.vocab["@END@"]
-
-        goldy = newy[:, 1:]
-        # tgt = torch.zeros(goldy.size(0), goldy.size(1), self.vocab.number_of_ids(), device=goldy.device)
-        # tgt = tgt.scatter(2, goldy[:, :, None], 1.)
-        # tgtmask = (goldy != 0).float()
-
-        newy = newy[:, :-1]
-        return x, newy, goldy
+    # def extract_training_example(self, x, y):
+    #     ymask = (y != 0).float()
+    #     ylens = ymask.sum(1).long()
+    #     newy = y
+    #     newy = torch.cat([torch.ones_like(newy[:, 0:1]) * self.vocab["@START@"], newy], 1)
+    #     newy = torch.cat([newy, torch.zeros_like(newy[:, 0:1])], 1)       # append some zeros
+    #     # append EOS
+    #     for i, ylen in zip(range(len(ylens)), ylens):
+    #         newy[i, ylen+1] = self.vocab["@END@"]
+    #
+    #     goldy = newy[:, 1:]
+    #     # tgt = torch.zeros(goldy.size(0), goldy.size(1), self.vocab.number_of_ids(), device=goldy.device)
+    #     # tgt = tgt.scatter(2, goldy[:, :, None], 1.)
+    #     # tgtmask = (goldy != 0).float()
+    #
+    #     newy = newy[:, :-1]
+    #     return x, newy, goldy
 
 
 class Tokenizer(object):
@@ -123,7 +127,7 @@ class Tokenizer(object):
         inptensor = inputs.input_ids[0]
 
         if self.outtok is None:
-            outtoks = self.get_out_toks(outs)
+            outtoks = self.get_out_toks(outs) + [self.outvocab.endtoken]
             outtensor = self.tensorize_output(outtoks, self.outvocab)
         else:
             outputs = self.outtok(outs.lower(), return_tensors='pt')
@@ -284,7 +288,7 @@ class CustomValidator:
             fnres = fn()
             fnreses.append(fnres)
         if self.tt is not None:
-            self.tt.msg(" - ".join([str(x) for x in fnreses]))
+            self.tt.msg("validator: " + " - ".join([str(x) for x in fnreses]))
 
     def on_batch_end(self):
         if self.validinter < 1:
@@ -403,7 +407,7 @@ def run(lr=0.0001,
         batchtostrs = lambda x: t5tok.batch_decode(x)     # TODO: test
     else:
         batchtostrs = lambda x: [fldic.tostr(x[i]) for i in range(len(x))]
-    decoder = SeqDecoderT5(t5, max_size=maxsize, batch_to_strs=batchtostrs)
+    decoder = SeqDecoderT5(t5, max_size=maxsize, batch_to_strs=batchtostrs, eos_token_id=fldic[fldic.endtoken])
     tt.tock()
 
     if testcode:
