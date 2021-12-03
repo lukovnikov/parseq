@@ -13,6 +13,7 @@ import qelos as q
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
+from transformers import Adafactor
 
 from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetLoader
 
@@ -266,6 +267,7 @@ def collate_fn(x, pad_value=0, numtokens=5000):
 
 
 def run(lr=0.0001,
+        useadafactor=False,
         lrmul=0.1,
         gradnorm=3,
         batsize=60,
@@ -408,8 +410,16 @@ def run(lr=0.0001,
 
     def get_optim(_m, _lr, _lrmul, _ftmode, _originalinout, _wreg=0):
         paramgroups = get_parameters(_m, _lr=lr, _lrmul=_lrmul, _ftmode=_ftmode, _originalinout=_originalinout)
-        optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=_wreg)
+        if useadafactor:
+            tt.msg("Using AdaFactor.")
+            optim = Adafactor(paramgroups, lr=lr, scale_parameter=False, relative_step=False, warmup_init=False)
+        else:
+            tt.msg("Using Adam.")
+            optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=_wreg)
         return optim
+
+    if useadafactor:
+        gradnorm = 1e6
 
     def clipgradnorm(_m=None, _norm=None):
         torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
@@ -436,11 +446,16 @@ def run(lr=0.0001,
     optim = get_optim(decoder, lr, lrmul, ftmode, originalinout)
     warmupsteps = int(round(warmup * t_max))
     print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
+
     if cosinecycles == 0:       # constant lr
+        tt.msg("Using constant LR with warmup")
         lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> 1.
     else:
+        tt.msg("Using cosine LR with restart and with warmup")
         lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> (CosineWithRestart(cycles=cosinecycles, steps=t_max-warmupsteps)) >> 0.000001
+
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
+
 
     trainbatch = partial(q.train_batch,
                          on_before_optim_step=[
@@ -535,7 +550,7 @@ def run(lr=0.0001,
         tt.tick("rerunning validation")
         oodvalidres = oodvalidepoch()
         settings.update({"oodvalid_tree_acc_at_oodearly": oodvmetrics[0].get_epoch_error()})
-        tt.tock(f"IID validation results: {oodvalidres}")
+        tt.tock(f"OOD validation results: {oodvalidres}")
 
         tt.tick("running test")
         testres = testepoch()
@@ -549,6 +564,7 @@ def run(lr=0.0001,
 def run_experiment(
         lr=-1.,
         lrmul=-1.,
+        useadafactor=False,
         gradnorm=2,
         batsize=-1,
         epochs=-1,
@@ -579,8 +595,8 @@ def run_experiment(
         "seed": [42, 87646464, 456852],
         "epochs": [50],
         "batsize": [60],
-        "lr": [0.001],
-        "lrmul": [0.1],
+        "lr": [0.0005],
+        "lrmul": [1.],
         "modelsize": ["small", "base", "large"],
         # "patience": [-1],
         # "warmup": [20],
