@@ -5,6 +5,7 @@ import re
 import shelve
 from copy import deepcopy
 from functools import partial
+from math import ceil
 from typing import Dict, Callable
 
 import wandb
@@ -266,13 +267,51 @@ def collate_fn(x, pad_value=0, numtokens=5000):
     return ret
 
 
+class CustomValidator:
+    def __init__(self, *validepochfns, numbats=None, validinter=None, tt=None):
+        super().__init__()
+        self.tt = tt
+        self.validepochfns = validepochfns      # functions that will be triggered
+        self.numbats = numbats
+        self.validinter = validinter
+        self.batchmod = int(ceil(self.numbats * self.validinter))
+        self.batchcount = 0
+        self.epochcount = 0
+
+    def run_fns(self):
+        fnreses = []
+        for fn in self.validepochfns:
+            fnres = fn()
+            fnreses.append(fnres)
+        if self.tt is not None:
+            self.tt.msg(" - ".join([str(x) for x in fnreses]))
+
+    def on_batch_end(self):
+        if self.validinter < 1:
+            self.batchcount += 1
+            if self.batchcount % self.batchmod == 0 or self.batchcount % self.numbats == 0:
+                self.run_fns()
+
+            # reset count
+            if self.batchcount % self.numbats == 0:
+                self.batchcount = 0
+
+    def on_epoch_end(self):
+        self.batchcount = 0
+        if self.validinter >= 1:
+            if self.epochcount % self.validinter == 0:
+                self.run_fns()
+        self.epochcount += 1
+
+
 def run(lr=0.0001,
         useadafactor=False,
         lrmul=0.1,
         gradnorm=3,
         batsize=60,
+        testbatsize=-1,
         epochs=16,
-        validinter=3,
+        validinter=3.,
         validfrac=0.1,
         warmup=0.1,
         cosinecycles=0,
@@ -289,7 +328,7 @@ def run(lr=0.0001,
         gpu=-1,
         trainonvalidonly=False,
         recomputedata=False,
-        version="v3",
+        version="v4",
         ):
     """
     :param lrmul:       multiplier for learning rate for secondary parameters
@@ -314,6 +353,9 @@ def run(lr=0.0001,
     np.random.seed(seed)
     device = torch.device("cpu") if gpu < 0 else torch.device("cuda", gpu)
 
+    if testbatsize == -1:
+        testbatsize = batsize
+
     tt = q.ticktock("script")
     tt.tick("data")
     trainds, iidvalidds, oodvalidds, testds, fldic = \
@@ -326,9 +368,9 @@ def run(lr=0.0001,
     tt.tick("dataloaders")
     NUMWORKERS = 0
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
-    iidvaliddl = DataLoader(iidvalidds, batch_size=batsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
-    oodvaliddl = DataLoader(oodvalidds, batch_size=batsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
-    testdl = DataLoader(testds, batch_size=batsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    iidvaliddl = DataLoader(iidvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    oodvaliddl = DataLoader(oodvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    testdl = DataLoader(testds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     # print(json.dumps(next(iter(trainds)), indent=3))
     # print(next(iter(traindl)))
     # print(next(iter(validdl)))
@@ -437,9 +479,9 @@ def run(lr=0.0001,
         for name, loss in zip(["tree_acc"], tmetrics):
             d["train_"+name] = loss.get_epoch_error()
         for name, loss in zip(["tree_acc"], iidvmetrics):
-            d["valid_"+name] = loss.get_epoch_error()
+            d["iidvalid_"+name] = loss.get_epoch_error()
         for name, loss in zip(["tree_acc"], oodvmetrics):
-            d["valid_"+name] = loss.get_epoch_error()
+            d["oodvalid_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
     t_max = epochs * len(traindl)
@@ -456,31 +498,6 @@ def run(lr=0.0001,
 
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
-
-    trainbatch = partial(q.train_batch,
-                         on_before_optim_step=[
-                             lambda : clipgradnorm(_m=decoder, _norm=gradnorm),
-                             lambda : lr_schedule.step()
-                         ])
-
-    if trainonvalidonly:
-        tt.msg("TRAINING ON IID VALID ONLY, VALIDATING ON TEST !!!!!!!")
-        traindl = iidvaliddl
-        validdl = testdl
-
-    trainepoch = partial(q.train_epoch, model=decoder,
-                         dataloader=traindl,
-                         optim=optim,
-                         losses=tloss,
-                         device=device,
-                         _train_batch=trainbatch)
-
-    trainevalepoch = partial(q.test_epoch,
-                             model=decoder,
-                             losses=tmetrics,
-                             dataloader=traindl,
-                             device=device)
-
     iidvalidepoch = partial(q.test_epoch,
                          model=decoder,
                          losses=iidvmetrics,
@@ -493,15 +510,44 @@ def run(lr=0.0001,
                             losses=oodvmetrics,
                             dataloader=oodvaliddl,
                             device=device,
-                            on_end=[lambda: oodeyt.on_epoch_end(), lambda: wandb_logger()])
+                            on_end=[lambda: oodeyt.on_epoch_end()])
+
+    validator = CustomValidator(iidvalidepoch, oodvalidepoch, lambda: wandb_logger(), numbats=len(traindl), validinter=validinter, tt=tt)
+
+    trainbatch = partial(q.train_batch,
+                         on_before_optim_step=[
+                             lambda : clipgradnorm(_m=decoder, _norm=gradnorm),
+                             lambda : lr_schedule.step()
+                         ],
+                         on_end=[lambda : validator.on_batch_end()]
+                         )
+
+    if trainonvalidonly:
+        tt.msg("TRAINING ON IID VALID ONLY, VALIDATING ON TEST !!!!!!!")
+        traindl = iidvaliddl
+        validdl = testdl
+
+    trainepoch = partial(q.train_epoch, model=decoder,
+                         dataloader=traindl,
+                         optim=optim,
+                         losses=tloss,
+                         device=device,
+                         _train_batch=trainbatch,
+                         on_end=[lambda: validator.on_epoch_end()])
+
+    trainevalepoch = partial(q.test_epoch,
+                             model=decoder,
+                             losses=tmetrics,
+                             dataloader=traindl,
+                             device=device)
 
     tt.tick("training")
     validfs = [iidvalidepoch, oodvalidepoch]
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=validfs,
+                   run_valid_epoch=None,
                    max_epochs=epochs,
-                   check_stop=[lambda: iideyt.check_stop() and oodeyt.check_stop()],
-                   validinter=validinter)
+                   check_stop=[lambda: iideyt.check_stop() and oodeyt.check_stop()]
+                   )
     tt.tock("done training")
 
     settings.update({"train_loss_at_end": tloss[0].get_epoch_error()})
@@ -567,8 +613,9 @@ def run_experiment(
         useadafactor=False,
         gradnorm=2,
         batsize=-1,
+        testbatsize=-1,
         epochs=-1,
-        validinter=-1,
+        validinter=-1.,
         warmup=0.1,
         cosinecycles=0,
         modelsize="small",
