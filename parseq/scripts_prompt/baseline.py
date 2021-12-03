@@ -80,11 +80,11 @@ class SeqDecoderT5(torch.nn.Module):
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # replace padded positions with -100 --> internally, T5 code ignores index -100 in CE loss
-        y = y - 100 * (y == 0).long()
+        labels = y - 100 * (y == 0).long()
         modelout = self.model(
             input_ids=x,
             attention_mask=(x!=0).long(),
-            labels=y
+            labels=labels
         )
         loss, logits = modelout.loss, modelout.logits
         _, preds = logits.max(-1)
