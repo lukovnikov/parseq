@@ -1389,7 +1389,7 @@ class SCANDatasetLoader(object):
             splitidxs["oodvalid"] = splitidxs["valid"]
             del splitidxs["valid"]
         else:                           # copy "iidvalid" to "oodvalid"
-            splitidxs["oodvalid"] = splitidxs["iidvalid"]
+            splitidxs["oodvalid"] = splitidxs["test"]
 
         all_lines = open(os.path.join(self.p, "all.txt")).readlines()
         all_lines = [x.strip() for x in all_lines]
