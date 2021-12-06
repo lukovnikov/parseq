@@ -324,6 +324,7 @@ def run(lr=0.0001,
         originalinout=False,
         ptsize=5,  # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
         adapterdim=64,
+        no100klm=False,
         dataset="scan/length",
         maxsize=50,
         seed=42,
@@ -394,7 +395,7 @@ def run(lr=0.0001,
             pt_type = None
         else:
             pt_type = "inoutonly"
-    t5tok, t5, _ = load_t5(modelsize=modelsize, use_lm100k=True, pt_type=pt_type, pt_size=ptsize, adapterdim=adapterdim, out_vocab_size=out_vocab_size)
+    t5tok, t5, _ = load_t5(modelsize=modelsize, use_lm100k=not no100klm, pt_type=pt_type, pt_size=ptsize, adapterdim=adapterdim, out_vocab_size=out_vocab_size)
 
     # set dropouts:
     def _set_dropout(x=None, _p=None):
@@ -629,6 +630,7 @@ def run_experiment(
         originalinout=False,
         ptsize=5,           # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
         adapterdim=-1,
+        no100klm=False,
         dataset="default",
         maxsize=-1,
         seed=-1,
