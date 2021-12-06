@@ -108,7 +108,7 @@ class T5PTEncoderBlock(T5PTBlock):
             if self.first or self.deep:
                 # take hidden states, compute prefix and integrate prefix between first hidden states and the rest
                 prefix = self.pt_emb.weight[None, :, :].repeat(hidden_states.size(0), 1, 1)
-                prefix = self.dropout(prefix)
+                prefix = self.prompt_dropout(prefix)
 
                 if self.first or self.replace: # replace
                     hidden_states[:, :self.pt_size, :] = prefix

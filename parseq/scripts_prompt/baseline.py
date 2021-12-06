@@ -21,7 +21,7 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
 from parseq.scripts_prompt.t5 import load_t5_tokenizer, load_t5, T5PTGen, get_tunable_params, set_custom_dropouts, \
-    CosineWithRestart
+    CosineWithRestart, set_requires_grad
 from parseq.vocab import Vocab
 
 
@@ -448,6 +448,7 @@ def run(lr=0.0001,
                 i += 1
         else:
             primary_params = get_tunable_params(m)
+            set_requires_grad(m, primary_params)
         paramgroups = [{"params": primary_params, "lr": _lr}]
         if len(secondary_params) > 0:
             paramgroups.append({"params": secondary_params, "lr": _lr * _lrmul})
