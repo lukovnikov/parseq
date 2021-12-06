@@ -323,6 +323,7 @@ def run(lr=0.0001,
         ftmode="ft",  # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
         originalinout=False,
         ptsize=5,  # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
+        adapterdim=64,
         dataset="scan/length",
         maxsize=50,
         seed=42,
@@ -332,7 +333,7 @@ def run(lr=0.0001,
         gpu=-1,
         trainonvalidonly=False,
         recomputedata=False,
-        version="v5",
+        version="v6",
         ):
     """
     :param lrmul:       multiplier for learning rate for secondary parameters
@@ -393,7 +394,7 @@ def run(lr=0.0001,
             pt_type = None
         else:
             pt_type = "inoutonly"
-    t5tok, t5, _ = load_t5(modelsize=modelsize, use_lm100k=True, pt_type=pt_type, pt_size=ptsize, out_vocab_size=out_vocab_size)
+    t5tok, t5, _ = load_t5(modelsize=modelsize, use_lm100k=True, pt_type=pt_type, pt_size=ptsize, adapterdim=adapterdim, out_vocab_size=out_vocab_size)
 
     # set dropouts:
     def _set_dropout(x=None, _p=None):
@@ -627,6 +628,7 @@ def run_experiment(
         ftmode="ft",        # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
         originalinout=False,
         ptsize=5,           # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
+        adapterdim=-1,
         dataset="default",
         maxsize=-1,
         seed=-1,
@@ -654,6 +656,7 @@ def run_experiment(
         # "warmup": [20],
         "validinter": [2],
         # "gradacc": [1],
+        "adapterdim": [64],
     }
 
     if dataset.startswith("cfq"):

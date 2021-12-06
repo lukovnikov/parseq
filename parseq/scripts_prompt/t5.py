@@ -9,7 +9,8 @@ from torch import nn
 import transformers
 from torch.nn import CrossEntropyLoss
 from transformers import T5Tokenizer, T5ForConditionalGeneration, T5Config
-from transformers.models.t5.modeling_t5 import T5Stack, T5Block, T5LayerNorm, load_tf_weights_in_t5
+from transformers.models.t5.modeling_t5 import T5Stack, T5Block, T5LayerNorm, load_tf_weights_in_t5, T5LayerFF, \
+    T5LayerSelfAttention, T5LayerCrossAttention
 
 
 # use 100k LM pre-trained T5 weights instead of normal weights! --> https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md
@@ -45,6 +46,7 @@ class T5PTBlock(torch.nn.Module):       # wrapper for T5 Blocks with PT
         self.prompt_dropout = torch.nn.Dropout(prompt_dropout)
 
         if pt_type == "default":
+            print("Using shallow+static+add as default")
             pt_type = "shallow+static+add"
 
         self.pt_type = pt_type
@@ -80,7 +82,7 @@ class T5PTBlock(torch.nn.Module):       # wrapper for T5 Blocks with PT
     def set_custom_dropout(self, p=0.):
         self.prompt_dropout.p = p
 
-    def get_pt_params(self):
+    def get_ft_params(self):
         ret = []
         if hasattr(self, "pt_emb"):
             ret += list(self.pt_emb.parameters())
@@ -203,9 +205,11 @@ class T5PTGen(T5ForConditionalGeneration):
               out_vocab_size=None,
               pt_type="default",               # "default" or "inoutonly" or "de(ep)/sh(allow)+a(dd)/r(epl)+st(atic)/dy(namic)"      default: deep+static+add
               pt_size=5,                    # number of prefix/prompt pseudo-tokens
+              adapt_dim=64,                 # dimension of adapters, only used if pt_type is "ada(pters)"
               ):
-        self.pt_size = pt_size
         self.pt_type = pt_type
+        self.pt_size = pt_size
+        self.adapt_dim = adapt_dim
         self.out_vocab_size = out_vocab_size
 
         if self.pt_type == "inoutonly":
@@ -218,7 +222,10 @@ class T5PTGen(T5ForConditionalGeneration):
 
         dim = self.shared.embedding_dim
 
-        if not (self.pt_type is None or self.pt_type == "inoutonly"):
+        if self.pt_type.startswith("ada"):
+            # use bottleneck adapters in all transformer layers
+            pass
+        elif not (self.pt_type is None or self.pt_type == "inoutonly"):
             # adapt the transformer layers -- every adapted layer is responsible for generating its own prompt
             for i, block in enumerate(self.encoder.block):      # encoder layers
                 block = T5PTEncoderBlock(block, pt_type=pt_type, pt_size=pt_size, first=i == 0, dim=dim)
@@ -231,7 +238,7 @@ class T5PTGen(T5ForConditionalGeneration):
         if self.out_vocab_size is not None:     # we use vanilla initialized input and output layers in decoder
             self.decoder.dropout.p = p
 
-    def get_pt_params(self):
+    def get_ft_params(self):
         ret = []
         if self.out_vocab_size is not None:
             ret += list(self.lm_head.parameters())
@@ -284,6 +291,193 @@ class T5PTGen(T5ForConditionalGeneration):
         return ret
 
 
+class AdapterFF(torch.nn.Module):
+    gated = False
+    gatebias = -4
+    def __init__(self, dim, adapterdim, dropout=0., **kw):
+        super().__init__(**kw)
+        self.dim = dim
+        self.adapterdim = adapterdim
+        self.wi = torch.nn.Linear(self.dim, self.adapterdim)
+        self.wo = torch.nn.Linear(self.adapterdim, self.dim)
+        if self.gated == "full":
+            self.wg = torch.nn.Linear(self.adapterdim, self.dim)  # gate weights
+        elif self.gated == "bias":
+            self.gb = torch.nn.Parameter(torch.zeros(self.dim))
+        self.dropout = torch.nn.Dropout(dropout)
+        self.nonlin = torch.nn.GELU()
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        small = 0.001
+        if self.gated == "full":
+            torch.nn.init.uniform_(self.wo.weight, -small, +small)
+            torch.nn.init.constant_(self.wg.bias, 0)
+        elif self.gated == "bias":
+            torch.nn.init.constant_(self.gb, 0)
+        torch.nn.init.uniform_(self.wi.weight, -small, +small)
+        torch.nn.init.uniform_(self.wo.weight, -small, +small)
+        torch.nn.init.constant_(self.wi.bias, 0)
+        torch.nn.init.constant_(self.wo.bias, 0)
+
+    def forward(self, h):
+        _h = h
+        _h = self.wi(_h)
+        _h = self.nonlin(_h)
+        _h = self.dropout(_h)
+        new_h = self.wo(_h)
+        if self.gated == "full":
+            g = torch.sigmoid(self.wg(_h) + self.gatebias)
+            new_h = g * new_h + (1 - g) * h
+        elif self.gated == "bias":
+            g = torch.sigmoid(self.gb + self.gatebias)
+            new_h = g * new_h + (1 - g) * h
+        else:
+            new_h = new_h + h
+        return new_h
+
+
+class AdapterGatedFF(AdapterFF):
+    gated = "full"
+
+
+class AdapterBiasGatedFF(AdapterFF):
+    gated = "bias"
+
+
+class AdapterT5LayerFF(T5LayerFF):
+    @classmethod
+    def cast(cls, obj:T5LayerFF, dim=None, adapterdim=None):
+        obj.__class__ = cls
+        obj.adapterff = AdapterBiasGatedFF(dim, adapterdim)
+
+    def forward(self, h):
+        _h = h
+        _h = self.layer_norm(_h)
+        _h = self.DenseReluDense(_h)
+        _h = self.adapterff(_h)
+        newh = h + self.dropout(_h)
+        return newh
+
+    def get_ft_params(self):
+        return list(self.adapterff.parameters()) + list(self.layer_norm.parameters())
+
+
+class AdapterT5LayerSelfAttention(T5LayerSelfAttention):
+    @classmethod
+    def cast(cls, obj:T5LayerFF, dim=None, adapterdim=None):
+        obj.__class__ = cls
+        obj.adapterff = AdapterBiasGatedFF(dim, adapterdim)
+
+    def forward(
+        self,
+        hidden_states,
+        attention_mask=None,
+        position_bias=None,
+        layer_head_mask=None,
+        past_key_value=None,
+        use_cache=False,
+        output_attentions=False,
+    ):
+        normed_hidden_states = self.layer_norm(hidden_states)
+        attention_output = self.SelfAttention(
+            normed_hidden_states,
+            mask=attention_mask,
+            position_bias=position_bias,
+            layer_head_mask=layer_head_mask,
+            past_key_value=past_key_value,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+        )
+        x = self.adapterff(attention_output[0])
+        hidden_states = hidden_states + self.dropout(x)
+        outputs = (hidden_states,) + attention_output[1:]  # add attentions if we output them
+        return outputs
+
+    def get_ft_params(self):
+        return list(self.adapterff.parameters()) + list(self.layer_norm.parameters())
+
+
+class AdapterT5LayerCrossAttention(T5LayerCrossAttention):
+    @classmethod
+    def cast(cls, obj:T5LayerFF, dim=None, adapterdim=None):
+        obj.__class__ = cls
+        obj.adapterff = AdapterBiasGatedFF(dim, adapterdim)
+
+    def forward(
+        self,
+        hidden_states,
+        key_value_states,
+        attention_mask=None,
+        position_bias=None,
+        layer_head_mask=None,
+        past_key_value=None,
+        use_cache=False,
+        query_length=None,
+        output_attentions=False,
+    ):
+        normed_hidden_states = self.layer_norm(hidden_states)
+        attention_output = self.EncDecAttention(
+            normed_hidden_states,
+            mask=attention_mask,
+            key_value_states=key_value_states,
+            position_bias=position_bias,
+            layer_head_mask=layer_head_mask,
+            past_key_value=past_key_value,
+            use_cache=use_cache,
+            query_length=query_length,
+            output_attentions=output_attentions,
+        )
+        x = self.adapterff(attention_output[0])
+        layer_output = hidden_states + self.dropout(x)
+        outputs = (layer_output,) + attention_output[1:]  # add attentions if we output them
+        return outputs
+
+    def get_ft_params(self):
+        return list(self.adapterff.parameters()) + list(self.layer_norm.parameters())
+
+
+def insert_adapters(m:torch.nn.Module, dim=None, adapterdim=None):
+    if isinstance(m, T5LayerFF):
+        AdapterT5LayerFF.cast(m, dim=dim, adapterdim=adapterdim)
+    elif isinstance(m, T5LayerSelfAttention):
+        AdapterT5LayerSelfAttention.cast(m, dim=dim, adapterdim=adapterdim)
+    elif isinstance(m, T5LayerCrossAttention):
+        AdapterT5LayerCrossAttention.cast(m, dim=dim, adapterdim=adapterdim)
+
+
+class AdapterT5Gen(T5ForConditionalGeneration):
+    def adapt(self,
+              out_vocab_size=None,
+              adapterdim=64,  # dimension of adapters, only used if pt_type is "ada(pters)"
+              ):
+        self.adapterdim = adapterdim
+        self.out_vocab_size = out_vocab_size
+
+        if self.out_vocab_size is not None:
+            # change input embeddings and output layer
+            self.decoder.embed_tokens = torch.nn.Embedding(out_vocab_size, self.shared.embedding_dim)
+            self.lm_head = torch.nn.Linear(self.lm_head.in_features, out_vocab_size, bias=False)
+
+        dim = self.shared.embedding_dim
+
+        # TODO insert adapters into layers
+        self.apply(partial(insert_adapters, dim=dim, adapterdim=self.adapterdim))
+
+        self.shared = None  # make sure self.shared is not used!
+
+    def set_custom_dropout(self, p=0.):
+        if self.out_vocab_size is not None:  # we use vanilla initialized input and output layers in decoder
+            self.decoder.dropout.p = p
+
+    def get_ft_params(self):
+        ret = []
+        if self.out_vocab_size is not None:
+            ret += list(self.lm_head.parameters())
+            ret += list(self.decoder.embed_tokens.parameters())
+        return ret
+
+
 def try_generate(inp:str=None, model=None, tokenizer=None):
     if inp is None:
         inp = "When I get up in the morning, the first thing I do is eat breakfast. I should also take a "
@@ -310,14 +504,14 @@ def try_train(inps:List[str], outs:List[str], model=None, tokenizer=None):
     print("done backward")
 
 
-def _get_pt_params(m, out=None):
-    if hasattr(m, "get_pt_params"):
-        out.extend(m.get_pt_params())
+def _get_ft_params(m, out=None):
+    if hasattr(m, "get_ft_params"):
+        out.extend(m.get_ft_params())
 
 
 def get_tunable_params(model:T5PTGen):
     collectedparams = []
-    model.apply(partial(_get_pt_params, out=collectedparams))
+    model.apply(partial(_get_ft_params, out=collectedparams))
     return collectedparams
 
 
@@ -351,13 +545,14 @@ def load_t5_tokenizer(modelsize="small"):
     return tokenizer
 
 
-def load_t5(modelsize="small", use_lm100k=True, pt_type=None, pt_size=None, out_vocab_size=None):
+def load_t5(modelsize="small", use_lm100k=True, pt_type=None, pt_size=None, adapterdim=64, out_vocab_size=None):
     """
     :param modelsize:       "small" / "base" / "large" / "xl" / "xxl"
     :param use_lm100k:      use the LM100k pretraind T5 or not
     :param pt_type:         None --> original T5 returned
                             "inoutonly" --> adapted T5 is returned but with the decoder input and
                                             output replaced by vanilla networks. 'out_vocab_size' must be specified.
+                            "ada(pters)" --> every transformer layer is inserted with a bottleneck adapter as in Houlsby et al. (2019)
                             "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)":
                                 "shallow" vs "deep" :   shallow affects only input to lowest encoder block,
                                                         deep affects input for all encoder blocks
@@ -382,31 +577,44 @@ def load_t5(modelsize="small", use_lm100k=True, pt_type=None, pt_size=None, out_
     config = T5Config.from_pretrained(modelname)
     if use_lm100k:
         if pt_type is not None:
-            tt.tick(f"loading PT-adapted 100k-LM T5-{modelsize} model from checkpoint")
-            model = T5PTGen.from_pretrained(f"../../t5lm100k/t5.1.1.lm100k.{modelsize}/model.ckpt-1100000.index",
-                                            from_tf=True, config=config)
+            if pt_type.startswith("ada"):
+                tt.tick(f"loading Adapter-inserted 100k-LM T5-{modelsize} model from checkpoint")
+                model = AdapterT5Gen.from_pretrained(f"../../t5lm100k/t5.1.1.lm100k.{modelsize}/model.ckpt-1100000.index",
+                                                     from_tf=True, config=config)
+            else:
+                tt.tick(f"loading PT-adapted 100k-LM T5-{modelsize} model from checkpoint")
+                model = T5PTGen.from_pretrained(f"../../t5lm100k/t5.1.1.lm100k.{modelsize}/model.ckpt-1100000.index",
+                                                from_tf=True, config=config)
         else:
             tt.tick(f"loading normal 100k-LM T5-{modelsize} model from checkpoint")
             model = T5ForConditionalGeneration.from_pretrained(f"../../t5lm100k/t5.1.1.lm100k.{modelsize}/model.ckpt-1100000.index",
                                             from_tf=True, config=config)
     else:
         if pt_type is not None:
-            tt.tick(f"loading PT-adapted T5-{modelsize} from huggingface")
-            model = T5PTGen.from_pretrained(modelname)
+            if pt_type.startswith("ada"):
+                tt.tick(f"loading Adapter-inserted T5-{modelsize} from huggingface")
+                model = AdapterT5Gen.from_pretrained(modelname)
+            else:
+                tt.tick(f"loading PT-adapted T5-{modelsize} from huggingface")
+                model = T5PTGen.from_pretrained(modelname)
         else:
             tt.tick(f"loading normal T5-{modelsize} from huggingface")
             model = T5ForConditionalGeneration.from_pretrained(modelname)
     tt.tock("loaded")
     tt.tock("loaded everything")
     if pt_type is not None:
-        tt.msg(f"adapting to PT mode {pt_type}, PT size {pt_size}")
-        model.adapt(pt_type=pt_type, pt_size=pt_size, out_vocab_size=out_vocab_size)
+        if pt_type.startswith("ada"):
+            tt.msg(f"Inserting {adapterdim}-dim adapter layers.")
+            model.adapt(adapterdim=adapterdim)
+        else:
+            tt.msg(f"adapting to PT mode {pt_type}, PT size {pt_size}")
+            model.adapt(pt_type=pt_type, pt_size=pt_size, out_vocab_size=out_vocab_size)
     return tokenizer, model, config
 
 
 def main(lr=0.001):
     out_vocab_size = None
-    tokenizer, model, _ = load_t5("small", pt_type="default", pt_size=5, out_vocab_size=out_vocab_size)
+    tokenizer, model, _ = load_t5("small", pt_type="adapt", pt_size=5, out_vocab_size=out_vocab_size)
 
     # try_generate(model=model, tokenizer=tokenizer)
 
@@ -428,5 +636,5 @@ def main(lr=0.001):
 
 
 if __name__ == '__main__':
-    # q.argprun(main)
-    try_cosine()
+    q.argprun(main)
+    # try_cosine()
