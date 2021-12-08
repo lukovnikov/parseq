@@ -437,20 +437,25 @@ class AdapterT5LayerCrossAttention(T5LayerCrossAttention):
         return list(self.adapterff.parameters()) + list(self.layer_norm.parameters())
 
 
-def insert_adapters(m:torch.nn.Module, dim=None, adapterdim=None):
-    if isinstance(m, T5LayerFF):
+def insert_adapters(m:torch.nn.Module, dim=None, adapterdim=None, adaptmode="ada"):
+    selectors = set([x for x in adaptmode.split("+") if x in ("ff", "self", "cross")])
+    if len(selectors) == 0:
+        selectors = {"ff", "self", "cross"}
+    if isinstance(m, T5LayerFF) and "ff" in selectors:
         AdapterT5LayerFF.cast(m, dim=dim, adapterdim=adapterdim)
-    elif isinstance(m, T5LayerSelfAttention):
+    elif isinstance(m, T5LayerSelfAttention) and "self" in selectors:
         AdapterT5LayerSelfAttention.cast(m, dim=dim, adapterdim=adapterdim)
-    elif isinstance(m, T5LayerCrossAttention):
+    elif isinstance(m, T5LayerCrossAttention) and "cross" in selectors:
         AdapterT5LayerCrossAttention.cast(m, dim=dim, adapterdim=adapterdim)
 
 
 class AdapterT5Gen(T5ForConditionalGeneration):
     def adapt(self,
+              adaptmode="ada",
               out_vocab_size=None,
               adapterdim=64,  # dimension of adapters, only used if pt_type is "ada(pters)"
               ):
+        self.adaptmode = adaptmode
         self.adapterdim = adapterdim
         self.out_vocab_size = out_vocab_size
 
@@ -461,8 +466,9 @@ class AdapterT5Gen(T5ForConditionalGeneration):
 
         dim = self.shared.embedding_dim
 
-        # TODO insert adapters into layers
-        self.apply(partial(insert_adapters, dim=dim, adapterdim=self.adapterdim))
+        if any([x.startswith("enc") for x in self.adaptmode.split("+")]):
+            self.encoder.apply(partial(insert_adapters, dim=dim, adapterdim=self.adapterdim, adaptmode=adaptmode))
+        self.decoder.apply(partial(insert_adapters, dim=dim, adapterdim=self.adapterdim, adaptmode=adaptmode))
 
         self.shared = None  # make sure self.shared is not used!
 
@@ -605,7 +611,7 @@ def load_t5(modelsize="small", use_lm100k=True, pt_type=None, pt_size=None, adap
     if pt_type is not None:
         if pt_type.startswith("ada"):
             tt.msg(f"Inserting {adapterdim}-dim adapter layers.")
-            model.adapt(adapterdim=adapterdim)
+            model.adapt(adaptermode=pt_type, adapterdim=adapterdim)
         else:
             tt.msg(f"adapting to PT mode {pt_type}, PT size {pt_size}")
             model.adapt(pt_type=pt_type, pt_size=pt_size, out_vocab_size=out_vocab_size)
