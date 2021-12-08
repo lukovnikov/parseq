@@ -611,7 +611,7 @@ def load_t5(modelsize="small", use_lm100k=True, pt_type=None, pt_size=None, adap
     if pt_type is not None:
         if pt_type.startswith("ada"):
             tt.msg(f"Inserting {adapterdim}-dim adapter layers.")
-            model.adapt(adaptermode=pt_type, adapterdim=adapterdim)
+            model.adapt(adaptmode=pt_type, adapterdim=adapterdim)
         else:
             tt.msg(f"adapting to PT mode {pt_type}, PT size {pt_size}")
             model.adapt(pt_type=pt_type, pt_size=pt_size, out_vocab_size=out_vocab_size)
