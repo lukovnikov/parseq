@@ -337,7 +337,7 @@ def run(lr=0.0001,
         gpu=-1,
         trainonvalidonly=False,
         recomputedata=False,
-        version="v7",
+        version="v8",
         ):
     """
     :param lrmul:       multiplier for learning rate for secondary parameters
