@@ -6,6 +6,7 @@ import shelve
 from copy import deepcopy
 from functools import partial
 from math import ceil
+from time import sleep
 from typing import Dict, Callable
 
 import wandb
@@ -615,6 +616,7 @@ def run(lr=0.0001,
 
     wandb.config.update(settings)
     q.pp_dict(settings)
+    sleep(15)
 
 
 def run_experiment(
