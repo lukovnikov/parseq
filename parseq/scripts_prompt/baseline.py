@@ -329,7 +329,9 @@ def run(lr=0.0001,
         maxsize=50,
         seed=42,
         dropout=0.,
+        dropoutemb=0.,
         dropoutpassive=0.,
+        postdropemb=False,
         testcode=False,
         gpu=-1,
         trainonvalidonly=False,
@@ -403,7 +405,8 @@ def run(lr=0.0001,
             x.p = _p
 
     t5.apply(partial(_set_dropout, _p=dropoutpassive))           # set all dropouts to passive dropout rate (zero by default)
-    set_custom_dropouts(t5, p=dropout)
+    set_custom_dropouts(t5, p=dropout, dropoutemb=dropoutemb)
+    t5.decoder.c_postdropemb = postdropemb
 
     if fldic is None:
         batchtostrs = lambda x: t5tok.batch_decode(x)     # TODO: test
@@ -635,7 +638,9 @@ def run_experiment(
         maxsize=-1,
         seed=-1,
         dropout=-1.,
+        dropoutemb=-1.,
         dropoutpassive=-1.,
+        postdropemb=False,
         testcode=False,
         trainonvalidonly=False,
         gpu=-1,
@@ -648,6 +653,7 @@ def run_experiment(
         "dataset": ["scan/random", "scan/length", "scan/add_jump", "scan/add_turn_left", "scan/mcd1", "scan/mcd2", "scan/mcd3"],
         "dropout": [0.1],
         "dropoutpassive": [0.1],
+        "dropoutemb": [0.0],
         "seed": [42, 87646464, 456852],
         "epochs": [50],
         "batsize": [60],
