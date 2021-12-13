@@ -507,7 +507,7 @@ def run(lr=0.0001,
         lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> 1.
     else:
         tt.msg("Using cosine LR with restart and with warmup")
-        lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> (CosineWithRestart(cycles=cosinecycles, steps=t_max-warmupsteps)) >> 0.000001
+        lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> (CosineWithRestart(high=1., low=0.1, cycles=cosinecycles, steps=t_max-warmupsteps)) >> 0.1
 
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
