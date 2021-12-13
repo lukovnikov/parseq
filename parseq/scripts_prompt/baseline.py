@@ -356,7 +356,7 @@ def run(lr=0.0001,
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
 
-    wandb.init(project=f"compgen_prompt", config=settings, reinit=True)
+    run = wandb.init(project=f"compgen_prompt", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -408,6 +408,8 @@ def run(lr=0.0001,
     t5.apply(partial(_set_dropout, _p=dropoutpassive))           # set all dropouts to passive dropout rate (zero by default)
     set_custom_dropouts(t5, p=dropout, dropoutemb=dropoutemb)
     t5.decoder.c_postdropemb = postdropemb
+
+    print(t5.decoder)
 
     if fldic is None:
         batchtostrs = lambda x: t5tok.batch_decode(x)     # TODO: test
@@ -616,7 +618,8 @@ def run(lr=0.0001,
 
     wandb.config.update(settings)
     q.pp_dict(settings)
-    sleep(15)
+    run.finish()
+    # sleep(15)
 
 
 def run_experiment(
