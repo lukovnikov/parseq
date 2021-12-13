@@ -722,7 +722,7 @@ class CustomT5Stack(T5Stack):
                     if i == v[-1] and "cuda:" + str(k) != self.last_device:
                         hidden_states = hidden_states.to("cuda:" + str(k + 1))
 
-        if self.postdropemb == True:                            # ADDED: if enabled
+        if self.c_postdropemb == True:                            # ADDED: if enabled
             hidden_states = hidden_states - subtract_emb        # ADDED: subtracting dropped out input embeddings
 
         hidden_states = self.final_layer_norm(hidden_states)
