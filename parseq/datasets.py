@@ -1457,9 +1457,9 @@ class COGSDatasetLoader(object):
         super(COGSDatasetLoader, self).__init__(**kw)
         self.p = path
         for k in self.mapp:
-            if not os.path.exists(os.path.join(self.p, k)):
+            if not os.path.exists(os.path.join(self.p, self.mapp[k])):
                 print(f"File for '{k}' split missing, downloading from {self.mainp + self.mapp[k]}")
-                download_url(self.mainp+self.mapp[k], os.path.join(self.p, k))
+                download_url(self.mainp+self.mapp[k], os.path.join(self.p, self.mapp[k]))
 
     def load(self, oodvalidsize=3000, seed=42, verbose=True, lispify=True):
         examples = []
@@ -1502,16 +1502,33 @@ class COGSDatasetLoader(object):
             for k, v in counts.items():
                 print(f"Size of {k} set:\t{v}")
 
+        fldic = Vocab()
+
         # run string-level fixes on logical forms
+        traininplens, trainoutlens, testinplens, testoutlens = [], [], [], []
         for i in tqdm(range(len(examples))):
             lf = examples[i][1]
             fixedlf = self.fix_lf_string(lf)
-            lflisp = self.lfstr_to_taglisp(fixedlf)
-            examples[i] = (examples[i][0], lflisp, examples[i][2], examples[i][3])
-
+            tree = self.lfstr_to_tree(fixedlf)
+            fl = self.tree_to_shortlisp(tree)
+            for token in fl.split(" "):
+                fldic.add_token(token, seen=examples[i][3] == "train")
+            examples[i] = (examples[i][0], fl, examples[i][2], examples[i][3])
+            if examples[i][3] == "train":
+                traininplens.append(len(examples[i][0].split(" ")))
+                trainoutlens.append(len(examples[i][1].split(" ")))
+            elif examples[i][3].endswith("test"):
+                testinplens.append(len(examples[i][0].split(" ")))
+                testoutlens.append(len(examples[i][1].split(" ")))
+        print("Max lens during training:")
+        print(max(traininplens), max(trainoutlens))
+        print("Max lens during testing:")
+        print(max(testinplens), max(testoutlens))
+        fldic.finalize()
         return examples
 
-    def lfstr_to_taglisp(self, x:str):
+    @staticmethod
+    def lfstr_to_tree(x:str):
         splits = [xe.strip() for xe in x.split("AND")]
         conditions = [prolog_to_tree(xe) for xe in splits]
         # reorder so that unaries are first
@@ -1524,8 +1541,58 @@ class COGSDatasetLoader(object):
                 others.append(cond)
         conditions = unaries + others
         ret = Tree("@AND@", children=conditions)
-        _ret = tree_to_taglisp(ret)
-        return _ret
+        return ret
+
+    @classmethod
+    def tree_to_shortlisp(cls, x:Tree, variable_children=("@AND@",)):
+        # e.g. V-AND 1ary-person X1 2ary-father X1 X2 )
+        if isinstance(x, str):
+            return x
+        elif len(x) == 0:
+            return x.label()
+        else:
+            assert isinstance(x, Tree)
+            tail = " ".join([cls.tree_to_shortlisp(xe) for xe in x])
+            if x.label() in variable_children:
+                ret = f"D-{x.label()} {tail} )"
+            else:
+                ret = f"{len(x)}ary-{x.label()} " + tail
+            return ret
+
+    @classmethod
+    def shortlisp_to_tree(cls, x:str):
+        xs = x.split(" ")
+        ret, tail = cls._shortlisp_to_tree(xs)
+        return ret
+
+    @classmethod
+    def _shortlisp_to_tree(cls, x:List[str], arityparent=-1):
+        head, *tail = x
+        if re.match(r"\d+ary-.+", head) or re.match("D-.+", head):
+            m = re.match(r"(\d+)ary-(.+)", head)
+            m2 = re.match(r"D-(.+)", head)
+            if m:
+                arity, label = int(m.group(1)), m.group(2)
+            elif m2:
+                arity, label = -1, m2.group(1)
+            children = []
+            while True:
+                if arity == 0:
+                    break
+                if arity < 0:
+                    assert len(tail) > 0
+                    if tail[0] == ")":
+                        _, *tail = tail
+                        break
+                child, tail = cls._shortlisp_to_tree(tail, arityparent=arity)
+                children.append(child)
+                arity -= 1
+            ret = Tree(label, children=children)
+            return ret, tail
+        else:
+            child = Tree(head, children=[])
+            return child, tail
+
 
     def fix_lf_string(self, x:str):
         _x = x
@@ -1761,6 +1828,20 @@ def try_iterable_ds():
 
 def try_cogs():
     dl = COGSDatasetLoader()
+
+    # try shortlisp
+    treestr = "(@AND@ (person x1) (thing x2) (owner x1 x2) (location x2 (under x3)))"
+    tree = lisp_to_tree(treestr)
+    print(tree)
+    shortlisp = dl.tree_to_shortlisp(tree)
+    print(shortlisp)
+    rtree = dl.shortlisp_to_tree(shortlisp)
+    print(rtree)
+
+    assert(tree == rtree)
+
+    print("done")
+
     dl.load()
 
 
