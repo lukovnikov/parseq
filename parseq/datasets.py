@@ -26,7 +26,7 @@ from torch.utils.data.dataloader import default_collate
 from tqdm import tqdm
 
 from parseq.grammar import lisp_to_pas, pas_to_tree, tree_size, tree_to_lisp, tree_to_lisp_tokens, lisp_to_tree, \
-    tree_to_taglisp, taglisp_to_tree
+    tree_to_taglisp, taglisp_to_tree, prolog_to_tree
 from parseq.vocab import SequenceEncoder, Vocab
 
 import multiprocessing as mp
@@ -1446,6 +1446,101 @@ class SCANDatasetLoader(object):
             raise e
 
 
+class COGSDatasetLoader(object):
+    mainp = "https://raw.githubusercontent.com/najoungkim/COGS/main/data/"
+    mapp = {"train": "train.tsv", "iidvalid": "dev.tsv", "iidtest": "test.tsv", "oodtest": "gen.tsv"}
+
+    def __init__(self, path="../datasets/cogs/", **kw):
+        """
+        :param path:            where to find/store all dataset files
+        """
+        super(COGSDatasetLoader, self).__init__(**kw)
+        self.p = path
+        for k in self.mapp:
+            if not os.path.exists(os.path.join(self.p, k)):
+                print(f"File for '{k}' split missing, downloading from {self.mainp + self.mapp[k]}")
+                download_url(self.mainp+self.mapp[k], os.path.join(self.p, k))
+
+    def load(self, oodvalidsize=3000, seed=42, verbose=True, lispify=True):
+        examples = []
+
+        # load all examples
+        if verbose:
+            print("loading all examples")
+        for k in self.mapp:
+            for line in open(os.path.join(self.p, self.mapp[k])).readlines():
+                splits = line.strip().split("\t")
+                assert(len(splits) == 3)
+                examples.append((splits[0], splits[1], splits[2], k))
+
+        # split off an OOD valid set from the OOD test set
+        if verbose:
+            print(f"splitting off {oodvalidsize} examples from oodtest for oodvalid")
+        oodtestidxs = []
+        for i, example in enumerate(examples):
+            if example[3] == "oodtest":
+                oodtestidxs.append(i)
+
+        assert oodvalidsize > 0 and oodvalidsize < len(oodtestidxs)
+
+        rs = random.Random(seed)
+        rs.shuffle(oodtestidxs)
+        oodvalididxs = set(oodtestidxs[:oodvalidsize])
+        # oodtestidxs = oodtestidxs[oodvalidsize:]
+
+        i = 0
+        while i < len(examples):
+            if i in oodvalididxs:
+                examples[i] = (examples[i][0], examples[i][1], examples[i][2], "oodvalid")
+            i += 1
+
+        counts = {"train": 0, "iidvalid": 0, "oodvalid": 0, "iidtest": 0, "oodtest": 0}
+        for example in examples:
+            counts[example[3]] += 1
+
+        if verbose:
+            for k, v in counts.items():
+                print(f"Size of {k} set:\t{v}")
+
+        # run string-level fixes on logical forms
+        for i in tqdm(range(len(examples))):
+            lf = examples[i][1]
+            fixedlf = self.fix_lf_string(lf)
+            lflisp = self.lfstr_to_taglisp(fixedlf)
+            examples[i] = (examples[i][0], lflisp, examples[i][2], examples[i][3])
+
+        return examples
+
+    def lfstr_to_taglisp(self, x:str):
+        splits = [xe.strip() for xe in x.split("AND")]
+        conditions = [prolog_to_tree(xe) for xe in splits]
+        # reorder so that unaries are first
+        unaries = []
+        others = []
+        for cond in conditions:
+            if len(cond) == 1:
+                unaries.append(cond)
+            else:
+                others.append(cond)
+        conditions = unaries + others
+        ret = Tree("@AND@", children=conditions)
+        _ret = tree_to_taglisp(ret)
+        return _ret
+
+    def fix_lf_string(self, x:str):
+        _x = x
+        _x = re.sub(r"x\s_\s(\d+)", r"x_\1", _x)
+        # _x = re.sub(r"([a-z]+)\s\.\s([a-z]+)", r"\1.\2", _x)
+        if "LAMBDA" in _x:
+            _x = re.sub(r"LAMBDA\s[a-z]\s\.", "", _x)
+        _x = re.sub(r"\s\.\s", ".", _x)
+        _x = re.sub(r"\*", "", _x)
+        _x = re.sub(r";", " AND ", _x)
+        _x = re.sub("\s+", " ", _x).strip()
+        # _x = _x.split(" ")
+        return _x
+
+
 # endregion
 def try_cfq():
     dsl = CFQDatasetLoader()
@@ -1664,7 +1759,9 @@ def try_iterable_ds():
     print("mapping works")
 
 
-
+def try_cogs():
+    dl = COGSDatasetLoader()
+    dl.load()
 
 
 
@@ -1685,4 +1782,5 @@ if __name__ == '__main__':
     # print(try_multilingual_geoquery_dataset_loader())
     # try_scan()
     # try_cfq()
-    try_iterable_ds()
+    # try_iterable_ds()
+    try_cogs()
