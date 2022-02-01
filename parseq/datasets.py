@@ -1169,7 +1169,7 @@ class CFQDatasetLoader(object):
         shutil.rmtree(os.path.join(self.p, "cfq"))
         self.tt.tock()
 
-    def load(self, split="random/modent", validfrac=0.1, seed=42, verbose=True, lispify=True):
+    def load(self, split="random/modent", validfrac=0.1, seed=42, verbose=True, lispify=True, loadunused=False):
         """
                 :param split: which split to use (see self.available_splits)
                 must be of the form "split/version" where "split" part can be "mcdX" or "random" or other
@@ -1210,6 +1210,16 @@ class CFQDatasetLoader(object):
 
         all_lines = open(os.path.join(self.p, "_data.jsonl")).readlines()
         all_lines = [x.strip() for x in all_lines]
+
+        if loadunused:
+            usedids = set()
+            for splitname, splitids in splitidxs.items():
+                usedids |= set(splitids)
+            splitidxs["unused"] = []
+            for i in range(len(all_lines)):
+                if i not in usedids:
+                    splitidxs["unused"].append(i)
+
         for subsetname in splitidxs:
             if verbose:
                 print(f"doing '{subsetname}'")
@@ -1611,6 +1621,7 @@ class COGSDatasetLoader(object):
 # endregion
 def try_cfq():
     dsl = CFQDatasetLoader()
+    data = dsl.load("mcd1/modent", loadunused=True)
 
 
 def try_scan():
@@ -1862,6 +1873,6 @@ if __name__ == '__main__':
     # print(govd.examples)
     # print(try_multilingual_geoquery_dataset_loader())
     # try_scan()
-    # try_cfq()
+    try_cfq()
     # try_iterable_ds()
-    try_cogs()
+    # try_cogs()
