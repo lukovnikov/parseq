@@ -829,7 +829,7 @@ def load_t5_tokenizer(modelsize="small"):
 def load_t5(modelsize="small", use_lm100k=True, pt_type=None, pt_size=None, adapterdim=64, out_vocab_size=None):
     """
     :param modelsize:       "small" / "base" / "large" / "xl" / "xxl"
-    :param use_lm100k:      use the LM100k pretraind T5 or not
+    :param use_lm100k:      use the LM100k pretrained T5 or not
     :param pt_type:         None --> original T5 returned
                             "inoutonly" --> adapted T5 is returned but with the decoder input and
                                             output replaced by vanilla networks. 'out_vocab_size' must be specified.

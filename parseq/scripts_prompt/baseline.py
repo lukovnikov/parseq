@@ -166,7 +166,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
 
     inptok = load_t5_tokenizer(inptok_name)
 
-    iidvalidisoodvalid = Fatrainlse
+    iidvalidisoodvalid = False
     if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
         iidvalidisoodvalid = True
 
