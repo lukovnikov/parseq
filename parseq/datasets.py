@@ -1169,7 +1169,7 @@ class CFQDatasetLoader(object):
         shutil.rmtree(os.path.join(self.p, "cfq"))
         self.tt.tock()
 
-    def load(self, split="random/modent", validfrac=0.1, seed=42, verbose=True, lispify=True, loadunused=False):
+    def load(self, split="random/modent", validfrac=0.1, seed=42, verbose=True, lispify=True, loadunused=False, keepids=False):
         """
                 :param split: which split to use (see self.available_splits)
                 must be of the form "split/version" where "split" part can be "mcdX" or "random" or other
@@ -1225,7 +1225,10 @@ class CFQDatasetLoader(object):
                 print(f"doing '{subsetname}'")
             for i in tqdm(splitidxs[subsetname], disable=not verbose):
                 example = self.process_line(all_lines[i], lispify=lispify, version=version)
-                examples.append(example + (subsetname,))
+                if keepids:
+                    examples.append((i,) + example + (subsetname,))
+                else:
+                    examples.append(example + (subsetname,))
         ret = Dataset(examples)
         return ret
 

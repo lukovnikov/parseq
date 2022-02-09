@@ -1,8 +1,11 @@
+import random
+from numbers import Number
+
 import itertools
 import json
 import math
 from copy import copy
-from typing import List
+from typing import List, Tuple
 
 import torch
 import numpy as np
@@ -12,7 +15,7 @@ from nltk import Tree
 from tqdm import tqdm
 
 from parseq.datasets import CFQDatasetLoader
-from parseq.grammar import taglisp_to_tree
+from parseq.grammar import taglisp_to_tree, tree_size
 
 
 def find_subgraphs_sparql(x:Tree, minsize=1, maxsize=4):
@@ -117,18 +120,30 @@ class FrequencyDistribution():
             entr = entr - self(k) * math.log(self(k))
         return entr
 
+    def _check_numeric(self):
+        # check if all keys are numbers:
+        allnumbers = True
+        for k in self._counts:
+            if not isinstance(k, Number):
+                allnumbers = False
+                break
+        if not allnumbers:
+            raise Exception("Can not compute average for non-numerical keys.")
 
-def compute_entropy_minus(fd:FrequencyDistribution, xs, entropy=None):
-    """
-    :param fd:       Original frequencies
-    :param entropy:  The original entropy of 'fd'. If not specified, entropy is computed from scratch.
-    :param xs:       A multiset (e.g. list, tuple) of elements in fd to subtract from the entropy
-    :return:
-    """
-    pass
+    def average(self):
+        self._check_numeric()
+        acc = 0
+        for k in self._counts:
+            acc += k * self(k)
+        return acc
 
 
 class DivergenceComputer():
+
+    IDINDEX = 0
+    NLINDEX = 1
+    LFINDEX = 2
+    SPLITINDEX = 3
 
     orderless = {"@QUERY", "@AND", "@OR", "@WHERE"}
     variablesize = {"@AND", "@OR", "@WHERE"}
@@ -164,7 +179,7 @@ class DivergenceComputer():
 
     def extract_compounds(self, x:Tree):
         """ This method extracts simple compounds that consist of two elements: parent and child """
-        compounds = find_subgraphs_sparql(x, minsize=2, maxsize=3)
+        compounds = find_subgraphs_sparql(x, minsize=1, maxsize=3)
         return compounds
         # if len(x) == 0:     # leaf
         #     retcomps = []
@@ -200,10 +215,20 @@ class DivergenceComputer():
     def compute_chernoff_coeff(dist1:FrequencyDistribution, dist2:FrequencyDistribution, alpha=0.5, weights=None):
         return FrequencyDistribution.compute_chernoff_coeff(dist1, dist2, alpha=alpha, weights=weights)
 
+    def compute_size_distribution(self, l:List):
+        fd = FrequencyDistribution()
+        for example in tqdm(l):
+            t = example[self.LFINDEX]
+            if not isinstance(t, Tree):
+                t = taglisp_to_tree(t)
+            s = tree_size(t)
+            fd[s] += 1
+        return fd
+
     def compute_atom_distribution(self, l:List):
         fd = FrequencyDistribution()
         for example in tqdm(l):
-            t = example[1]
+            t = example[self.LFINDEX]
             if not isinstance(t, Tree):
                 t = taglisp_to_tree(t)
             fd += self.extract_atom_dist(t)
@@ -212,18 +237,18 @@ class DivergenceComputer():
     def compute_atom_distributions(self, ds):
         atomses = dict()
         for example in tqdm(ds):
-            t = example[1]
+            t = example[self.LFINDEX]
             if not isinstance(t, Tree):
                 t = taglisp_to_tree(t)
-            if example[2] not in atomses:
-                atomses[example[2]] = FrequencyDistribution()
-            atomses[example[2]] += self.extract_atom_dist(t)
+            if example[self.SPLITINDEX] not in atomses:
+                atomses[example[self.SPLITINDEX]] = FrequencyDistribution()
+            atomses[example[self.SPLITINDEX]] += self.extract_atom_dist(t)
         return atomses
 
     def compute_compound_distribution(self, l:List):
         fd = FrequencyDistribution()
         for example in tqdm(l):
-            t = example[1]
+            t = example[self.LFINDEX]
             if not isinstance(t, Tree):
                 t = taglisp_to_tree(t)
             for comp in self.extract_compounds(t):
@@ -233,13 +258,13 @@ class DivergenceComputer():
     def compute_compound_distributions(self, ds):
         compoundses = dict()
         for example in tqdm(ds):
-            t = example[1]
+            t = example[self.LFINDEX]
             if not isinstance(t, Tree):
                 t = taglisp_to_tree(t)
-            if example[2] not in compoundses:
-                compoundses[example[2]] = FrequencyDistribution()
+            if example[self.SPLITINDEX] not in compoundses:
+                compoundses[example[self.SPLITINDEX]] = FrequencyDistribution()
             for comp in self.extract_compounds(t):
-                compoundses[example[2]][comp] += 1
+                compoundses[example[self.SPLITINDEX]][comp] += 1
         return compoundses
 
     def _compute_atom_divergences(self, dists):
@@ -269,6 +294,188 @@ class DivergenceComputer():
         return self._compute_compound_divergences(dists)
 
 
+def get_dist_similarity(x, dist):
+    if isinstance(dist, FrequencyDistribution):
+        dist = dist.tofreqs()
+    score = 0
+    for xe in x:
+        score += dist[xe] if xe in dist else 0
+    score = score / max(1e-6, len(x))
+    return score
+
+
+def filter_mcd(source: List[Tuple[str, Tree]], otheratoms, othercomps, N=10000,
+               dc=None, coeffa=1, coeffb=1, coeffatom=1000):
+    """
+    :param source:      a list of examples from which to pick, in format (input, output)
+    :param otheratoms:  atom distributions of other splits
+    :param othercomps:  compound distributions of other splits
+    :param N:           how many examples to retain in selection from source
+    :return:   MCD selection of examples from source wrt all other distributions
+
+    ideally, the training set shouldn't contain any compound from new selection
+    and the new selection shouldn't contain any compound from test
+    """
+    assert len(source) > N
+    assert len(otheratoms) == len(othercomps)
+
+    trainatoms, testatoms = otheratoms
+    traincomps, testcomps = othercomps
+    traincomps = traincomps.tofreqs()
+    testcomps = testcomps.tofreqs()
+
+    print("creating selection")
+    exstats = []
+    for x in tqdm(source):
+        # xatoms = dc.extract_atoms(x[dc.LFINDEX])
+        xcomps = dc.extract_compounds(x[dc.LFINDEX])
+        exstats.append((get_dist_similarity(xcomps, traincomps),
+                        get_dist_similarity(xcomps, testcomps),
+                        len(xcomps)))
+
+    # select top-N examples with least overlap with train and test
+    scores = [(i, coeffa * a + coeffb * b) for (i, (a, b, e)) in enumerate(exstats)]
+    sortedscores = sorted(scores, key=lambda x: x[1])
+    retids = [i for i, s in sortedscores[:N]]
+    ret = []
+    for i in retids:
+        a = source[i]
+        a = tuple(a) + ("ood2valid",)
+        ret.append(a)
+    return ret
+
+
+def print_overlaps(dists):
+    collections = dict()
+    for k, v in dists.items():
+        collections[k] = set(v.keys())
+    ks = list(dists.keys())
+    for i in range(len(ks)):
+        fromname = ks[i]
+        fromatoms = collections[ks[i]]
+        for j in range(i, len(ks)):
+            toname = ks[j]
+            toatoms = collections[ks[j]]
+            print(f"Overlap {fromname},{toname}: {len(fromatoms & toatoms)} / ({len(fromatoms)}, {len(toatoms)})")
+
+
+def filter_traindata(traindata, testdata, newdevdata, N=10000, dc=None):
+    newcompdist = dc.compute_compound_distribution(newdevdata).tofreqs()
+    testdist = dc.compute_compound_distribution(testdata).tofreqs()
+
+    scores = []
+    for i, x in enumerate(tqdm(traindata)):
+        xcomps = dc.extract_compounds(x[dc.LFINDEX])
+        scores.append((i, get_dist_similarity(xcomps, newcompdist) - get_dist_similarity(xcomps, testdist)))
+
+    sortedscores = sorted(scores, key=lambda x: x[dc.LFINDEX], reverse=True)
+    retids = [i for i, s in sortedscores[N:]]
+    ret = []
+    for retid, score in retids:
+        a = traindata[retid]
+        a = a[:-1] + ("ood2valid",)
+        ret.append(a)
+    # ret = [(traindata[i][0], traindata[i][1], "newtrain") for i in retids]
+    return ret
+
+
+def resplit_cfq(split="mcd1", outp="../../datasets/cfq/", debug=False, N=10000):
+    ds = CFQDatasetLoader().load(f"{split}/modent", validfrac=0, loadunused=True, keepids=True)
+
+    if debug:
+        ds = ds.examples
+        random.shuffle(ds)
+        ds = ds[:10000]
+        N = 1000
+    dc = DivergenceComputer()
+
+    print("Atom distributions")
+    atom_dists = dc.compute_atom_distributions(ds)
+    print(json.dumps(dc._compute_atom_divergences(atom_dists), indent=3))
+
+    print("Compound distributions")
+    comp_dists = dc.compute_compound_distributions(ds)
+    print(json.dumps(dc._compute_compound_divergences(comp_dists), indent=3))
+
+    # extract unused examples
+    print("Extracting unused examples")
+    unused = [(ex[0], ex[1], taglisp_to_tree(ex[2])) for ex in tqdm(ds) if ex[-1] == "unused"]
+    len(unused)
+
+    # filtering mcd
+    print("selecting examples for second ood set")
+    newsplit = filter_mcd(unused, [atom_dists["train"], atom_dists["test"]], [comp_dists["train"], comp_dists["test"]],
+                          N=N, dc=dc)
+
+    # print("debug", newsplit[0])
+
+    print("Computing distributions of new split")
+    newsplit_atomdist = dc.compute_atom_distribution(newsplit)
+    newsplit_compdist = dc.compute_compound_distribution(newsplit)
+    _atom_dists = {k: v for k, v in atom_dists.items()}
+    _atom_dists["newsplit"] = newsplit_atomdist
+    _comp_dists = {k: v for k, v in comp_dists.items()}
+    _comp_dists["newsplit"] = newsplit_compdist
+    print(json.dumps(dc._compute_atom_divergences(_atom_dists), indent=3))
+    print(json.dumps(dc._compute_compound_divergences(_comp_dists), indent=3))
+
+    # for k in set(_atom_dists["train"].elements()) | set(_atom_dists["test"].elements()) | set(
+    #         _atom_dists["newsplit"].elements()):
+    #     print(f"{k}: {_atom_dists['train'](k):.5f} - {_atom_dists['test'](k):.5f} - {_atom_dists['newsplit'](k):.5f}")
+
+    print_overlaps(_atom_dists)
+    print_overlaps(_comp_dists)
+
+    # extract ids for new json and check them
+    ret = extract_example_ids(ds, newsplit, newtrain=None)
+    with open(f"{outp}{split}new.json", "w") as f:
+        json.dump(ret, f)
+    return ret
+
+
+    # BELOW CODE CHANGES TRAINING DATA
+    # traindata = [(ex[0], taglisp_to_tree(ex[1])) for ex in tqdm(ds) if ex[2] == "train"]
+    # testdata = [(ex[0], taglisp_to_tree(ex[1])) for ex in tqdm(ds) if ex[2] == "test"]
+    # newdevdata = [(ex[0], ex[1]) for ex in tqdm(newsplit)]
+    # newtrain = filter_traindata(traindata, testdata, newdevdata)
+    #
+    # # %%
+    #
+    # newtrain_atomdist = dc.compute_atom_distribution(newtrain)
+    # newtrain_compdist = dc.compute_compound_distribution(newtrain)
+    # __atom_dists = {k: v for k, v in _atom_dists.items()}
+    # __atom_dists["newtrain"] = newtrain_atomdist
+    # __comp_dists = {k: v for k, v in _comp_dists.items()}
+    # __comp_dists["newtrain"] = newtrain_compdist
+    # print(json.dumps(dc._compute_atom_divergences(__atom_dists), indent=3))
+    # print(json.dumps(dc._compute_compound_divergences(__comp_dists), indent=3))
+    #
+    # # %%
+    #
+    # print_overlaps(__atom_dists)
+    # print_overlaps(__comp_dists)
+
+
+def extract_example_ids(ds, newood=None, newtrain=None):
+    ret = {}
+    for (i, nl, lf, split) in ds:
+        if split not in ret:
+            ret[split] = []
+        ret[split].append(i)
+
+    if newood is not None:
+        ret["ood2valid"] = []
+        for (i, nl, lf, split) in newood:
+            ret["ood2valid"].append(i)
+
+    if newtrain is not None:
+        ret["train"] = []
+        for (i, nl, lf, split) in newtrain:
+            ret["train"].append(i)
+
+    return ret
+
+
 def try_cfq():
     ds = CFQDatasetLoader().load("mcd1/modent")
     print(ds[0])
@@ -279,4 +486,4 @@ def try_cfq():
 
 
 if __name__ == '__main__':
-    try_cfq()
+    resplit_cfq("mcd2", debug=False)
