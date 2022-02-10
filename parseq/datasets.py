@@ -1095,12 +1095,15 @@ def download_url(url, output_path):
 
 class CFQDatasetLoader(object):
     fullp = "https://storage.googleapis.com/cfq_dataset/cfq1.1.tar.gz"
-    split_names = "mcd1,mcd2,mcd3,random"
-    available_splits = tuple("mcd1,mcd2,mcd3,random".split(","))
+    split_names = "mcd1,mcd2,mcd3,random,mcd1new,mcd2new,mcd3new"
+    available_splits = tuple("mcd1,mcd2,mcd3,random,mcd1new,mcd2new,mcd3new".split(","))
     rename = {
         "mcd1": "mcd1",
         "mcd2": "mcd2",
         "mcd3": "mcd3",
+        "mcd1new": "mcd1new",
+        "mcd2new": "mcd2new",
+        "mcd3new": "mcd3new",
         "random": "random_split",
         "question_pattern": "question_pattern_split",
         "question_complexity": "question_complexity_split",
@@ -1110,7 +1113,12 @@ class CFQDatasetLoader(object):
     remap = {
         "trainIdxs": "train",
         "devIdxs": "valid",
-        "testIdxs": "test"
+        "testIdxs": "test",
+        "train": "train",
+        "test": "test",
+        "unused": "unused",
+        "oodvalid": "oodvalid",
+        "ood2valid": "ood2valid",
     }
 
     def __init__(self, path="../datasets/cfq/", **kw):
@@ -1202,23 +1210,28 @@ class CFQDatasetLoader(object):
             splitidxs["train"] = trainidxs
             splitidxs["iidvalid"] = valididxs
 
-        if "valid" in splitidxs:        # rename provided validation set "oodvalid"
-            splitidxs["oodvalid"] = splitidxs["valid"]
-            del splitidxs["valid"]
-        else:                           # copy "iidvalid" to "oodvalid"
-            splitidxs["oodvalid"] = splitidxs["iidvalid"]
+        if "oodvalid" not in splitidxs:
+            if "valid" in splitidxs:        # rename provided validation set "oodvalid"
+                splitidxs["oodvalid"] = splitidxs["valid"]
+                del splitidxs["valid"]
+            else:                           # copy "iidvalid" to "oodvalid"
+                splitidxs["oodvalid"] = splitidxs["iidvalid"]
 
         all_lines = open(os.path.join(self.p, "_data.jsonl")).readlines()
         all_lines = [x.strip() for x in all_lines]
 
         if loadunused:
-            usedids = set()
-            for splitname, splitids in splitidxs.items():
-                usedids |= set(splitids)
-            splitidxs["unused"] = []
-            for i in range(len(all_lines)):
-                if i not in usedids:
-                    splitidxs["unused"].append(i)
+            if "unused" not in splitidxs:
+                usedids = set()
+                for splitname, splitids in splitidxs.items():
+                    usedids |= set(splitids)
+                splitidxs["unused"] = []
+                for i in range(len(all_lines)):
+                    if i not in usedids:
+                        splitidxs["unused"].append(i)
+        else:
+            if "unused" in splitidxs:
+                del splitidxs["unused"]
 
         for subsetname in splitidxs:
             if verbose:
@@ -1624,7 +1637,7 @@ class COGSDatasetLoader(object):
 # endregion
 def try_cfq():
     dsl = CFQDatasetLoader()
-    data = dsl.load("mcd1/modent", loadunused=True)
+    data = dsl.load("mcd1new/modent", loadunused=True)
 
 
 def try_scan():
