@@ -183,7 +183,8 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
                 shelved = shelf[key]
                 trainex, iidvalidex, oodvalidex, ood2validex, testex, fldic = shelved["trainex"], shelved["iidvalidex"], shelved["oodvalidex"], shelved["ood2validex"], shelved["testex"], shelved["fldic"]
                 _inptok_name = shelved["inptok_name"]
-                trainds, iidvalidds, oodvalidds, ood2validds, testds = Dataset(trainex), Dataset(iidvalidex), Dataset(oodvalidex), Dataset(ood2validex), Dataset(testex)
+                trainds, iidvalidds, oodvalidds, ood2validds, testds = \
+                    Dataset(trainex), Dataset(iidvalidex), Dataset(oodvalidex), Dataset(ood2validex), Dataset(testex)
                 tt.tock("loaded from shelf")
 
     if recompute:
@@ -258,9 +259,14 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
             shelf[key] = shelved
         tt.tock("shelved")
 
+    subtrainex = trainds.examples + []
+    random.shuffle(subtrainex)
+    subtrainex = subtrainex[:len(subtrainex)//10]
+    subtrainds = Dataset(subtrainex)
+
     tt.tock(f"loaded '{dataset}'")
     tt.msg(f"#train={len(trainds)}, #iidvalid={len(iidvalidds)}, #oodvalid={len(oodvalidds)}, #ood2valid={len(ood2validds)}, #test={len(testds)}")
-    return trainds, iidvalidds, oodvalidds, ood2validds, testds, fldic
+    return trainds, subtrainds, iidvalidds, oodvalidds, ood2validds, testds, fldic
 
 
 def collate_fn(x, pad_value=0, numtokens=5000):
@@ -338,6 +344,7 @@ def run(lr=0.0001,
         testcode=False,
         gpu=-1,
         trainonvalidonly=False,
+        trainonood2only=False,
         recomputedata=False,
         version="v1",
         ):
@@ -369,7 +376,7 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, iidvalidds, oodvalidds, ood2validds, testds, fldic = \
+    trainds, subtrainds, iidvalidds, oodvalidds, ood2validds, testds, fldic = \
         load_ds(dataset=dataset,
                 validfrac=validfrac,
                 inptok_name=modelsize,
@@ -378,10 +385,14 @@ def run(lr=0.0001,
 
     tt.tick("dataloaders")
     NUMWORKERS = 0
+
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
-    iidvaliddl = DataLoader(iidvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    subtraindl = DataLoader(subtrainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
+    iidvaliddl = DataLoader(iidvalidds, batch_size=batsize if not trainonvalidonly else testbatsize,
+                            shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     oodvaliddl = DataLoader(oodvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
-    ood2validdl = DataLoader(ood2validds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    ood2validdl = DataLoader(ood2validds, batch_size=batsize if trainonood2only else testbatsize,
+                             shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     testdl = DataLoader(testds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     # print(json.dumps(next(iter(trainds)), indent=3))
     # print(next(iter(traindl)))
@@ -436,6 +447,7 @@ def run(lr=0.0001,
 
     tloss = make_array_of_metrics("loss", "acc", reduction="mean")
     tmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    subtmetrics = make_array_of_metrics("treeacc", reduction="mean")
     iidvmetrics = make_array_of_metrics("treeacc", reduction="mean")
     oodvmetrics = make_array_of_metrics("treeacc", reduction="mean")
     ood2vmetrics = make_array_of_metrics("treeacc", reduction="mean")
@@ -551,10 +563,13 @@ def run(lr=0.0001,
                          )
 
     if trainonvalidonly:
-        assert False
-        tt.msg("TRAINING ON IID VALID ONLY, VALIDATING ON TEST !!!!!!!")
+        # assert False
+        tt.msg("TRAINING ON IID VALID ONLY !!!!!!!")
         traindl = iidvaliddl
-        validdl = testdl
+
+    if trainonood2only:
+        tt.msg("TRAINING ON OOD2 VALID ONLY !!!!!!!!")
+        traindl = ood2validdl
 
     trainepoch = partial(q.train_epoch, model=decoder,
                          dataloader=traindl,
@@ -566,8 +581,8 @@ def run(lr=0.0001,
 
     trainevalepoch = partial(q.test_epoch,
                              model=decoder,
-                             losses=tmetrics,
-                             dataloader=traindl,
+                             losses=subtmetrics,
+                             dataloader=subtraindl,
                              device=device)
 
     tt.tick("training")
@@ -597,7 +612,7 @@ def run(lr=0.0001,
         decoder.model = iideyt.remembered
         model = iideyt.remembered
 
-        tt.tick("running train")
+        tt.tick("running evaluation on subset of train")
         trainres = trainevalepoch()
         settings.update({"train_tree_acc_at_iidearly": tmetrics[0].get_epoch_error()})
         tt.tock(f"Train tree acc: {trainres}")
@@ -617,7 +632,7 @@ def run(lr=0.0001,
         decoder.model = oodeyt.remembered
         model = oodeyt.remembered
 
-        tt.tick("running train")
+        tt.tick("running evaluation on subset of train")
         trainres = trainevalepoch()
         settings.update({"train_tree_acc_at_oodearly": tmetrics[0].get_epoch_error()})
         tt.tock(f"Train tree acc: {trainres}")
@@ -637,13 +652,13 @@ def run(lr=0.0001,
         decoder.model = ood2eyt.remembered
         model = ood2eyt.remembered
 
-        tt.tick("running train")
+        tt.tick("running evaluation on subset of train")
         trainres = trainevalepoch()
         settings.update({"train_tree_acc_at_ood2early": tmetrics[0].get_epoch_error()})
         tt.tock(f"Train tree acc: {trainres}")
 
         tt.tick("rerunning validation")
-        ood2validres = ood2validepoch()
+        oodvalidres = ood2validepoch()
         settings.update({"ood2valid_tree_acc_at_ood2early": ood2vmetrics[0].get_epoch_error()})
         tt.tock(f"OOD2 validation results: {oodvalidres}")
 
@@ -684,6 +699,7 @@ def run_experiment(
         postdropemb=False,
         testcode=False,
         trainonvalidonly=False,
+        trainonood2only=False,
         gpu=-1,
         recomputedata=False,
         ):
