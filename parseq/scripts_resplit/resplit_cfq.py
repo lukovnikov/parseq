@@ -101,7 +101,11 @@ class FrequencyDistribution():
             dist1 = dist1.tofreqs()
         if isinstance(dist2, FrequencyDistribution):
             dist2 = dist2.tofreqs()
-        keys = set(dist1.keys()) & set(dist2.keys())
+        # keys = set(dist1.keys()) & set(dist2.keys())
+        if len(dist1) > len(dist2):
+            keys = dist2.keys()
+        else:
+            keys = dist1.keys()
         for k in keys:
             v1 = dist1[k]
             if k not in dist2:
