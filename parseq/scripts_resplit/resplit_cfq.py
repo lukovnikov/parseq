@@ -107,11 +107,8 @@ class FrequencyDistribution():
         else:
             keys = dist1.keys()
         for k in keys:
-            v1 = dist1[k]
-            if k not in dist2:
-                v2 = 0
-            else:
-                v2 = dist2[k]
+            v1 = dist1[k] if k in dist1 else 0
+            v2 = dist2[k] if k in dist2 else 0
             contrib = math.pow(v1, alpha) * math.pow(v2, 1 - alpha)
             if weights is not None:
                 if k in weights:
