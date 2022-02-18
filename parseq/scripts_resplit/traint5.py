@@ -335,7 +335,7 @@ def run(lr=0.0001,
         adapterdim=64,
         usedefaultmodel=False,
         dataset="scan/length",
-        maxsize=50,
+        maxsize=-1,
         seed=42,
         dropout=0.,
         dropoutemb=0.,
@@ -382,6 +382,17 @@ def run(lr=0.0001,
                 inptok_name=modelsize,
                 originalinout=originalinout,
                 recompute=recomputedata)
+
+    if maxsize < 0:   # has not been manually overridden
+        if dataset.startswith("cfq"):
+            maxsize = 160
+        elif dataset.startswith("scan"):
+            if originalinout:
+                maxsize = 300
+            else:
+                maxsize = 55
+
+    print(f"Maxsize: {maxsize}")
 
     tt.tick("dataloaders")
     NUMWORKERS = 0
@@ -724,18 +735,10 @@ def run_experiment(
         "adapterdim": [64],
     }
 
-    if dataset.startswith("cfq"):
-        settings["maxsize"] = 160
-    elif dataset.startswith("scan"):
-        if originalinout:
-            settings["maxsize"] = 300
-        else:
-            settings["maxsize"] = 55
-
     for k in ranges:
         if k in settings:
             if isinstance(settings[k], str) and settings[k] != "default":
-                ranges[k] = [settings[k]]
+                ranges[k] = settings[k].split(",")
             elif isinstance(settings[k], (int, float)) and settings[k] >= 0:
                 ranges[k] = [settings[k]]
             else:
