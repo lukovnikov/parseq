@@ -77,13 +77,13 @@ class FrequencyDistribution():
 
     def __add__(self, other):
         ret = FrequencyDistribution()
-        for k in set(self._counts.keys()) | set(other._counts.keys()):
+        for k in set(self.keys()) | set(other.keys()):
             ret[k] = self[k] + other[k]
         return ret
 
     def __sub__(self, other):
         ret = FrequencyDistribution()
-        for k in set(self._counts.keys()) | set(other._counts.keys()):
+        for k in set(self.keys()) | set(other.keys()):
             ret[k] = self[k] - other[k]
         return ret
 
@@ -138,6 +138,11 @@ class FrequencyDistribution():
         for k in self._counts:
             acc += k * self(k)
         return acc
+
+    def compute_overlap(self, other:type("FrequencyDistribution")):
+        selfkeys = set(self._counts.keys())
+        otherkeys = set(other._counts.keys()) if isinstance(other, FrequencyDistribution) else set(other)
+        return len(selfkeys & otherkeys), len(selfkeys), len(otherkeys), len(selfkeys | otherkeys)
 
 
 class DivergenceComputer():
@@ -291,6 +296,17 @@ class DivergenceComputer():
                 divergences[subsetname + "-" + subsetname2] = 1 - self.compute_chernoff_coeff(dists[subsetname], dists[subsetname2], 0.1)
         return divergences
 
+    def _compute_overlaps(self, dists, union=False):
+        overlaps = dict()
+        for subsetname in dists:
+            for subsetname2 in dists:
+                if self.verbose:
+                    print(f"computing overlap between {subsetname} and {subsetname2}")
+                a, b, c, d = dists[subsetname].compute_overlap(dists[subsetname2])
+                t = b if not union else d
+                overlaps[subsetname + "-" + subsetname2] = a / max(t, 1e-6)
+        return overlaps
+
     def compute_compound_divergences(self, ds):
         dists = self.compute_compound_distributions(ds)
         return self._compute_compound_divergences(dists)
@@ -307,7 +323,7 @@ def get_dist_similarity(x, dist):
 
 
 def filter_mcd(source: List[Tuple[str, Tree]], otheratoms, othercomps, N=10000,
-               dc=None, coeffa=1, coeffb=1, coeffatom=1000):
+               dc=None, coeffa=1, coeffb=15):
     """
     :param source:      a list of examples from which to pick, in format (input, output)
     :param otheratoms:  atom distributions of other splits
@@ -321,7 +337,7 @@ def filter_mcd(source: List[Tuple[str, Tree]], otheratoms, othercomps, N=10000,
     assert len(source) > N
     assert len(otheratoms) == len(othercomps)
 
-    trainatoms, testatoms = otheratoms
+    # trainatoms, testatoms = otheratoms
     traincomps, testcomps = othercomps
     traincomps = traincomps.tofreqs()
     testcomps = testcomps.tofreqs()
@@ -329,16 +345,18 @@ def filter_mcd(source: List[Tuple[str, Tree]], otheratoms, othercomps, N=10000,
     print("creating selection")
     exstats = []
     for x in tqdm(source):
-        # xatoms = dc.extract_atoms(x[dc.LFINDEX])
-        xcomps = dc.extract_compounds(x[dc.LFINDEX])
-        exstats.append((get_dist_similarity(xcomps, traincomps),
-                        get_dist_similarity(xcomps, testcomps),
+        # xatoms = dc.extract_atoms(x[1])
+        # xcomps = dc.extract_compounds(x[1])
+        xcomps = dc.extract_compound_dist(x[2])
+        exstats.append((dc.compute_chernoff_coeff(traincomps, xcomps, alpha=0.1),
+                        dc.compute_chernoff_coeff(xcomps, testcomps, alpha=0.1),
                         len(xcomps)))
 
-    # select top-N examples with least overlap with train and test
-    scores = [(i, coeffa * a + coeffb * b) for (i, (a, b, e)) in enumerate(exstats)]
+    # select top-N examples with least overlap with train and test as starting point
+    scores = [(i, coeffa*a + coeffb*b) for (i, (a, b, e)) in enumerate(exstats)]
     sortedscores = sorted(scores, key=lambda x: x[1])
     retids = [i for i, s in sortedscores[:N]]
+
     ret = []
     for i in retids:
         a = source[i]
@@ -381,7 +399,8 @@ def filter_traindata(traindata, testdata, newdevdata, N=10000, dc=None):
     return ret
 
 
-def resplit_cfq(split="mcd1", outp="../../datasets/cfq/", debug=False, N=10000):
+def resplit_cfq(split="mcd1", outp="../../datasets/cfq/", coeffa=1., coeffb=15.,
+                debug=False, N=10000):
     ds = CFQDatasetLoader().load(f"{split}/modent", validfrac=0, loadunused=True, keepids=True)
 
     if debug:
@@ -407,7 +426,7 @@ def resplit_cfq(split="mcd1", outp="../../datasets/cfq/", debug=False, N=10000):
     # filtering mcd
     print("selecting examples for second ood set")
     newsplit = filter_mcd(unused, [atom_dists["train"], atom_dists["test"]], [comp_dists["train"], comp_dists["test"]],
-                          N=N, dc=dc)
+                          coeffa=coeffa, coeffb=coeffb, N=N, dc=dc)
 
     # print("debug", newsplit[0])
 
@@ -430,7 +449,7 @@ def resplit_cfq(split="mcd1", outp="../../datasets/cfq/", debug=False, N=10000):
 
     # extract ids for new json and check them
     ret = extract_example_ids(ds, newsplit, newtrain=None)
-    with open(f"{outp}{split}new.json", "w") as f:
+    with open(f"{outp}{split}new2.json", "w") as f:
         json.dump(ret, f)
     return ret
 
@@ -478,6 +497,250 @@ def extract_example_ids(ds, newood=None, newtrain=None):
     return ret
 
 
+def compute_approx_chernoff_change_twoway(comps, dist1:FrequencyDistribution, dist2:FrequencyDistribution, alpha=0.5):
+    cchange1 = 0
+    cchange2 = 0
+    for comp in comps:
+        cchange1 += (((dist1[comp] + 1)/dist1.total) ** alpha - dist1(comp) ** alpha) * (dist2(comp) ** (1-alpha))
+        cchange2 += (dist1(comp) ** alpha) * (((dist2[comp] + 1)/dist2.total) ** (1-alpha) - dist2(comp) ** (1-alpha))
+    return cchange1, cchange2
+
+
+def compute_approx_chernoff_change(comps, traindist:FrequencyDistribution, validdist:FrequencyDistribution, testdist:FrequencyDistribution, alpha=0.1):
+    trainchange = 0   # change in total weighted chernoff coeff if example is assigned to train
+    validchange = 0   # "" "" if assigned to valid
+    testchange = 0    # "" "" "" test
+    for comp in comps:
+        trainchange += (((traindist[comp] + 1)/(traindist.total + 1)) ** alpha - traindist(comp) ** alpha) * (testdist(comp) ** (1-alpha))
+        trainchange += (((traindist[comp] + 1)/(traindist.total + 1)) ** alpha - traindist(comp) ** alpha) * (validdist(comp) ** (1-alpha))
+        validchange += (((validdist[comp] + 1)/(validdist.total + 1)) ** alpha - validdist(comp) ** alpha) * (testdist(comp) ** (1-alpha))
+        validchange += (traindist(comp) ** alpha) * (((validdist[comp] + 1)/(validdist.total+1)) ** (1-alpha) - validdist(comp) ** (1-alpha))
+        testchange += (traindist(comp) ** alpha) * (((testdist[comp] + 1)/(testdist.total+1)) ** (1-alpha) - testdist(comp) ** (1-alpha))
+        testchange += (validdist(comp) ** alpha) * (((testdist[comp] + 1)/(testdist.total+1)) ** (1-alpha) - testdist(comp) ** (1-alpha))
+    return trainchange, validchange, testchange
+
+
+def compute_true_chernoff_change(comps, traindist:FrequencyDistribution, validdist:FrequencyDistribution, testdist:FrequencyDistribution, alpha=0.1):
+    dc = DivergenceComputer()
+    _traindist = FrequencyDistribution()
+    _traindist._counts = copy(traindist._counts)
+    _traindist.total = traindist.total
+
+    _validdist = FrequencyDistribution()
+    _validdist._counts = copy(validdist._counts)
+    _validdist.total = validdist.total
+
+    _testdist = FrequencyDistribution()
+    _testdist._counts = copy(testdist._counts)
+    _testdist.total = testdist.total
+
+    for comp in comps:
+        _traindist[comp] += 1
+        _validdist[comp] += 1
+        _testdist[comp] += 1
+
+    trainchange = FrequencyDistribution.compute_chernoff_coeff(_traindist, validdist, alpha=alpha) - FrequencyDistribution.compute_chernoff_coeff(traindist, validdist, alpha=alpha) \
+                  + FrequencyDistribution.compute_chernoff_coeff(_traindist, testdist, alpha=alpha) - FrequencyDistribution.compute_chernoff_coeff(traindist, testdist, alpha=alpha)
+
+    validchange = FrequencyDistribution.compute_chernoff_coeff(traindist, _validdist, alpha=alpha) - FrequencyDistribution.compute_chernoff_coeff(traindist, validdist, alpha=alpha) \
+                  + FrequencyDistribution.compute_chernoff_coeff(_validdist, testdist, alpha=alpha) - FrequencyDistribution.compute_chernoff_coeff(validdist, testdist, alpha=alpha)
+
+    testchange = FrequencyDistribution.compute_chernoff_coeff(traindist, _testdist, alpha=alpha) - FrequencyDistribution.compute_chernoff_coeff(traindist, testdist, alpha=alpha) \
+                  + FrequencyDistribution.compute_chernoff_coeff(validdist, _testdist, alpha=alpha) - FrequencyDistribution.compute_chernoff_coeff(validdist, testdist, alpha=alpha)
+
+    return trainchange, validchange, testchange
+
+
+def try_chernoff_change():
+    traindist = FrequencyDistribution()
+    comps = "a b c d a b c a c d"
+    comps = "a a a a a a a a a b c i i"
+    for comp in comps.split():
+        traindist[comp] += 100
+
+    validdist = FrequencyDistribution()
+    comps = "a b c d a b e f e"
+    comps = "b c d d d e e h h f"
+    # comps = "a b c d a b c a c d"
+
+    for comp in comps.split():
+        validdist[comp] += 100
+
+    testdist = FrequencyDistribution()
+    comps = "a b c d e f g g g h"
+    comps = "a e e f f f f g g "
+    # comps = "a b c d a b c a c d"
+
+    for comp in comps.split():
+        testdist[comp] += 100
+
+    comps = "a".split()
+    print(comps)
+    print(compute_approx_chernoff_change(comps, traindist, validdist, testdist))
+    print(compute_true_chernoff_change(comps, traindist, validdist, testdist))
+
+    comps = "i".split()
+    print(comps)
+    print(compute_approx_chernoff_change(comps, traindist, validdist, testdist))
+    print(compute_true_chernoff_change(comps, traindist, validdist, testdist))
+
+    comps = "f".split()
+    print(comps)
+    print(compute_approx_chernoff_change(comps, traindist, validdist, testdist))
+    print(compute_true_chernoff_change(comps, traindist, validdist, testdist))
+
+    comps = "h".split()
+    print(comps)
+    print(compute_approx_chernoff_change(comps, traindist, validdist, testdist))
+    print(compute_true_chernoff_change(comps, traindist, validdist, testdist))
+
+    comps = "g".split()
+    print(comps)
+    print(compute_approx_chernoff_change(comps, traindist, validdist, testdist))
+    print(compute_true_chernoff_change(comps, traindist, validdist, testdist))
+
+
+def print_divergences(subsets):
+    dc = DivergenceComputer()
+    # updating compound distribution and computing divergences
+    print("updating compound distributions and computing divergences")
+    cds = {}
+    ads = {}
+    for i, subset in enumerate(subsets):
+        cds[str(i)] = dc.compute_compound_distribution(subset)
+        ads[str(i)] = dc.compute_atom_distribution(subset)
+    divs = dc._compute_compound_divergences(cds)
+    adivs = dc._compute_atom_divergences(ads)
+    overlaps = dc._compute_overlaps(cds)
+    aoverlaps = dc._compute_overlaps(ads, union=True)
+    for k in ["0-1", "0-2", "1-2"]:
+        print(f"{k}: {divs[k]:.3f}, {overlaps[k] * 100:.1f} -- {adivs[k]:.3f}, {aoverlaps[k] * 100:.1f}")
+
+
+def make_mcd_splits(xs: List, sizes=(0.6, 0.2, 0.2), backbleed=0.1, minbackbleed=20, restfraq=0.2):
+    # initialize randomly
+    dc = DivergenceComputer()
+    targetsize = len(xs) * (1 - restfraq)
+
+    print("initializing randomly by selecting 1 random example for train")
+    xs = [(x[0], x[1], taglisp_to_tree(x[2]) if not isinstance(x[2], Tree) else x[2]) for x in xs]
+    random.shuffle(xs)
+    subsets = [[], [], []]
+
+    trainseed = xs.pop(0)
+    subsets[0].append(trainseed)
+
+    # find validseed example with which trainseed has least overlap
+    bestscore, bestid = 1e6, None
+    trainseeddist = dc.extract_compound_dist(trainseed[2])
+    for i, example in tqdm(enumerate(xs)):
+        exampledist = dc.extract_compound_dist(example[2])
+        a, _, _, _ = trainseeddist.compute_overlap(
+            exampledist)  # how many of trainseed's compounds occur in example's compounds
+        if a < bestscore:
+            bestscore = a
+            bestid = i
+    validseed = xs.pop(bestid)
+    subsets[1].append(validseed)
+
+    # find testseed example with which trainseed and validseed have least overlap
+    bestscore, bestid = 1e6, None
+    validseeddist = dc.extract_compound_dist(validseed[2])
+    seeddist = trainseeddist + validseeddist
+    for i, example in tqdm(enumerate(xs)):
+        exampledist = dc.extract_compound_dist(example[2])
+        a, _, _, _ = seeddist.compute_overlap(exampledist)
+        if a < bestscore:
+            bestscore = a
+            bestid = i
+    testseed = xs.pop(bestid)
+    subsets[2].append(testseed)
+    print("initialized")
+
+    trainstats = FrequencyDistribution()
+    validstats = FrequencyDistribution()
+    teststats = FrequencyDistribution()
+    statses = [trainstats, validstats, teststats]
+
+    # update stats
+    for subset, stats in zip(subsets, statses):
+        for example in subset:
+            for comp in dc.extract_compounds(example[2]):
+                stats[comp] += 1
+
+    n = 0
+    for subset in subsets:
+        n += len(subset)
+
+    done = False
+    while not done:
+        newxs = []
+        #         print(xs[0], len(xs))
+        for example in tqdm(xs):
+            comps = dc.extract_compounds(example[2])
+            changes = compute_approx_chernoff_change(comps, *statses, alpha=0.1)
+            changes = list(zip(changes, range(3)))
+            bestchoices = sorted(changes, key=lambda x: x[0])  # which subset is best
+            #             print(bestchoices)
+            bestchoices = [x[1] for x in bestchoices]
+
+            bestchoice = bestchoices[0]
+            if len(subsets[bestchoice]) <= sizes[bestchoice] * n:
+                subsets[bestchoice].append(example)
+                n += 1
+                for comp in comps:
+                    statses[bestchoice][comp] += 1
+                if n >= targetsize:
+                    done = True
+                    print("done!")
+                    break
+            else:
+                newxs.append(example)
+
+        if not done:
+            if len(xs) - len(newxs) < max(backbleed * len(xs), minbackbleed):
+                print("backbleeding")
+            while len(xs) - len(newxs) < max(backbleed * len(xs),
+                                             minbackbleed) and not done:  # none of the examples have been added
+                # add last example to the next best choice
+                if len(newxs) == 0:
+                    break
+                example = newxs.pop(-1)
+                comps = dc.extract_compounds(example[2])
+                changes = compute_approx_chernoff_change(comps, *statses, alpha=0.1)
+                changes = list(zip(changes, range(3)))
+                bestchoices = sorted(changes, key=lambda x: x[0])  # which subset is best
+                #             print(bestchoices)
+                bestchoices = [x[1] for x in bestchoices]
+
+                for bestchoice in bestchoices:
+                    if len(subsets[bestchoice]) <= sizes[bestchoice] * n:
+                        subsets[bestchoice].append(example)
+                        n += 1
+                        for comp in comps:
+                            statses[bestchoice][comp] += 1
+                        if n >= targetsize:
+                            done = True
+                            print("done!")
+                        break
+
+        print(len(subsets[0]), len(subsets[1]), len(subsets[2]))
+
+        print_divergences(subsets)
+
+        xs = newxs
+        random.shuffle(xs)
+        print("remaining: ", len(xs))
+        if len(xs) == 0:
+            done = True
+
+    # iterate over remaining
+    # assign to the most fitting subset
+    print(len(subsets[0]), len(subsets[1]), len(subsets[2]))
+
+    return subsets
+
+
 def try_cfq():
     ds = CFQDatasetLoader().load("mcd1/modent")
     print(ds[0])
@@ -488,4 +751,5 @@ def try_cfq():
 
 
 if __name__ == '__main__':
-    resplit_cfq("mcd2", debug=False)
+    resplit_cfq("mcd3", coeffb=30, debug=False)
+    # try_chernoff_change()

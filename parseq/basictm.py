@@ -17,15 +17,29 @@ class Transformer(Module):
                  nhead: int = 8,
                  num_encoder_layers: int = 6,
                  num_decoder_layers: int = 6,
-                 dim_feedforward: int = 2048,
                  dropout: float = 0.1,
+                 dropoutemb: float = -1.,
                  activation: Union[str, Callable[[Tensor], Tensor]] = torch.nn.functional.relu,
-                 custom_encoder: Optional[Any] = None,
-                 custom_decoder: Optional[Any] = None,
                  layer_norm_eps: float = 1e-5,
                  norm_first: bool = False,
                  device=None,
-                 dtype=None) -> None:
+                 dtype=None,
+                 **kw) -> None:
+        super().__init__(**kw)
+        self.inpvocabsize = inpvocsize
+        self.outvocabsize = outvocsize
+        self.dropoutemb = dropout if dropoutemb < 0 else dropoutemb
+        self.transformer = TransformerModel(d_model=d_model, nhead=nhead, num_encoder_layers=num_encoder_layers,
+                                            num_decoder_layers=num_decoder_layers, dim_feedforward=d_model*4,
+                                            dropout=dropout, activation=activation, layer_norm_eps=layer_norm_eps,
+                                            norm_first=norm_first, device=device, dtype=dtype)
+
+        self.dim = d_model
+
+        self.inpemb = torch.nn.Embedding(self.inpvocabsize, self.dim, padding_idx=0)
+        self.outemb = torch.nn.Embedding(self.outvocabsize, self.dim, padding_idx=0)
+        self.outlin = torch.nn.Linear(self.dim, self.outvocabsize)
+        self.embdropout = torch.nn.Dropout(self.dropoutemb)
         
 
 

@@ -1095,15 +1095,23 @@ def download_url(url, output_path):
 
 class CFQDatasetLoader(object):
     fullp = "https://storage.googleapis.com/cfq_dataset/cfq1.1.tar.gz"
-    split_names = "mcd1,mcd2,mcd3,random,mcd1new,mcd2new,mcd3new"
-    available_splits = tuple("mcd1,mcd2,mcd3,random,mcd1new,mcd2new,mcd3new".split(","))
+    available_splits = tuple("mcd1,mcd2,mcd3,random,mcd1new,mcd2new,mcd3new,"
+                             "1800mcd1,2000mcd1,4500mcd1,9000mcd1,10000mcd1,"
+                             "18000mcd1,90000mcd1".split(","))
     rename = {
         "mcd1": "mcd1",
         "mcd2": "mcd2",
         "mcd3": "mcd3",
-        "mcd1new": "mcd1new",
-        "mcd2new": "mcd2new",
-        "mcd3new": "mcd3new",
+        "mcd1new": "mcd1new2",
+        "mcd2new": "mcd2new2",
+        "mcd3new": "mcd3new2",
+        "1800mcd1": "minicfq1800split1",
+        "2000mcd1": "minicfq2000split1",
+        "4500mcd1": "minicfq4500split1",
+        "9000mcd1": "minicfq9000split1",
+        "10000mcd1": "minicfq10000split1",
+        "18000mcd1": "minicfq18000split1",
+        "90000mcd1": "minicfq90000split1",
         "random": "random_split",
         "question_pattern": "question_pattern_split",
         "question_complexity": "question_complexity_split",
@@ -1117,12 +1125,13 @@ class CFQDatasetLoader(object):
         "train": "train",
         "test": "test",
         "unused": "unused",
+        "iidvalid": "iidvalid",
         "oodvalid": "oodvalid",
         "ood2valid": "ood2valid",
     }
 
     def __init__(self, path="../datasets/cfq/", **kw):
-        super(CFQDatasetLoader, self).__init__(**kw)
+        super().__init__(**kw)
         self.p = os.path.join(os.path.dirname(__file__), path)
         self.tt = q.ticktock("CFQDatasetLoader")
         self.tt.tick("make data")
@@ -1199,7 +1208,7 @@ class CFQDatasetLoader(object):
 
         trainidxs = splitidxs["train"]
 
-        if validfrac > 0:
+        if validfrac > 0 and "iidvalid" not in splitidxs:
             if verbose:
                 print(f"splitting off a random {validfrac*100:.0f}% of 'train' for 'iidvalid' using seed {seed}")
             rnd = random.Random(seed)
