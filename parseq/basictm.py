@@ -1,5 +1,5 @@
 import copy
-from typing import Optional, Any, Union, Callable
+from typing import Optional, Any, Union, Callable, List
 
 import torch
 from torch import Tensor
@@ -7,8 +7,10 @@ from torch.nn import LayerNorm, Module, MultiheadAttention, Linear, Dropout, Mod
 from torch.nn.init import xavier_uniform_
 
 
-class Transformer(Module):
+class TransformerModel(Module):
     """ Internally uses 'TransformerModel' but automates embeddings and masks. """
+
+    ### By default, uses learned positional embeddings
 
     def __init__(self,
                  inpvocsize:int=1000,
@@ -24,26 +26,144 @@ class Transformer(Module):
                  norm_first: bool = False,
                  device=None,
                  dtype=None,
+                 maxlen=500,
                  **kw) -> None:
         super().__init__(**kw)
         self.inpvocabsize = inpvocsize
         self.outvocabsize = outvocsize
         self.dropoutemb = dropout if dropoutemb < 0 else dropoutemb
-        self.transformer = TransformerModel(d_model=d_model, nhead=nhead, num_encoder_layers=num_encoder_layers,
+        self.transformer = Transformer(d_model=d_model, nhead=nhead, num_encoder_layers=num_encoder_layers,
                                             num_decoder_layers=num_decoder_layers, dim_feedforward=d_model*4,
                                             dropout=dropout, activation=activation, layer_norm_eps=layer_norm_eps,
                                             norm_first=norm_first, device=device, dtype=dtype)
 
         self.dim = d_model
 
+        self.maxlen = maxlen
+
         self.inpemb = torch.nn.Embedding(self.inpvocabsize, self.dim, padding_idx=0)
+        self.inpposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=-1000)
         self.outemb = torch.nn.Embedding(self.outvocabsize, self.dim, padding_idx=0)
+        self.outposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=-1000)
         self.outlin = torch.nn.Linear(self.dim, self.outvocabsize)
         self.embdropout = torch.nn.Dropout(self.dropoutemb)
+
+        self.loss = torch.nn.CrossEntropyLoss(reduction="none")
+
+    def _compute_enc_inp(self, x):
+        assert x.dim() == 2 and x.dtype == torch.long
+        xlen = x.size(1)
+        xemb = self.inpemb(x)
+        xposemb = self.inpposemb.weight[None, :xlen, :]   # (1, numpos, embdim)
+        xemb = xemb + xposemb
+        xemb = self.embdropout(xemb)
+        encpadmask = x == 0         # mask element has value False --> it is allowed to participate in attention
+        return xemb, encpadmask
+
+    def _compute_dec_inp(self, y):
+        assert y.dim() == 2 and y.dtype == torch.long
+        ylen = y.size(1)
+        yemb = self.outemb(y)
+        yposemb = self.outposemb.weight[None, :ylen, :]
+        yemb = yemb + yposemb
+        yemb = self.embdropout(yemb)
+        decpadmask = y == 0
+        return yemb, decpadmask
+
+    def forward(self, x, y, y_out=None):
+        """ This is the forward for the training. Use .decode() during prediction. """
+        if y_out is None:
+            y_out = y
+        # 1. compute embeddings (absolute learned positional embeddings)
+        assert y_out.dim() == 2 and y_out.dtype == torch.long
+        assert x.size(0) == y.size(0)       # batch sizes must match
+        assert x.size(0) == y_out.size(0)  # batch sizes must match
+        ylen = y.size(1)
+        assert ylen == y_out.size(1)
+        xemb, encpadmask = self._compute_enc_inp(x)
+        yemb, decpadmask = self._compute_dec_inp(y)
+
+        # 2. compute attention masks:
+        # - padding mask for encoder
+        # - padding mask for decoder
+        # - causal mask for decoder
+        deccausalmask = torch.tril(torch.ones(ylen, ylen, dtype=torch.bool, device=x.device)) == 0
+
+        # 3. use transformer:
+        out = self.transformer(xemb, yemb,
+                               tgt_mask=deccausalmask,
+                               src_key_padding_mask=encpadmask,
+                               tgt_key_padding_mask=decpadmask,
+                               memory_key_padding_mask=encpadmask)
+
+        # 4. compute outputs and losses and metrics
+        logits = self.outlin(out)   # (batsize, outseqlen, outvocabsize)
+        _, outs = torch.max(logits, -1)  # (batsize, outseqlen)
+
+        losses = self.compute_losses(logits[:, :-1], y_out[:, 1:])
+        metrics = self.compute_metrics(torch.cat([y[:, 0:1], outs[:, :-1]]), y_out)
+
+        ret = {k: v for k, v in losses.items()}
+        for k, v in metrics.items():
+            assert k not in ret
+        for k, v in metrics.items():
+            ret[k] = v
+        assert "loss" in ret
+        return ret
+
+    def compute_losses(self, preds, gold):
+        # (batsize, seqlen, outvocsize), (batsize, seqlen)
+        ce = torch.nn.functional.cross_entropy(preds, gold, ignore_index=0, reduction='none')
+        mask = (gold != 0).float()
+        # ret = ce.sum(1) / mask.sum(1)
+        ret = ce.sum(1)
+        return {"loss": ret}
+
+    def compute_metrics(self, preds, gold):
+        return {}
+
+    def decode(self, x, y):
+        y = y[:, 0:1]
+
+        # 1. encode
+        xemb, encpadmask = self._compute_enc_inp(x)
+        memory = self.encoder(xemb, src_key_padding_mask=encpadmask)
+
+        # 2. while stopping criterion not reached, keep decoding
+        out_acc = y + 0
+        savedstates = [torch.zeros(x.size(0), 0, self.dim, device=y.device) for _ in self.decoder.layers]
+        decpadmask_acc = torch.zeros(x.size(0), 0, device=y.device, dtype=torch.bool)
+        while True:
+            yemb, decpadmask = self._compute_dec_inp(y)
+            decpadmask_acc = torch.cat([decpadmask_acc, decpadmask], 1)
+            out_step, newstates = self.decoder.decode_step(yemb, memory,
+                                     savedkvs=savedstates,
+                                     tgt_key_padding_mask=decpadmask_acc,
+                                     memory_key_padding_mask=encpadmask)   # no need for causal mask because we are decoding and can use everything
+            # get output and save it
+            logits_step = self.outlin(out_step)   # (batsize, outseqlen, outvocabsize)
+            _, pred_step = torch.max(logits_step, -1)  # (batsize, outseqlen)
+            out_acc = torch.cat([out_acc, pred_step], 1)
+            # update saved states
+            newsavedstates = []
+            for newstate, savedstate in zip(newstates, savedstates):
+                newsavedstate = torch.cat([savedstate, newstate], 1)
+                newsavedstates.append(newsavedstate)
+            savedstates = newsavedstates
+
+            out = torch
+            if self._stop_decoding(out):
+                break
+
+    def _stop_decoding(self, out):
+        l = out.size(1)
+        if l >= self.maxlen:
+            return True
+        else:
+            return False
         
 
-
-class TransformerModel(Module):
+class Transformer(Module):
     r"""A transformer model. User is able to modify the attributes as needed. The architecture
     is based on the paper "Attention Is All You Need". Ashish Vaswani, Noam Shazeer,
     Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Lukasz Kaiser, and
@@ -85,7 +205,7 @@ class TransformerModel(Module):
                  layer_norm_eps: float = 1e-5, norm_first: bool = False,
                  device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
-        super(TransformerModel, self).__init__()
+        super(Transformer, self).__init__()
 
         if custom_encoder is not None:
             self.encoder = custom_encoder
@@ -283,6 +403,25 @@ class TransformerDecoder(Module):
 
         return output
 
+    def decode_step(self, tgt: Tensor, memory: Tensor,
+                    savedkvs=None,    # previously produced states
+                    tgt_key_padding_mask=None,   # full padding mask for decoded sequence
+                    memory_key_padding_mask=None, # padding mask for memory (encoded states)
+                    ):
+        output = tgt
+        newkvs = []
+        for mod, savedkv in zip(self.layers, savedkvs):
+            kv = torch.cat([savedkv, output])
+            output = mod(output, memory, kv=kv,
+                         tgt_key_padding_mask=tgt_key_padding_mask,
+                         memory_key_padding_mask=memory_key_padding_mask)
+            newkvs.append(kv)
+
+        if self.norm is not None:
+            output = self.norm(output)
+
+        return output, newkvs
+
 
 class TransformerEncoderLayer(Module):
     r"""TransformerEncoderLayer is made up of self-attn and feedforward network.
@@ -371,7 +510,8 @@ class TransformerEncoderLayer(Module):
 
     # self-attention block
     def _sa_block(self, x: Tensor,
-                  attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor]) -> Tensor:
+                  attn_mask: Optional[Tensor],
+                  key_padding_mask: Optional[Tensor]) -> Tensor:
         x = self.self_attn(x, x, x,
                            attn_mask=attn_mask,
                            key_padding_mask=key_padding_mask,
@@ -447,7 +587,8 @@ class TransformerDecoderLayer(Module):
         super(TransformerDecoderLayer, self).__setstate__(state)
 
     def forward(self, tgt: Tensor, memory: Tensor, tgt_mask: Optional[Tensor] = None, memory_mask: Optional[Tensor] = None,
-                tgt_key_padding_mask: Optional[Tensor] = None, memory_key_padding_mask: Optional[Tensor] = None) -> Tensor:
+                tgt_key_padding_mask: Optional[Tensor] = None, memory_key_padding_mask: Optional[Tensor] = None,
+                kv=None) -> Tensor:
         r"""Pass the inputs (and mask) through the decoder layer.
 
         Args:
@@ -465,11 +606,11 @@ class TransformerDecoderLayer(Module):
 
         x = tgt
         if self.norm_first:
-            x = x + self._sa_block(self.norm1(x), tgt_mask, tgt_key_padding_mask)
+            x = x + self._sa_block(self.norm1(x), tgt_mask, tgt_key_padding_mask, kv=kv)
             x = x + self._mha_block(self.norm2(x), memory, memory_mask, memory_key_padding_mask)
             x = x + self._ff_block(self.norm3(x))
         else:
-            x = self.norm1(x + self._sa_block(x, tgt_mask, tgt_key_padding_mask))
+            x = self.norm1(x + self._sa_block(x, tgt_mask, tgt_key_padding_mask, kv=kv))
             x = self.norm2(x + self._mha_block(x, memory, memory_mask, memory_key_padding_mask))
             x = self.norm3(x + self._ff_block(x))
 
@@ -477,8 +618,9 @@ class TransformerDecoderLayer(Module):
 
     # self-attention block
     def _sa_block(self, x: Tensor,
-                  attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor]) -> Tensor:
-        x = self.self_attn(x, x, x,
+                  attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], kv:Optional[Tensor] = None,) -> Tensor:
+        kv = x if kv is None else kv
+        x = self.self_attn(x, kv, kv,
                            attn_mask=attn_mask,
                            key_padding_mask=key_padding_mask,
                            need_weights=False)[0]
