@@ -144,7 +144,7 @@ class TransformerModel(Module):
             _, pred_step = torch.max(logits_step, -1)  # (batsize, outseqlen)
             out_acc = torch.cat([out_acc, pred_step], 1)
             # update saved states
-            savedkv = newkvs
+            savedkvs = newkvs
 
             if self._stop_decoding(out_acc):
                 break
