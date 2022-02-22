@@ -434,7 +434,7 @@ def run(lr=0.0001,
     set_custom_dropouts(t5, p=dropout, dropoutemb=dropoutemb)
     t5.decoder.c_postdropemb = postdropemb
 
-    print(t5.decoder)
+    # print(t5.decoder)
 
     if fldic is None:
         batchtostrs = lambda x: t5tok.batch_decode(x)     # TODO: test
