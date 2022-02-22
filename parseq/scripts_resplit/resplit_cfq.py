@@ -751,5 +751,5 @@ def try_cfq():
 
 
 if __name__ == '__main__':
-    resplit_cfq("mcd3", coeffb=30, debug=False)
+    resplit_cfq("mcd2", coeffb=12, debug=False)
     # try_chernoff_change()

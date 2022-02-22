@@ -42,13 +42,11 @@ class TransformerModel(Module):
         self.maxlen = maxlen
 
         self.inpemb = torch.nn.Embedding(self.inpvocabsize, self.dim, padding_idx=0)
-        self.inpposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=-1000)
+        self.inpposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=None)
         self.outemb = torch.nn.Embedding(self.outvocabsize, self.dim, padding_idx=0)
-        self.outposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=-1000)
+        self.outposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=None)
         self.outlin = torch.nn.Linear(self.dim, self.outvocabsize)
         self.embdropout = torch.nn.Dropout(self.dropoutemb)
-
-        self.loss = torch.nn.CrossEntropyLoss(reduction="none")
 
     def _compute_enc_inp(self, x):
         assert x.dim() == 2 and x.dtype == torch.long
@@ -101,7 +99,7 @@ class TransformerModel(Module):
         _, outs = torch.max(logits, -1)  # (batsize, outseqlen)
 
         losses = self.compute_losses(logits[:, :-1], y_out[:, 1:])
-        metrics = self.compute_metrics(torch.cat([y[:, 0:1], outs[:, :-1]]), y_out)
+        metrics = self.compute_metrics(torch.cat([y[:, 0:1], outs[:, :-1]], 1), y_out)
 
         ret = {k: v for k, v in losses.items()}
         for k, v in metrics.items():
@@ -113,8 +111,9 @@ class TransformerModel(Module):
 
     def compute_losses(self, preds, gold):
         # (batsize, seqlen, outvocsize), (batsize, seqlen)
-        ce = torch.nn.functional.cross_entropy(preds, gold, ignore_index=0, reduction='none')
+        ce = torch.nn.functional.cross_entropy(preds.transpose(1, 2), gold, ignore_index=0, reduction='none')
         mask = (gold != 0).float()
+        ce = ce * mask
         # ret = ce.sum(1) / mask.sum(1)
         ret = ce.sum(1)
         return {"loss": ret}
@@ -127,17 +126,17 @@ class TransformerModel(Module):
 
         # 1. encode
         xemb, encpadmask = self._compute_enc_inp(x)
-        memory = self.encoder(xemb, src_key_padding_mask=encpadmask)
+        memory = self.transformer.encoder(xemb, src_key_padding_mask=encpadmask)
 
         # 2. while stopping criterion not reached, keep decoding
         out_acc = y + 0
-        savedstates = [torch.zeros(x.size(0), 0, self.dim, device=y.device) for _ in self.decoder.layers]
+        savedkvs = [torch.zeros(x.size(0), 0, self.dim, device=y.device) for _ in self.transformer.decoder.layers]
         decpadmask_acc = torch.zeros(x.size(0), 0, device=y.device, dtype=torch.bool)
         while True:
             yemb, decpadmask = self._compute_dec_inp(y)
             decpadmask_acc = torch.cat([decpadmask_acc, decpadmask], 1)
-            out_step, newstates = self.decoder.decode_step(yemb, memory,
-                                     savedkvs=savedstates,
+            out_step, newkvs = self.transformer.decoder.decode_step(yemb, memory,
+                                     savedkvs=savedkvs,
                                      tgt_key_padding_mask=decpadmask_acc,
                                      memory_key_padding_mask=encpadmask)   # no need for causal mask because we are decoding and can use everything
             # get output and save it
@@ -145,15 +144,12 @@ class TransformerModel(Module):
             _, pred_step = torch.max(logits_step, -1)  # (batsize, outseqlen)
             out_acc = torch.cat([out_acc, pred_step], 1)
             # update saved states
-            newsavedstates = []
-            for newstate, savedstate in zip(newstates, savedstates):
-                newsavedstate = torch.cat([savedstate, newstate], 1)
-                newsavedstates.append(newsavedstate)
-            savedstates = newsavedstates
+            savedkv = newkvs
 
-            out = torch
-            if self._stop_decoding(out):
+            if self._stop_decoding(out_acc):
                 break
+
+        return out_acc
 
     def _stop_decoding(self, out):
         l = out.size(1)
@@ -161,6 +157,33 @@ class TransformerModel(Module):
             return True
         else:
             return False
+
+
+def try_basictm_train():
+    m = TransformerModel(maxlen=20)
+    x = torch.tensor([[1,2,3,0,0,0],
+                      [4,5,6,7,8,0]])
+    y = torch.tensor([[9,10,11,12,0,0],
+                      [13,14,15,16,17,0]])
+    out = m(x, y)
+
+    loss = out["loss"][1]
+    loss.backward()
+
+    print(m.inpposemb.weight.grad[:, 0:2])
+    print(m.outposemb.weight.grad[:, 0:2])
+
+
+def try_basictm_decode():
+
+    m = TransformerModel(maxlen=20)
+    x = torch.tensor([[1,2,3,0,0,0],
+                      [4,5,6,7,8,0]])
+    y = torch.tensor([[9,10,11,12,0,0],
+                      [13,14,15,16,17,0]])
+    y = y[:, :1]
+    out = m.decode(x, y)
+    print(out)
         
 
 class Transformer(Module):
@@ -411,7 +434,7 @@ class TransformerDecoder(Module):
         output = tgt
         newkvs = []
         for mod, savedkv in zip(self.layers, savedkvs):
-            kv = torch.cat([savedkv, output])
+            kv = torch.cat([savedkv, output], 1)
             output = mod(output, memory, kv=kv,
                          tgt_key_padding_mask=tgt_key_padding_mask,
                          memory_key_padding_mask=memory_key_padding_mask)
@@ -662,4 +685,6 @@ def try_tm():
 
 
 if __name__ == '__main__':
-    try_tm()
+    # try_tm()
+    # try_basictm_train()
+    try_basictm_decode()
