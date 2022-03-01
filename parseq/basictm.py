@@ -58,11 +58,11 @@ class TransformerModel(Module):
         encpadmask = x == 0         # mask element has value False --> it is allowed to participate in attention
         return xemb, encpadmask
 
-    def _compute_dec_inp(self, y):
+    def _compute_dec_inp(self, y, offset=0):
         assert y.dim() == 2 and y.dtype == torch.long
         ylen = y.size(1)
         yemb = self.outemb(y)
-        yposemb = self.outposemb.weight[None, :ylen, :]
+        yposemb = self.outposemb.weight[None, offset:offset+ylen, :]
         yemb = yemb + yposemb
         yemb = self.embdropout(yemb)
         decpadmask = y == 0
@@ -106,6 +106,8 @@ class TransformerModel(Module):
             assert k not in ret
         for k, v in metrics.items():
             ret[k] = v
+
+        ret["logits"] = logits
         assert "loss" in ret
         return ret
 
@@ -130,10 +132,13 @@ class TransformerModel(Module):
 
         # 2. while stopping criterion not reached, keep decoding
         out_acc = y + 0
+        out_logits = []
         savedkvs = [torch.zeros(x.size(0), 0, self.dim, device=y.device) for _ in self.transformer.decoder.layers]
         decpadmask_acc = torch.zeros(x.size(0), 0, device=y.device, dtype=torch.bool)
+        i = 0
+        prevy = y
         while True:
-            yemb, decpadmask = self._compute_dec_inp(y)
+            yemb, decpadmask = self._compute_dec_inp(prevy, offset=i)
             decpadmask_acc = torch.cat([decpadmask_acc, decpadmask], 1)
             out_step, newkvs = self.transformer.decoder.decode_step(yemb, memory,
                                      savedkvs=savedkvs,
@@ -142,14 +147,18 @@ class TransformerModel(Module):
             # get output and save it
             logits_step = self.outlin(out_step)   # (batsize, outseqlen, outvocabsize)
             _, pred_step = torch.max(logits_step, -1)  # (batsize, outseqlen)
+            prevy = pred_step
             out_acc = torch.cat([out_acc, pred_step], 1)
+            out_logits.append(logits_step)
             # update saved states
             savedkvs = newkvs
 
             if self._stop_decoding(out_acc):
                 break
+            i += 1
 
-        return out_acc
+        out_logits = torch.cat(out_logits, 1)
+        return out_acc, out_logits
 
     def _stop_decoding(self, out):
         l = out.size(1)
@@ -176,14 +185,21 @@ def try_basictm_train():
 
 def try_basictm_decode():
 
-    m = TransformerModel(maxlen=20)
+    m = TransformerModel(maxlen=6, dropout=0)
     x = torch.tensor([[1,2,3,0,0,0],
                       [4,5,6,7,8,0]])
     y = torch.tensor([[9,10,11,12,0,0],
                       [13,14,15,16,17,0]])
     y = y[:, :1]
-    out = m.decode(x, y)
+    out, outlogits = m.decode(x, y)
     print(out)
+
+    # compare logits with logits in train mode
+    ret = m(x, out)
+    trainlogits = ret["logits"]
+    diff = outlogits - trainlogits[:, :-1, :]
+    print(diff.abs().mean(-1))
+
         
 
 class Transformer(Module):

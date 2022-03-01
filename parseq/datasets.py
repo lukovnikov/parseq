@@ -1096,6 +1096,7 @@ def download_url(url, output_path):
 class CFQDatasetLoader(object):
     fullp = "https://storage.googleapis.com/cfq_dataset/cfq1.1.tar.gz"
     available_splits = tuple("mcd1,mcd2,mcd3,random,mcd1new,mcd2new,mcd3new,"
+                             "minimcd1new,minimcd2new,minimcd3new"
                              "1800mcd1,2000mcd1,4500mcd1,9000mcd1,10000mcd1,"
                              "18000mcd1,90000mcd1".split(","))
     rename = {
@@ -1105,6 +1106,9 @@ class CFQDatasetLoader(object):
         "mcd1new": "mcd1new2",
         "mcd2new": "mcd2new2",
         "mcd3new": "mcd3new2",
+        "minimcd1new": "mcd1new.16k5",
+        "minimcd2new": "mcd2new.16k5",
+        "minimcd3new": "mcd3new.16k5",
         "1800mcd1": "minicfq1800split1",
         "2000mcd1": "minicfq2000split1",
         "4500mcd1": "minicfq4500split1",
