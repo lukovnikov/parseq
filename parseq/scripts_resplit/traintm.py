@@ -26,14 +26,14 @@ from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_t5, T5PTGen, get_t
 from parseq.vocab import Vocab
 
 
-class SeqDecoderT5(torch.nn.Module):
+class SeqDecoderTM(torch.nn.Module):
 
     def __init__(self, model,
                  max_size:int=100,
                  batch_to_strs:Callable=None,
                  eos_token_id=None,
                  **kw):
-        super(SeqDecoderT5, self).__init__(**kw)
+        super().__init__(**kw)
         self.model = model
         self.max_size = max_size
         self.batch_to_strs = batch_to_strs
@@ -116,23 +116,18 @@ class SeqDecoderT5(torch.nn.Module):
 
 
 class Tokenizer(object):
-    def __init__(self, inptok=None, outtok=None, outvocab:Vocab=None, **kw):
+    def __init__(self, inpvocab:Vocab=None, outvocab:Vocab=None, **kw):
         super(Tokenizer, self).__init__(**kw)
-        self.inptok = inptok
-        self.outtok = outtok
+        self.inpvocab = inpvocab
         self.outvocab = outvocab
 
     def tokenize(self, inps:str, outs):
         # input:
-        inputs = self.inptok(inps, return_tensors='pt')
-        inptensor = inputs.input_ids[0]
+        inptoks = self.get_toks(inps) + [self.inpvocab.endtoken]
+        inptensor = self.tensorize_output(inptoks, self.inpvocab)
+        outtoks = self.get_out_toks(outs) + [self.outvocab.endtoken]
+        outtensor = self.tensorize_output(outtoks, self.outvocab)
 
-        if self.outtok is None:
-            outtoks = self.get_out_toks(outs) + [self.outvocab.endtoken]
-            outtensor = self.tensorize_output(outtoks, self.outvocab)
-        else:
-            outputs = self.outtok(outs.lower(), return_tensors='pt')
-            outtensor = outputs.input_ids[0]
         ret = {"inps": inps, "outs":outs, "inptensor": inptensor, "outtensor": outtensor}
         ret = (ret["inptensor"], ret["outtensor"])
         return ret
@@ -152,25 +147,22 @@ class Tokenizer(object):
 ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY", "(@WHERE", "(@OR", "(@AND", "(@QUERY"}
 
 
-def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=None, originalinout=False):
+def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, originalinout=False):
     """
     :param dataset:
     :param validfrac:       how much of the original IID train set is used for IID validation set
     :param recompute:
-    :param inptok_name:
     :param originalinout:
     :return:
     """
     tt = q.ticktock("data")
     tt.tick(f"loading '{dataset}'")
 
-    inptok = load_t5_tokenizer(inptok_name)
-
     iidvalidisoodvalid = False
     if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
         iidvalidisoodvalid = True
 
-    key = f"{dataset}|validfrac={validfrac}|inptok=t5-{inptok_name}|originalinout={originalinout}"
+    key = f"{dataset}|validfrac={validfrac}|originalinout={originalinout}"
 
     shelfname = os.path.basename(__file__) + ".cache.shelve"
     if not recompute:
@@ -181,8 +173,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
                 tt.tock("couldn't load from shelf")
             else:
                 shelved = shelf[key]
-                trainex, iidvalidex, oodvalidex, ood2validex, testex, fldic = shelved["trainex"], shelved["iidvalidex"], shelved["oodvalidex"], shelved["ood2validex"], shelved["testex"], shelved["fldic"]
-                _inptok_name = shelved["inptok_name"]
+                trainex, iidvalidex, oodvalidex, ood2validex, testex, inpdic, fldic = shelved["trainex"], shelved["iidvalidex"], shelved["oodvalidex"], shelved["ood2validex"], shelved["testex"], shelved["inpdic"], shelved["fldic"]
                 trainds, iidvalidds, oodvalidds, ood2validds, testds = \
                     Dataset(trainex), Dataset(iidvalidex), Dataset(oodvalidex), Dataset(ood2validex), Dataset(testex)
                 tt.tock("loaded from shelf")
@@ -200,41 +191,32 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
             raise Exception(f"Unknown dataset: '{dataset}'")
         tt.tock("loaded data")
 
-        if not originalinout:
-            tt.tick("creating tokenizer")
-            tokenizer = Tokenizer(inptok=inptok)
-            tt.tock("created tokenizer")
+        tt.tick("creating tokenizer")
+        tokenizer = Tokenizer()
+        tt.tock("created tokenizer")
 
-            print(len(ds))
+        print(len(ds))
 
-            tt.tick("dictionaries")
-            inplens, outlens = [0], []
-            fldic = Vocab()
-            for x in ds:
-                inplens.append(len(tokenizer.inptok(x[0]).input_ids))
-                outtoks = tokenizer.get_out_toks(x[1])
-                outlens.append(len(outtoks))
-                for tok in outtoks:
-                    fldic.add_token(tok, seen=x[2] == "train")
-            fldic.finalize(min_freq=0, top_k=np.infty)
-            tokenizer.outvocab = fldic
-            print(
-                f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
-            print(f"output vocabulary size: {len(fldic.D)} at output")
-            tt.tock("built dictionaries")
-        else:
-            tt.tick("creating tokenizer")
-            tokenizer = Tokenizer(inptok=inptok, outtok=inptok)
-            tt.tock("created tokenizer")
-
-            tt.msg("using input tokenizer for output")
-            inplens, outlens = [0], []
-            for x in ds:
-                inplens.append(len(tokenizer.inptok(x[0]).input_ids))
-                outlens.append(len(tokenizer.outtok(x[1]).input_ids))
-            print(
-                f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
-            fldic = None
+        tt.tick("dictionaries")
+        inplens, outlens = [0], []
+        inpdic = Vocab()
+        fldic = Vocab()
+        for x in ds:
+            inptoks = tokenizer.get_toks(x[0])
+            inplens.append(len(inptoks))
+            for tok in inptoks:
+                inpdic.add_token(tok, seen=x[2] == "train")
+            outtoks = tokenizer.get_out_toks(x[1])
+            outlens.append(len(outtoks))
+            for tok in outtoks:
+                fldic.add_token(tok, seen=x[2] == "train")
+        inpdic.finalize(min_freq=0, top_k=np.infty)
+        fldic.finalize(min_freq=0, top_k=np.infty)
+        tokenizer.outvocab = fldic
+        print(
+            f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
+        print(f"output vocabulary size: {len(fldic.D)} at output")
+        tt.tock("built dictionaries")
 
         tt.tick("tensorizing")
         trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
@@ -253,8 +235,8 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
                 "oodvalidex": oodvalidds.examples,
                 "ood2validex": ood2validds.examples,
                 "testex": testds.examples,
+                "inpdic": inpdic,
                 "fldic": fldic,
-                "inptok_name": inptok_name,
             }
             shelf[key] = shelved
         tt.tock("shelved")
@@ -266,7 +248,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
 
     tt.tock(f"loaded '{dataset}'")
     tt.msg(f"#train={len(trainds)}, #iidvalid={len(iidvalidds)}, #oodvalid={len(oodvalidds)}, #ood2valid={len(ood2validds)}, #test={len(testds)}")
-    return trainds, subtrainds, iidvalidds, oodvalidds, ood2validds, testds, fldic
+    return trainds, subtrainds, iidvalidds, oodvalidds, ood2validds, testds, inpdic, fldic
 
 
 def collate_fn(x, pad_value=0, numtokens=5000):
@@ -328,17 +310,14 @@ def run(lr=0.0001,
         validfrac=0.1,
         warmup=0.1,
         cosinecycles=0,
-        modelsize="small",
-        originalinout=False,
-        adapterdim=64,
-        usedefaultmodel=False,
+        numlayers=6,
+        numheads=4,
+        modeldim=320,
         dataset="scan/length",
         maxsize=-1,
         seed=42,
         dropout=0.,
         dropoutemb=0.,
-        dropoutpassive=0.,
-        postdropemb=False,
         testcode=False,
         gpu=-1,
         trainonvalidonly=False,
@@ -363,7 +342,7 @@ def run(lr=0.0001,
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
 
-    run = wandb.init(project=f"compgen_resplit", config=settings, reinit=True)
+    run = wandb.init(project=f"compgen_resplit_basictm", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -374,21 +353,16 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, subtrainds, iidvalidds, oodvalidds, ood2validds, testds, fldic = \
+    trainds, subtrainds, iidvalidds, oodvalidds, ood2validds, testds, inpdic, fldic = \
         load_ds(dataset=dataset,
                 validfrac=validfrac,
-                inptok_name=modelsize,
-                originalinout=originalinout,
                 recompute=recomputedata)
 
     if maxsize < 0:   # has not been manually overridden
         if dataset.startswith("cfq"):
             maxsize = 160
         elif dataset.startswith("scan"):
-            if originalinout:
-                maxsize = 300
-            else:
-                maxsize = 55
+            maxsize = 55
 
     print(f"Maxsize: {maxsize}")
 
@@ -411,24 +385,18 @@ def run(lr=0.0001,
 
     tt.tick("model")
     out_vocab_size = None
-    if fldic is not None:
-        out_vocab_size = fldic.number_of_ids()
-    else:
-        assert originalinout
-    if originalinout:
-        pt_type = None
-    else:
-        pt_type = "inoutonly"
-    t5tok, t5, _ = load_t5(modelsize=modelsize, use_lm100k=not usedefaultmodel, pt_type=pt_type, pt_size=0, adapterdim=adapterdim, out_vocab_size=out_vocab_size)
+    out_vocab_size = fldic.number_of_ids()
+
+    tm = create_model(num_layers=numlayers, num_heads=numheads, modeldim=modeldim, inp_vocab_size=inp_vocab_size, out_vocab_size=out_vocab_size)
 
     # set dropouts:
     def _set_dropout(x=None, _p=None):
         if isinstance(x, torch.nn.Dropout):
             x.p = _p
 
-    t5.apply(partial(_set_dropout, _p=dropoutpassive))           # set all dropouts to passive dropout rate (zero by default)
-    set_custom_dropouts(t5, p=dropout, dropoutemb=dropoutemb)
-    t5.decoder.c_postdropemb = postdropemb
+    tm.apply(partial(_set_dropout, _p=dropoutpassive))           # set all dropouts to passive dropout rate (zero by default)
+    # set_custom_dropouts(t5, p=dropout, dropoutemb=dropoutemb)
+    # t5.decoder.c_postdropemb = postdropemb
 
     # print(t5.decoder)
 
