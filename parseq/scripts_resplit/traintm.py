@@ -6,6 +6,7 @@ import shelve
 from copy import deepcopy
 from functools import partial
 from math import ceil
+from parseq.basictm import TransformerModel
 from time import sleep
 from typing import Dict, Callable
 
@@ -24,6 +25,13 @@ from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
 from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_t5, T5PTGen, get_tunable_params, set_custom_dropouts, \
     CosineWithRestart, set_requires_grad
 from parseq.vocab import Vocab
+
+
+def create_model(num_layers, num_heads, modeldim, inp_vocab_size, out_vocab_size, dropout=0.):
+    m = TransformerModel(inpvocsize=inp_vocab_size, outvocsize=out_vocab_size, d_model=modeldim,
+                         num_encoder_layers=num_layers, num_decoder_layers=num_layers,
+                         nhead=num_heads, dropout=dropout)
+    return m
 
 
 class SeqDecoderTM(torch.nn.Module):
@@ -69,7 +77,7 @@ class SeqDecoderTM(torch.nn.Module):
         return trees
 
     def test_forward(self, x:torch.Tensor, gold:torch.Tensor=None):   # --> implement how decoder operates end-to-end
-        preds = self.model.generate(x, max_length=self.max_size, eos_token_id=self.eos_token_id)
+        preds, _ = self.model.decode(x, gold[:, :1], max_length=self.max_size, eos_token_id=self.eos_token_id)
 
         # compute loss and metrics
         gold_trees = self.tensor_to_trees(gold)
@@ -81,18 +89,15 @@ class SeqDecoderTM(torch.nn.Module):
 
     def train_forward(self, x:torch.Tensor, y:torch.Tensor):  # --> implement one step training of tagger
         # replace padded positions with -100 --> internally, T5 code ignores index -100 in CE loss
-        labels = y - 100 * (y == 0).long()
-        modelout = self.model(
-            input_ids=x,
-            attention_mask=(x!=0).long(),
-            labels=labels
-        )
-        loss, logits = modelout.loss, modelout.logits
+        # labels = y - 100 * (y == 0).long()
+        modelout = self.model(x, y)
+        loss, logits = modelout["loss"], modelout["logits"]
         _, preds = logits.max(-1)
-        same = (preds == y) & (y != 0)
-        elemacc = same.float().sum(1) / (y != 0).sum(1)
-        elemacc = elemacc.mean(0)
-        same |= (y == 0)
+        preds, gold = preds[:, :-1], y[:, 1:]
+        same = (preds == gold) & (gold != 0)
+        # elemacc = same.float().sum(1) / (gold != 0).sum(1)
+        # elemacc = elemacc.mean(0)
+        same |= (gold == 0)
         seqacc = torch.all(same, 1).float().mean(0)
         return {"loss": loss, "acc": seqacc}, logits
 
@@ -212,6 +217,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, originalinout
                 fldic.add_token(tok, seen=x[2] == "train")
         inpdic.finalize(min_freq=0, top_k=np.infty)
         fldic.finalize(min_freq=0, top_k=np.infty)
+        tokenizer.inpvocab = inpdic
         tokenizer.outvocab = fldic
         print(
             f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
@@ -384,27 +390,24 @@ def run(lr=0.0001,
     tt.tock()
 
     tt.tick("model")
-    out_vocab_size = None
+    inp_vocab_size = inpdic.number_of_ids()
     out_vocab_size = fldic.number_of_ids()
 
     tm = create_model(num_layers=numlayers, num_heads=numheads, modeldim=modeldim, inp_vocab_size=inp_vocab_size, out_vocab_size=out_vocab_size)
 
-    # set dropouts:
-    def _set_dropout(x=None, _p=None):
-        if isinstance(x, torch.nn.Dropout):
-            x.p = _p
+    # # set dropouts:
+    # def _set_dropout(x=None, _p=None):
+    #     if isinstance(x, torch.nn.Dropout):
+    #         x.p = _p
 
-    tm.apply(partial(_set_dropout, _p=dropoutpassive))           # set all dropouts to passive dropout rate (zero by default)
+    # tm.apply(partial(_set_dropout, _p=dropoutpassive))           # set all dropouts to passive dropout rate (zero by default)
     # set_custom_dropouts(t5, p=dropout, dropoutemb=dropoutemb)
     # t5.decoder.c_postdropemb = postdropemb
 
     # print(t5.decoder)
 
-    if fldic is None:
-        batchtostrs = lambda x: t5tok.batch_decode(x)     # TODO: test
-    else:
-        batchtostrs = lambda x: [fldic.tostr(x[i]) for i in range(len(x))]
-    decoder = SeqDecoderT5(t5, max_size=maxsize, batch_to_strs=batchtostrs, eos_token_id=fldic[fldic.endtoken])
+    batchtostrs = lambda x: [fldic.tostr(x[i]) for i in range(len(x))]
+    decoder = SeqDecoderTM(tm, max_size=maxsize, batch_to_strs=batchtostrs, eos_token_id=fldic[fldic.endtoken])
     tt.tock()
 
     if testcode:
@@ -429,33 +432,16 @@ def run(lr=0.0001,
     xmetrics = make_array_of_metrics("treeacc", reduction="mean")
 
     # region parameters
-    def get_parameters(m:SeqDecoderT5, _lr, _lrmul, _ftmode, _originalinout):
-        primary_params = []
-        secondary_params = []
-        if _ftmode == "ft":     # fine-tune all params using _lr*_lrmul and if _originalinout is True, then also finetune decoder inputs and outputs
-            secondary_params += list(m.parameters())
-            if _originalinout is False:     # train input and output using _lr
-                primary_params += list(m.model.lm_head.parameters()) + list(m.model.decoder.embed_tokens.parameters())
-            # remove primary params from secondary
-            i = 0
-            while i < len(secondary_params):
-                for primaryparam in primary_params:
-                    if secondary_params[i] is primaryparam:
-                        del secondary_params[i]
-                        i -= 1
-                        break
-                i += 1
-        else:
-            primary_params = get_tunable_params(m)
-            set_requires_grad(m, primary_params)
+    def get_parameters(m:SeqDecoderTM, _lr, _lrmul):
+        primary_params = m.parameters()
         paramgroups = [{"params": primary_params, "lr": _lr}]
-        if len(secondary_params) > 0:
-            paramgroups.append({"params": secondary_params, "lr": _lr * _lrmul})
+        # if len(secondary_params) > 0:
+        #     paramgroups.append({"params": secondary_params, "lr": _lr * _lrmul})
         return paramgroups
     # endregion
 
-    def get_optim(_m, _lr, _lrmul, _ftmode, _originalinout, _wreg=0):
-        paramgroups = get_parameters(_m, _lr=lr, _lrmul=_lrmul, _ftmode=_ftmode, _originalinout=_originalinout)
+    def get_optim(_m, _lr, _lrmul, _wreg=0):
+        paramgroups = get_parameters(_m, _lr=lr, _lrmul=_lrmul)
         if useadafactor:
             tt.msg("Using AdaFactor.")
             optim = Adafactor(paramgroups, lr=lr, scale_parameter=False, relative_step=False, warmup_init=False)
@@ -493,7 +479,7 @@ def run(lr=0.0001,
         wandb.log(d)
 
     t_max = epochs * len(traindl)
-    optim = get_optim(decoder, lr, lrmul, ftmode, originalinout)
+    optim = get_optim(decoder, lr, lrmul)
     warmupsteps = int(round(warmup * t_max))
     print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
 
@@ -659,19 +645,14 @@ def run_experiment(
         validinter=-1.,
         warmup=0.1,
         cosinecycles=0,
-        modelsize="small",
-        ftmode="ft",        # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
-        originalinout=False,
-        ptsize=5,           # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
-        adapterdim=-1,
-        usedefaultmodel=False,
+        numlayers=6,
+        numheads=4,
+        modeldim=320,
         dataset="default",
         maxsize=-1,
         seed=-1,
         dropout=-1.,
         dropoutemb=-1.,
-        dropoutpassive=-1.,
-        postdropemb=False,
         testcode=False,
         trainonvalidonly=False,
         trainonood2only=False,
@@ -684,19 +665,16 @@ def run_experiment(
     ranges = {
         "dataset": ["cfq/mcd1new", "cfq/mcd2new", "cfq/mcd3new"],
         "dropout": [0.1],
-        "dropoutpassive": [0.1],
         "dropoutemb": [0.0],
         "seed": [42, 87646464, 456852],
         "epochs": [50],
         "batsize": [60],
         "lr": [0.0005],
         "lrmul": [1.],
-        "modelsize": ["small", "base", "large"],
         # "patience": [-1],
         # "warmup": [20],
         "validinter": [2],
         # "gradacc": [1],
-        "adapterdim": [64],
     }
 
     for k in ranges:

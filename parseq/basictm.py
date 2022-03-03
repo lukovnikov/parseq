@@ -69,7 +69,11 @@ class TransformerModel(Module):
         return yemb, decpadmask
 
     def forward(self, x, y, y_out=None):
-        """ This is the forward for the training. Use .decode() during prediction. """
+        """ This is the forward for the training. Use .decode() during prediction.
+        The first token of the output sequence 'y' should be the same start token.
+        If y_out is specified, it is used for supervision.
+            The first sequence element of y_out should be the real first element (starting token).
+        """
         if y_out is None:
             y_out = y
         # 1. compute embeddings (absolute learned positional embeddings)
@@ -123,7 +127,10 @@ class TransformerModel(Module):
     def compute_metrics(self, preds, gold):
         return {}
 
-    def decode(self, x, y):
+    def decode(self, x, y, max_length=None, eos_token_id=None):
+        """
+        The first token of the input sequence should be the same start token.
+        """
         y = y[:, 0:1]
 
         # 1. encode
@@ -153,16 +160,17 @@ class TransformerModel(Module):
             # update saved states
             savedkvs = newkvs
 
-            if self._stop_decoding(out_acc):
+            if self._stop_decoding(out_acc, max_length=max_length):
                 break
             i += 1
 
         out_logits = torch.cat(out_logits, 1)
         return out_acc, out_logits
 
-    def _stop_decoding(self, out):
+    def _stop_decoding(self, out, max_length=None):
+        max_length = max_length if max_length is not None else self.maxlen
         l = out.size(1)
-        if l >= self.maxlen:
+        if l >= max_length:
             return True
         else:
             return False
