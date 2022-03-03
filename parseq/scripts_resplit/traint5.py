@@ -695,7 +695,7 @@ def run_experiment(
         modelsize="small",
         ftmode="ft",        # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
         originalinout=False,
-        ptsize=5,           # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
+        # ptsize=5,           # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
         adapterdim=-1,
         usedefaultmodel=False,
         dataset="default",
