@@ -26,15 +26,10 @@ def find_subgraphs_sparql(x:Tree, minsize=1, maxsize=4):
     # print(whereclause)
     clauses = whereclause[:] + [selectclause]
     clauses[:] = sorted(clauses, key=lambda x: str(x))
-    # print(whereclause)
     combos = []
     for l in range(minsize, min(maxsize+1, len(clauses))):
         for combo in itertools.combinations(clauses, l):
             combos.append(str(combo))
-    # for i in range(len(whereclause)):
-    #     for j in range(len(whereclause)):
-    #         if j > i:
-    #             wherecombos.append((whereclause[i], whereclause[j]))
     return combos
 
 
@@ -43,18 +38,11 @@ def find_subgraphs_sparql_ord(x:Tree, minsize=1, maxsize=3):
     assert x[0].label() == "@QUERY"
     selectclause = x[0][0]
     whereclause = x[0][1]
-    # print(whereclause)
-    clauses = whereclause[:] + [selectclause]
-    clauses[:] = sorted(clauses, key=lambda x: str(x))
-    # print(whereclause)
+    clauses = [selectclause] + whereclause[:]
     combos = []
     for l in range(minsize, min(maxsize+1, len(clauses))):
         for combo in itertools.combinations(clauses, l):
             combos.append(str(combo))
-    # for i in range(len(whereclause)):
-    #     for j in range(len(whereclause)):
-    #         if j > i:
-    #             wherecombos.append((whereclause[i], whereclause[j]))
     return combos
 
 
@@ -204,10 +192,11 @@ class DivergenceComputer():
             fd[atom] += 1
         return fd
 
-    def extract_compounds(self, y:Tree, x:str):
+    def extract_compounds(self, y:Tree, x:str=None):
         """ This method extracts simple compounds that consist of two elements: parent and child """
         compounds = find_subgraphs_sparql(y, minsize=1, maxsize=3)
-        compounds = find_subgraphs_sparql_ord(y, minsize=1, maxsize=3)
+        # print("old")
+        # compounds = find_subgraphs_sparql_ord(y, minsize=1, maxsize=3)
         return compounds
         # if len(x) == 0:     # leaf
         #     retcomps = []
@@ -232,8 +221,8 @@ class DivergenceComputer():
         #         # compounds.append(f"{xstr} - {connectstr} -> {childatom}")
         #     return compounds, xstr
 
-    def extract_compound_dist(self, x:Tree):
-        comps = self.extract_compounds(x)
+    def extract_compound_dist(self, t:Tree, x:str=None):
+        comps = self.extract_compounds(t, x)
         fd = FrequencyDistribution()
         for comp in comps:
             fd[comp] += 1
@@ -276,22 +265,24 @@ class DivergenceComputer():
     def compute_compound_distribution(self, l:List):
         fd = FrequencyDistribution()
         for example in tqdm(l):
+            x = example[self.NLINDEX]
             t = example[self.LFINDEX]
             if not isinstance(t, Tree):
                 t = taglisp_to_tree(t)
-            for comp in self.extract_compounds(t):
+            for comp in self.extract_compounds(t, x):
                 fd[comp] += 1
         return fd
 
     def compute_compound_distributions(self, ds):
         compoundses = dict()
         for example in tqdm(ds):
+            x = example[self.NLINDEX]
             t = example[self.LFINDEX]
             if not isinstance(t, Tree):
                 t = taglisp_to_tree(t)
             if example[self.SPLITINDEX] not in compoundses:
                 compoundses[example[self.SPLITINDEX]] = FrequencyDistribution()
-            for comp in self.extract_compounds(t):
+            for comp in self.extract_compounds(t, x):
                 compoundses[example[self.SPLITINDEX]][comp] += 1
         return compoundses
 
@@ -406,7 +397,7 @@ def filter_traindata(traindata, testdata, newdevdata, N=10000, dc=None):
 
     scores = []
     for i, x in enumerate(tqdm(traindata)):
-        xcomps = dc.extract_compounds(x[dc.LFINDEX])
+        xcomps = dc.extract_compounds(x[dc.LFINDEX], x[dc.NLINDEX])
         scores.append((i, get_dist_similarity(xcomps, newcompdist) - get_dist_similarity(xcomps, testdist)))
 
     sortedscores = sorted(scores, key=lambda x: x[dc.LFINDEX], reverse=True)
@@ -686,7 +677,7 @@ def make_mcd_splits(xs: List, sizes=(0.6, 0.2, 0.2), backbleed=0.1, minbackbleed
     # update stats
     for subset, stats in zip(subsets, statses):
         for example in subset:
-            for comp in dc.extract_compounds(example[2]):
+            for comp in dc.extract_compounds(example[2], example[1]):
                 stats[comp] += 1
 
     n = 0
@@ -698,7 +689,7 @@ def make_mcd_splits(xs: List, sizes=(0.6, 0.2, 0.2), backbleed=0.1, minbackbleed
         newxs = []
         #         print(xs[0], len(xs))
         for example in tqdm(xs):
-            comps = dc.extract_compounds(example[2])
+            comps = dc.extract_compounds(example[2], example[1])
             changes = compute_approx_chernoff_change(comps, *statses, alpha=0.1)
             changes = list(zip(changes, range(3)))
             bestchoices = sorted(changes, key=lambda x: x[0])  # which subset is best
@@ -727,7 +718,7 @@ def make_mcd_splits(xs: List, sizes=(0.6, 0.2, 0.2), backbleed=0.1, minbackbleed
                 if len(newxs) == 0:
                     break
                 example = newxs.pop(-1)
-                comps = dc.extract_compounds(example[2])
+                comps = dc.extract_compounds(example[2], example[1])
                 changes = compute_approx_chernoff_change(comps, *statses, alpha=0.1)
                 changes = list(zip(changes, range(3)))
                 bestchoices = sorted(changes, key=lambda x: x[0])  # which subset is best
