@@ -38,6 +38,26 @@ def find_subgraphs_sparql(x:Tree, minsize=1, maxsize=4):
     return combos
 
 
+def find_subgraphs_sparql_ord(x:Tree, minsize=1, maxsize=3):
+    assert x.label() == "@R@"
+    assert x[0].label() == "@QUERY"
+    selectclause = x[0][0]
+    whereclause = x[0][1]
+    # print(whereclause)
+    clauses = whereclause[:] + [selectclause]
+    clauses[:] = sorted(clauses, key=lambda x: str(x))
+    # print(whereclause)
+    combos = []
+    for l in range(minsize, min(maxsize+1, len(clauses))):
+        for combo in itertools.combinations(clauses, l):
+            combos.append(str(combo))
+    # for i in range(len(whereclause)):
+    #     for j in range(len(whereclause)):
+    #         if j > i:
+    #             wherecombos.append((whereclause[i], whereclause[j]))
+    return combos
+
+
 class FrequencyDistribution():
     def __init__(self):
         super().__init__()
@@ -184,9 +204,10 @@ class DivergenceComputer():
             fd[atom] += 1
         return fd
 
-    def extract_compounds(self, x:Tree):
+    def extract_compounds(self, y:Tree, x:str):
         """ This method extracts simple compounds that consist of two elements: parent and child """
-        compounds = find_subgraphs_sparql(x, minsize=1, maxsize=3)
+        compounds = find_subgraphs_sparql(y, minsize=1, maxsize=3)
+        compounds = find_subgraphs_sparql_ord(y, minsize=1, maxsize=3)
         return compounds
         # if len(x) == 0:     # leaf
         #     retcomps = []
