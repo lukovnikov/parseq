@@ -439,7 +439,7 @@ class TransformerDecoder(Module):
 
     def __init__(self, num_layers, layerkwargs):
         super(TransformerDecoder, self).__init__()
-        self.layers = torch.nn.ModuleList([TransformerEncoderLayer(**layerkwargs) for _ in range(num_layers)])
+        self.layers = torch.nn.ModuleList([TransformerDecoderLayer(**layerkwargs) for _ in range(num_layers)])
         # self.layers = _get_clones(encoder_layer, num_layers)
         self.num_layers = num_layers
         d_model, layer_norm_eps, device, dtype = [layerkwargs[n] for n in ["d_model", "layer_norm_eps", "device", "dtype"]]
