@@ -319,6 +319,7 @@ def run(lr=0.0001,
         numlayers=6,
         numheads=4,
         modeldim=320,
+        modelsize="manual",
         dataset="scan/length",
         maxsize=-1,
         seed=42,
@@ -347,6 +348,22 @@ def run(lr=0.0001,
 
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
+
+    if modelsize != "manual":
+        print("Overriding manual settings with predefined settings")
+    if modelsize == "small":
+        numlayers = 6
+        numheads = 8
+        modeldim = 512
+    elif modelsize == "medium":
+        numlayers = 9
+        numheads = 12
+        modeldim = 768
+    elif modelsize == "large":
+        numlayers = 12
+        numheads = 16
+        modeldim = 1024
+
 
     run = wandb.init(project=f"compgen_resplit_basictm", config=settings, reinit=True)
     random.seed(seed)
@@ -645,9 +662,10 @@ def run_experiment(
         validinter=-1.,
         warmup=0.1,
         cosinecycles=0,
-        numlayers=6,
-        numheads=4,
-        modeldim=320,
+        # numlayers=6,
+        # numheads=4,
+        # modeldim=320,
+        modelsize="manual",
         dataset="default",
         maxsize=-1,
         seed=-1,
@@ -663,13 +681,14 @@ def run_experiment(
     settings = locals().copy()
 
     ranges = {
+        "modelsize": ["small", "medium", "large"],
         "dataset": ["cfq/mcd1new", "cfq/mcd2new", "cfq/mcd3new"],
-        "dropout": [0.1],
+        "dropout": [0.0, 0.1, 0.25],
         "dropoutemb": [0.0],
         "seed": [42, 87646464, 456852],
-        "epochs": [50],
+        "epochs": [40, 50, 60],
         "batsize": [60],
-        "lr": [0.0005],
+        "lr": [0.0001, 0.0005, 0.001],
         "lrmul": [1.],
         # "patience": [-1],
         # "warmup": [20],

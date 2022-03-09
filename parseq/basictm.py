@@ -257,20 +257,40 @@ class Transformer(Module):
         if custom_encoder is not None:
             self.encoder = custom_encoder
         else:
-            encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout,
-                                                    activation, layer_norm_eps, norm_first,
-                                                    **factory_kwargs)
-            encoder_norm = LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
-            self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
+            # encoder_layer = TransformerEncoderLayer()
+            # encoder_norm = LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
+            encoderlayerkwargs = {
+                "device": device,
+                "dtype": dtype,
+                "d_model": d_model,
+                "nhead": nhead,
+                "dim_feedforward": dim_feedforward,
+                "dropout": dropout,
+                "activation": activation,
+                "layer_norm_eps": layer_norm_eps,
+                "norm_first": norm_first
+            }
+            self.encoder = TransformerEncoder(num_encoder_layers, encoderlayerkwargs)
 
         if custom_decoder is not None:
             self.decoder = custom_decoder
         else:
-            decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout,
-                                                    activation, layer_norm_eps, norm_first,
-                                                    **factory_kwargs)
-            decoder_norm = LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
-            self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
+            decoderlayerkwargs = {
+                "device": device,
+                "dtype": dtype,
+                "d_model": d_model,
+                "nhead": nhead,
+                "dim_feedforward": dim_feedforward,
+                "dropout": dropout,
+                "activation": activation,
+                "layer_norm_eps": layer_norm_eps,
+                "norm_first": norm_first
+            }
+            # decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout,
+            #                                         activation, layer_norm_eps, norm_first,
+            #                                         **factory_kwargs)
+            # decoder_norm = LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
+            self.decoder = TransformerDecoder(num_decoder_layers, decoderlayerkwargs)
 
         self._reset_parameters()
 
@@ -370,11 +390,13 @@ class TransformerEncoder(Module):
     """
     __constants__ = ['norm']
 
-    def __init__(self, encoder_layer, num_layers, norm=None):
+    def __init__(self, num_layers, layerkwargs):
         super(TransformerEncoder, self).__init__()
-        self.layers = _get_clones(encoder_layer, num_layers)
+        self.layers = [TransformerEncoderLayer(**layerkwargs) for _ in range(num_layers)]
+        # self.layers = _get_clones(encoder_layer, num_layers)
         self.num_layers = num_layers
-        self.norm = norm
+        d_model, layer_norm_eps, device, dtype = [layerkwargs[n] for n in ["d_model", "layer_norm_eps", "device", "dtype"]]
+        self.norm = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
 
     def forward(self, src: Tensor, mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None) -> Tensor:
         r"""Pass the input through the encoder layers in turn.
@@ -415,11 +437,13 @@ class TransformerDecoder(Module):
     """
     __constants__ = ['norm']
 
-    def __init__(self, decoder_layer, num_layers, norm=None):
+    def __init__(self, num_layers, layerkwargs):
         super(TransformerDecoder, self).__init__()
-        self.layers = _get_clones(decoder_layer, num_layers)
+        self.layers = [TransformerEncoderLayer(**layerkwargs) for _ in range(num_layers)]
+        # self.layers = _get_clones(encoder_layer, num_layers)
         self.num_layers = num_layers
-        self.norm = norm
+        d_model, layer_norm_eps, device, dtype = [layerkwargs[n] for n in ["d_model", "layer_norm_eps", "device", "dtype"]]
+        self.norm = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
 
     def forward(self, tgt: Tensor, memory: Tensor, tgt_mask: Optional[Tensor] = None,
                 memory_mask: Optional[Tensor] = None, tgt_key_padding_mask: Optional[Tensor] = None,
@@ -501,13 +525,13 @@ class TransformerEncoderLayer(Module):
     """
     __constants__ = ['norm_first']
 
-    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
+    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1, attndropout=0.,
                  activation: Union[str, Callable[[Tensor], Tensor]] = torch.nn.functional.relu,
                  layer_norm_eps: float = 1e-5, norm_first: bool = False,
                  device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super(TransformerEncoderLayer, self).__init__()
-        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True,
+        self.self_attn = MultiheadAttention(d_model, nhead, dropout=attndropout, batch_first=True,
                                             **factory_kwargs)
         # Implementation of Feedforward model
         self.linear1 = Linear(d_model, dim_feedforward, **factory_kwargs)
@@ -599,15 +623,15 @@ class TransformerDecoderLayer(Module):
     """
     __constants__ = ['norm_first']
 
-    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
+    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1, attndropout=0.,
                  activation: Union[str, Callable[[Tensor], Tensor]] = torch.nn.functional.relu,
                  layer_norm_eps: float = 1e-5, norm_first: bool = False,
                  device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super(TransformerDecoderLayer, self).__init__()
-        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True,
+        self.self_attn = MultiheadAttention(d_model, nhead, dropout=attndropout, batch_first=True,
                                             **factory_kwargs)
-        self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=True,
+        self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=attndropout, batch_first=True,
                                                  **factory_kwargs)
         # Implementation of Feedforward model
         self.linear1 = Linear(d_model, dim_feedforward, **factory_kwargs)
