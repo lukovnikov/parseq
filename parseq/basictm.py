@@ -251,7 +251,7 @@ class Transformer(Module):
                  custom_encoder: Optional[Any] = None, custom_decoder: Optional[Any] = None,
                  layer_norm_eps: float = 1e-5, norm_first: bool = False,
                  device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        # factory_kwargs = {'device': device, 'dtype': dtype}
         super(Transformer, self).__init__()
 
         if custom_encoder is not None:
@@ -392,7 +392,7 @@ class TransformerEncoder(Module):
 
     def __init__(self, num_layers, layerkwargs):
         super(TransformerEncoder, self).__init__()
-        self.layers = [TransformerEncoderLayer(**layerkwargs) for _ in range(num_layers)]
+        self.layers = torch.nn.ModuleList([TransformerEncoderLayer(**layerkwargs) for _ in range(num_layers)])
         # self.layers = _get_clones(encoder_layer, num_layers)
         self.num_layers = num_layers
         d_model, layer_norm_eps, device, dtype = [layerkwargs[n] for n in ["d_model", "layer_norm_eps", "device", "dtype"]]
@@ -439,7 +439,7 @@ class TransformerDecoder(Module):
 
     def __init__(self, num_layers, layerkwargs):
         super(TransformerDecoder, self).__init__()
-        self.layers = [TransformerEncoderLayer(**layerkwargs) for _ in range(num_layers)]
+        self.layers = torch.nn.ModuleList([TransformerEncoderLayer(**layerkwargs) for _ in range(num_layers)])
         # self.layers = _get_clones(encoder_layer, num_layers)
         self.num_layers = num_layers
         d_model, layer_norm_eps, device, dtype = [layerkwargs[n] for n in ["d_model", "layer_norm_eps", "device", "dtype"]]
