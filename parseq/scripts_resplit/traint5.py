@@ -690,6 +690,7 @@ def run_experiment(
         testbatsize=-1,
         epochs=-1,
         validinter=-1.,
+        validfrac=0.1,
         warmup=0.1,
         cosinecycles=0,
         modelsize="small",
