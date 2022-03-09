@@ -351,7 +351,11 @@ def run(lr=0.0001,
 
     if modelsize != "manual":
         print("Overriding manual settings with predefined settings")
-    if modelsize == "small":
+    if modelsize == "tiny":
+        numlayers = 4
+        numheads = 6
+        modeldim = 384
+    elif modelsize == "small":
         numlayers = 6
         numheads = 8
         modeldim = 512
@@ -681,18 +685,18 @@ def run_experiment(
     settings = locals().copy()
 
     ranges = {
-        "modelsize": ["small", "medium", "large"],
+        "modelsize": ["tiny", "small", "medium", "large"],
         "dataset": ["cfq/mcd1new", "cfq/mcd2new", "cfq/mcd3new"],
         "dropout": [0.0, 0.1, 0.25],
         "dropoutemb": [0.0],
         "seed": [42, 87646464, 456852],
-        "epochs": [40, 50, 60],
+        "epochs": [30, 42, 51],
         "batsize": [60],
         "lr": [0.0001, 0.0005, 0.001],
         "lrmul": [1.],
         # "patience": [-1],
         # "warmup": [20],
-        "validinter": [2],
+        "validinter": [3],
         # "gradacc": [1],
     }
 
