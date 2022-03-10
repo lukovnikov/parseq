@@ -1271,8 +1271,20 @@ class CFQDatasetLoader(object):
             # print(ret[0])
             # print(ret[1])
             tree = sparql_to_tree(ret[1])
+
+            whereclause = tree[1]
+            assert(whereclause.label() == "@WHERE")
+            conditions = [x for x in whereclause if x.label() == "@COND"]
+            for condition in conditions:
+                assert len(condition[0]) == 0
+                assert len(condition[1]) == 0
+
+
             treestr = tree_to_taglisp(tree)
-            treestr = treestr.replace("(", " (").replace(")", " ) ")
+            treestr = treestr.replace("(", " (").replace(")", " ) ").replace("\s+", " ")
+
+            print(len(treestr.split()), len(ret[1].split()))
+
             tree_recons = taglisp_to_tree(treestr)
             assert(tree == tree_recons)
             treestr = re.sub(r"\s+", " ", treestr)
@@ -1283,7 +1295,8 @@ class CFQDatasetLoader(object):
 
 
 def sparql_to_tree(x):
-    xs = re.split("([)\n\s+|\(\)])", x)
+    # xs = re.split("([)\n\s+|\(\)])", x)
+    xs = re.split("([)\n\s+\(\)])", x)
     # xs = [xse for xse in xs if xse not in {'', ' ', '\n'}]
     _xs = []
     prevspace = False
@@ -1306,9 +1319,12 @@ def sparql_to_tree(x):
 
     ORDERLESS = {"@QUERY", "@AND", "@OR", "@WHERE"}
 
-    tree = Tree("@R@", [Tree("@QUERY", [])])
-    curnode = tree[0]
-    tree[0].parent = tree
+    # tree = Tree("@R@", [Tree("@QUERY", [])])
+    # curnode = tree[0]
+    # tree[0].parent = tree
+
+    tree = Tree("@QUERY", [])
+    curnode = tree
 
     def resolve_buffer(c, b):
         _c = c
@@ -1320,14 +1336,14 @@ def sparql_to_tree(x):
         for be in b:
             if be == "":
                 pass
-            elif be == "|":
-                if c[-1].label() != "@OR":      # append next to the or
-                    prev = c.pop(-1)
-                    node = Tree("@OR", [prev])
-                    prev.parent = node
-                    c.append(node)
-                    node.parent = c
-                appendto = c[-1]
+            # elif be == "|":
+            #     if c[-1].label() != "@OR":      # append next to the or
+            #         prev = c.pop(-1)
+            #         node = Tree("@OR", [prev])
+            #         prev.parent = node
+            #         c.append(node)
+            #         node.parent = c
+            #     appendto = c[-1]
             elif be == "(":
                 c = c[-1]
             elif be == ")":
@@ -1381,6 +1397,24 @@ def sparql_to_tree(x):
         else:
             buffer.append(xe)
 
+    # collapse @COND
+    tree = collapse_cond(tree)
+
+    return tree
+
+
+def collapse_cond(tree):
+    newchildren = []
+    for child in tree:
+        child = collapse_cond(child)
+        if child.label() == "@COND":
+            newchild = child[1]
+            assert len(newchild) == 0
+            newchild[:] = [child[0], child[2]]
+            newchildren.append(newchild)
+        else:
+            newchildren.append(child)
+    tree[:] = newchildren
     return tree
 
 
