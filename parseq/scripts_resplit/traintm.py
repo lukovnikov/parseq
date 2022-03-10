@@ -355,6 +355,10 @@ def run(lr=0.0001,
         numlayers = 4
         numheads = 6
         modeldim = 384
+    elif modelsize == "micro":
+        numlayers = 2
+        numheads = 16
+        modeldim = 128
     elif modelsize == "small":
         numlayers = 6
         numheads = 8
