@@ -28,6 +28,8 @@ from parseq.vocab import Vocab
 
 
 def create_model(num_layers, num_heads, modeldim, inp_vocab_size, out_vocab_size, dropout=0.):
+    print("creating model with locals:")
+    print(json.dumps(locals()))
     m = TransformerModel(inpvocsize=inp_vocab_size, outvocsize=out_vocab_size, d_model=modeldim,
                          num_encoder_layers=num_layers, num_decoder_layers=num_layers,
                          nhead=num_heads, dropout=dropout)
@@ -391,7 +393,7 @@ def run(lr=0.0001,
 
     if maxsize < 0:   # has not been manually overridden
         if dataset.startswith("cfq"):
-            maxsize = 160
+            maxsize = 120
         elif dataset.startswith("scan"):
             maxsize = 55
 
@@ -418,7 +420,9 @@ def run(lr=0.0001,
     inp_vocab_size = inpdic.number_of_ids()
     out_vocab_size = fldic.number_of_ids()
 
-    tm = create_model(num_layers=numlayers, num_heads=numheads, modeldim=modeldim, inp_vocab_size=inp_vocab_size, out_vocab_size=out_vocab_size)
+    tm = create_model(num_layers=numlayers, num_heads=numheads, modeldim=modeldim,
+                      inp_vocab_size=inp_vocab_size, out_vocab_size=out_vocab_size,
+                      dropout=dropout)
 
     # # set dropouts:
     # def _set_dropout(x=None, _p=None):
@@ -432,6 +436,7 @@ def run(lr=0.0001,
     # print(t5.decoder)
 
     batchtostrs = lambda x: [fldic.tostr(x[i]) for i in range(len(x))]
+    print(f"Maxsize: {maxsize}")
     decoder = SeqDecoderTM(tm, max_size=maxsize, batch_to_strs=batchtostrs, eos_token_id=fldic[fldic.endtoken])
     tt.tock()
 

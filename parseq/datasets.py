@@ -1283,7 +1283,7 @@ class CFQDatasetLoader(object):
             treestr = tree_to_taglisp(tree)
             treestr = treestr.replace("(", " (").replace(")", " ) ").replace("\s+", " ")
 
-            print(len(treestr.split()), len(ret[1].split()))
+            # print(len(treestr.split()), len(ret[1].split()))
 
             tree_recons = taglisp_to_tree(treestr)
             assert(tree == tree_recons)
