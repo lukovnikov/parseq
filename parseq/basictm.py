@@ -6,6 +6,54 @@ from torch import Tensor
 from torch.nn import LayerNorm, Module, MultiheadAttention, Linear, Dropout, ModuleList
 from torch.nn.init import xavier_uniform_
 
+import math
+from typing import Optional
+
+
+def sinusoidal_pos_embedding(d_model: int, max_len: int = 5000, pos_offset: int = 0,
+                             device: Optional[torch.device] = None):
+    pe = torch.zeros(max_len, d_model, device=device)
+    position = torch.arange(0, max_len, dtype=torch.float, device=device).unsqueeze(1) + pos_offset
+    div_term = torch.exp(torch.arange(0, d_model, 2, dtype=torch.float, device=device) * (-math.log(10000.0) / d_model))
+    pe[:, 0::2] = torch.sin(position * div_term)
+    pe[:, 1::2] = torch.cos(position * div_term)
+    return pe
+
+
+class SinusoidalPositionalEmbedding(torch.nn.Module):
+    r"""Inject some information about the relative or absolute position of the tokens
+        in the sequence. The positional encodings have the same dimension as
+        the embeddings, so that the two can be summed. Here, we use sine and cosine
+        functions of different frequencies.
+    .. math::
+        \text{PosEncoder}(pos, 2i) = sin(pos/10000^(2i/d_model))
+        \text{PosEncoder}(pos, 2i+1) = cos(pos/10000^(2i/d_model))
+        \text{where pos is the word position and i is the embed idx)
+    Args:
+        d_model: the embed dim (required).
+        dropout: the dropout value (default=0.1).
+        max_len: the max. length of the incoming sequence (default=5000).
+        batch_first: if true, batch dimension is the first, if not, its the 2nd.
+    Examples:
+        > pos_encoder = SinusoidalPositionalEmbedding(d_model)
+    """
+
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000,
+                 downscale=True):
+        super(SinusoidalPositionalEmbedding, self).__init__()
+        self.dropout = torch.nn.Dropout(p=dropout)
+
+        scale = (1. / math.sqrt(d_model)) if downscale else 1.
+
+        pe = sinusoidal_pos_embedding(d_model, max_len, 0) * scale
+        # pe = pe.unsqueeze(0)
+
+        self.register_buffer('weight', pe)
+
+    def forward(self, x: torch.Tensor, offset: int = 0) -> torch.Tensor:
+        raise Exception("should not be called directly")
+        pass
+
 
 class TransformerModel(Module):
     """ Internally uses 'TransformerModel' but automates embeddings and masks. """
@@ -42,9 +90,11 @@ class TransformerModel(Module):
         self.maxlen = maxlen
 
         self.inpemb = torch.nn.Embedding(self.inpvocabsize, self.dim, padding_idx=0)
-        self.inpposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=None)
+        # self.inpposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=None)
+        self.inpposemb = SinusoidalPositionalEmbedding(self.dim, max_len=maxlen)
         self.outemb = torch.nn.Embedding(self.outvocabsize, self.dim, padding_idx=0)
-        self.outposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=None)
+        # self.outposemb = torch.nn.Embedding(self.maxlen, self.dim, padding_idx=None)
+        self.outposemb = SinusoidalPositionalEmbedding(self.dim, max_len=maxlen)
         self.outlin = torch.nn.Linear(self.dim, self.outvocabsize)
         self.embdropout = torch.nn.Dropout(self.dropoutemb)
 
