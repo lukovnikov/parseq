@@ -691,8 +691,6 @@ def run_experiment(
     ranges = {
         "dataset": ["cfq/mcd1new", "cfq/mcd2new", "cfq/mcd3new"],
         "dropout": [0.1],
-        "dropoutpassive": [0.1],
-        "dropoutemb": [0.0],
         "seed": [42, 87646464, 456852],
         "epochs": [50],
         "batsize": [60],
