@@ -21,8 +21,7 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
-from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_t5, T5PTGen, get_tunable_params, set_custom_dropouts, \
-    CosineWithRestart, set_requires_grad
+from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_vanilla_t5, load_adaptered_t5, CosineWithRestart
 from parseq.vocab import Vocab
 
 
@@ -152,13 +151,12 @@ class Tokenizer(object):
 ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY", "(@WHERE", "(@OR", "(@AND", "(@QUERY"}
 
 
-def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=None, originalinout=False):
+def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=None):
     """
     :param dataset:
     :param validfrac:       how much of the original IID train set is used for IID validation set
     :param recompute:
     :param inptok_name:
-    :param originalinout:
     :return:
     """
     tt = q.ticktock("data")
@@ -170,7 +168,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
     if dataset.startswith("cfq/") or dataset.startswith("scan/mcd"):
         iidvalidisoodvalid = True
 
-    key = f"{dataset}|validfrac={validfrac}|inptok=t5-{inptok_name}|originalinout={originalinout}"
+    key = f"{dataset}|validfrac={validfrac}|inptok=t5-{inptok_name}"
 
     shelfname = os.path.basename(__file__) + ".cache.shelve"
     if not recompute:
@@ -200,7 +198,7 @@ def load_ds(dataset="scan/random", validfrac=0.1, recompute=False, inptok_name=N
             raise Exception(f"Unknown dataset: '{dataset}'")
         tt.tock("loaded data")
 
-        if not originalinout:
+        if True:
             tt.tick("creating tokenizer")
             tokenizer = Tokenizer(inptok=inptok)
             tt.tock("created tokenizer")
@@ -329,23 +327,19 @@ def run(lr=0.0001,
         warmup=0.1,
         cosinecycles=0,
         modelsize="small",
-        ftmode="ft",
-        originalinout=False,
-        adapterdim=64,
+        ftmode="ft",                # "ft" or "adapter"
+        adapterdim=64,              # only active in adapter mode
         usedefaultmodel=False,
         dataset="scan/length",
         maxsize=-1,
         seed=42,
         dropout=0.,
-        dropoutemb=0.,
-        dropoutpassive=0.,
-        postdropemb=False,
         testcode=False,
         gpu=-1,
         trainonvalidonly=False,
         trainonood2only=False,
         recomputedata=False,
-        version="v3",
+        version="v4",
         ):
     """
     :param lrmul:       multiplier for learning rate for secondary parameters
@@ -379,17 +373,13 @@ def run(lr=0.0001,
         load_ds(dataset=dataset,
                 validfrac=validfrac,
                 inptok_name=modelsize,
-                originalinout=originalinout,
                 recompute=recomputedata)
 
     if maxsize < 0:   # has not been manually overridden
         if dataset.startswith("cfq"):
-            maxsize = 160
+            maxsize = 120
         elif dataset.startswith("scan"):
-            if originalinout:
-                maxsize = 300
-            else:
-                maxsize = 55
+            maxsize = 55
 
     print(f"Maxsize: {maxsize}")
 
@@ -412,26 +402,16 @@ def run(lr=0.0001,
 
     tt.tick("model")
     out_vocab_size = None
-    if fldic is not None:
-        out_vocab_size = fldic.number_of_ids()
-    else:
-        assert originalinout
-    if originalinout:
-        pt_type = None
-    else:
-        pt_type = "inoutonly"
-    t5tok, t5, _ = load_t5(modelsize=modelsize, use_lm100k=not usedefaultmodel, pt_type=pt_type, pt_size=0, adapterdim=adapterdim, out_vocab_size=out_vocab_size)
+    assert fldic is not None
+    out_vocab_size = fldic.number_of_ids()
 
-    # set dropouts:
-    def _set_dropout(x=None, _p=None):
-        if isinstance(x, torch.nn.Dropout):
-            x.p = _p
+    if ftmode == "ft":
+        t5tok, t5, _ = load_vanilla_t5(modelsize=modelsize, use_lm100k=not usedefaultmodel, out_vocab_size=out_vocab_size)
+    elif ftmode.startswith("ada"):
+        t5tok, t5, _ = load_adaptered_t5(modelsize=modelsize, use_lm100k=not usedefaultmodel, adapterdim=adapterdim,
+                                       out_vocab_size=out_vocab_size)
 
-    t5.apply(partial(_set_dropout, _p=dropoutpassive))           # set all dropouts to passive dropout rate (zero by default)
-    set_custom_dropouts(t5, p=dropout, dropoutemb=dropoutemb)
-    t5.decoder.c_postdropemb = postdropemb
-
-    # print(t5.decoder)
+    t5.set_dropout(dropout)
 
     if fldic is None:
         batchtostrs = lambda x: t5tok.batch_decode(x)     # TODO: test
@@ -462,13 +442,12 @@ def run(lr=0.0001,
     xmetrics = make_array_of_metrics("treeacc", reduction="mean")
 
     # region parameters
-    def get_parameters(m:SeqDecoderT5, _lr, _lrmul, _ftmode, _originalinout):
+    def get_parameters(m:SeqDecoderT5, _lr, _lrmul, _ftmode):
         primary_params = []
         secondary_params = []
         if _ftmode == "ft":     # fine-tune all params using _lr*_lrmul and if _originalinout is True, then also finetune decoder inputs and outputs
             secondary_params += list(m.parameters())
-            if _originalinout is False:     # train input and output using _lr
-                primary_params += list(m.model.lm_head.parameters()) + list(m.model.decoder.embed_tokens.parameters())
+            primary_params += list(m.model.lm_head.parameters()) + list(m.model.decoder.embed_tokens.parameters())
             # remove primary params from secondary
             i = 0
             while i < len(secondary_params):
@@ -479,16 +458,15 @@ def run(lr=0.0001,
                         break
                 i += 1
         else:
-            primary_params = get_tunable_params(m)
-            set_requires_grad(m, primary_params)
+            primary_params = m.get_tunable_params_and_set_requires_grad()
         paramgroups = [{"params": primary_params, "lr": _lr}]
         if len(secondary_params) > 0:
             paramgroups.append({"params": secondary_params, "lr": _lr * _lrmul})
         return paramgroups
     # endregion
 
-    def get_optim(_m, _lr, _lrmul, _ftmode, _originalinout, _wreg=0):
-        paramgroups = get_parameters(_m, _lr=lr, _lrmul=_lrmul, _ftmode=_ftmode, _originalinout=_originalinout)
+    def get_optim(_m, _lr, _lrmul, _ftmode, _wreg=0):
+        paramgroups = get_parameters(_m, _lr=lr, _lrmul=_lrmul, _ftmode=_ftmode)
         if useadafactor:
             tt.msg("Using AdaFactor.")
             optim = Adafactor(paramgroups, lr=lr, scale_parameter=False, relative_step=False, warmup_init=False)
@@ -526,7 +504,7 @@ def run(lr=0.0001,
         wandb.log(d)
 
     t_max = epochs * len(traindl)
-    optim = get_optim(decoder, lr, lrmul, ftmode, originalinout)
+    optim = get_optim(decoder, lr, lrmul, ftmode)
     warmupsteps = int(round(warmup * t_max))
     print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
 
@@ -694,18 +672,13 @@ def run_experiment(
         warmup=0.1,
         cosinecycles=0,
         modelsize="small",
-        ftmode="ft",        # "ft" (finetune) or "inoutonly" or "sh(allow)/de(ep)+a(dd)/r(eplace)+st(atic)/dy(namic)"
-        originalinout=False,
-        # ptsize=5,           # length of prompt (only effective if ftmode is not "ft" or "inoutonly"
+        ftmode="ft",        # "ft" (finetune) or "adapter"
         adapterdim=-1,
         usedefaultmodel=False,
         dataset="default",
         maxsize=-1,
         seed=-1,
         dropout=-1.,
-        dropoutemb=-1.,
-        dropoutpassive=-1.,
-        postdropemb=False,
         testcode=False,
         trainonvalidonly=False,
         trainonood2only=False,
