@@ -700,7 +700,7 @@ def run_experiment(
         "dropout": [0.1, 0.25],
         # "dropoutemb": [0.0],
         "seed": [42, 87646464, 456852],
-        "epochs": [51, 64, 101],
+        "epochs": [51, 100, 151],
         "batsize": [60],
         "lr": [0.0001, 0.0005, 0.001],
         "lrmul": [1.],
