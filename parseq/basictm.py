@@ -105,8 +105,8 @@ class TransformerModel(Module):
             # torch.nn.init.xavier_uniform_(self.inpemb.weight)
             # torch.nn.init.xavier_uniform_(self.outemb.weight)
         # elif self.embedding_init == "kaiming":
-            torch.nn.init.kaiming_normal_(self.input_embedding.weight)
-            torch.nn.init.kaiming_normal_(self.output_embedding.weight)
+            torch.nn.init.kaiming_normal_(self.inpemb.weight)
+            torch.nn.init.kaiming_normal_(self.outemb.weight)
 
     def _compute_enc_inp(self, x):
         assert x.dim() == 2 and x.dtype == torch.long
