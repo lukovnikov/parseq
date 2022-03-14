@@ -39,7 +39,7 @@ class SinusoidalPositionalEmbedding(torch.nn.Module):
     """
 
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000,
-                 downscale=False):
+                 downscale=True):
         super(SinusoidalPositionalEmbedding, self).__init__()
         self.dropout = torch.nn.Dropout(p=dropout)
 
@@ -97,6 +97,16 @@ class TransformerModel(Module):
         self.outposemb = SinusoidalPositionalEmbedding(self.dim, max_len=maxlen)
         self.outlin = torch.nn.Linear(self.dim, self.outvocabsize)
         self.embdropout = torch.nn.Dropout(self.dropoutemb)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        if True: #self.embedding_init == "xavier":
+            # torch.nn.init.xavier_uniform_(self.inpemb.weight)
+            # torch.nn.init.xavier_uniform_(self.outemb.weight)
+        # elif self.embedding_init == "kaiming":
+            torch.nn.init.kaiming_normal_(self.input_embedding.weight)
+            torch.nn.init.kaiming_normal_(self.output_embedding.weight)
 
     def _compute_enc_inp(self, x):
         assert x.dim() == 2 and x.dtype == torch.long
