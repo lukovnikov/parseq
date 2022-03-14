@@ -39,7 +39,7 @@ class SinusoidalPositionalEmbedding(torch.nn.Module):
     """
 
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000,
-                 downscale=True):
+                 downscale=False):
         super(SinusoidalPositionalEmbedding, self).__init__()
         self.dropout = torch.nn.Dropout(p=dropout)
 
