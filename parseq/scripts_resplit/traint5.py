@@ -458,7 +458,7 @@ def run(lr=0.0001,
                         break
                 i += 1
         else:
-            primary_params = m.get_tunable_params_and_set_requires_grad()
+            primary_params = m.model.get_tunable_params_and_set_requires_grad()
         paramgroups = [{"params": primary_params, "lr": _lr}]
         if len(secondary_params) > 0:
             paramgroups.append({"params": secondary_params, "lr": _lr * _lrmul})

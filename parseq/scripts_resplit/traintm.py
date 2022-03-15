@@ -373,7 +373,6 @@ def run(lr=0.0001,
         numheads = 16
         modeldim = 1024
 
-
     run = wandb.init(project=f"compgen_resplit_basictm", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
