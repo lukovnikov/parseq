@@ -504,7 +504,7 @@ def run(lr=0.0001,
             d["ood2valid_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
-    t_max = epochs * len(traindl)
+    t_max = epochs * len(traindl) / gradacc
     optim = get_optim(decoder, lr, lrmul, ftmode)
     warmupsteps = int(round(warmup * t_max))
     print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
