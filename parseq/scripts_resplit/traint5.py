@@ -319,6 +319,7 @@ def run(lr=0.0001,
         useadafactor=False,
         lrmul=0.1,
         gradnorm=3,
+        gradacc=1,
         batsize=60,
         testbatsize=-1,
         epochs=16,
@@ -541,6 +542,7 @@ def run(lr=0.0001,
     validator = CustomValidator(iidvalidepoch, oodvalidepoch, ood2validepoch, lambda: wandb_logger(), numbats=len(traindl), validinter=validinter, tt=tt)
 
     trainbatch = partial(q.train_batch,
+                         gradient_accumulation_steps=gradacc,
                          on_before_optim_step=[
                              lambda : clipgradnorm(_m=decoder, _norm=gradnorm),
                              lambda : lr_schedule.step()
@@ -664,6 +666,7 @@ def run_experiment(
         lrmul=-1.,
         useadafactor=False,
         gradnorm=2,
+        gradacc=1,
         batsize=-1,
         testbatsize=-1,
         epochs=-1,

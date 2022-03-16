@@ -301,7 +301,8 @@ def load_t5_tokenizer(modelsize="small"):
 def load_vanilla_t5(modelsize="small", use_lm100k=True, out_vocab_size=None):
     print(f"Transformers version: {transformers.__version__}")
     tt = q.ticktock("script")
-    tt.tick(f"loading {modelsize} T5-LM100k")
+    modelname = "T5-LM100k" if use_lm100k else "T5"
+    tt.tick(f"loading {modelsize} {modelname}")
     modelname = f"google/t5-v1_1-{modelsize}"
     tt.msg(f"modelname: {modelname}")
     tt.tick("loading tokenizer")
