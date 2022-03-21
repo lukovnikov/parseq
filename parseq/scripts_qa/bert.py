@@ -71,6 +71,7 @@ class MemAdapter(torch.nn.Module):
             self.wg = torch.nn.Linear(self.memdim, self.dim)  # gate weights
         elif self.gated == "bias":
             self.gb = torch.nn.Parameter(torch.zeros(self.dim))
+        self.sg = torch.nn.Linear(self.memdim, 1)
         self.dropout = torch.nn.Dropout(dropout)
         self.nonlin = torch.nn.GELU()
         self.reset_parameters()
@@ -82,6 +83,8 @@ class MemAdapter(torch.nn.Module):
             torch.nn.init.constant_(self.wg.bias, 0)
         elif self.gated == "bias":
             torch.nn.init.constant_(self.gb, 0)
+        torch.nn.init.uniform_(self.sg.weight, -small, +small)
+        torch.nn.init.constant_(self.sg.bias, 0)
         self.wi.reset_parameters()
         self.wo.reset_parameters()
         # torch.nn.init.uniform_(self.wi.weight, -small, +small)
@@ -98,12 +101,16 @@ class MemAdapter(torch.nn.Module):
         _h = self.kvmem(_h)
 
         new_h = self.wo(_h)
+
+        gate = None
+
         if self.gated == "full":
-            g = torch.sigmoid(self.wg(__h) + self.gatebias)
-            new_h = g * new_h + (1 - g) * h
+            gate = torch.sigmoid(self.wg(__h) + self.sg(__h) + self.gatebias)
         elif self.gated == "bias":
-            g = torch.sigmoid(self.gb + self.gatebias)
-            new_h = g * new_h + (1 - g) * h
+            gate = torch.sigmoid(self.gb + self.sg(__h) + self.gatebias)
+
+        if gate is not None:
+            new_h = gate * new_h + (1 - gate) * h
         else:
             new_h = new_h + h
         return new_h
