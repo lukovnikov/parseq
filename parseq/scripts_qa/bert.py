@@ -1,6 +1,6 @@
 import copy
 from functools import partial
-from typing import List, Union
+from typing import List, Union, Dict
 
 import torch
 import numpy as np
@@ -11,7 +11,7 @@ from torch.nn import CrossEntropyLoss
 from torch.utils.checkpoint import checkpoint
 from transformers import T5Tokenizer, T5ForConditionalGeneration, T5Config, BertTokenizer
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
-from transformers.models.bert.modeling_bert import BertModel, BertAttention, BertLayer, BertOutput
+from transformers.models.bert.modeling_bert import BertModel, BertAttention, BertLayer, BertOutput, BertEmbeddings
 
 
 # use 100k LM pre-trained T5 weights instead of normal weights! --> https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md
@@ -225,12 +225,55 @@ def mem_adapterize_layer(layer, dim, adapterdim, memsize=1000, kvmem=None, adapt
         layer.attention.output = AdapteredBertOutput(layer.attention.output, adapterff)
 
 
+class AdaptedBertWordEmbeddings(torch.nn.Module):
+    def __init__(self, original_emb:torch.nn.Embedding, tok:BertTokenizer):
+        super(AdaptedBertWordEmbeddings, self).__init__()
+        self.original_emb = original_emb
+        self.tok = tok
+
+        self.added_tokens = tok.added_tokens_encoder
+        orig_mapper = torch.arange(0, max(list(tok.vocab.values()) + list(self.added_tokens.values()))+1, dtype=torch.long)
+        xtra_mapper = torch.zeros_like(orig_mapper)
+        masker = torch.zeros_like(orig_mapper).to(torch.bool)
+        newidx = 1
+        for added_token in self.added_tokens.values():
+            orig_mapper[added_token] = tok.vocab["[UNK]"]
+            xtra_mapper[added_token] = newidx
+            masker[added_token] = 1
+            newidx += 1
+
+        self.register_buffer("orig_mapper", orig_mapper)
+        self.register_buffer("xtra_mapper", xtra_mapper)
+        self.register_buffer("masker", masker)
+
+        self.xtra_emb = torch.nn.Embedding(max(xtra_mapper)+1, original_emb.embedding_dim)
+
+    def forward(self, x:torch.Tensor):
+        orig_x = self.orig_mapper[x]
+        xtra_x = self.xtra_mapper[x]
+        originalemb = self.original_emb(orig_x)
+        xtraemb = self.xtra_emb(xtra_x)
+        mask = self.masker[x]
+        emb = torch.where(mask.unsqueeze(-1), xtraemb, originalemb)
+        return emb
+
+    def get_ft_params(self):
+        return self.xtra_emb.parameters()
+
+
+def adapt_embeddings(embeddings:BertEmbeddings, tok:BertTokenizer):
+    adaptedembs = AdaptedBertWordEmbeddings(embeddings.word_embeddings, tok)
+    embeddings.word_embeddings = adaptedembs
+    return embeddings
+
+
 class MemAdapteredBERT(BertModel):
     def adapt(self,
               adapterdim=64,  # dimension of adapters, only used if pt_type is "ada(pters)"
               memsize=1000,
               topk=4,        # insert adapters only in higher topk layers
               sharemem=True,
+              tokenizer=None,
               ):
         self.adapterdim = adapterdim
         self.memsize = memsize
@@ -245,6 +288,8 @@ class MemAdapteredBERT(BertModel):
         for i, layer in enumerate(self.encoder.layer):
             if numlayer - i <= topk:
                 mem_adapterize_layer(layer, dim=self.config.hidden_size, adapterdim=self.adapterdim, memsize=memsize, kvmem = kvmem)
+
+        self.embeddings = adapt_embeddings(self.embeddings, tokenizer)
 
         # self.encoder.apply(partial(insert_adapters, dim=self.config.hidden_size, adapterdim=self.adapterdim))
 
