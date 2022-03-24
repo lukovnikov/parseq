@@ -1,3 +1,5 @@
+from collections import Callable
+
 from functools import partial
 
 import os
@@ -5,7 +7,7 @@ import tqdm
 import random
 
 from parseq.datasets import Dataset
-from transformers import BertTokenizer, BertModel
+from transformers import BertTokenizer, BertModel, AutoTokenizer, BertTokenizerFast
 
 
 class MetaQADatasetLoader(object):
@@ -57,14 +59,14 @@ class MetaQADatasetLoader(object):
         question = question.replace("\s+", " ").strip()
         return question, answers
 
-    def load_kb(self):
+    def load_kb(self, tok):
         print("loading KB dataset")
         triples = []
         with open(os.path.join(self.p, "kb.txt"), encoding="utf-8") as f:
             for line in tqdm.tqdm(f.readlines()):
                 newtriples = self.process_kb_line(line)
                 triples.extend(newtriples)
-        ds = KBDataset(triples)
+        ds = KBDataset(triples, tok)
         return ds
 
     def process_kb_line(self, line:str):
@@ -77,41 +79,91 @@ class MetaQADatasetLoader(object):
 
 
 class KBDataset(Dataset):
-    def __init__(self, triples):
-        super(KBDataset, self).__init__(triples)
+    def __init__(self, triples, tok=None):
+        super(KBDataset, self).__init__()
         self.tripleset = set(triples)
         entities, rels = elems_from_triples(triples)
         self.entities = entities
         self.rels = rels
+        allelems = self.rels + self.entities
+        self.elemdic = {k: v for k, v in zip(allelems, range(len(allelems)))}
+
+        self.tok = tok
+        print("Pretokenizing elements")
+        self.elems_pretokenized = []
+        for elem in tqdm.tqdm(allelems):
+            self.elems_pretokenized.append(self.tok(elem, return_tensors="pt")["input_ids"])
+
+        outtriples = []
+        for triple in triples:
+            outtriples.append(((triple[0], triple[1], "[ANS]"), triple[2], 2))
+            outtriples.append(((triple[0], "[ANS]", triple[2]), triple[1], 1))
+            outtriples.append((("[ANS]", triple[1], triple[2]), triple[0], 0))
+        print("Pretokenizing triples")
+        self.triples_pretokenized = []
+        for triple, _, _ in tqdm.tqdm(outtriples):
+            triplestr = f"{triple[0]} [SEP1] {triple[1]} [SEP2] {triple[2]}"
+            self.triples_pretokenized.append(self.tok(triplestr, return_tensors="pt")["input_ids"])
+
+        self._examples = outtriples
 
     def __getitem__(self, item):
-        triple = super(KBDataset, self).__getitem__(item)
-        subj, rel, obj = triple
-        if random.random() > 0.8:
-            posans = rel
-            negans = rel
-            while (subj, negans, obj) in self.tripleset:
-                negans = random.choice(self.rels)
-            whichreplaced = 1
+        if isinstance(item, (Callable, tuple, dict)):
+            ret = self.filter(item)
+            return ret
+        elif isinstance(item, str):     # interpreted as split, then last column is assumed to be the split
+            ret = self.filter(lambda x: x[-1] == item).map(lambda x: x[:-1])
+            return ret
         else:
-            if random.random() > 0.5:
-                posans = obj
-                negans = obj
-                while (subj, rel, negans) in self.tripleset:
-                    negans = random.choice(self.entities)
-                whichreplaced = 2
-            else:
-                posans = subj
-                negans = subj
-                while (negans, rel, obj) in self.tripleset:
-                    negans = random.choice(self.entities)
-                whichreplaced = 0
+            triple = self._examples[item]
+            triple_pretokenized = self.triples_pretokenized[item]
 
-        triple = [subj, rel, obj]
-        triple[whichreplaced] = "[ANS]"
+            posans = triple[1]
+            negans = posans
+            negwhich = triple[2]
 
-        triplestr = f"{triple[0]} [SEP1] {triple[1]} [SEP2] {triple[2]}"
-        return triplestr, posans, negans
+            negtriple = triple[:]
+            negtriple[negwhich] = negans
+
+            while tuple(negtriple) not in self.tripleset:
+                if negwhich == 1:
+                    negans = random.choice(self.rels)
+                else:
+                    negans = random.choice(self.entities)
+                negtriple[negwhich] = negans
+
+            posans_pretokenized = self.elems_pretokenized[self.elemdic[posans]]
+            negans_pretokenized = self.elems_pretokenized[self.elemdic[negans]]
+            return triple_pretokenized, posans_pretokenized, negans_pretokenized, (triple, negans)
+        #
+        #
+        # triple = super(KBDataset, self).__getitem__(item)
+        # subj, rel, obj = triple
+        # if random.random() > 0.8:
+        #     posans = rel
+        #     negans = rel
+        #     while (subj, negans, obj) in self.tripleset:
+        #         negans = random.choice(self.rels)
+        #     whichreplaced = 1
+        # else:
+        #     if random.random() > 0.5:
+        #         posans = obj
+        #         negans = obj
+        #         while (subj, rel, negans) in self.tripleset:
+        #             negans = random.choice(self.entities)
+        #         whichreplaced = 2
+        #     else:
+        #         posans = subj
+        #         negans = subj
+        #         while (negans, rel, obj) in self.tripleset:
+        #             negans = random.choice(self.entities)
+        #         whichreplaced = 0
+        #
+        # triple = [subj, rel, obj]
+        # triple[whichreplaced] = "[ANS]"
+        #
+        # triplestr = f"{triple[0]} [SEP1] {triple[1]} [SEP2] {triple[2]}"
+        # return triplestr, posans, negans
     #
     #
     # def __getitem__(self, item):
@@ -157,8 +209,13 @@ def elems_from_triples(triples):
 
 
 def try_metaqa():
-    tok = BertTokenizer.from_pretrained("bert-base-uncased", additional_special_tokens=["[SEP1]", "[SEP2]", "[ANS]"])
+    print("loading tokenizer")
+    tok = BertTokenizerFast.from_pretrained("bert-base-uncased", additional_special_tokens=["[SEP1]", "[SEP2]", "[ANS]"])
     print(len(tok.vocab))
+
+    kbds = MetaQADatasetLoader().load_kb(tok)
+    print(len(kbds))
+    print(kbds[:15])
     # tok.add_tokens(["[SEP1]", "[SEP2]"])
 
     print(tok.tokenize("zelensky [SEP1] president [SEP2] ukraine"))
@@ -177,9 +234,6 @@ def try_metaqa():
     print(len(ds))
     print(ds[:5])
 
-    kbds = MetaQADatasetLoader().load_kb()
-    print(len(kbds))
-    print(kbds[:15])
 
 
 if __name__ == '__main__':

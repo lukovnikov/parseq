@@ -9,7 +9,7 @@ from torch import nn
 import transformers
 from torch.nn import CrossEntropyLoss
 from torch.utils.checkpoint import checkpoint
-from transformers import T5Tokenizer, T5ForConditionalGeneration, T5Config, BertTokenizer
+from transformers import T5Tokenizer, T5ForConditionalGeneration, T5Config, BertTokenizer, BertTokenizerFast
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 from transformers.models.bert.modeling_bert import BertModel, BertAttention, BertLayer, BertOutput, BertEmbeddings
 
@@ -226,12 +226,17 @@ def mem_adapterize_layer(layer, dim, adapterdim, memsize=1000, kvmem=None, adapt
 
 
 class AdaptedBertWordEmbeddings(torch.nn.Module):
-    def __init__(self, original_emb:torch.nn.Embedding, tok:BertTokenizer):
+    def __init__(self, original_emb:torch.nn.Embedding, tok:Union[BertTokenizer, BertTokenizerFast]):
         super(AdaptedBertWordEmbeddings, self).__init__()
         self.original_emb = original_emb
-        self.tok = tok
+        # self.tok = tok
 
-        self.added_tokens = tok.added_tokens_encoder
+        if isinstance(tok, BertTokenizer):
+            self.added_tokens = tok.added_tokens_encoder
+        elif isinstance(tok, BertTokenizerFast):
+            self.added_tokens = dict(zip(tok.additional_special_tokens, tok.additional_special_tokens_ids))
+
+
         orig_mapper = torch.arange(0, max(list(tok.vocab.values()) + list(self.added_tokens.values()))+1, dtype=torch.long)
         xtra_mapper = torch.zeros_like(orig_mapper)
         masker = torch.zeros_like(orig_mapper).to(torch.bool)
@@ -261,7 +266,7 @@ class AdaptedBertWordEmbeddings(torch.nn.Module):
         return self.xtra_emb.parameters()
 
 
-def adapt_embeddings(embeddings:BertEmbeddings, tok:BertTokenizer):
+def adapt_embeddings(embeddings:BertEmbeddings, tok:Union[BertTokenizer, BertTokenizerFast]):
     adaptedembs = AdaptedBertWordEmbeddings(embeddings.word_embeddings, tok)
     embeddings.word_embeddings = adaptedembs
     return embeddings
