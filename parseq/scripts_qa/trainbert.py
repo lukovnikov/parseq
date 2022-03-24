@@ -27,40 +27,6 @@ from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_vanilla_t5, load_a
 from parseq.vocab import Vocab
 
 
-class Tokenizer(object):
-    def __init__(self, inptok=None, outtok=None, outvocab:Vocab=None, **kw):
-        super(Tokenizer, self).__init__(**kw)
-        self.inptok = inptok
-        self.outtok = outtok
-        self.outvocab = outvocab
-
-    def tokenize(self, inps:str, outs):
-        # input:
-        inputs = self.inptok(inps, return_tensors='pt')
-        inptensor = inputs.input_ids[0]
-
-        if self.outtok is None:
-            outtoks = self.get_out_toks(outs) + [self.outvocab.endtoken]
-            outtensor = self.tensorize_output(outtoks, self.outvocab)
-        else:
-            outputs = self.outtok(outs.lower(), return_tensors='pt')
-            outtensor = outputs.input_ids[0]
-        ret = {"inps": inps, "outs":outs, "inptensor": inptensor, "outtensor": outtensor}
-        ret = (ret["inptensor"], ret["outtensor"])
-        return ret
-
-    def get_toks(self, x):
-        return x.strip().split(" ")
-
-    def get_out_toks(self, x):
-        return self.get_toks(x)
-
-    def tensorize_output(self, x, vocab):
-        ret = [vocab[xe] for xe in x]
-        ret = torch.tensor(ret)
-        return ret
-
-
 def load_ds(dataset="metaqa", inptok_name="bert-base-uncased", whichhops="1+2+3"):
     """
     :param dataset:
@@ -75,18 +41,15 @@ def load_ds(dataset="metaqa", inptok_name="bert-base-uncased", whichhops="1+2+3"
     tok = BertTokenizer.from_pretrained("bert-base-uncased", additional_special_tokens=["[SEP1]", "[SEP2]", "[ANS]"])
 
     tt.tick("loading data")
-    kbds = MetaQADatasetLoader().load_kb()
+    kbds = MetaQADatasetLoader().load_kb(tok)
     qads = MetaQADatasetLoader().load_qa(whichhops)
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
     tt.tock("loaded data")
 
     kblens = []
-    for triplestr, posans, negans in tqdm(kbds):
-        pass
-        kblens.append(tok(triplestr, return_tensors="pt")["input_ids"].size(-1))
-        tok(posans, return_tensors="pt")["input_ids"]
-        tok(negans, return_tensors="pt")["input_ids"]
+    for tripletensor, posans, negans in tqdm(kbds):
+        kblens.append(tripletensor.size(-1))
     print(f"KB examples avg/max length is {np.mean(kblens):.1f}/{max(kblens)}")
 
     qalens = []

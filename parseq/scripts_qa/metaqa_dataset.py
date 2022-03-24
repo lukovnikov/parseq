@@ -99,6 +99,7 @@ class KBDataset(Dataset):
             outtriples.append(((triple[0], triple[1], "[ANS]"), triple[2], 2))
             outtriples.append(((triple[0], "[ANS]", triple[2]), triple[1], 1))
             outtriples.append((("[ANS]", triple[1], triple[2]), triple[0], 0))
+
         print("Pretokenizing triples")
         self.triples_pretokenized = []
         for triple, _, _ in tqdm.tqdm(outtriples):
@@ -115,26 +116,32 @@ class KBDataset(Dataset):
             ret = self.filter(lambda x: x[-1] == item).map(lambda x: x[:-1])
             return ret
         else:
-            triple = self._examples[item]
-            triple_pretokenized = self.triples_pretokenized[item]
+            if isinstance(item, slice):
+                rets = []
+                items = list(range(item.stop)[item])
+                for iteme in items:
+                    rets.append(self.__getitem__(iteme))
+                ret = zip(*rets)
+                return ret
+            else:
+                triple, posans, negwhich = self._examples[item]
+                triple_pretokenized = self.triples_pretokenized[item]
 
-            posans = triple[1]
-            negans = posans
-            negwhich = triple[2]
+                negans = posans
 
-            negtriple = triple[:]
-            negtriple[negwhich] = negans
-
-            while tuple(negtriple) not in self.tripleset:
-                if negwhich == 1:
-                    negans = random.choice(self.rels)
-                else:
-                    negans = random.choice(self.entities)
+                negtriple = list(triple[:])
                 negtriple[negwhich] = negans
 
-            posans_pretokenized = self.elems_pretokenized[self.elemdic[posans]]
-            negans_pretokenized = self.elems_pretokenized[self.elemdic[negans]]
-            return triple_pretokenized, posans_pretokenized, negans_pretokenized, (triple, negans)
+                while tuple(negtriple) not in self.tripleset:
+                    if negwhich == 1:
+                        negans = random.choice(self.rels)
+                    else:
+                        negans = random.choice(self.entities)
+                    negtriple[negwhich] = negans
+
+                posans_pretokenized = self.elems_pretokenized[self.elemdic[posans]]
+                negans_pretokenized = self.elems_pretokenized[self.elemdic[negans]]
+                return triple_pretokenized, posans_pretokenized, negans_pretokenized
         #
         #
         # triple = super(KBDataset, self).__getitem__(item)
