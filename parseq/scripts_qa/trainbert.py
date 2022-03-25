@@ -27,7 +27,7 @@ from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_vanilla_t5, load_a
 from parseq.vocab import Vocab
 
 
-def load_ds(dataset="metaqa", inptok_name="bert-base-uncased", whichhops="1+2+3"):
+def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", recompute=False):
     """
     :param dataset:
     :param validfrac:       how much of the original IID train set is used for IID validation set
@@ -38,11 +38,16 @@ def load_ds(dataset="metaqa", inptok_name="bert-base-uncased", whichhops="1+2+3"
     tt = q.ticktock("data")
     tt.tick(f"loading '{dataset}'")
 
-    tok = BertTokenizer.from_pretrained("bert-base-uncased", additional_special_tokens=["[SEP1]", "[SEP2]", "[ANS]"])
+    tok = BertTokenizer.from_pretrained(tokname, additional_special_tokens=["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]"])
 
     tt.tick("loading data")
-    kbds = MetaQADatasetLoader().load_kb(tok)
-    qads = MetaQADatasetLoader().load_qa(whichhops)
+    with shelve.open(os.path.basename(__file__)+".cache") as s:
+        if "kbds" not in s or recompute:
+            s["kbds"] = MetaQADatasetLoader().load_kb(tok)
+        kbds = s["kbds"]
+        if "qads" not in s or recompute:
+            s["qads"] = MetaQADatasetLoader().load_qa("all", kbds, tok)
+        qads = s["qads"]
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
     tt.tock("loaded data")

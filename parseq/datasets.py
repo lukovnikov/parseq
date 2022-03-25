@@ -122,11 +122,14 @@ class CachedDataset(object):
         self._examples_cache = {}
         self.baseds = None
 
-    def cache(self, compute_now=False):
+    def cache(self, compute_now=False, showprogress=False):
         """ Enable cache at this level. """
         self.enable_cache()
         if compute_now:
-            [self[i] for i in range(len(self))]
+            if showprogress:
+                [self[i] for i in tqdm(range(len(self)))]
+            else:
+                [self[i] for i in range(len(self))]
         return self
 
     def clear_cache(self):
