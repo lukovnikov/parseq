@@ -42,14 +42,13 @@ def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", reco
 
     tt.tick("loading data")
     with shelve.open(os.path.basename(__file__)+".cache") as s:
-        if "kbds" not in s or recompute:
-            s["kbds"] = MetaQADatasetLoader().load_kb(tok)
-        kbds = s["kbds"]
-        if "qads" not in s or recompute:
-            s["qads"] = MetaQADatasetLoader().load_qa("all", kbds, tok)
-        qads = s["qads"]
+        kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute)
+        qads = MetaQADatasetLoader().load_qa("all", kbds.baseds, tok, recompute=recompute)
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
+    print("length QADS train:", len(qads[0]))
+    print("length QADS valid:", len(qads[1]))
+    print("length QADS test:", len(qads[2]))
     tt.tock("loaded data")
 
     kblens = []
@@ -58,61 +57,15 @@ def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", reco
     print(f"KB examples avg/max length is {np.mean(kblens):.1f}/{max(kblens)}")
 
     qalens = []
-    numans = []
-    anslens = []
-    for question, answers in tqdm(qads):
-        qalens.append(tok(question, return_tensors="pt")["input_ids"].size(-1))
-        numans.append(len(answers.split(",")))
-        anslens.append(tok(answers, return_tensors="pt")["input_ids"].size(-1))
+    for question, _, _ in tqdm(qads[0]):
+        qalens.append(question.size(-1))
+    for question, _ in tqdm(qads[1]):
+        qalens.append(question.size(-1))
+    for question, _ in tqdm(qads[2]):
+        qalens.append(question.size(-1))
 
-    return
-
-
-    tt.tick("dictionaries")
-    inplens, outlens = [0], []
-    fldic = Vocab()
-    for x in ds:
-        inplens.append(len(tokenizer.inptok(x[0]).input_ids))
-        outtoks = tokenizer.get_out_toks(x[1])
-        outlens.append(len(outtoks))
-        for tok in outtoks:
-            fldic.add_token(tok, seen=x[2] == "train")
-    fldic.finalize(min_freq=0, top_k=np.infty)
-    tokenizer.outvocab = fldic
-    print(
-        f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
-    print(f"output vocabulary size: {len(fldic.D)} at output")
-    tt.tock("built dictionaries")
-    tt.tick("creating tokenizer")
-    tokenizer = Tokenizer(inptok=inptok, outtok=inptok)
-    tt.tock("created tokenizer")
-
-    tt.msg("using input tokenizer for output")
-    inplens, outlens = [0], []
-    for x in ds:
-        inplens.append(len(tokenizer.inptok(x[0]).input_ids))
-        outlens.append(len(tokenizer.outtok(x[1]).input_ids))
-    print(
-        f"input avg/max length is {np.mean(inplens):.1f}/{max(inplens)}, output avg/max length is {np.mean(outlens):.1f}/{max(outlens)}")
-    fldic = None
-
-    tt.tick("tensorizing")
-    trainds = ds.filter(lambda x: x[-1] == "train").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-    iidvalidds = ds.filter(lambda x: x[-1] == "iidvalid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-    oodvalidds = ds.filter(lambda x: x[-1] == "oodvalid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-    ood2validds = ds.filter(lambda x: x[-1] == "ood2valid").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-    testds = ds.filter(lambda x: x[-1] == "test").map(lambda x: x[:-1]).map(lambda x: tokenizer.tokenize(x[0], x[1])).cache(True)
-    # ds = ds.map(lambda x: tokenizer.tokenize(x[0], x[1]) + (x[2],)).cache(True)
-    tt.tock("tensorized")
-
-    subtrainex = trainds.examples + []
-    random.shuffle(subtrainex)
-    subtrainex = subtrainex[:len(subtrainex)//10]
-    subtrainds = Dataset(subtrainex)
-
-    tt.tock(f"loaded '{dataset}'")
-    tt.msg(f"#train={len(trainds)}, #iidvalid={len(iidvalidds)}, #oodvalid={len(oodvalidds)}, #ood2valid={len(ood2validds)}, #test={len(testds)}")
-    return trainds, subtrainds, iidvalidds, oodvalidds, ood2validds, testds, fldic
+    print(f"QA examples avg/max length is {np.mean(qalens):.1f}/{max(qalens)}")
+    return qads + (kbds,)
 
 
 def collate_fn(x, pad_value=0, numtokens=5000):
@@ -577,5 +530,5 @@ def run_experiment(
 
 
 if __name__ == '__main__':
-    load_ds()
+    load_ds(recompute=False)
     # q.argprun(run_experiment)
