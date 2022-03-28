@@ -80,7 +80,7 @@ class MetaQADatasetLoader(object):
         question = question.replace("\s+", " ").strip()
         return question, answers
 
-    def load_kb(self, tok, recompute=False):
+    def load_kb(self, tok, validfrac=0.1, recompute=False):
         with shelve.open(os.path.basename(__file__)+".cache") as s:
             if "kbds" not in s or recompute:
                 print("loading KB dataset")
@@ -94,8 +94,15 @@ class MetaQADatasetLoader(object):
                 print("shelved")
             print("loading from shelve")
             _ds = s["kbds"]
-        ds = _ds.map(_ds.item_mapper)
-        return ds
+        # TODO validate only on portion of train data, optionally implement splitting
+        # random.shuffle(_ds.examples)
+        # indexes = list(range(len(_ds)))
+        # random.shuffle(indexes)
+        # validindexes = set(indexes[:round(validfrac * len(_ds))])
+        # _ds[lambda x: ]
+        trainds = _ds.map(partial(_ds.item_mapper, return_type="pair"))
+        trainvalidds = _ds.map(partial(_ds.item_mapper, return_type="set"))
+        return trainds, trainvalidds
 
     def process_kb_line(self, line:str):
         line = line.strip()

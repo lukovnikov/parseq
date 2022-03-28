@@ -52,7 +52,7 @@ def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", reco
     tt.tock("loaded data")
 
     kblens = []
-    for tripletensor, posans, negans in tqdm(kbds):
+    for tripletensor, posans, negans in tqdm(kbds[0]):
         kblens.append(tripletensor.size(-1))
     print(f"KB examples avg/max length is {np.mean(kblens):.1f}/{max(kblens)}")
 
@@ -65,7 +65,7 @@ def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", reco
         qalens.append(question.size(-1))
 
     print(f"QA examples avg/max length is {np.mean(qalens):.1f}/{max(qalens)}")
-    return qads + (kbds,)
+    return qads + kbds
 
 
 def collate_fn(x, pad_value=0, numtokens=5000):
@@ -171,11 +171,8 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, subtrainds, iidvalidds, oodvalidds, ood2validds, testds, fldic = \
-        load_ds(dataset=dataset,
-                validfrac=validfrac,
-                inptok_name=modelsize,
-                recompute=recomputedata)
+    trainds, validds, testds, kbtrainds, kbvalidds = \
+        load_ds(dataset=dataset, tokname="bert-base-uncased", recompute=recomputedata)
 
     if maxsize < 0:   # has not been manually overridden
         if dataset.startswith("cfq"):
