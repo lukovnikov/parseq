@@ -100,8 +100,8 @@ class MetaQADatasetLoader(object):
         # random.shuffle(indexes)
         # validindexes = set(indexes[:round(validfrac * len(_ds))])
         # _ds[lambda x: ]
-        trainds = _ds.map(partial(_ds.item_mapper, return_type="pair"))
-        trainvalidds = _ds.map(partial(_ds.item_mapper, return_type="set"))
+        trainds = _ds.map(partial(_ds.item_mapper, return_mode="pair"))
+        trainvalidds = _ds.map(partial(_ds.item_mapper, return_mode="set"))
         return trainds, trainvalidds
 
     def process_kb_line(self, line:str):

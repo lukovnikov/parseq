@@ -43,7 +43,7 @@ def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", reco
     tt.tick("loading data")
     with shelve.open(os.path.basename(__file__)+".cache") as s:
         kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute)
-        qads = MetaQADatasetLoader().load_qa("all", kbds.baseds, tok, recompute=recompute)
+        qads = MetaQADatasetLoader().load_qa("all", kbds[0].baseds, tok, recompute=recompute)
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
     print("length QADS train:", len(qads[0]))
