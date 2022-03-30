@@ -298,7 +298,8 @@ def run(lr=0.0001,
 
     bertmodel.set_dropout(dropout)
 
-    m = Model(bertmodel, bertmodel.config.hidden_size, elemtensors=kbtrainds.baseds.elems_pretokenized)
+    m = Model(bertmodel, bertmodel.config.hidden_size,
+              elemtensors=kbtrainds.baseds.elems_pretokenized, cachebatsize=testbatsize*5)
 
     batch = next(iter(traindl))
     out = m(*batch)
