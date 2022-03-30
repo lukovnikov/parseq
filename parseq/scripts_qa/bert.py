@@ -211,6 +211,10 @@ class VanillaBERT(BertModel):
                 m.p = _p
         self.apply(partial(_set_dropout, _p=p))
 
+    def adapt(self, tokenizer=None):
+        if tokenizer is not None:
+            self.embeddings = adapt_embeddings(self.embeddings, tokenizer)
+
 
 def mem_adapterize_layer(layer, dim, adapterdim, memsize=1000, kvmem=None, adaptmode="ada"):
     selectors = set([x for x in adaptmode.split("+") if x in ("ff", "self", "cross")])
@@ -276,7 +280,7 @@ class MemAdapteredBERT(BertModel):
     def adapt(self,
               adapterdim=64,  # dimension of adapters, only used if pt_type is "ada(pters)"
               memsize=1000,
-              topk=4,        # insert adapters only in higher topk layers
+              topk=6,        # insert adapters only in higher topk layers
               sharemem=True,
               tokenizer=None,
               ):
@@ -418,45 +422,52 @@ def load_bert_tokenizer(modelsize="base"):
     return tokenizer
 
 
-def load_vanilla_bert(modelsize="base"):
+def load_vanilla_bert(modelsize="base", tokenizer=None):
     print(f"Transformers version: {transformers.__version__}")
     tt = q.ticktock("script")
     modelname = "BERT"
     tt.tick(f"loading {modelsize} {modelname}")
     modelname = f"bert-{modelsize}-uncased"
     tt.msg(f"modelname: {modelname}")
-    tt.tick("loading tokenizer")
-    tokenizer = BertTokenizer.from_pretrained(modelname)
-    tt.tock("loaded")
     tt.tick(f"loading normal {modelname} from huggingface")
     model = VanillaBERT.from_pretrained(modelname)
 
+    model.adapt(tokenizer=tokenizer)
+    if tokenizer is None:
+        tt.tick("loading tokenizer")
+        tokenizer = BertTokenizer.from_pretrained(modelname)
+        tt.tock("loaded")
     tt.tock("loaded")
     tt.tock("loaded everything")
     return tokenizer, model
 
 
-def load_adaptered_bert(modelsize="base", adapterdim=64, usemem=False):
+def load_adaptered_bert(modelsize="base", adapterdim=64, usemem=False, memsize=1000, tokenizer=None):
     print(f"Transformers version: {transformers.__version__}")
     tt = q.ticktock("script")
     modelname = "BERT"
     tt.tick(f"loading {modelsize} {modelname}")
     modelname = f"bert-{modelsize}-uncased"
     tt.msg(f"modelname: {modelname}")
-    tt.tick("loading tokenizer")
-    tokenizer = BertTokenizer.from_pretrained(modelname)
-    tt.tock("loaded")
+    if tokenizer is None:
+        tt.tick("loading tokenizer")
+        tokenizer = BertTokenizer.from_pretrained(modelname)
+        tt.tock("loaded")
+    else:
+        tt.msg("using passed tokenizer")
 
     if not usemem:
         tt.tick(f"loading Adapter-inserted {modelname} from huggingface")
         model = AdapteredBERT.from_pretrained(modelname)
+        tt.msg(f"Using {adapterdim}-dim regular adapter layers.")
+        model.adapt(adapterdim=adapterdim)
     else:
         tt.tick(f"loading KV Mem Adapter-inserted {modelname} from huggingface")
         model = MemAdapteredBERT.from_pretrained(modelname)
+        tt.msg(f"Using {adapterdim}-dim KV mem adapter layers.")
+        model.adapt(adapterdim=adapterdim, memsize=memsize, tokenizer=tokenizer)
 
     tt.tock("loaded")
-    tt.msg(f"Inserting {adapterdim}-dim KV mem adapter layers.")
-    model.adapt(adapterdim=adapterdim)
 
     tt.tock("loaded everything")
     return tokenizer, model

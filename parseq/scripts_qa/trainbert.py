@@ -1,3 +1,5 @@
+import sys
+
 import json
 import os
 import random
@@ -22,12 +24,15 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
+from parseq.scripts_qa.bert import load_adaptered_bert, load_vanilla_bert
 from parseq.scripts_qa.metaqa_dataset import MetaQADatasetLoader
 from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_vanilla_t5, load_adaptered_t5, CosineWithRestart
 from parseq.vocab import Vocab
 
+from parseq.scripts_qa.metaqa_dataset import QADataset, KBDataset
 
-def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", recompute=False):
+
+def load_ds(dataset="metaqa/1", tokname="bert-base-uncased", recompute=False):
     """
     :param dataset:
     :param validfrac:       how much of the original IID train set is used for IID validation set
@@ -38,12 +43,13 @@ def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", reco
     tt = q.ticktock("data")
     tt.tick(f"loading '{dataset}'")
 
+    dataset, whichhops = dataset.split("/")
+
     tok = BertTokenizer.from_pretrained(tokname, additional_special_tokens=["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]"])
 
     tt.tick("loading data")
-    with shelve.open(os.path.basename(__file__)+".cache") as s:
-        kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute)
-        qads = MetaQADatasetLoader().load_qa("all", kbds[0].baseds, tok, recompute=recompute)
+    kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute)
+    qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute)
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
     print("length QADS train:", len(qads[0]))
@@ -65,7 +71,7 @@ def load_ds(dataset="metaqa", tokname="bert-base-uncased", whichhops="all", reco
         qalens.append(question.size(-1))
 
     print(f"QA examples avg/max length is {np.mean(qalens):.1f}/{max(qalens)}")
-    return qads + kbds
+    return (tok,) + qads + kbds
 
 
 def collate_fn(x, pad_value=0, numtokens=5000):
@@ -77,6 +83,102 @@ def collate_fn(x, pad_value=0, numtokens=5000):
     b = [be[1] for be in b]
     ret = autocollate(b, pad_value=pad_value)
     return ret
+
+
+class Model(torch.nn.Module):
+    def __init__(self, encoder, dim, attdim=512, nheads=4, elemtensors=None, cachebatsize=100):
+        super(Model, self).__init__()
+        self.encoder = encoder
+        self.xread = AttentionReadout(dim, attdim, nheads)
+        self.entread = AttentionReadout(dim, attdim, nheads)
+
+        self.classifier_l1 = torch.nn.Linear(dim*2, dim)
+        self.classifier_l1aux = torch.nn.Linear(dim, 1)
+        self.classifier_l2 = torch.nn.Linear(dim*2, 1)
+        self.classifier_nonlin = torch.nn.GELU()
+
+        self.loss = torch.nn.BCEWithLogitsLoss(reduction="none")
+
+        self.elemtensors = elemtensors
+        self.repr_cache = None
+        self.cachebatsize = cachebatsize
+
+    def _compute_score(self, xenc, cenc):
+        _scores1 = self.classifier_l1(torch.cat([xenc, cenc], -1))
+        _scores2 = (xenc * cenc * self.classifier_l1aux.weight[None, :, 0])
+        _scores = self.classifier_nonlin(torch.cat([_scores1, _scores2], -1))
+        _scores = self.classifier_l2(_scores)[:, 0]
+        return _scores
+
+    def train_forward(self, x, pos, neg):
+        xmask = x != 0
+        xenc = self.encoder(x, attention_mask=xmask)[0]
+        xenc = self.xread(xenc, attention_mask=xmask)
+
+        posmask = pos != 0
+        posenc = self.encoder(pos, attention_mask=posmask)[0]
+        posenc = self.entread(posenc, attention_mask=posmask)
+
+        # posscores = (xenc * posenc).sum(-1)   # batch dot product
+        posscores = self._compute_score(xenc, posenc)
+
+        negmask = neg != 0
+        negenc = self.encoder(neg, attention_mask=negmask)[0]
+        negenc = self.entread(negenc, attention_mask=negmask)
+
+        # negscores = (xenc * negenc).sum(-1)
+        negscores = self._compute_score(xenc, negenc)
+
+        loss = self.loss(posscores, torch.ones_like(posscores)) + self.loss(negscores, torch.zeros_like(negscores))
+        return loss
+
+    def test_forward(self, x, posids):
+        device = x.device
+        elem_reprs = self.get_elem_repr(device=device)
+
+    def get_elem_repr(self, device=torch.device("cpu")):
+        if self.repr_cache is None:
+            # compute cache
+            dl = DataLoader(Dataset([(t,) for t in self.elemtensors]), batch_size=self.cachebatsize, shuffle=False, collate_fn=autocollate)
+            acc = []
+            for batch in dl:
+                x = batch[0]
+                x = x.to(device)
+                xmask = x != 0
+                elemenc = self.encoder(x, attention_mask=xmask)[0]
+                elemenc = self.entread(elemenc, attention_mask=xmask)
+                acc.append(elemenc)
+            reprs = torch.cat(acc, 0)
+            self.repr_cache = reprs
+        return self.repr_cache
+
+    def clear_cache(self):
+        self.repr_cache = None
+
+    def forward(self, *args, **kwargs):
+        if self.training:
+            return self.train_forward(*args, **kwargs)
+        else:
+            return self.test_forward(*args, **kwargs)
+
+
+class AttentionReadout(torch.nn.Module):
+    def __init__(self, dim, attdim, heads):
+        super(AttentionReadout, self).__init__()
+        self.dim, self.attdim, self.nheads = dim, attdim, heads
+        self.proj = torch.nn.Linear(dim, attdim)
+        self.att = torch.nn.Linear(attdim//heads, heads)
+        self.projback = torch.nn.Linear(attdim, dim)
+
+    def forward(self, x, attention_mask=None):  # (batsize, seqlen, dim), (batsize, seqlen)
+        xproj = self.proj(x).view(x.size(0), x.size(1), self.nheads, self.attdim//self.nheads)
+        queries = self.att.weight
+        xweights = torch.einsum("bshd,hd->bsh", xproj, queries)  # (batsize, seqlen, nheads)
+        xweights = torch.where(attention_mask[:, :, None] == 1, xweights, torch.log(torch.zeros_like(xweights)))
+        xalpha = torch.softmax(xweights, 1)        # (batsize, seqlen, nheads)
+        xvals = torch.einsum("bshd,bsh->bhd", xproj, xalpha).view(x.size(0), -1)
+        ret = self.projback(xvals)
+        return ret
 
 
 class CustomValidator:
@@ -129,19 +231,17 @@ def run(lr=0.0001,
         warmup=0.1,
         cosinecycles=0,
         modelsize="small",
-        ftmode="ft",                # "ft" or "adapter"
+        mode="base",                # "base" or "mem" or "ada"
         adapterdim=64,              # only active in adapter mode
+        memsize=1000,
         usedefaultmodel=False,
-        dataset="scan/length",
-        maxsize=-1,
+        dataset="metaqa/1",
         seed=42,
         dropout=0.,
         testcode=False,
         gpu=-1,
-        trainonvalidonly=False,
-        trainonood2only=False,
         recomputedata=False,
-        version="v4",
+        version="v0",
         ):
     """
     :param lrmul:       multiplier for learning rate for secondary parameters
@@ -160,7 +260,7 @@ def run(lr=0.0001,
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
 
-    run = wandb.init(project=f"compgen_resplit", config=settings, reinit=True)
+    run = wandb.init(project=f"bert+kvmem+qa--baseline-bert", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -171,51 +271,45 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    trainds, validds, testds, kbtrainds, kbvalidds = \
+    tok, trainds, validds, testds, kbtrainds, kbvalidds = \
         load_ds(dataset=dataset, tokname="bert-base-uncased", recompute=recomputedata)
-
-    if maxsize < 0:   # has not been manually overridden
-        if dataset.startswith("cfq"):
-            maxsize = 120
-        elif dataset.startswith("scan"):
-            maxsize = 55
-
-    print(f"Maxsize: {maxsize}")
 
     tt.tick("dataloaders")
     NUMWORKERS = 0
 
+    kbtraindl = DataLoader(kbtrainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
+    kbvaliddl = DataLoader(kbvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
-    subtraindl = DataLoader(subtrainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
-    iidvaliddl = DataLoader(iidvalidds, batch_size=batsize if not trainonvalidonly else testbatsize,
-                            shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
-    oodvaliddl = DataLoader(oodvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
-    ood2validdl = DataLoader(ood2validds, batch_size=batsize if trainonood2only else testbatsize,
-                             shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    validdl = DataLoader(validds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     testdl = DataLoader(testds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
-    # print(json.dumps(next(iter(trainds)), indent=3))
-    # print(next(iter(traindl)))
-    # print(next(iter(validdl)))
+
     tt.tock()
     tt.tock()
+
+    next(iter(traindl))
+    next(iter(kbtraindl))
+    next(iter(validdl))
 
     tt.tick("model")
-    out_vocab_size = None
-    assert fldic is not None
-    out_vocab_size = fldic.number_of_ids()
-
-    if ftmode == "ft":
-        t5tok, t5, _ = load_vanilla_t5(modelsize=modelsize, use_lm100k=not usedefaultmodel, out_vocab_size=out_vocab_size)
-    elif ftmode.startswith("ada"):
-        t5tok, t5, _ = load_adaptered_t5(modelsize=modelsize, use_lm100k=not usedefaultmodel, adapterdim=adapterdim,
-                                       out_vocab_size=out_vocab_size)
-
-    t5.set_dropout(dropout)
-
-    if fldic is None:
-        batchtostrs = lambda x: t5tok.batch_decode(x)     # TODO: test
+    if mode in ("base", "default", "vanilla"):
+        tok, bertmodel = load_vanilla_bert(modelsize, tokenizer=tok)
     else:
-        batchtostrs = lambda x: [fldic.tostr(x[i]) for i in range(len(x))]
+        tok, bertmodel = load_adaptered_bert(modelsize, adapterdim=adapterdim, usemem="mem" in mode, memsize=memsize, tokenizer=tok)
+
+    bertmodel.set_dropout(dropout)
+
+    m = Model(bertmodel, bertmodel.config.hidden_size, elemtensors=kbtrainds.baseds.elems_pretokenized)
+
+    batch = next(iter(traindl))
+    out = m(*batch)
+    with torch.no_grad():
+        m.train(False)
+        batch = next(iter(validdl))
+        out = m(*batch)
+        m.train(True)
+
+    sys.exit()
+
     decoder = SeqDecoderT5(t5, max_size=maxsize, batch_to_strs=batchtostrs, eos_token_id=fldic[fldic.endtoken])
     tt.tock()
 
@@ -472,17 +566,14 @@ def run_experiment(
         validfrac=0.1,
         warmup=0.1,
         cosinecycles=0,
-        modelsize="small",
-        ftmode="ft",        # "ft" (finetune) or "adapter"
+        modelsize="base",
+        mode="base",        # "ft" (finetune) or "adapter"
         adapterdim=-1,
-        usedefaultmodel=False,
+        memsize=-1,
         dataset="default",
-        maxsize=-1,
         seed=-1,
         dropout=-1.,
         testcode=False,
-        trainonvalidonly=False,
-        trainonood2only=False,
         gpu=-1,
         recomputedata=False,
         ):
@@ -490,19 +581,20 @@ def run_experiment(
     settings = locals().copy()
 
     ranges = {
-        "dataset": ["cfq/mcd1new", "cfq/mcd2new", "cfq/mcd3new"],
+        "dataset": ["metaqa/1"],
         "dropout": [0.1],
         "seed": [42, 87646464, 456852],
         "epochs": [50],
         "batsize": [60],
         "lr": [0.0005],
         "lrmul": [1.],
-        "modelsize": ["small", "base", "large"],
+        "modelsize": ["base"],
         # "patience": [-1],
         # "warmup": [20],
         "validinter": [2],
         # "gradacc": [1],
         "adapterdim": [64],
+        "memsize": [1000],
     }
 
     for k in ranges:
@@ -516,9 +608,6 @@ def run_experiment(
                 # raise Exception(f"something wrong with setting '{k}'")
             del settings[k]
 
-    if dataset.endswith("/mcd"):
-        ranges["dataset"] = [dataset + f"{i}" for i in range(1, 4)]
-
     def checkconfig(spec):
         return True
 
@@ -527,5 +616,5 @@ def run_experiment(
 
 
 if __name__ == '__main__':
-    load_ds(recompute=False)
-    # q.argprun(run_experiment)
+    # load_ds(recompute=False)
+    q.argprun(run_experiment)

@@ -25,13 +25,14 @@ class MetaQADatasetLoader(object):
         """
         if hops == "all":
             hops = "1+2+3"
+        hops = hops.split("+")
 
         with shelve.open(os.path.basename(__file__) + ".cache") as s:
-            whichhops = hops.split("+")
 
-            if f"kbds:{hops}" not in s or recompute:
+            if f"qads" not in s or recompute:
                 data = []
-                for numhops in whichhops:
+                whichhops = "1+2+3"
+                for numhops in whichhops.split("+"):
                     print(f"loading {numhops}-hop")
                     path = os.path.join(self.p, f"{numhops}-hop", "vanilla")
                     # load train data
@@ -53,13 +54,14 @@ class MetaQADatasetLoader(object):
 
                 assert tok is not None and kbds is not None
                 ds = QADataset(data, tok=tok, kbds=kbds)
-                s[f"kbds:{hops}"] = ds
+                s[f"qads"] = ds
                 print("shelved")
             print("loading from shelve")
-            ds = s[f"kbds:{hops}"]
-        trainds = ds["train"].map(partial(ds.item_mapper, return_mode="pair"))
-        validds = ds["valid"].map(partial(ds.item_mapper, return_mode="set"))
-        testds = ds["test"].map(partial(ds.item_mapper, return_mode="set"))
+            ds = s[f"qads"]
+            _ds = ds.filter(lambda x: str(x[-2]) in hops)
+        trainds = _ds["train"].map(partial(ds.item_mapper, return_mode="pair"))
+        validds = _ds["valid"].map(partial(ds.item_mapper, return_mode="set"))
+        testds = _ds["test"].map(partial(ds.item_mapper, return_mode="set"))
         return trainds, validds, testds
 
 
@@ -125,7 +127,7 @@ class QADataset(Dataset):
 
     def init_mapper(self, x, tok):
         question, answers, hops, split = x
-        question_tokenized = tok(question, return_tensors="pt")["input_ids"]
+        question_tokenized = tok(question, return_tensors="pt")["input_ids"][0]
         answerset = set(answers)
         return question_tokenized, answerset, hops, split
 
@@ -166,9 +168,9 @@ class KBDataset(Dataset):
         print("Pretokenizing elements")
         self.elems_pretokenized = []
         for elem in tqdm.tqdm(self.rels):
-            self.elems_pretokenized.append(self.tok("[REL] " + elem, return_tensors="pt")["input_ids"])
+            self.elems_pretokenized.append(self.tok("[REL] " + elem, return_tensors="pt")["input_ids"][0])
         for elem in tqdm.tqdm(self.entities):
-            self.elems_pretokenized.append(self.tok("[ENT] " + elem, return_tensors="pt")["input_ids"])
+            self.elems_pretokenized.append(self.tok("[ENT] " + elem, return_tensors="pt")["input_ids"][0])
 
         # group triples
         tripledict = {}
@@ -185,7 +187,7 @@ class KBDataset(Dataset):
         for _triple in tqdm.tqdm(tripledict.keys()):
             triple, _ = _triple
             triplestr = f"{triple[0]} [SEP1] {triple[1]} [SEP2] {triple[2]}"
-            tripletensor = self.tok(triplestr, return_tensors="pt")["input_ids"]
+            tripletensor = self.tok(triplestr, return_tensors="pt")["input_ids"][0]
             outtriples.append((tripletensor, _triple[1], tripledict[_triple]))
 
         self._examples = outtriples
@@ -289,18 +291,15 @@ def try_metaqa():
     tok = BertTokenizerFast.from_pretrained("bert-base-uncased", additional_special_tokens=["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]"])
     print(len(tok.vocab))
 
-    kbds = MetaQADatasetLoader().load_kb(tok)
-    kbds = kbds.map(kbds.item_mapper)
+    kbds, validkbds = MetaQADatasetLoader().load_kb(tok)
+    # kbds = kbds.map(kbds.item_mapper)
     print(len(kbds))
     print([kbds[i] for i in range(15)])
 
-    qads = MetaQADatasetLoader().load_qa("1", kbds=kbds, tok=tok)
-    print([qads[i] for i in range(15)])
+    trainqads, validqads, testqads = MetaQADatasetLoader().load_qa("1", kbds=kbds.baseds, tok=tok)
+    print([trainqads[i] for i in range(15)])
+    print([validqads[i] for i in range(15)])
     # tok.add_tokens(["[SEP1]", "[SEP2]"])
-
-    print(tok.tokenize("zelensky [SEP1] president [SEP2] ukraine"))
-    print(tok.__call__("zelensky [SEP1] president [SEP2] ukraine"))
-    print(tok("zelensky [SEP1] president [SEP2] ukraine"))
 
     bert = BertModel.from_pretrained("bert-base-uncased")
     bertemb = bert.embeddings
@@ -309,11 +308,6 @@ def try_metaqa():
 
     tokids = tok("[SEP1] [SEP2] [SEP] [UNK]", return_tensors="pt")["input_ids"][None, :]
     embs = bertemb(tokids)
-
-    ds = MetaQADatasetLoader().load_qa("1+2")
-    print(len(ds))
-    print(ds[:5])
-
 
 
 if __name__ == '__main__':
