@@ -33,13 +33,14 @@ def try_cosine():
 
 
 class KVMem(torch.nn.Module):
-    def __init__(self, dim, memdim, memsize):
+    def __init__(self, memdim, memsize, nheads=1):
         super().__init__()
-        self.dim, self.memdim, self.memsize = dim, memdim, memsize
+        self.memdim, self.memsize = memdim, memsize
+        self.nheads = nheads
 
-        self.keys = torch.nn.Linear(self.memdim, self.memsize)
+        self.keys = torch.nn.Linear(self.memdim, self.memsize, bias=False)
         self.sm = torch.nn.Softmax(-1)
-        self.values = torch.nn.Linear(self.memsize, self.memdim)
+        self.values = torch.nn.Linear(self.memsize, self.memdim, bias=False)
 
         self.reset_parameters()
 
@@ -47,23 +48,41 @@ class KVMem(torch.nn.Module):
         self.keys.reset_parameters()
         self.values.reset_parameters()
 
-    def forward(self, h):
-        weights = self.keys(h)
-        weights = self.sm(weights)
-        ret = self.values(weights)
+    def forward(self, h):  # (batsize, seqlen, memdim)
+        queries = h.unflatten(-1, (self.nheads, self.memdim // self.nheads))   # (batsize, seqlen, nheads, memdim//nheads)
+        keys = self.keys.weight    # (memsize, memdim)
+        keys = keys.unflatten(1, (self.nheads, keys.size(1) // self.nheads))  # (memsize, nheads, memdim//nheads)
+        weights = torch.einsum("bshd,zhd->bshz", queries, keys)
+        weights = torch.softmax(weights, -1)        # (batsize, seqlen, nheads, memsize*)
+        values = self.values.weight  # (memdim, memsize)
+        values = values.unflatten(0, (self.nheads, values.size(0) // self.nheads))  # (nheads, memdim//nheads, memsize)
+        ret = torch.einsum("bshz,hdz->bshd", weights, values)
+        ret = ret.flatten(-2, -1)  # (batsize, seqlen, memdim)
+        # weights = self.keys(h)
+        # weights = self.sm(weights)
+        # ret = self.values(weights)
         return ret
+
+
+def try_kvmem():
+    m = KVMem(10, 100, 2)
+    x = torch.rand(3, 7, 10)
+    ret = m(x)
+    print(ret.size())
 
 
 class MemAdapter(torch.nn.Module):
     gated = False
     gatebias = -4
 
-    def __init__(self, dim, memdim, memsize, dropout=0., kvmem=None, **kw):
+    def __init__(self, dim, memdim, memsize, nheads=1, dropout=0., kvmem=None, **kw):
         super().__init__(**kw)
         self.dim = dim
         self.memdim, self.memsize = memdim, memsize
+        self.nheads = nheads
 
-        self.mem = KVMem(self.dim, self.memdim, self.memsize) if kvmem is None else kvmem
+        self.mem = KVMem(self.memdim, self.memsize, nheads=self.nheads) \
+            if kvmem is None else kvmem
 
         self.wi = torch.nn.Linear(self.dim, self.memdim)
         self.wo = torch.nn.Linear(self.memdim, self.dim)
@@ -171,62 +190,39 @@ class AdapterBiasGatedFF(AdapterFF):
 
 
 class AdapteredBertOutput(torch.nn.Module):
-    def __init__(self, bertoutput:BertOutput, adapter):
+    def __init__(self, bertoutput:Union[BertOutput, type("AdapteredBertOutput")], adapter):
         super(AdapteredBertOutput, self).__init__()
         self.m = bertoutput
-        self.adapterff = adapter
+        self.old_adapters = torch.nn.ModuleList()
+        if isinstance(bertoutput, AdapteredBertOutput):
+            self.old_adapters.extend(bertoutput.old_adapters)
+            self.old_adapters.append(bertoutput.adapter)
+        self.new_adapter = adapter
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.m.dense(hidden_states)
         hidden_states = self.m.dropout(hidden_states)
 
-        hidden_states = self.adapterff(hidden_states)
+        hidden_states = self.new_adapter(hidden_states)
+        for old_adapter in self.old_adapters:
+            hidden_states = old_adapter(hidden_states)
 
         hidden_states = self.m.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
     def get_ft_params(self):
-        return list(self.adapterff.parameters()) + list(self.m.LayerNorm.parameters())
+        return list(self.new_adapter.parameters()) + list(self.m.LayerNorm.parameters())
 
 
-def insert_adapters(m:torch.nn.Module, dim=None, adapterdim=None, adaptmode="ada"):
-    selectors = set([x for x in adaptmode.split("+") if x in ("ff", "self", "cross")])
-    if len(selectors) == 0:
-        selectors = {"ff", "self", "cross"}
-        # print(f"Adapting based on selectors: {selectors}")
-    if isinstance(m, BertAttention) and "self" in selectors:
-        m.output = AdapteredBertOutput(m.output, dim=dim, adapterdim=adapterdim)
-    elif isinstance(m, BertLayer) and "ff" in selectors:
-        m.output = AdapteredBertOutput(m.output, dim=dim, adapterdim=adapterdim)
-
-
-class VanillaBERT(BertModel):
-    def get_tunable_params_and_set_requires_grad(self):
-        ret = list(self.parameters())
-        return ret
-
-    def set_dropout(self, p=0.):
-        def _set_dropout(m, _p=0.):
-            if isinstance(m, torch.nn.Dropout):
-                m.p = _p
-        self.apply(partial(_set_dropout, _p=p))
-
-    def adapt(self, tokenizer=None):
-        if tokenizer is not None:
-            self.embeddings = adapt_embeddings(self.embeddings, tokenizer)
-
-
-def mem_adapterize_layer(layer, dim, adapterdim, memsize=1000, kvmem=None, adaptmode="ada"):
-    selectors = set([x for x in adaptmode.split("+") if x in ("ff", "self", "cross")])
-    if len(selectors) == 0:
-        selectors = {"ff", "self", "cross"}
-        # print(f"Adapting based on selectors: {selectors}")
-    if "ff" in selectors:
-        memadapter = MemAdapter(dim=dim, memdim=adapterdim, memsize=memsize, kvmem=kvmem)
-        layer.output = AdapteredBertOutput(layer.output, memadapter)
-    if "self" in selectors:
-        adapterff = AdapterFF(dim=dim, adapterdim=adapterdim)
-        layer.attention.output = AdapteredBertOutput(layer.attention.output, adapterff)
+# def insert_adapters(m:torch.nn.Module, dim=None, adapterdim=None, adaptmode="ada"):
+#     selectors = set([x for x in adaptmode.split("+") if x in ("ff", "self", "cross")])
+#     if len(selectors) == 0:
+#         selectors = {"ff", "self", "cross"}
+#         # print(f"Adapting based on selectors: {selectors}")
+#     if isinstance(m, BertAttention) and "self" in selectors:
+#         m.output = AdapteredBertOutput(m.output, dim=dim, adapterdim=adapterdim)
+#     elif isinstance(m, BertLayer) and "ff" in selectors:
+#         m.output = AdapteredBertOutput(m.output, dim=dim, adapterdim=adapterdim)
 
 
 class AdaptedBertWordEmbeddings(torch.nn.Module):
@@ -276,60 +272,6 @@ def adapt_embeddings(embeddings:BertEmbeddings, tok:Union[BertTokenizer, BertTok
     return embeddings
 
 
-class MemAdapteredBERT(BertModel):
-    def adapt(self,
-              adapterdim=64,  # dimension of adapters, only used if pt_type is "ada(pters)"
-              memsize=1000,
-              topk=6,        # insert adapters only in higher topk layers
-              sharemem=True,
-              tokenizer=None,
-              ):
-        self.adapterdim = adapterdim
-        self.memsize = memsize
-        self.sharemem = sharemem
-
-        if sharemem:
-            kvmem = KVMem(self.config.hidden_size, self.adapterdim, self.memsize)
-        else:
-            kvmem = None
-
-        numlayer = len(self.encoder.layer)
-        for i, layer in enumerate(self.encoder.layer):
-            if numlayer - i <= topk:
-                mem_adapterize_layer(layer, dim=self.config.hidden_size, adapterdim=self.adapterdim, memsize=memsize, kvmem = kvmem)
-
-        self.embeddings = adapt_embeddings(self.embeddings, tokenizer)
-
-        # self.encoder.apply(partial(insert_adapters, dim=self.config.hidden_size, adapterdim=self.adapterdim))
-
-    def get_tunable_params_and_set_requires_grad(self):
-        ret = []
-
-        def _get_ft_params(m, out=None):
-            if hasattr(m, "get_ft_params"):
-                out.extend(m.get_ft_params())
-
-        collectedparams = []
-        self.apply(partial(_get_ft_params, out=collectedparams))
-
-        ret += collectedparams
-
-        for param in self.parameters():
-            computegrad = False
-            for tunableparam in ret:
-                if param is tunableparam:
-                    computegrad = True
-            param.requires_grad = computegrad
-
-        return ret
-
-    def set_dropout(self, p=0.):
-        def _set_dropout(m, _p=0.):
-            if isinstance(m, torch.nn.Dropout):
-                m.p = _p
-        self.apply(partial(_set_dropout, _p=p))
-
-
 def adapterize_layer(layer, dim, adapterdim, adaptmode="ada"):
     selectors = set([x for x in adaptmode.split("+") if x in ("ff", "self", "cross")])
     if len(selectors) == 0:
@@ -343,7 +285,34 @@ def adapterize_layer(layer, dim, adapterdim, adaptmode="ada"):
         layer.attention.output = AdapteredBertOutput(layer.attention.output, adapterff)
 
 
-class AdapteredBERT(BertModel):
+def mem_adapterize_layer(layer, dim, adapterdim, memsize=1000, memdim=512, memheads=8, kvmem=None, adaptmode="ada"):
+    selectors = set([x for x in adaptmode.split("+") if x in ("ff", "self", "cross")])
+    if len(selectors) == 0:
+        selectors = {"ff", "self", "cross"}
+        # print(f"Adapting based on selectors: {selectors}")
+    if "ff" in selectors:
+        memadapter = MemAdapter(dim=dim, memdim=memdim, memsize=memsize, memheads=memheads, kvmem=kvmem)
+        layer.output = AdapteredBertOutput(layer.output, memadapter)
+    if "self" in selectors:
+        adapterff = AdapterFF(dim=dim, adapterdim=adapterdim)
+        layer.attention.output = AdapteredBertOutput(layer.attention.output, adapterff)
+
+
+class AdapterableBERT(BertModel):
+    embeddingsadapted = False
+    layersadapted = False
+
+    def set_dropout(self, p=0.):
+        def _set_dropout(m, _p=0.):
+            if isinstance(m, torch.nn.Dropout):
+                m.p = _p
+        self.apply(partial(_set_dropout, _p=p))
+
+    def adapt_embeddings(self, tokenizer=None):
+        if not isinstance(self.embeddings, AdaptedBertWordEmbeddings) and tokenizer is not None:
+            self.embeddings = adapt_embeddings(self.embeddings, tokenizer)
+            self.embeddingsadapted = True
+
     def adapt(self,
               adapterdim=64,  # dimension of adapters, only used if pt_type is "ada(pters)"
               topk=1000,        # insert adapters only in higher topk layers
@@ -354,34 +323,55 @@ class AdapteredBERT(BertModel):
             if numlayer - i <= topk:
                 adapterize_layer(layer, dim=self.config.hidden_size, adapterdim=self.adapterdim)
 
-        # self.encoder.apply(partial(insert_adapters, dim=self.config.hidden_size, adapterdim=self.adapterdim))
+        self.layersadapted = True
+
+    def memadapt(self,
+              adapterdim=64,  # dimension of adapters, only used if pt_type is "ada(pters)"
+              memsize=1000,
+              memdim=64,
+              memnheads=1,
+              topk=6,        # insert adapters only in higher topk layers
+              sharemem=True,
+              ):
+        self.adapterdim = adapterdim
+        self.memsize = memsize
+        self.sharemem = sharemem
+        self.memdim = memdim
+
+        if sharemem:
+            kvmem = KVMem(self.memdim, self.memsize, nheads=memnheads)
+        else:
+            kvmem = None
+
+        numlayer = len(self.encoder.layer)
+        for i, layer in enumerate(self.encoder.layer):
+            if numlayer - i <= topk:
+                mem_adapterize_layer(layer, dim=self.config.hidden_size, adapterdim=self.adapterdim,
+                                     memsize=self.memsize, memdim=self.memdim, memheads=self.memheads, kvmem=kvmem)
+
+        self.layersadapted = True
 
     def get_tunable_params_and_set_requires_grad(self):
-        ret = []
+        if self.layersadapted:
+            ret = []
 
-        def _get_ft_params(m, out=None):
-            if hasattr(m, "get_ft_params"):
-                out.extend(m.get_ft_params())
+            def _get_ft_params(m, out=None):
+                if hasattr(m, "get_ft_params"):
+                    out.extend(m.get_ft_params())
 
-        collectedparams = []
-        self.apply(partial(_get_ft_params, out=collectedparams))
+            collectedparams = []
+            self.apply(partial(_get_ft_params, out=collectedparams))
 
-        ret += collectedparams
+            ret += collectedparams
+        else:
+            ret = list(self.parameters())
 
         for param in self.parameters():
-            computegrad = False
-            for tunableparam in ret:
-                if param is tunableparam:
-                    computegrad = True
-            param.requires_grad = computegrad
+            param.requires_grad = False
+        for tunableparam in ret:
+            tunableparam.requires_grad = True
 
         return ret
-
-    def set_dropout(self, p=0.):
-        def _set_dropout(m, _p=0.):
-            if isinstance(m, torch.nn.Dropout):
-                m.p = _p
-        self.apply(partial(_set_dropout, _p=p))
 
 
 def try_generate(inp:str=None, model=None, tokenizer=None):
@@ -430,9 +420,11 @@ def load_vanilla_bert(modelsize="base", tokenizer=None):
     modelname = f"bert-{modelsize}-uncased"
     tt.msg(f"modelname: {modelname}")
     tt.tick(f"loading normal {modelname} from huggingface")
-    model = VanillaBERT.from_pretrained(modelname)
+    model = AdapterableBERT.from_pretrained(modelname)
 
-    model.adapt(tokenizer=tokenizer)
+    model.adapt_embeddings(tokenizer=tokenizer)
+    assert model.layersadapted is False
+
     if tokenizer is None:
         tt.tick("loading tokenizer")
         tokenizer = BertTokenizer.from_pretrained(modelname)
@@ -442,7 +434,34 @@ def load_vanilla_bert(modelsize="base", tokenizer=None):
     return tokenizer, model
 
 
-def load_adaptered_bert(modelsize="base", adapterdim=64, usemem=False, memsize=1000, tokenizer=None):
+def load_adaptered_bert(modelsize="base", adapterdim=64, tokenizer=None):
+    print(f"Transformers version: {transformers.__version__}")
+    tt = q.ticktock("script")
+    modelname = "BERT"
+    tt.tick(f"loading {modelsize} {modelname}")
+    modelname = f"bert-{modelsize}-uncased"
+    tt.msg(f"modelname: {modelname}")
+
+    if tokenizer is None:
+        tt.tick("loading tokenizer")
+        tokenizer = BertTokenizer.from_pretrained(modelname)
+        tt.tock("loaded")
+    else:
+        tt.msg("using passed tokenizer")
+
+    tt.tick(f"loading Adapter-inserted {modelname} from huggingface")
+    model = AdapterableBERT.from_pretrained(modelname)
+
+    tt.msg(f"Using {adapterdim}-dim regular adapter layers.")
+    model.adapt_embeddings(tokenizer)
+    model.adapt(adapterdim=adapterdim)
+    tt.tock("loaded")
+
+    tt.tock("loaded everything")
+    return tokenizer, model
+
+
+def load_memadaptered_bert(modelsize="base", adapterdim=64, memsize=1000, memdim=512, memheads=8, tokenizer=None):
     print(f"Transformers version: {transformers.__version__}")
     tt = q.ticktock("script")
     modelname = "BERT"
@@ -456,16 +475,12 @@ def load_adaptered_bert(modelsize="base", adapterdim=64, usemem=False, memsize=1
     else:
         tt.msg("using passed tokenizer")
 
-    if not usemem:
-        tt.tick(f"loading Adapter-inserted {modelname} from huggingface")
-        model = AdapteredBERT.from_pretrained(modelname)
-        tt.msg(f"Using {adapterdim}-dim regular adapter layers.")
-        model.adapt(adapterdim=adapterdim)
-    else:
-        tt.tick(f"loading KV Mem Adapter-inserted {modelname} from huggingface")
-        model = MemAdapteredBERT.from_pretrained(modelname)
-        tt.msg(f"Using {adapterdim}-dim KV mem adapter layers.")
-        model.adapt(adapterdim=adapterdim, memsize=memsize, tokenizer=tokenizer)
+    tt.tick(f"loading KV Mem Adapter-inserted {modelname} from huggingface")
+    model = AdapterableBERT.from_pretrained(modelname)
+
+    tt.msg(f"Using {adapterdim}-dim KV mem adapter layers.")
+    model.adapt_embeddings(tokenizer=tokenizer)
+    model.memadapt(adapterdim=adapterdim, memsize=memsize, memdim=memdim, memheads=memheads)
 
     tt.tock("loaded")
 
@@ -497,6 +512,7 @@ def main(lr=0.001):
 
 
 if __name__ == '__main__':
+    try_kvmem()
     # try_load_vanilla()
-    q.argprun(main)
+    # q.argprun(main)
     # try_cosine()

@@ -24,7 +24,7 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
-from parseq.scripts_qa.bert import load_adaptered_bert, load_vanilla_bert
+from parseq.scripts_qa.bert import load_adaptered_bert, load_vanilla_bert, load_memadaptered_bert
 from parseq.scripts_qa.metaqa_dataset import MetaQADatasetLoader
 from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_vanilla_t5, load_adaptered_t5, CosineWithRestart
 from parseq.vocab import Vocab
@@ -86,13 +86,15 @@ def collate_fn(x, pad_value=0, numtokens=5000):
 
 
 class Model(torch.nn.Module):
+    randomizedeval = True
     def __init__(self, encoder, dim, attdim=512, nheads=4, elemtensors=None, cachebatsize=100):
         super(Model, self).__init__()
         self.encoder = encoder
         self.xread = AttentionReadout(dim, attdim, nheads)
         self.entread = AttentionReadout(dim, attdim, nheads)
 
-        self.classifier_l1 = torch.nn.Linear(dim*2, dim)
+        self.classifier_l1p1 = torch.nn.Linear(dim, dim)
+        self.classifier_l1p2 = torch.nn.Linear(dim, dim)
         self.classifier_l1aux = torch.nn.Linear(dim, 1)
         self.classifier_l2 = torch.nn.Linear(dim*2, 1)
         self.classifier_nonlin = torch.nn.GELU()
@@ -104,11 +106,20 @@ class Model(torch.nn.Module):
         self.cachebatsize = cachebatsize
 
     def _compute_score(self, xenc, cenc):
-        _scores1 = self.classifier_l1(torch.cat([xenc, cenc], -1))
+        _scores1p1 = self.classifier_l1p1(xenc)
+        _scores1p2 = self.classifier_l1p2(cenc)
+        _scores1 = _scores1p1 + _scores1p2
         _scores2 = (xenc * cenc * self.classifier_l1aux.weight[None, :, 0])
         _scores = self.classifier_nonlin(torch.cat([_scores1, _scores2], -1))
         _scores = self.classifier_l2(_scores)[:, 0]
         return _scores
+
+    def _compute_scores_all(self, xenc, cenc):  # (batsize, dim), (outsize, dim)
+        _cenc = cenc.repeat(xenc.size(0), 1)
+        _xenc = xenc.repeat_interleave(cenc.size(0), 0)
+        scores = self._compute_score(_xenc, _cenc)   # (batsize * outsize,)
+        scores = scores.view(xenc.size(0), -1)
+        return scores
 
     def train_forward(self, x, pos, neg):
         xmask = x != 0
@@ -132,14 +143,61 @@ class Model(torch.nn.Module):
         loss = self.loss(posscores, torch.ones_like(posscores)) + self.loss(negscores, torch.zeros_like(negscores))
         return loss
 
-    def test_forward(self, x, posids):
+    def test_forward(self, x, posids, randomized=None):
+        xmask = x != 0
+        xenc = self.encoder(x, attention_mask=xmask)[0]
+        xenc = self.xread(xenc, attention_mask=xmask)
+
         device = x.device
         elem_reprs = self.get_elem_repr(device=device)
+
+        randomized = randomized if randomized is not None else self.randomizedeval
+        if randomized is not None and randomized is not False:  # instead of using all reprs, randomly select some negatives for evaluation purposes
+            randomized = 100 if randomized is True else randomized
+            selection = set()
+            for posids_i in posids:
+                selection.update(posids_i)
+            totalrange = list(set(range(len(elem_reprs))) - selection)
+            negsel = set(random.choices(totalrange, k=len(x) * randomized))
+            selection.update(negsel)
+            selection = sorted(list(selection))
+            selectionmap = {v: k for k, v in enumerate(selection)}
+            mappedposids = [set([selectionmap[posid] for posid in posids_i]) for posids_i in posids]
+            _posids = posids
+            posids = mappedposids
+            # assert(max(selection) < len(elem_reprs))    # TODO: bring this back after debugging
+            _elem_reprs = elem_reprs
+            elem_reprs = torch.stack([elem_reprs[selection_i if selection_i < len(elem_reprs) else 0]
+                          for selection_i in selection], 0)
+
+        scores = []
+        for elem_repr_batch in elem_reprs.split(self.cachebatsize, 0):
+            # score_batch = torch.einsum("bd,md->bm", xenc, elem_repr_batch)
+            score_batch = self._compute_scores_all(xenc, elem_repr_batch)
+            scores.append(score_batch)
+        scores = torch.cat(scores, 1)
+        predicted = scores >= 0    # TODO: try different thresholds or prediction method?
+
+        precisions, recalls, fscores = [], [], []
+        for predicted_row, posids_i in zip(predicted.unbind(0), posids):
+            predids_i = set(torch.nonzero(predicted_row)[:, 0].detach().cpu().numpy())
+            precisions.append(len(predids_i & posids_i) / max(1, len(predids_i)))
+            recalls.append(len(predids_i & posids_i) / max(1, len(posids_i)))
+
+        fscores = [2 * recall_i * precision_i / (recall_i + precision_i)
+                   for precision_i, recall_i in zip(precisions, recalls)]
+        return {
+            "precision": precisions,
+            "recall": recalls,
+            "fscore": fscores
+        }
 
     def get_elem_repr(self, device=torch.device("cpu")):
         if self.repr_cache is None:
             # compute cache
-            dl = DataLoader(Dataset([(t,) for t in self.elemtensors]), batch_size=self.cachebatsize, shuffle=False, collate_fn=autocollate)
+            elemtensors = self.elemtensors
+            elemtensors = elemtensors[:100]   # ONLY FOR DEBUGGING
+            dl = DataLoader(Dataset([(t,) for t in elemtensors]), batch_size=self.cachebatsize, shuffle=False, collate_fn=autocollate)
             acc = []
             for batch in dl:
                 x = batch[0]
@@ -231,10 +289,11 @@ def run(lr=0.0001,
         warmup=0.1,
         cosinecycles=0,
         modelsize="small",
-        mode="base",                # "base" or "mem" or "ada"
+        mode="base",                # "base" or "mem" or "ada" or "dualada"
         adapterdim=64,              # only active in adapter mode
         memsize=1000,
-        usedefaultmodel=False,
+        memdim=512,
+        memheads=8,
         dataset="metaqa/1",
         seed=42,
         dropout=0.,
@@ -290,11 +349,16 @@ def run(lr=0.0001,
     next(iter(kbtraindl))
     next(iter(validdl))
 
+    # load initial model
     tt.tick("model")
-    if mode in ("base", "default", "vanilla"):
-        tok, bertmodel = load_vanilla_bert(modelsize, tokenizer=tok)
-    else:
-        tok, bertmodel = load_adaptered_bert(modelsize, adapterdim=adapterdim, usemem="mem" in mode, memsize=memsize, tokenizer=tok)
+    tok, bertmodel = load_vanilla_bert(modelsize, tokenizer=tok)
+    if "ada" in mode:
+        tt.msg(f"Using {adapterdim}-dim regular adapter layers.")
+        bertmodel.adapt(adapterdim=adapterdim)
+
+    elif "mem" in mode:
+        tt.msg(f"Using {adapterdim}-dim KV mem adapter layers.")
+        bertmodel.memadapt(adapterdim=adapterdim, memsize=memsize, memdim=memdim, memheads=memheads)
 
     bertmodel.set_dropout(dropout)
 
@@ -571,6 +635,8 @@ def run_experiment(
         mode="base",        # "ft" (finetune) or "adapter"
         adapterdim=-1,
         memsize=-1,
+        memdim=-1,
+        memheads=-1,
         dataset="default",
         seed=-1,
         dropout=-1.,
@@ -596,6 +662,8 @@ def run_experiment(
         # "gradacc": [1],
         "adapterdim": [64],
         "memsize": [1000],
+        "memdim": [512],
+        "memheads": [8],
     }
 
     for k in ranges:
