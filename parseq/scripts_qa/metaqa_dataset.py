@@ -62,7 +62,12 @@ class MetaQADatasetLoader(object):
         trainds = _ds["train"].map(partial(ds.item_mapper, return_mode="pair"))
         validds = _ds["valid"].map(partial(ds.item_mapper, return_mode="set"))
         testds = _ds["test"].map(partial(ds.item_mapper, return_mode="set"))
-        return trainds, validds, testds
+
+        evaltrainds = _ds["train"]
+        random.shuffle(evaltrainds._examples)
+        evaltrainds = Dataset(evaltrainds.examples[:len(evaltrainds)//10])
+        evaltrainds = evaltrainds.map(partial(ds.item_mapper, return_mode="set"))
+        return trainds, evaltrainds, validds, testds
 
 
     # def qa_mapper(self, x, tok=None, kbds=None):

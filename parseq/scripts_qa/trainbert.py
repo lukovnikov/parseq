@@ -24,7 +24,7 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
-from parseq.scripts_qa.bert import load_adaptered_bert, load_vanilla_bert, load_memadaptered_bert
+from parseq.scripts_qa.bert import load_adaptered_bert, load_vanilla_bert, load_memadaptered_bert, AdapterableBERT
 from parseq.scripts_qa.metaqa_dataset import MetaQADatasetLoader
 from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_vanilla_t5, load_adaptered_t5, CosineWithRestart
 from parseq.vocab import Vocab
@@ -53,8 +53,9 @@ def load_ds(dataset="metaqa/1", tokname="bert-base-uncased", recompute=False):
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
     print("length QADS train:", len(qads[0]))
-    print("length QADS valid:", len(qads[1]))
-    print("length QADS test:", len(qads[2]))
+    print("length QADS eval train:", len(qads[1]))
+    print("length QADS valid:", len(qads[2]))
+    print("length QADS test:", len(qads[3]))
     tt.tock("loaded data")
 
     kblens = []
@@ -85,13 +86,9 @@ def collate_fn(x, pad_value=0, numtokens=5000):
     return ret
 
 
-class Model(torch.nn.Module):
-    randomizedeval = True
-    def __init__(self, encoder, dim, attdim=512, nheads=4, elemtensors=None, cachebatsize=100):
-        super(Model, self).__init__()
-        self.encoder = encoder
-        self.xread = AttentionReadout(dim, attdim, nheads)
-        self.entread = AttentionReadout(dim, attdim, nheads)
+class ModelClassifier(torch.nn.Module):
+    def __init__(self, dim):
+        super(ModelClassifier, self).__init__()
 
         self.classifier_l1p1 = torch.nn.Linear(dim, dim)
         self.classifier_l1p2 = torch.nn.Linear(dim, dim)
@@ -99,19 +96,48 @@ class Model(torch.nn.Module):
         self.classifier_l2 = torch.nn.Linear(dim*2, 1)
         self.classifier_nonlin = torch.nn.GELU()
 
-        self.loss = torch.nn.BCEWithLogitsLoss(reduction="none")
-
-        self.elemtensors = elemtensors
-        self.repr_cache = None
-        self.cachebatsize = cachebatsize
-
-    def _compute_score(self, xenc, cenc):
+    def forward(self, xenc, cenc):
         _scores1p1 = self.classifier_l1p1(xenc)
         _scores1p2 = self.classifier_l1p2(cenc)
         _scores1 = _scores1p1 + _scores1p2
         _scores2 = (xenc * cenc * self.classifier_l1aux.weight[None, :, 0])
         _scores = self.classifier_nonlin(torch.cat([_scores1, _scores2], -1))
         _scores = self.classifier_l2(_scores)[:, 0]
+        return _scores
+
+
+class Model(torch.nn.Module):
+    randomizedeval = True
+
+    def __init__(self, encoder:AdapterableBERT, dim, attdim=512, nheads=4, elemtensors=None, cachebatsize=100):
+        super(Model, self).__init__()
+        self.encoder = encoder
+        self.xread = AttentionReadout(dim, attdim, nheads)
+        self.entread = AttentionReadout(dim, attdim, nheads)
+        self.classifier = ModelClassifier(dim)
+
+        self.loss = torch.nn.BCEWithLogitsLoss(reduction="none")
+
+        self.elemtensors = elemtensors
+        self.repr_cache = None
+        self.cachebatsize = cachebatsize
+
+    def copy_from(self, m:type("Model")):
+        self.encoder = m.encoder
+        self.xread = m.xread
+        self.entread = m.entread
+        self.classifier = m.classifier
+
+    def get_tunable_params_and_set_requires_grad(self):
+        ret = self.encoder.get_tunable_params_and_set_requires_grad()
+        ret2 = list(self.xread.parameters()) + list(self.entread.parameters()) + list(self.classifier.parameters())
+        for param in ret2:
+            param.requires_grad = True
+        ret = ret + ret2
+        return ret
+
+    def _compute_score(self, xenc, cenc):
+        _scores = self.classifier(xenc, cenc)
         return _scores
 
     def _compute_scores_all(self, xenc, cenc):  # (batsize, dim), (outsize, dim)
@@ -141,7 +167,7 @@ class Model(torch.nn.Module):
         negscores = self._compute_score(xenc, negenc)
 
         loss = self.loss(posscores, torch.ones_like(posscores)) + self.loss(negscores, torch.zeros_like(negscores))
-        return loss
+        return {"loss": loss}, None
 
     def test_forward(self, x, posids, randomized=None):
         xmask = x != 0
@@ -190,7 +216,7 @@ class Model(torch.nn.Module):
             "precision": precisions,
             "recall": recalls,
             "fscore": fscores
-        }
+        }, None
 
     def get_elem_repr(self, device=torch.device("cpu")):
         if self.repr_cache is None:
@@ -278,7 +304,6 @@ class CustomValidator:
 
 def run(lr=0.0001,
         useadafactor=False,
-        lrmul=0.1,
         gradnorm=3,
         gradacc=1,
         batsize=60,
@@ -290,6 +315,7 @@ def run(lr=0.0001,
         cosinecycles=0,
         modelsize="small",
         mode="base",                # "base" or "mem" or "ada" or "dualada"
+        kbpretrain=False,
         adapterdim=64,              # only active in adapter mode
         memsize=1000,
         memdim=512,
@@ -330,7 +356,7 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    tok, trainds, validds, testds, kbtrainds, kbvalidds = \
+    tok, trainds, evaltrainds, validds, testds, kbtrainds, kbvalidds = \
         load_ds(dataset=dataset, tokname="bert-base-uncased", recompute=recomputedata)
 
     tt.tick("dataloaders")
@@ -338,7 +364,9 @@ def run(lr=0.0001,
 
     kbtraindl = DataLoader(kbtrainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
     kbvaliddl = DataLoader(kbvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
+    evaltraindl = DataLoader(evaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     validdl = DataLoader(validds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
     testdl = DataLoader(testds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
 
@@ -365,107 +393,61 @@ def run(lr=0.0001,
     m = Model(bertmodel, bertmodel.config.hidden_size,
               elemtensors=kbtrainds.baseds.elems_pretokenized, cachebatsize=testbatsize*5)
 
-    batch = next(iter(traindl))
-    out = m(*batch)
-    with torch.no_grad():
-        m.train(False)
-        batch = next(iter(validdl))
-        out = m(*batch)
-        m.train(True)
-
-    sys.exit()
-
-    decoder = SeqDecoderT5(t5, max_size=maxsize, batch_to_strs=batchtostrs, eos_token_id=fldic[fldic.endtoken])
-    tt.tock()
-
     if testcode:
         tt.tick("testcode")
         batch = next(iter(traindl))
-        # out = tagger(batch[1])
-        tt.tick("train")
-        out = decoder(*batch)
+        out = m(*batch)
+        with torch.no_grad():
+            m.train(False)
+            batch = next(iter(validdl))
+            out = m(*batch)
+            m.train(True)
         tt.tock()
-        decoder.train(False)
-        tt.tick("test")
-        out = decoder(*batch)
-        tt.tock()
-        tt.tock("testcode")
 
-    tloss = make_array_of_metrics("loss", "acc", reduction="mean")
-    tmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    subtmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    iidvmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    oodvmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    ood2vmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    xmetrics = make_array_of_metrics("treeacc", reduction="mean")
 
-    # region parameters
-    def get_parameters(m:SeqDecoderT5, _lr, _lrmul, _ftmode):
-        primary_params = []
-        secondary_params = []
-        if _ftmode == "ft":     # fine-tune all params using _lr*_lrmul and if _originalinout is True, then also finetune decoder inputs and outputs
-            secondary_params += list(m.parameters())
-            primary_params += list(m.model.lm_head.parameters()) + list(m.model.decoder.embed_tokens.parameters())
-            # remove primary params from secondary
-            i = 0
-            while i < len(secondary_params):
-                for primaryparam in primary_params:
-                    if secondary_params[i] is primaryparam:
-                        del secondary_params[i]
-                        i -= 1
-                        break
-                i += 1
-        else:
-            primary_params = m.model.get_tunable_params_and_set_requires_grad()
-        paramgroups = [{"params": primary_params, "lr": _lr}]
-        if len(secondary_params) > 0:
-            paramgroups.append({"params": secondary_params, "lr": _lr * _lrmul})
-        return paramgroups
-    # endregion
+    # loss and metrics for fine-tuning on QA data
+    tloss = make_array_of_metrics("loss", reduction="mean")
+    tmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
+    vmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
+    xmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
+    if kbpretrain: # loss and metrics for pretraining on KB data
+        kbtloss = make_array_of_metrics("loss", reduction="mean")
+        kbtmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
 
-    def get_optim(_m, _lr, _lrmul, _ftmode, _wreg=0):
-        paramgroups = get_parameters(_m, _lr=lr, _lrmul=_lrmul, _ftmode=_ftmode)
-        if useadafactor:
-            tt.msg("Using AdaFactor.")
-            optim = Adafactor(paramgroups, lr=lr, scale_parameter=False, relative_step=False, warmup_init=False)
-        else:
-            tt.msg("Using Adam.")
-            optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=_wreg)
-        return optim
+    params = m.get_tunable_params_and_set_requires_grad()
+    if useadafactor:
+        tt.msg("Using AdaFactor.")
+        optim = Adafactor(params, lr=lr, scale_parameter=False, relative_step=False, warmup_init=False)
+    else:
+        tt.msg("Using Adam.")
+        optim = torch.optim.Adam(params, lr=lr, weight_decay=0)
 
     if useadafactor:
         gradnorm = 1e6
 
-    def clipgradnorm(_m=None, _norm=None):
-        torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
-
     patience = epochs
-    iideyt = q.EarlyStopper(iidvmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
-                         remember_f=lambda: deepcopy(decoder.model))
-    oodeyt = q.EarlyStopper(oodvmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
-                         remember_f=lambda: deepcopy(decoder.model))
-    ood2eyt = q.EarlyStopper(ood2vmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
-                            remember_f=lambda: deepcopy(decoder.model))
+    eyt = q.EarlyStopper(tmetrics[2], patience=patience, min_epochs=5, more_is_better=True,
+                         remember_f=lambda: deepcopy(m))
 
     def wandb_logger():
         d = {}
-        for name, loss in zip(["loss", "acc"], tloss):
+        for name, loss in zip(["loss"], tloss):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], tmetrics):
+        for name, loss in zip(["loss"], kbtloss):
+            d["kbtrain_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["precision", "recall", "fscore"], tmetrics):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], iidvmetrics):
-            d["iidvalid_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], oodvmetrics):
-            d["oodvalid_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], ood2vmetrics):
-            d["ood2valid_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["precision", "recall", "fscore"], vmetrics):
+            d["train_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["precision", "recall", "fscore"], xmetrics):
+            d["train_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["precision", "recall", "fscore"], kbtmetrics):
+            d["train_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
     t_max = epochs * len(traindl) / gradacc
-    optim = get_optim(decoder, lr, lrmul, ftmode)
     warmupsteps = int(round(warmup * t_max))
     print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
-
     if cosinecycles == 0:       # constant lr
         tt.msg("Using constant LR with warmup")
         lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> 1.
@@ -475,142 +457,77 @@ def run(lr=0.0001,
 
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
-    iidvalidepoch = partial(q.test_epoch,
-                         model=decoder,
-                         losses=iidvmetrics,
-                         dataloader=iidvaliddl,
+    validepoch = partial(q.test_epoch,
+                         model=m,
+                         losses=vmetrics,
+                         dataloader=validdl,
                          device=device,
-                         on_end=[lambda: iideyt.on_epoch_end()])
-
-    oodvalidepoch = partial(q.test_epoch,
-                            model=decoder,
-                            losses=oodvmetrics,
-                            dataloader=oodvaliddl,
-                            device=device,
-                            on_end=[lambda: oodeyt.on_epoch_end()])
-
-    ood2validepoch = partial(q.test_epoch,
-                            model=decoder,
-                            losses=ood2vmetrics,
-                            dataloader=ood2validdl,
-                            device=device,
-                            on_end=[lambda: ood2eyt.on_epoch_end()])
-
-    validator = CustomValidator(iidvalidepoch, oodvalidepoch, ood2validepoch, lambda: wandb_logger(), numbats=len(traindl), validinter=validinter, tt=tt)
+                         on_end=[lambda: eyt.on_epoch_end(), lambda: m.clear_cache()])
 
     trainbatch = partial(q.train_batch,
                          gradient_accumulation_steps=gradacc,
                          on_before_optim_step=[
-                             lambda : clipgradnorm(_m=decoder, _norm=gradnorm),
-                             lambda : lr_schedule.step()
-                         ],
-                         on_end=[lambda : validator.on_batch_end()]
+                             lambda: torch.nn.utils.clip_grad_norm_(params, gradnorm),
+                             lambda: lr_schedule.step()
+                         ]
                          )
 
-    if trainonvalidonly:
-        # assert False
-        tt.msg("TRAINING ON IID VALID ONLY !!!!!!!")
-        traindl = iidvaliddl
-
-    if trainonood2only:
-        tt.msg("TRAINING ON OOD2 VALID ONLY !!!!!!!!")
-        traindl = ood2validdl
-
-    trainepoch = partial(q.train_epoch, model=decoder,
+    trainepoch = partial(q.train_epoch, model=m,
                          dataloader=traindl,
                          optim=optim,
                          losses=tloss,
                          device=device,
                          _train_batch=trainbatch,
-                         on_end=[lambda: validator.on_epoch_end()])
+                         on_end=[])
 
     trainevalepoch = partial(q.test_epoch,
-                             model=decoder,
-                             losses=subtmetrics,
-                             dataloader=subtraindl,
-                             device=device)
+                             model=m,
+                             losses=tmetrics,
+                             dataloader=evaltraindl,
+                             device=device,
+                             on_end=[lambda: m.clear_cache()])
 
     tt.tick("training")
-    validfs = [iidvalidepoch, oodvalidepoch, ood2validepoch]
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=None,
+                   run_valid_epoch=[trainevalepoch, validepoch, lambda: wandb_logger()],
                    max_epochs=epochs,
-                   check_stop=[lambda: iideyt.check_stop() and oodeyt.check_stop() and ood2eyt.check_stop()]
+                   check_stop=[lambda: eyt.check_stop()]
                    )
     tt.tock("done training")
 
     settings.update({"train_loss_at_end": tloss[0].get_epoch_error()})
 
-    tt.tick("running test before reloading")
     testepoch = partial(q.test_epoch,
-                         model=decoder,
+                         model=m,
                          losses=xmetrics,
                          dataloader=testdl,
-                         device=device)
+                         device=device,
+                         on_end=[lambda: m.clear_cache()])
 
+    tt.tick("running test before reloading")
     testres = testepoch()
-    settings.update({"test_tree_acc_at_end": xmetrics[0].get_epoch_error()})
-    tt.tock(f"Test tree acc: {testres}")
 
-    if iideyt.remembered is not None:
-        tt.msg("reloading model with best IID validation accuracy")
-        decoder.model = iideyt.remembered
-        model = iideyt.remembered
+    settings.update({"test_fscore_at_end": xmetrics[2].get_epoch_error()})
+    tt.tock(f"Test results: {testres}")
 
-        tt.tick("running evaluation on subset of train")
-        trainres = trainevalepoch()
-        settings.update({"train_tree_acc_at_iidearly": tmetrics[0].get_epoch_error()})
-        tt.tock(f"Train tree acc: {trainres}")
-
-        tt.tick("rerunning validation")
-        iidvalidres = iidvalidepoch()
-        settings.update({"iidvalid_tree_acc_at_iidearly": iidvmetrics[0].get_epoch_error()})
-        tt.tock(f"IID validation results: {iidvalidres}")
-
-        tt.tick("running test")
-        testres = testepoch()
-        settings.update({"test_tree_acc_at_iidearly": xmetrics[0].get_epoch_error()})
-        tt.tock(f"Test tree acc: {testres}")
-
-    if oodeyt.remembered is not None:
-        tt.msg("reloading model with best OOD validation accuracy")
-        decoder.model = oodeyt.remembered
-        model = oodeyt.remembered
+    if eyt.remembered is not None:
+        tt.msg("reloading model with best validation accuracy")
+        m.copy_from(eyt.remembered)
 
         tt.tick("running evaluation on subset of train")
         trainres = trainevalepoch()
-        settings.update({"train_tree_acc_at_oodearly": tmetrics[0].get_epoch_error()})
-        tt.tock(f"Train tree acc: {trainres}")
+        settings.update({"train_fscore_at_earlystop": tmetrics[2].get_epoch_error()})
+        tt.tock(f"Train results: {trainres}")
 
         tt.tick("rerunning validation")
-        oodvalidres = oodvalidepoch()
-        settings.update({"oodvalid_tree_acc_at_oodearly": oodvmetrics[0].get_epoch_error()})
-        tt.tock(f"OOD validation results: {oodvalidres}")
+        validres = validepoch()
+        settings.update({"valid_fscore_at_earlystop": vmetrics[2].get_epoch_error()})
+        tt.tock(f"Validation results: {validres}")
 
         tt.tick("running test")
         testres = testepoch()
-        settings.update({"test_tree_acc_at_oodearly": xmetrics[0].get_epoch_error()})
-        tt.tock(f"Test tree acc: {testres}")
-
-    if ood2eyt.remembered is not None:
-        tt.msg("reloading model with best OOD2 validation accuracy")
-        decoder.model = ood2eyt.remembered
-        model = ood2eyt.remembered
-
-        tt.tick("running evaluation on subset of train")
-        trainres = trainevalepoch()
-        settings.update({"train_tree_acc_at_ood2early": tmetrics[0].get_epoch_error()})
-        tt.tock(f"Train tree acc: {trainres}")
-
-        tt.tick("rerunning validation")
-        oodvalidres = ood2validepoch()
-        settings.update({"ood2valid_tree_acc_at_ood2early": ood2vmetrics[0].get_epoch_error()})
-        tt.tock(f"OOD2 validation results: {oodvalidres}")
-
-        tt.tick("running test")
-        testres = testepoch()
-        settings.update({"test_tree_acc_at_ood2early": xmetrics[0].get_epoch_error()})
-        tt.tock(f"Test tree acc: {testres}")
+        settings.update({"test_fscore_at_earlystop": xmetrics[2].get_epoch_error()})
+        tt.tock(f"Test results: {testres}")
 
     wandb.config.update(settings)
     q.pp_dict(settings)
@@ -620,7 +537,6 @@ def run(lr=0.0001,
 
 def run_experiment(
         lr=-1.,
-        lrmul=-1.,
         useadafactor=False,
         gradnorm=2,
         gradacc=1,
@@ -633,6 +549,7 @@ def run_experiment(
         cosinecycles=0,
         modelsize="base",
         mode="base",        # "ft" (finetune) or "adapter"
+        kbpretrain=False,
         adapterdim=-1,
         memsize=-1,
         memdim=-1,
@@ -654,7 +571,6 @@ def run_experiment(
         "epochs": [50],
         "batsize": [60],
         "lr": [0.0005],
-        "lrmul": [1.],
         "modelsize": ["base"],
         # "patience": [-1],
         # "warmup": [20],
