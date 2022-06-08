@@ -62,6 +62,8 @@ class ModelClassifier(torch.nn.Module):
 
 class Model(torch.nn.Module):
     randomizedeval = True
+    maxnumentsperexample = 10
+    numnegsperexample = 10
 
     def __init__(self, encoder:T5Stack, dim, attdim=512, nheads=4, elemtensors=None, cachebatsize=100):
         super(Model, self).__init__()
@@ -97,7 +99,61 @@ class Model(torch.nn.Module):
         scores = scores.view(xenc.size(0), -1)
         return scores
 
-    def train_forward(self, x, pos, neg):
+    def train_forward(self, x, posids):
+        # encode questions:
+        xmask = x != 0
+        xenc = self.encoder(x, attention_mask=xmask)[0]
+        xenc = self.xread(xenc, attention_mask=xmask)
+
+        # select entities to encode
+        # copy positive ids into selection
+        selection = set()
+        for posids_ in posids:
+            addition = set()
+            # copy positive ids
+            addition.update(posids_)
+            # add some negative ids
+            totalrange = set(range(len(self.elemtensors))) - addition - selection
+            negsel = set(random.choices(list(totalrange), k=self.maxnumentsperexample-1))
+            addition.update(negsel)
+            if len(addition) > self.maxnumentsperexample:
+                addition = set(random.choices(list(addition), k=self.maxnumentsperexample))
+            # update global selection
+            selection.update(addition)
+        selection = sorted(list(selection))
+        selectionmap = {v: k for k, v in enumerate(selection)}
+
+        # compute supervision matrix (batsize, numcan)
+        supmat = torch.zeros(len(x), len(selection), dtype=torch.long, device=x.device)
+        for i, posids_ in enumerate(posids):
+            for posid in posids_:
+                if posid in selectionmap:
+                    supmat[i, selectionmap[posid]] = 1
+        supvec = supmat.view(-1)
+
+        # get the entity strings to encode
+        selection_tensors = [self.elemtensors[selection_i] for selection_i in selection]   # list of tensors
+        selection_tensors = autocollate(selection_tensors)      # TODO: debugger breaks here
+        selection_tensors = selection_tensors.to(x.device)
+
+        # encode entity strings
+        selmask = selection_tensors != 0
+        selenc = self.encoder(selection_tensors, attention_mask=selmask)[0]
+        selenc = self.entread(selenc, attention_mask=selmask)
+
+        # compute scores
+        xenc_repeated = xenc.repeat_interleave(len(selection), 0)       # (batsize * numcan, dim)
+        selenc_repeated = selenc.repeat(len(x), 1)                      # (numcan * batsize, dim)
+        scores = self._compute_score(xenc_repeated, selenc_repeated)    # (batsize * numcan,) scores
+
+        # compute per-example losses and accuracies
+        scoremat = scores.view(len(x), len(selection))
+        loss = self.loss(scoremat, supmat).sum(-1)
+        accuracies = ((scoremat >= 0).long() == supmat).mean(-1)
+
+        return {"loss": loss, "accuracies": accuracies, "negacc": -1}, None
+
+    def train_forward_(self, x, pos, neg):
         xmask = x != 0
         xenc = self.encoder(x, attention_mask=xmask)[0]
         xenc = self.xread(xenc, attention_mask=xmask)
@@ -255,7 +311,7 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
     print(f"KB examples avg/max length is {np.mean(kblens):.1f}/{max(kblens)}")
 
     qalens = []
-    for question, _, _ in tqdm(qads[0]):
+    for question, _ in tqdm(qads[0]):
         qalens.append(question.size(-1))
     for question, _ in tqdm(qads[2]):
         qalens.append(question.size(-1))

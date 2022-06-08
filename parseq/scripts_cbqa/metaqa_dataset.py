@@ -77,7 +77,7 @@ class MetaQADatasetLoader(object):
             random.shuffle(testds._examples)
             testds = Dataset(testds.examples[:subset])
 
-        trainds = trainds.map(partial(ds.item_mapper, return_mode="pair"))
+        trainds = trainds.map(partial(ds.item_mapper, return_mode="set"))
         validds = validds.map(partial(ds.item_mapper, return_mode="set"))
         testds = testds.map(partial(ds.item_mapper, return_mode="set"))
 
@@ -137,6 +137,8 @@ class MetaQADatasetLoader(object):
 
 class QADataset(Dataset):
     getitemtype = "pair"       # "pair" or "set"
+    maxnumpos = 10
+    maxnumnegs = 10
     def __init__(self, examples, tok=None, kbds=None):
         super(QADataset, self).__init__()
         self.entities = kbds.entities
