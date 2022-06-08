@@ -24,7 +24,7 @@ from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetL
 from parseq.eval import make_array_of_metrics
 from parseq.grammar import lisp_to_tree, are_equal_trees, taglisp_to_tree
 from parseq.scripts_cbqa.adapter_t5 import AdaptedT5WordEmbeddings
-from parseq.scripts_cbqa.metaqa_dataset import MetaQADatasetLoader
+from parseq.scripts_cbqa.metaqa_dataset import MetaQADatasetLoader, KBDataset, QADataset
 from parseq.scripts_resplit.t5 import load_t5_tokenizer, load_vanilla_t5, load_adaptered_t5, CosineWithRestart
 from parseq.vocab import Vocab
 
@@ -36,20 +36,28 @@ class ModelClassifier(torch.nn.Module):
     def __init__(self, dim):
         super(ModelClassifier, self).__init__()
 
+        self.l1 = torch.nn.Linear(dim*2, dim)
+
         self.classifier_l1p1 = torch.nn.Linear(dim, dim)
         self.classifier_l1p2 = torch.nn.Linear(dim, dim)
         self.classifier_l1aux = torch.nn.Linear(dim, 1)
         self.classifier_l2 = torch.nn.Linear(dim*2, 1)
-        self.classifier_nonlin = torch.nn.GELU()
+        self.classifier_nonlin = torch.nn.ReLU()
 
     def forward(self, xenc, cenc):
-        _scores1p1 = self.classifier_l1p1(xenc)
-        _scores1p2 = self.classifier_l1p2(cenc)
-        _scores1 = _scores1p1 + _scores1p2
-        _scores2 = (xenc * cenc * self.classifier_l1aux.weight[None, :, 0])
-        _scores = self.classifier_nonlin(torch.cat([_scores1, _scores2], -1))
-        _scores = self.classifier_l2(_scores)[:, 0]
-        return _scores
+        ccat = torch.cat([xenc, cenc], -1)
+        x = self.l1(ccat)
+        x = self.classifier_nonlin(x)
+        x = torch.cat([x, x], -1)
+        x = self.classifier_l2(x)[:, 0]
+        return x
+        # _scores1p1 = self.classifier_l1p1(xenc)
+        # _scores1p2 = self.classifier_l1p2(cenc)
+        # _scores1 = _scores1p1 + _scores1p2
+        # _scores2 = (xenc * cenc * self.classifier_l1aux.weight[None, :, 0])
+        # _scores = self.classifier_nonlin(torch.cat([_scores1, _scores2], -1))
+        # _scores = self.classifier_l2(_scores)[:, 0]
+        # return _scores
 
 
 class Model(torch.nn.Module):
@@ -75,11 +83,7 @@ class Model(torch.nn.Module):
         self.classifier = m.classifier
 
     def get_tunable_params_and_set_requires_grad(self):
-        ret = self.encoder.get_tunable_params_and_set_requires_grad()
-        ret2 = list(self.xread.parameters()) + list(self.entread.parameters()) + list(self.classifier.parameters())
-        for param in ret2:
-            param.requires_grad = True
-        ret = ret + ret2
+        ret = self.parameters()
         return ret
 
     def _compute_score(self, xenc, cenc):
@@ -113,19 +117,22 @@ class Model(torch.nn.Module):
         negscores = self._compute_score(xenc, negenc)
 
         loss = self.loss(posscores, torch.ones_like(posscores)) + self.loss(negscores, torch.zeros_like(negscores))
-        return {"loss": loss}, None
+        accuracy = ((posscores >= 0).float() + (negscores < 0).float()) / 2
+        negacc = (negscores < 0).float()
+        return {"loss": loss, "accuracy": accuracy, "negacc": negacc}, None
 
     def test_forward(self, x, posids, randomized=None):
+        _isdebugging = False
         xmask = x != 0
         xenc = self.encoder(x, attention_mask=xmask)[0]
         xenc = self.xread(xenc, attention_mask=xmask)
 
         device = x.device
-        elem_reprs = self.get_elem_repr(device=device)
+        elem_reprs = self.get_elem_repr(device=device, _isdebugging=_isdebugging)
 
         randomized = randomized if randomized is not None else self.randomizedeval
         if randomized is not None and randomized is not False:  # instead of using all reprs, randomly select some negatives for evaluation purposes
-            randomized = 100 if randomized is True else randomized
+            randomized = 20 if randomized is True else randomized
             selection = set()
             for posids_i in posids:
                 selection.update(posids_i)
@@ -137,7 +144,8 @@ class Model(torch.nn.Module):
             mappedposids = [set([selectionmap[posid] for posid in posids_i]) for posids_i in posids]
             _posids = posids
             posids = mappedposids
-            # assert(max(selection) < len(elem_reprs))    # TODO: bring this back after debugging
+            if not _isdebugging:
+                assert(max(selection) < len(elem_reprs))
             _elem_reprs = elem_reprs
             elem_reprs = torch.stack([elem_reprs[selection_i if selection_i < len(elem_reprs) else 0]
                           for selection_i in selection], 0)
@@ -156,19 +164,20 @@ class Model(torch.nn.Module):
             precisions.append(len(predids_i & posids_i) / max(1, len(predids_i)))
             recalls.append(len(predids_i & posids_i) / max(1, len(posids_i)))
 
-        fscores = [2 * recall_i * precision_i / (recall_i + precision_i)
+        fscores = [2 * recall_i * precision_i / max(1e-6, (recall_i + precision_i))
                    for precision_i, recall_i in zip(precisions, recalls)]
         return {
-            "precision": precisions,
-            "recall": recalls,
-            "fscore": fscores
+            "precision": torch.tensor(precisions),
+            "recall": torch.tensor(recalls),
+            "fscore": torch.tensor(fscores)
         }, None
 
-    def get_elem_repr(self, device=torch.device("cpu")):
+    def get_elem_repr(self, device=torch.device("cpu"), _isdebugging=False):
         if self.repr_cache is None:
             # compute cache
             elemtensors = self.elemtensors
-            elemtensors = elemtensors[:100]   # ONLY FOR DEBUGGING
+            if _isdebugging:
+                elemtensors = elemtensors[:100]   # ONLY FOR DEBUGGING
             dl = DataLoader(Dataset([(t,) for t in elemtensors]), batch_size=self.cachebatsize, shuffle=False, collate_fn=autocollate)
             acc = []
             for batch in dl:
@@ -214,7 +223,7 @@ class AttentionReadout(torch.nn.Module):
 ORDERLESS = {"@WHERE", "@OR", "@AND", "@QUERY", "(@WHERE", "(@OR", "(@AND", "(@QUERY"}
 
 
-def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False):
+def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None):
     """
     :param dataset:
     :param validfrac:       how much of the original IID train set is used for IID validation set
@@ -231,7 +240,7 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False):
 
     tt.tick("loading data")
     kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute)
-    qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute)
+    qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute, subset=subset)
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
     print("length QADS train:", len(qads[0]))
@@ -269,6 +278,7 @@ def collate_fn(x, pad_value=0, numtokens=5000):
 
 
 def run(lr=0.0001,
+        kbpretrain=False,
         useadafactor=False,
         gradnorm=3,
         gradacc=1,
@@ -280,13 +290,13 @@ def run(lr=0.0001,
         warmup=0.1,
         cosinecycles=0,
         modelsize="small",
-        adapterdim=64,              # only active in adapter mode
         usedefaultmodel=False,
         dataset="metaqa/1",
         maxsize=-1,
         seed=42,
         dropout=0.,
         testcode=False,
+        debugcode=False,
         gpu=-1,
         recomputedata=False,
         version="v0",
@@ -308,7 +318,7 @@ def run(lr=0.0001,
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
 
-    run = wandb.init(project=f"t5-ft-cbqa-baseline", config=settings, reinit=True)
+    run = wandb.init(project=f"t5-cbqa-ftbase", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -320,7 +330,9 @@ def run(lr=0.0001,
     tt = q.ticktock("script")
     tt.tick("data")
     tok, trainds, evaltrainds, validds, testds, kbtrainds, kbvalidds = \
-        load_ds(dataset=dataset, tokname=f"google/t5-v1_1-{modelsize}", recompute=recomputedata)
+        load_ds(dataset=dataset, tokname=f"google/t5-v1_1-{modelsize}",
+                recompute=recomputedata,
+                subset=batsize*10 if debugcode else None)
 
     tt.tick("dataloaders")
     NUMWORKERS = 0
@@ -336,17 +348,14 @@ def run(lr=0.0001,
     tt.tock()
     tt.tock()
 
-    next(iter(traindl))
-    next(iter(kbtraindl))
-    next(iter(validdl))
-
     tt.tick("model")
     modelname = f"google/t5-v1_1-{modelsize}"
     t5model = T5Model.from_pretrained(modelname)
     emb = AdaptedT5WordEmbeddings(t5model.encoder.embed_tokens, tok)
     t5model.encoder.embed_tokens = emb
     encoder = t5model.encoder
-    m = Model(encoder, encoder.config.d_model)
+    m = Model(encoder, encoder.config.d_model,
+              elemtensors=kbtrainds.baseds.elems_pretokenized, cachebatsize=testbatsize*5)
 
     def _set_dropout(m, _p=0.):
         if isinstance(m, torch.nn.Dropout):
@@ -354,95 +363,64 @@ def run(lr=0.0001,
     m.apply(partial(_set_dropout, _p=dropout))
     tt.tock()
 
-    # TODO adapt from here
     if testcode:
         tt.tick("testcode")
         batch = next(iter(traindl))
-        # out = tagger(batch[1])
-        tt.tick("train")
-        out = decoder(*batch)
+        out = m(*batch)
+        with torch.no_grad():
+            m.train(False)
+            batch = next(iter(validdl))
+            out = m(*batch)
+            m.train(True)
         tt.tock()
-        decoder.train(False)
-        tt.tick("test")
-        out = decoder(*batch)
-        tt.tock()
-        tt.tock("testcode")
 
-    tloss = make_array_of_metrics("loss", "acc", reduction="mean")
-    tmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    subtmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    iidvmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    oodvmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    ood2vmetrics = make_array_of_metrics("treeacc", reduction="mean")
-    xmetrics = make_array_of_metrics("treeacc", reduction="mean")
+    # loss and metrics for fine-tuning on QA data
+    tloss = make_array_of_metrics("loss", "accuracy", "negacc", reduction="mean")
+    tmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
+    vmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
+    xmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
 
-    # region parameters
-    def get_parameters(m:SeqDecoderT5, _lr, _lrmul, _ftmode):
-        primary_params = []
-        secondary_params = []
-        if _ftmode == "ft":     # fine-tune all params using _lr*_lrmul and if _originalinout is True, then also finetune decoder inputs and outputs
-            secondary_params += list(m.parameters())
-            primary_params += list(m.model.lm_head.parameters()) + list(m.model.decoder.embed_tokens.parameters())
-            # remove primary params from secondary
-            i = 0
-            while i < len(secondary_params):
-                for primaryparam in primary_params:
-                    if secondary_params[i] is primaryparam:
-                        del secondary_params[i]
-                        i -= 1
-                        break
-                i += 1
-        else:
-            primary_params = m.model.get_tunable_params_and_set_requires_grad()
-        paramgroups = [{"params": primary_params, "lr": _lr}]
-        if len(secondary_params) > 0:
-            paramgroups.append({"params": secondary_params, "lr": _lr * _lrmul})
-        return paramgroups
-    # endregion
+    kbtloss = make_array_of_metrics("loss", reduction="mean")
+    kbtmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
 
-    def get_optim(_m, _lr, _lrmul, _ftmode, _wreg=0):
-        paramgroups = get_parameters(_m, _lr=lr, _lrmul=_lrmul, _ftmode=_ftmode)
-        if useadafactor:
-            tt.msg("Using AdaFactor.")
-            optim = Adafactor(paramgroups, lr=lr, scale_parameter=False, relative_step=False, warmup_init=False)
-        else:
-            tt.msg("Using Adam.")
-            optim = torch.optim.Adam(paramgroups, lr=lr, weight_decay=_wreg)
-        return optim
+    params = m.get_tunable_params_and_set_requires_grad()
+    if useadafactor:
+        tt.msg("Using AdaFactor.")
+        optim = Adafactor(params, lr=lr, scale_parameter=False, relative_step=False, warmup_init=False)
+    else:
+        tt.msg("Using Adam.")
+        optim = torch.optim.Adam(params, lr=lr, weight_decay=0)
 
     if useadafactor:
         gradnorm = 1e6
 
-    def clipgradnorm(_m=None, _norm=None):
-        torch.nn.utils.clip_grad_norm_(_m.parameters(), _norm)
-
     patience = epochs
-    iideyt = q.EarlyStopper(iidvmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
-                         remember_f=lambda: deepcopy(decoder.model))
-    oodeyt = q.EarlyStopper(oodvmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
-                         remember_f=lambda: deepcopy(decoder.model))
-    ood2eyt = q.EarlyStopper(ood2vmetrics[0], patience=patience, min_epochs=5, more_is_better=True,
-                            remember_f=lambda: deepcopy(decoder.model))
+    eyt = q.EarlyStopper(vmetrics[2], patience=patience, min_epochs=5, more_is_better=True,
+                         remember_f=lambda: deepcopy(m))
 
-    def wandb_logger():
+    def wandb_logger_qaft():
         d = {}
-        for name, loss in zip(["loss", "acc"], tloss):
+        for name, loss in zip(["loss", "accuracy"], tloss):
             d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], tmetrics):
-            d["train_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], iidvmetrics):
-            d["iidvalid_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], oodvmetrics):
-            d["oodvalid_"+name] = loss.get_epoch_error()
-        for name, loss in zip(["tree_acc"], ood2vmetrics):
-            d["ood2valid_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["precision", "recall", "fscore"], tmetrics):
+            d["evaltrain_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["precision", "recall", "fscore"], vmetrics):
+            d["valid_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["precision", "recall", "fscore"], xmetrics):
+            d["test_"+name] = loss.get_epoch_error()
+        wandb.log(d)
+
+    def wandb_logger_kbft():
+        d = {}
+        for name, loss in zip(["loss"], kbtloss):
+            d["kbtrain_"+name] = loss.get_epoch_error()
+        for name, loss in zip(["precision", "recall", "fscore"], kbtmetrics):
+            d["kbvalid_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
     t_max = epochs * len(traindl) / gradacc
-    optim = get_optim(decoder, lr, lrmul, ftmode)
     warmupsteps = int(round(warmup * t_max))
     print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
-
     if cosinecycles == 0:       # constant lr
         tt.msg("Using constant LR with warmup")
         lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> 1.
@@ -452,142 +430,77 @@ def run(lr=0.0001,
 
     lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
-    iidvalidepoch = partial(q.test_epoch,
-                         model=decoder,
-                         losses=iidvmetrics,
-                         dataloader=iidvaliddl,
+    validepoch = partial(q.test_epoch,
+                         model=m,
+                         losses=vmetrics,
+                         dataloader=validdl,
                          device=device,
-                         on_end=[lambda: iideyt.on_epoch_end()])
-
-    oodvalidepoch = partial(q.test_epoch,
-                            model=decoder,
-                            losses=oodvmetrics,
-                            dataloader=oodvaliddl,
-                            device=device,
-                            on_end=[lambda: oodeyt.on_epoch_end()])
-
-    ood2validepoch = partial(q.test_epoch,
-                            model=decoder,
-                            losses=ood2vmetrics,
-                            dataloader=ood2validdl,
-                            device=device,
-                            on_end=[lambda: ood2eyt.on_epoch_end()])
-
-    validator = CustomValidator(iidvalidepoch, oodvalidepoch, ood2validepoch, lambda: wandb_logger(), numbats=len(traindl), validinter=validinter, tt=tt)
+                         on_end=[lambda: eyt.on_epoch_end(), lambda: m.clear_cache(), lambda: wandb_logger_qaft()])
 
     trainbatch = partial(q.train_batch,
                          gradient_accumulation_steps=gradacc,
                          on_before_optim_step=[
-                             lambda : clipgradnorm(_m=decoder, _norm=gradnorm),
-                             lambda : lr_schedule.step()
-                         ],
-                         on_end=[lambda : validator.on_batch_end()]
+                             lambda: torch.nn.utils.clip_grad_norm_(params, gradnorm),
+                             lambda: lr_schedule.step()
+                         ]
                          )
 
-    if trainonvalidonly:
-        # assert False
-        tt.msg("TRAINING ON IID VALID ONLY !!!!!!!")
-        traindl = iidvaliddl
-
-    if trainonood2only:
-        tt.msg("TRAINING ON OOD2 VALID ONLY !!!!!!!!")
-        traindl = ood2validdl
-
-    trainepoch = partial(q.train_epoch, model=decoder,
+    trainepoch = partial(q.train_epoch, model=m,
                          dataloader=traindl,
                          optim=optim,
                          losses=tloss,
                          device=device,
                          _train_batch=trainbatch,
-                         on_end=[lambda: validator.on_epoch_end()])
+                         on_end=[])
 
     trainevalepoch = partial(q.test_epoch,
-                             model=decoder,
-                             losses=subtmetrics,
-                             dataloader=subtraindl,
-                             device=device)
+                             model=m,
+                             losses=tmetrics,
+                             dataloader=evaltraindl,
+                             device=device,
+                             on_end=[lambda: m.clear_cache()])
 
     tt.tick("training")
-    validfs = [iidvalidepoch, oodvalidepoch, ood2validepoch]
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=None,
+                   run_valid_epoch=[trainevalepoch, validepoch] if not debugcode else [],
                    max_epochs=epochs,
-                   check_stop=[lambda: iideyt.check_stop() and oodeyt.check_stop() and ood2eyt.check_stop()]
+                   check_stop=[lambda: eyt.check_stop()]
                    )
     tt.tock("done training")
 
     settings.update({"train_loss_at_end": tloss[0].get_epoch_error()})
 
-    tt.tick("running test before reloading")
     testepoch = partial(q.test_epoch,
-                         model=decoder,
+                         model=m,
                          losses=xmetrics,
                          dataloader=testdl,
-                         device=device)
+                         device=device,
+                         on_end=[lambda: m.clear_cache()])
 
+    tt.tick("running test before reloading")
     testres = testepoch()
-    settings.update({"test_tree_acc_at_end": xmetrics[0].get_epoch_error()})
-    tt.tock(f"Test tree acc: {testres}")
 
-    if iideyt.remembered is not None:
-        tt.msg("reloading model with best IID validation accuracy")
-        decoder.model = iideyt.remembered
-        model = iideyt.remembered
+    settings.update({"test_fscore_at_end": xmetrics[2].get_epoch_error()})
+    tt.tock(f"Test results: {testres}")
 
-        tt.tick("running evaluation on subset of train")
-        trainres = trainevalepoch()
-        settings.update({"train_tree_acc_at_iidearly": tmetrics[0].get_epoch_error()})
-        tt.tock(f"Train tree acc: {trainres}")
-
-        tt.tick("rerunning validation")
-        iidvalidres = iidvalidepoch()
-        settings.update({"iidvalid_tree_acc_at_iidearly": iidvmetrics[0].get_epoch_error()})
-        tt.tock(f"IID validation results: {iidvalidres}")
-
-        tt.tick("running test")
-        testres = testepoch()
-        settings.update({"test_tree_acc_at_iidearly": xmetrics[0].get_epoch_error()})
-        tt.tock(f"Test tree acc: {testres}")
-
-    if oodeyt.remembered is not None:
-        tt.msg("reloading model with best OOD validation accuracy")
-        decoder.model = oodeyt.remembered
-        model = oodeyt.remembered
+    if eyt.remembered is not None:
+        tt.msg("reloading model with best validation accuracy")
+        m.copy_from(eyt.remembered)
 
         tt.tick("running evaluation on subset of train")
         trainres = trainevalepoch()
-        settings.update({"train_tree_acc_at_oodearly": tmetrics[0].get_epoch_error()})
-        tt.tock(f"Train tree acc: {trainres}")
+        settings.update({"train_fscore_at_earlystop": tmetrics[2].get_epoch_error()})
+        tt.tock(f"Train results: {trainres}")
 
         tt.tick("rerunning validation")
-        oodvalidres = oodvalidepoch()
-        settings.update({"oodvalid_tree_acc_at_oodearly": oodvmetrics[0].get_epoch_error()})
-        tt.tock(f"OOD validation results: {oodvalidres}")
+        validres = validepoch()
+        settings.update({"valid_fscore_at_earlystop": vmetrics[2].get_epoch_error()})
+        tt.tock(f"Validation results: {validres}")
 
         tt.tick("running test")
         testres = testepoch()
-        settings.update({"test_tree_acc_at_oodearly": xmetrics[0].get_epoch_error()})
-        tt.tock(f"Test tree acc: {testres}")
-
-    if ood2eyt.remembered is not None:
-        tt.msg("reloading model with best OOD2 validation accuracy")
-        decoder.model = ood2eyt.remembered
-        model = ood2eyt.remembered
-
-        tt.tick("running evaluation on subset of train")
-        trainres = trainevalepoch()
-        settings.update({"train_tree_acc_at_ood2early": tmetrics[0].get_epoch_error()})
-        tt.tock(f"Train tree acc: {trainres}")
-
-        tt.tick("rerunning validation")
-        oodvalidres = ood2validepoch()
-        settings.update({"ood2valid_tree_acc_at_ood2early": ood2vmetrics[0].get_epoch_error()})
-        tt.tock(f"OOD2 validation results: {oodvalidres}")
-
-        tt.tick("running test")
-        testres = testepoch()
-        settings.update({"test_tree_acc_at_ood2early": xmetrics[0].get_epoch_error()})
-        tt.tock(f"Test tree acc: {testres}")
+        settings.update({"test_fscore_at_earlystop": xmetrics[2].get_epoch_error()})
+        tt.tock(f"Test results: {testres}")
 
     wandb.config.update(settings)
     q.pp_dict(settings)
@@ -597,7 +510,7 @@ def run(lr=0.0001,
 
 def run_experiment(
         lr=-1.,
-        lrmul=-1.,
+        kbpretrain=False,
         useadafactor=False,
         gradnorm=2,
         gradacc=1,
@@ -609,16 +522,12 @@ def run_experiment(
         warmup=0.1,
         cosinecycles=0,
         modelsize="small",
-        ftmode="ft",        # "ft" (finetune) or "adapter"
-        adapterdim=-1,
-        usedefaultmodel=False,
         dataset="default",
         maxsize=-1,
         seed=-1,
         dropout=-1.,
         testcode=False,
-        trainonvalidonly=False,
-        trainonood2only=False,
+        debugcode=False,
         gpu=-1,
         recomputedata=False,
         ):
@@ -626,19 +535,14 @@ def run_experiment(
     settings = locals().copy()
 
     ranges = {
-        "dataset": ["cfq/mcd1new", "cfq/mcd2new", "cfq/mcd3new"],
+        "dataset": ["metaqa/1"],
         "dropout": [0.1],
         "seed": [42, 87646464, 456852],
         "epochs": [50],
         "batsize": [60],
         "lr": [0.0005],
-        "lrmul": [1.],
-        "modelsize": ["small", "base", "large"],
-        # "patience": [-1],
-        # "warmup": [20],
+        "modelsize": ["base"],
         "validinter": [2],
-        # "gradacc": [1],
-        "adapterdim": [64],
     }
 
     for k in ranges:
@@ -651,9 +555,6 @@ def run_experiment(
                 pass
                 # raise Exception(f"something wrong with setting '{k}'")
             del settings[k]
-
-    if dataset.endswith("/mcd"):
-        ranges["dataset"] = [dataset + f"{i}" for i in range(1, 4)]
 
     def checkconfig(spec):
         return True

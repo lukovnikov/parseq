@@ -18,7 +18,7 @@ class MetaQADatasetLoader(object):
         super(MetaQADatasetLoader, self).__init__()
         self.p = p
 
-    def load_qa(self, hops="all", kbds=None, tok=None, recompute=False):
+    def load_qa(self, hops="all", kbds=None, tok=None, recompute=False, subset=None):
         """
         :param which:  "all" or "1", or "2" or "3" or "1+2" etc
         :return:
@@ -59,13 +59,28 @@ class MetaQADatasetLoader(object):
             print("loading from shelve")
             ds = s[f"qads"]
             _ds = ds.filter(lambda x: str(x[-2]) in hops)
-        trainds = _ds["train"].map(partial(ds.item_mapper, return_mode="pair"))
-        validds = _ds["valid"].map(partial(ds.item_mapper, return_mode="set"))
-        testds = _ds["test"].map(partial(ds.item_mapper, return_mode="set"))
 
         evaltrainds = _ds["train"]
         random.shuffle(evaltrainds._examples)
         evaltrainds = Dataset(evaltrainds.examples[:len(evaltrainds)//10])
+
+        trainds = _ds["train"]
+        validds = _ds["valid"]
+        testds = _ds["test"]
+        if subset is not None:
+            print(f"using only subset: {subset}")
+            random.shuffle(trainds._examples)
+            trainds = Dataset(trainds.examples[:subset])
+            evaltrainds = trainds
+            random.shuffle(validds._examples)
+            validds = Dataset(validds.examples[:subset])
+            random.shuffle(testds._examples)
+            testds = Dataset(testds.examples[:subset])
+
+        trainds = trainds.map(partial(ds.item_mapper, return_mode="pair"))
+        validds = validds.map(partial(ds.item_mapper, return_mode="set"))
+        testds = testds.map(partial(ds.item_mapper, return_mode="set"))
+
         evaltrainds = evaltrainds.map(partial(ds.item_mapper, return_mode="set"))
         return trainds, evaltrainds, validds, testds
 
