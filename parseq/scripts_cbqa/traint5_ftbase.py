@@ -62,8 +62,7 @@ class ModelClassifier(torch.nn.Module):
 
 class Model(torch.nn.Module):
     randomizedeval = True
-    maxnumentsperexample = 10
-    numnegsperexample = 10
+    maxnumentsperexample = 2
 
     def __init__(self, encoder:T5Stack, dim, attdim=512, nheads=4, elemtensors=None, cachebatsize=100):
         super(Model, self).__init__()
@@ -132,8 +131,8 @@ class Model(torch.nn.Module):
         supvec = supmat.view(-1)
 
         # get the entity strings to encode
-        selection_tensors = [self.elemtensors[selection_i] for selection_i in selection]   # list of tensors
-        selection_tensors = autocollate(selection_tensors)      # TODO: debugger breaks here
+        selection_tensors = [self.elemtensors[selection_i][None, :] for selection_i in selection]   # list of tensors
+        selection_tensors = autocollate(selection_tensors)[0]
         selection_tensors = selection_tensors.to(x.device)
 
         # encode entity strings
@@ -148,10 +147,10 @@ class Model(torch.nn.Module):
 
         # compute per-example losses and accuracies
         scoremat = scores.view(len(x), len(selection))
-        loss = self.loss(scoremat, supmat).sum(-1)
-        accuracies = ((scoremat >= 0).long() == supmat).mean(-1)
+        loss = self.loss(scoremat, supmat.float()).sum(-1)
+        accuracies = ((scoremat >= 0).long() == supmat).float().mean(-1)
 
-        return {"loss": loss, "accuracies": accuracies, "negacc": -1}, None
+        return {"loss": loss, "accuracy": accuracies, "negacc": torch.zeros_like(accuracies).fill_(-1)}, None
 
     def train_forward_(self, x, pos, neg):
         xmask = x != 0

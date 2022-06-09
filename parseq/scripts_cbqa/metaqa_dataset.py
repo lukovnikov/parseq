@@ -116,13 +116,13 @@ class MetaQADatasetLoader(object):
                 print("shelved")
             print("loading from shelve")
             _ds = s["kbds"]
-        # TODO validate only on portion of train data, optionally implement splitting
+        # INFO: validate only on portion of train data, optionally implement splitting
         # random.shuffle(_ds.examples)
         # indexes = list(range(len(_ds)))
         # random.shuffle(indexes)
         # validindexes = set(indexes[:round(validfrac * len(_ds))])
         # _ds[lambda x: ]
-        trainds = _ds.map(partial(_ds.item_mapper, return_mode="pair"))
+        trainds = _ds.map(partial(_ds.item_mapper, return_mode="set"))
         trainvalidds = _ds.map(partial(_ds.item_mapper, return_mode="set"))
         return trainds, trainvalidds
 
@@ -308,7 +308,7 @@ def elems_from_triples(triples):
     return entities, rels
 
 
-def try_metaqa(recompute = False):
+def try_metaqa(recompute = True):
     print("loading tokenizer")
     extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]"] # + [f"extra_id_{i}" for i in range(0)]
     tok = T5TokenizerFast.from_pretrained("google/t5-v1_1-base", additional_special_tokens=extra_tokens, extra_ids=0)
