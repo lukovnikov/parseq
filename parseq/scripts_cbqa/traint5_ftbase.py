@@ -1,3 +1,5 @@
+import itertools
+
 import json
 import os
 import random
@@ -37,7 +39,7 @@ class ModelClassifier(torch.nn.Module):
         super(ModelClassifier, self).__init__()
 
         self.l1 = torch.nn.Linear(dim*2, dim)
-
+        self.l1aux = torch.nn.Linear(dim, dim)
         self.classifier_l1p1 = torch.nn.Linear(dim, dim)
         self.classifier_l1p2 = torch.nn.Linear(dim, dim)
         self.classifier_l1aux = torch.nn.Linear(dim, 1)
@@ -45,10 +47,16 @@ class ModelClassifier(torch.nn.Module):
         self.classifier_nonlin = torch.nn.ReLU()
 
     def forward(self, xenc, cenc):
+        z = xenc * cenc
+        z = z.sum(1)
+        return z
         ccat = torch.cat([xenc, cenc], -1)
         x = self.l1(ccat)
         x = self.classifier_nonlin(x)
-        x = torch.cat([x, x], -1)
+        z = xenc * cenc * self.classifier_l1aux.weight[None, :, 0]
+        z = self.l1aux(z)
+        z = self.classifier_nonlin(z)
+        x = torch.cat([x, z], -1)
         x = self.classifier_l2(x)[:, 0]
         return x
         # _scores1p1 = self.classifier_l1p1(xenc)
@@ -62,7 +70,7 @@ class ModelClassifier(torch.nn.Module):
 
 class Model(torch.nn.Module):
     randomizedeval = True
-    maxnumentsperexample = 2
+    maxnumentsperexample = 1
 
     def __init__(self, encoder:T5Stack, dim, attdim=512, nheads=4, elemtensors=None, cachebatsize=100):
         super(Model, self).__init__()
@@ -88,8 +96,10 @@ class Model(torch.nn.Module):
         return ret
 
     def _compute_score(self, xenc, cenc):
-        _scores = self.classifier(xenc, cenc)
-        return _scores
+        scoremat = (xenc[:, None, :] * cenc[None, :, :]).sum(-1)
+        return scoremat
+        # _scores = self.classifier(xenc, cenc)
+        # return _scores
 
     def _compute_scores_all(self, xenc, cenc):  # (batsize, dim), (outsize, dim)
         _cenc = cenc.repeat(xenc.size(0), 1)
@@ -106,24 +116,34 @@ class Model(torch.nn.Module):
 
         # select entities to encode
         # copy positive ids into selection
-        selection = set()
+        allposids = set(itertools.chain(*posids))
+        totalrange = set(range(len(self.elemtensors))) - allposids
+        negsel = set(random.choices(list(totalrange), k=len(x) * self.maxnumentsperexample))
+        selectedposids = set()
         for posids_ in posids:
-            addition = set()
-            # copy positive ids
-            addition.update(posids_)
-            # add some negative ids
-            totalrange = set(range(len(self.elemtensors))) - addition - selection
-            negsel = set(random.choices(list(totalrange), k=self.maxnumentsperexample-1))
-            addition.update(negsel)
-            if len(addition) > self.maxnumentsperexample:
-                addition = set(random.choices(list(addition), k=self.maxnumentsperexample))
-            # update global selection
-            selection.update(addition)
+            if len(posids_) > self.maxnumentsperexample:
+                posids_ = set(random.choices(list(posids_), k=self.maxnumentsperexample))
+            selectedposids.update(posids_)
+        selection = selectedposids | negsel
+        # selection = set()
+        # for posids_ in posids:
+        #     addition = set()
+        #     # copy positive ids
+        #     addition.update(posids_)
+        #     # add some negative ids
+        #     totalrange = set(range(len(self.elemtensors))) - addition - selection
+        #     negsel = set(random.choices(list(totalrange), k=self.maxnumentsperexample-1))
+        #     addition.update(negsel)
+        #     if len(addition) > self.maxnumentsperexample:
+        #         addition = set(random.choices(list(addition), k=self.maxnumentsperexample))
+        #     # update global selection
+        #     selection.update(addition)
         selection = sorted(list(selection))
         selectionmap = {v: k for k, v in enumerate(selection)}
+        selectionrevmap = {v: k for k, v in selectionmap.items()}
 
         # compute supervision matrix (batsize, numcan)
-        supmat = torch.zeros(len(x), len(selection), dtype=torch.long, device=x.device)
+        supmat = torch.zeros(len(x), len(selection), dtype=torch.bool, device=x.device)
         for i, posids_ in enumerate(posids):
             for posid in posids_:
                 if posid in selectionmap:
@@ -141,16 +161,44 @@ class Model(torch.nn.Module):
         selenc = self.entread(selenc, attention_mask=selmask)
 
         # compute scores
-        xenc_repeated = xenc.repeat_interleave(len(selection), 0)       # (batsize * numcan, dim)
-        selenc_repeated = selenc.repeat(len(x), 1)                      # (numcan * batsize, dim)
-        scores = self._compute_score(xenc_repeated, selenc_repeated)    # (batsize * numcan,) scores
+        # xenc_repeated = xenc.repeat_interleave(len(selection), 0)       # (batsize * numcan, dim)
+        # selenc_repeated = selenc.repeat(len(x), 1)                      # (numcan * batsize, dim)
+        scoremat = self._compute_score(xenc, selenc)    # (batsize * numcan,) scores
 
         # compute per-example losses and accuracies
-        scoremat = scores.view(len(x), len(selection))
-        loss = self.loss(scoremat, supmat.float()).sum(-1)
-        accuracies = ((scoremat >= 0).long() == supmat).float().mean(-1)
+        # scoremat = scores.view(len(x), len(selection))
+        losses = self.loss(scoremat, supmat.float())
 
-        return {"loss": loss, "accuracy": accuracies, "negacc": torch.zeros_like(accuracies).fill_(-1)}, None
+        # make lossmask
+        # rand = torch.rand_like(losses)
+        # randsorted, _ = torch.sort(rand, 1)
+        # numnegs = 10
+        # thresholds = randsorted[:, numnegs]
+        # lossmask = rand < thresholds[:, None]
+        # lossmask = lossmask | supmat
+        lossmask = torch.ones_like(losses) == 1
+
+        # compute weighted loss
+        posweights = 0.5 / (supmat & lossmask).float().sum(1).clamp_min(1e-6)
+        negweights = 1.5 / (~supmat & lossmask).float().sum(1).clamp_min(1e-6)
+        weights = supmat.float() * posweights[:, None] + (~supmat).float() * negweights[:, None]
+        losses = losses * weights * lossmask.float()
+        loss = losses.sum(1)
+
+        # # compute accuracy
+        # accuracies = ((scoremat >= 0) == supmat).float().mean(-1)
+
+        # compute F1
+        predmat = (scoremat >= 0)
+        tpmat = (predmat & supmat).float().sum(1)
+        precisions = tpmat / predmat.float().sum(1).clamp_min(1e-6)
+        recalls = tpmat / supmat.float().sum(1).clamp_min(1e-6)
+        fscores = 2 * precisions * recalls / (precisions + recalls).clamp_min(1e-6)
+
+        return {"loss": loss, #"accuracy": accuracies,
+                "precision": precisions,
+                "recall": recalls,
+                "fscore": fscores}, None
 
     def train_forward_(self, x, pos, neg):
         xmask = x != 0
@@ -263,6 +311,8 @@ class AttentionReadout(torch.nn.Module):
         self.proj = torch.nn.Linear(dim, attdim)
         self.att = torch.nn.Linear(attdim//heads, heads)
         self.projback = torch.nn.Linear(attdim, dim)
+        self.nonlin = torch.nn.ReLU()
+        self.projfinal = torch.nn.Linear(dim, dim)
 
     def forward(self, x, attention_mask=None):  # (batsize, seqlen, dim), (batsize, seqlen)
         xproj = self.proj(x).view(x.size(0), x.size(1), self.nheads, self.attdim//self.nheads)
@@ -272,6 +322,7 @@ class AttentionReadout(torch.nn.Module):
         xalpha = torch.softmax(xweights, 1)        # (batsize, seqlen, nheads)
         xvals = torch.einsum("bshd,bsh->bhd", xproj, xalpha).view(x.size(0), -1)
         ret = self.projback(xvals)
+        ret = self.projfinal(self.nonlin(ret))
         return ret
 
 
@@ -305,7 +356,7 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
     tt.tock("loaded data")
 
     kblens = []
-    for tripletensor, posans, negans in tqdm(kbds[0]):
+    for tripletensor, posans in tqdm(kbds[0]):
         kblens.append(tripletensor.size(-1))
     print(f"KB examples avg/max length is {np.mean(kblens):.1f}/{max(kblens)}")
 
@@ -387,7 +438,7 @@ def run(lr=0.0001,
     tok, trainds, evaltrainds, validds, testds, kbtrainds, kbvalidds = \
         load_ds(dataset=dataset, tokname=f"google/t5-v1_1-{modelsize}",
                 recompute=recomputedata,
-                subset=batsize*10 if debugcode else None)
+                subset=5000 if debugcode else None)
 
     tt.tick("dataloaders")
     NUMWORKERS = 0
@@ -430,7 +481,7 @@ def run(lr=0.0001,
         tt.tock()
 
     # loss and metrics for fine-tuning on QA data
-    tloss = make_array_of_metrics("loss", "accuracy", "negacc", reduction="mean")
+    tloss = make_array_of_metrics("loss", "precision", "recall", "fscore", reduction="mean")
     tmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
     vmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
     xmetrics = make_array_of_metrics("precision", "recall", "fscore", reduction="mean")
@@ -506,6 +557,7 @@ def run(lr=0.0001,
                          losses=tloss,
                          device=device,
                          _train_batch=trainbatch,
+                         on_start=[lambda: m.clear_cache()],
                          on_end=[])
 
     trainevalepoch = partial(q.test_epoch,
@@ -513,7 +565,7 @@ def run(lr=0.0001,
                              losses=tmetrics,
                              dataloader=evaltraindl,
                              device=device,
-                             on_end=[lambda: m.clear_cache()])
+                             on_end=[])
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,

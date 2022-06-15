@@ -1,6 +1,7 @@
 import shelve
 from collections import Callable
 
+import torch
 from functools import partial
 
 import os
@@ -18,7 +19,7 @@ class MetaQADatasetLoader(object):
         super(MetaQADatasetLoader, self).__init__()
         self.p = p
 
-    def load_qa(self, hops="all", kbds=None, tok=None, recompute=False, subset=None):
+    def load_qa(self, hops="all", kbds=None, tok=None, recompute=False, subset=None, mode="set"):
         """
         :param which:  "all" or "1", or "2" or "3" or "1+2" etc
         :return:
@@ -29,7 +30,7 @@ class MetaQADatasetLoader(object):
 
         with shelve.open(os.path.basename(__file__) + ".cache") as s:
 
-            if f"qads" not in s or recompute:
+            if f"qads-{mode}" not in s or recompute:
                 data = []
                 whichhops = "1+2+3"
                 for numhops in whichhops.split("+"):
@@ -54,10 +55,10 @@ class MetaQADatasetLoader(object):
 
                 assert tok is not None and kbds is not None
                 ds = QADataset(data, tok=tok, kbds=kbds)
-                s[f"qads"] = ds
+                s[f"qads-{mode}"] = ds
                 print("shelved")
             print("loading from shelve")
-            ds = s[f"qads"]
+            ds = s[f"qads-{mode}"]
             _ds = ds.filter(lambda x: str(x[-2]) in hops)
 
         evaltrainds = _ds["train"]
@@ -77,11 +78,11 @@ class MetaQADatasetLoader(object):
             random.shuffle(testds._examples)
             testds = Dataset(testds.examples[:subset])
 
-        trainds = trainds.map(partial(ds.item_mapper, return_mode="set"))
-        validds = validds.map(partial(ds.item_mapper, return_mode="set"))
-        testds = testds.map(partial(ds.item_mapper, return_mode="set"))
+        trainds = trainds.map(partial(ds.item_mapper, return_mode=mode))
+        validds = validds.map(partial(ds.item_mapper, return_mode=mode))
+        testds = testds.map(partial(ds.item_mapper, return_mode=mode))
 
-        evaltrainds = evaltrainds.map(partial(ds.item_mapper, return_mode="set"))
+        evaltrainds = evaltrainds.map(partial(ds.item_mapper, return_mode=mode))
         return trainds, evaltrainds, validds, testds
 
 
@@ -102,9 +103,9 @@ class MetaQADatasetLoader(object):
         question = question.replace("\s+", " ").strip()
         return question, answers
 
-    def load_kb(self, tok, validfrac=0.1, recompute=False):
+    def load_kb(self, tok, validfrac=0.1, recompute=False, mode="set"):
         with shelve.open(os.path.basename(__file__)+".cache") as s:
-            if "kbds" not in s or recompute:
+            if f"kbds-{mode}" not in s or recompute:
                 print("loading KB dataset")
                 triples = []
                 with open(os.path.join(self.p, "kb.txt"), encoding="utf-8") as f:
@@ -112,18 +113,18 @@ class MetaQADatasetLoader(object):
                         newtriples = self.process_kb_line(line)
                         triples.extend(newtriples)
                 _ds = KBDataset(triples, tok)
-                s["kbds"] = _ds
+                s[f"kbds-{mode}"] = _ds
                 print("shelved")
             print("loading from shelve")
-            _ds = s["kbds"]
+            _ds = s[f"kbds-{mode}"]
         # INFO: validate only on portion of train data, optionally implement splitting
         # random.shuffle(_ds.examples)
         # indexes = list(range(len(_ds)))
         # random.shuffle(indexes)
         # validindexes = set(indexes[:round(validfrac * len(_ds))])
         # _ds[lambda x: ]
-        trainds = _ds.map(partial(_ds.item_mapper, return_mode="set"))
-        trainvalidds = _ds.map(partial(_ds.item_mapper, return_mode="set"))
+        trainds = _ds.map(partial(_ds.item_mapper, return_mode=mode))
+        trainvalidds = _ds.map(partial(_ds.item_mapper, return_mode=mode))
         return trainds, trainvalidds
 
     def process_kb_line(self, line:str):
@@ -146,6 +147,7 @@ class QADataset(Dataset):
         self.elems_pretokenized = kbds.elems_pretokenized
         mappedexamples = [self.init_mapper(example, tok) for example in tqdm.tqdm(examples)]
         self._examples = mappedexamples
+        self.tok = tok
 
     def init_mapper(self, x, tok):
         question, answers, hops, split = x
@@ -170,6 +172,25 @@ class QADataset(Dataset):
         elif return_mode == "set":
             valids = set([self.elemdic[value] for value in values])
             return question_pretokenized, valids
+
+        elif return_mode == "seq":
+            retids = [self.elemdic[value] for value in sorted(values)]
+            retid = retids[0]
+            # retid = random.choice(retids)
+            rettensor = self.elems_pretokenized[retid]
+            return question_pretokenized, rettensor
+            # retids = [self.elemdic[value] for value in sorted(values)]
+            # if len(retids) > 20:
+            #     retids = retids[:20]
+            # rettensor = []
+            # for retid in retids:
+            #     rettensor_i = self.elems_pretokenized[retid]
+            #     rettensor_i[-1] = self.tok.vocab["[SEPITEM]"]
+            #     rettensor.append(rettensor_i)
+            # rettensor = torch.cat(rettensor, 0)
+            # rettensor[-1] = self.tok.vocab["</s>"]
+            # return question_pretokenized, rettensor
+
 
 
 class KBDataset(Dataset):
@@ -233,8 +254,26 @@ class KBDataset(Dataset):
             return triple_pretokenized, posans_pretokenized, negans_pretokenized
 
         elif return_mode == "set":
-            valids = [self.elemdic[value] for value in values]
+            valids = set([self.elemdic[value] for value in values])
             return triple_pretokenized, valids
+
+        elif return_mode == "seq":
+            retids = [self.elemdic[value] for value in sorted(values)]
+            retid = random.choice(retids)
+            rettensor = self.elems_pretokenized[retid]
+            return triple_pretokenized, rettensor
+            # if len(retids) > 20:
+            #     retids = retids[:20]
+            # rettensor = []
+            # for retid in retids:
+            #     rettensor_i = self.elems_pretokenized[retid]
+            #     # rettensor_i[-1] = self.tok.vocab["[SEPITEM]"]
+            #     rettensor.append(rettensor_i)
+            # rettensor = torch.cat(rettensor, 0)
+            # rettensor[rettensor == self.tok.vocab["</s>"]] = self.tok.vocab["[SEPITEM]"]
+            # rettensor[-1] = self.tok.vocab["</s>"]
+            # return triple_pretokenized, rettensor
+
         #
         #
         # triple = super(KBDataset, self).__getitem__(item)
@@ -310,16 +349,18 @@ def elems_from_triples(triples):
 
 def try_metaqa(recompute = True):
     print("loading tokenizer")
-    extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]"] # + [f"extra_id_{i}" for i in range(0)]
+    extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]"] # + [f"extra_id_{i}" for i in range(0)]
+    extra_tokens = extra_tokens + [f"[ITEM-{i}]" for i in range(1000)]
     tok = T5TokenizerFast.from_pretrained("google/t5-v1_1-base", additional_special_tokens=extra_tokens, extra_ids=0)
     print(len(tok.vocab))
 
-    kbds, validkbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute)
+    kbds, validkbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, mode="seq")
     # kbds = kbds.map(kbds.item_mapper)
     print(len(kbds))
     print("\n".join([str(kbds[i]) for i in range(15)]))
 
-    trainqads, evaltrainds, validqads, testqads = MetaQADatasetLoader().load_qa("1", kbds=kbds.baseds, tok=tok, recompute=recompute)
+    trainqads, evaltrainds, validqads, testqads = MetaQADatasetLoader().load_qa("1", kbds=kbds.baseds, tok=tok, recompute=recompute,
+                                                    mode="seq")
     print("\n".join([str(trainqads[i]) for i in range(15)]))
     print("\n".join([str(validqads[i]) for i in range(15)]))
     # tok.add_tokens(["[SEP1]", "[SEP2]"])

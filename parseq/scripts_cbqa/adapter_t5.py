@@ -57,6 +57,30 @@ class AdaptedT5WordEmbeddings(torch.nn.Module):
         return self.xtra_emb.parameters()
 
 
+class AdaptedT5LMHead(torch.nn.Module):
+    def __init__(self, originalhead:torch.nn.Linear, tok:Union[T5Tokenizer, T5TokenizerFast]):
+        super(AdaptedT5LMHead, self).__init__()
+        self.originhead = originalhead
+
+        if isinstance(tok, T5Tokenizer):
+            self.added_tokens = tok.added_tokens_encoder
+        elif isinstance(tok, T5TokenizerFast):
+            self.added_tokens = dict(zip(tok.additional_special_tokens, tok.additional_special_tokens_ids))
+
+        numorigtokens = self.originhead.out_features
+        addedids = self.added_tokens.values()
+        self.start = min(min(addedids), numorigtokens)
+
+        numnewtokens = max(addedids) + 1 - self.start
+        self.newhead = torch.nn.Linear(self.originhead.in_features, numnewtokens, bias=False)
+
+    def forward(self, x):
+        origscores = self.originhead(x)
+        newscores = self.newhead(x)
+        ret = torch.cat([origscores[..., :self.start], newscores], -1)
+        return ret
+
+
 def adapt_embeddings(embeddings, tok:Union[T5Tokenizer, T5TokenizerFast]):
     adaptedembs = AdaptedT5WordEmbeddings(embeddings, tok)
     return adaptedembs
