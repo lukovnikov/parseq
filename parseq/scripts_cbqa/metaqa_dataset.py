@@ -140,6 +140,8 @@ class QADataset(Dataset):
     getitemtype = "pair"       # "pair" or "set"
     maxnumpos = 10
     maxnumnegs = 10
+    ansmaxlen = 200
+
     def __init__(self, examples, tok=None, kbds=None):
         super(QADataset, self).__init__()
         self.entities = kbds.entities
@@ -149,9 +151,15 @@ class QADataset(Dataset):
         self._examples = mappedexamples
         self.tok = tok
 
+        print("copying dictionary")
+        self.D = self.tok.vocab
+        self.D = {k: v for k, v in self.D.items()}
+
     def init_mapper(self, x, tok):
         question, answers, hops, split = x
         question_tokenized = tok(question, return_tensors="pt")["input_ids"][0]
+        # answerstr = " [SEPITEM] ".join(answers[:min(len(answers), self.maxans)])
+        # answertensor = tok(answerstr, return_tensors="pt")["input_ids"][0]
         answerset = set(answers)
         return question_tokenized, answerset, hops, split
 
@@ -175,9 +183,27 @@ class QADataset(Dataset):
 
         elif return_mode == "seq":
             retids = [self.elemdic[value] for value in sorted(values)]
-            retid = retids[0]
-            # retid = random.choice(retids)
-            rettensor = self.elems_pretokenized[retid]
+            # retid = retids[0]
+            # # retid = random.choice(retids)
+            # rettensor = self.elems_pretokenized[retid]
+
+            rettensor = torch.ones(self.ansmaxlen, dtype=torch.long) * -1000
+            rettensor[0] = self.D["[BOS]"]
+            pos = 1
+            for retid in retids:
+                elemtensor = self.elems_pretokenized[retid]
+                newpos = pos + elemtensor.size(0) - 1
+                if newpos + 1 < self.ansmaxlen:
+                    rettensor[pos:newpos] = elemtensor[0:newpos-pos]
+                    pos = newpos
+                else:
+                    newpos = pos
+            rettensor[newpos] = 1       # EOS
+            rettensor = rettensor[:newpos+1]
+
+            if not torch.all(rettensor >= 0):
+                assert torch.all(rettensor >= 0)
+
             return question_pretokenized, rettensor
             # retids = [self.elemdic[value] for value in sorted(values)]
             # if len(retids) > 20:
@@ -192,9 +218,9 @@ class QADataset(Dataset):
             # return question_pretokenized, rettensor
 
 
-
 class KBDataset(Dataset):
     getitemtype = "pair"       # "pair" or "set"
+    ansmaxlen = 200
 
     def __init__(self, triples, tok=None):
         super(KBDataset, self).__init__()
@@ -216,6 +242,7 @@ class KBDataset(Dataset):
             self.elems_pretokenized.append(self.tok("[ENT] " + elem, return_tensors="pt")["input_ids"][0])
 
         # group triples
+        print("Grouping triples")
         tripledict = {}
         for triple in tqdm.tqdm(triples):
             _triples = [((triple[0], triple[1], "[ANS]"), 2),
@@ -227,6 +254,7 @@ class KBDataset(Dataset):
                 tripledict[_triple].add(triple[_triple[1]])
 
         outtriples = []
+        print("Creating triple tensors")
         for _triple in tqdm.tqdm(tripledict.keys()):
             triple, _ = _triple
             triplestr = f"{triple[0]} [SEP1] {triple[1]} [SEP2] {triple[2]}"
@@ -234,6 +262,10 @@ class KBDataset(Dataset):
             outtriples.append((tripletensor, _triple[1], tripledict[_triple]))
 
         self._examples = outtriples
+
+        print("copying dictionary")
+        self.D = self.tok.vocab
+        self.D = {k: v for k, v in self.D.items()}
 
     def item_mapper(self, example, return_mode=None):
         return_mode = return_mode if return_mode is not None else self.getitemtype
@@ -259,9 +291,37 @@ class KBDataset(Dataset):
 
         elif return_mode == "seq":
             retids = [self.elemdic[value] for value in sorted(values)]
-            retid = random.choice(retids)
-            rettensor = self.elems_pretokenized[retid]
+            # retid = random.choice(retids)
+            # rettensor = self.elems_pretokenized[retid]
+            rettensor = torch.ones(self.ansmaxlen, dtype=torch.long) * -1000
+            rettensor[0] = self.D["[BOS]"]
+            pos = 1
+            for retid in retids:
+                elemtensor = self.elems_pretokenized[retid]
+                newpos = pos + elemtensor.size(0) - 1
+                if newpos + 1 < self.ansmaxlen:
+                    rettensor[pos:newpos] = elemtensor[0:newpos - pos]
+                    pos = newpos
+                else:
+                    newpos = pos
+            rettensor[newpos] = 1  # EOS
+            rettensor = rettensor[:newpos + 1]
             return triple_pretokenized, rettensor
+
+        elif return_mode == "seqset":   # set of sequences
+            rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(sorted(values))]
+            rets.append((self.D[f"[ITEM-{len(rets)}]"], None))
+            itemnr, retid = random.choice(rets)
+            if retid is None:
+                rettensor = torch.tensor([itemnr, self.D["[ENDOFSET]"], self.D[self.tok.eos_token]], dtype=torch.long)
+            else:
+                rettensor_ = self.elems_pretokenized[retid]
+                rettensor = torch.zeros(rettensor_.size(0)+1, device=rettensor_.device, dtype=rettensor_.dtype)
+                rettensor[0] = itemnr
+                rettensor[1:] = rettensor_[:]
+
+            return triple_pretokenized, rettensor
+
             # if len(retids) > 20:
             #     retids = retids[:20]
             # rettensor = []
@@ -349,7 +409,7 @@ def elems_from_triples(triples):
 
 def try_metaqa(recompute = True):
     print("loading tokenizer")
-    extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]"] # + [f"extra_id_{i}" for i in range(0)]
+    extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]"] # + [f"extra_id_{i}" for i in range(0)]
     extra_tokens = extra_tokens + [f"[ITEM-{i}]" for i in range(1000)]
     tok = T5TokenizerFast.from_pretrained("google/t5-v1_1-base", additional_special_tokens=extra_tokens, extra_ids=0)
     print(len(tok.vocab))

@@ -11,14 +11,14 @@ from math import ceil
 from time import sleep
 from tqdm import tqdm
 from transformers.models.t5.modeling_t5 import T5Stack, T5ForConditionalGeneration
-from typing import Dict, Callable, Union, Iterable, List, Iterator
+from typing import Dict, Callable
 
 import wandb
 
 import qelos as q
 import torch
 import numpy as np
-from torch.utils.data import DataLoader, BatchSampler, Sampler
+from torch.utils.data import DataLoader
 from transformers import Adafactor, T5TokenizerFast, T5Model
 
 from parseq.datasets import SCANDatasetLoader, autocollate, Dataset, CFQDatasetLoader
@@ -68,29 +68,27 @@ class Model(torch.nn.Module):
 
     def test_forward(self, x, y):
         xmask = x != 0
-        maxlen = min(self.maxlen, y.size(1) + 1)
+        # ylabel = y[:, 1:].clone().detach()
+        assert torch.all(y[:, 0] == y[0, 0].item())
 
         preds = self.model.generate(
             input_ids = x,
-            decoder_input_ids=y[:, 0:1],
             attention_mask = xmask,
-            max_length=maxlen,
+            max_length=self.maxlen,
             num_beams=1,
             do_sample=False,
+            decoder_start_token_id=y[0, 0].detach().cpu().item(),
             )
 
         if preds.size(-1) < y.size(-1):
-            # acc = torch.zeros(len(x), device=x.device)
-            app = torch.zeros(preds.size(0), y.size(1) - preds.size(1), device=preds.device, dtype=preds.dtype)
-            preds = torch.cat([preds, app], 1)
-            same = preds == y
+            acc = torch.zeros(len(x), device=x.device)
         else:
             same = preds[..., :y.size(-1)] == y
-        same |= y == 0
-        acc = torch.all(same, -1).float()
+            same |= y == 0
+            acc = torch.all(same, -1).float()
 
-        # predstring = [self.tok.decode(g, skip_special_tokens=False, clean_up_tokenization_spaces=True) for g in preds]
-        # targetstring = [self.tok.decode(t, skip_special_tokens=False, clean_up_tokenization_spaces=True) for t in y.unbind(0)]
+        predstring = [self.tok.decode(g, skip_special_tokens=False, clean_up_tokenization_spaces=True) for g in preds]
+        targetstring = [self.tok.decode(t, skip_special_tokens=False, clean_up_tokenization_spaces=True)for t in y.unbind(0)]
         return {"accuracy": acc}, None
 
     def forward(self, *args, **kwargs):
@@ -116,7 +114,7 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
 
     dataset, whichhops = dataset.split("/")
 
-    extratokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]"]
+    extratokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]"]
     extratokens = extratokens + [f"[ITEM-{i}]" for i in range(1000)]
     tok = T5TokenizerFast.from_pretrained(tokname, additional_special_tokens=extratokens, extra_ids=0)
 
@@ -156,53 +154,15 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
     return (tok,) + qads + kbds
 
 
-class DynamicBatchSampler(BatchSampler):
-
-    def __init__(self, ds:Dataset, effective_batch_size_fn, shuffle:bool=True, batch_size: int=-1, drop_last: bool=False) -> None:
-        # Since collections.abc.Iterable does not check for `__getitem__`, which
-        # is one way for an object to be an iterable, we don't do an `isinstance`
-        # check here.
-        super(DynamicBatchSampler, self).__init__(None, batch_size, drop_last)
-
-        self.shuffle = shuffle
-        self.ds = ds
-        self.effective_batch_size_fn = effective_batch_size_fn
-
-        self.epoch_plan = None
-
-    def build_epoch_plan(self):
-        idxs = list(range(len(self.ds)))
-        if self.shuffle:
-            random.shuffle(idxs)
-        self.epoch_plan = []
-        batch = []
-        state = None
-        for idx in idxs:
-            example = self.ds[idx]
-            ebs, state = self.effective_batch_size_fn(example, state)
-            if ebs > self.batch_size and len(batch) > 0:
-                self.epoch_plan.append(batch)
-                batch = []
-                state = None
-                ebs, state = self.effective_batch_size_fn(example, state)
-            batch.append(idx)
-        if not self.drop_last:
-            self.epoch_plan.append(batch)
-
-    def __iter__(self) -> Iterator[List[int]]:
-        batch_number = 0
-        if self.epoch_plan is None:
-            self.build_epoch_plan()
-        while batch_number < len(self.epoch_plan):
-            batch = self.epoch_plan[batch_number]
-            batch_number += 1
-            yield batch
-        self.epoch_plan = None
-
-    def __len__(self) -> int:
-        if self.epoch_plan is None:
-            self.build_epoch_plan()
-        return len(self.epoch_plan)
+def collate_fn(x, pad_value=0, numtokens=5000):
+    lens = [len(xe[1]) for xe in x]
+    a = list(zip(lens, x))
+    a = sorted(a, key=lambda xe: xe[0], reverse=True)
+    maxnum = int(numtokens/max(lens))
+    b = a[:maxnum]
+    b = [be[1] for be in b]
+    ret = autocollate(b, pad_value=pad_value)
+    return ret
 
 
 def run(lr=0.0001,
@@ -211,7 +171,7 @@ def run(lr=0.0001,
         gradnorm=3,
         gradacc=1,
         batsize=60,
-        maxlen=200,
+        maxlen=30,
         testbatsize=-1,
         epochs=16,
         validinter=3.,
@@ -269,20 +229,10 @@ def run(lr=0.0001,
     kbtraindl = DataLoader(kbtrainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
     kbvaliddl = DataLoader(kbvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
 
-    def bsfn(x, state):
-        if state is None:
-            state = (0, 0, 0)
-        maxinplen, maxoutlen, numex = state
-        numex += 1
-        maxinplen = max(maxinplen, len(x[0]))
-        maxoutlen = max(maxoutlen, len(x[1]))
-        ebs = maxinplen * numex + maxoutlen * numex
-        return ebs, (maxinplen, maxoutlen, numex)
-
-    traindl = DataLoader(trainds, batch_sampler=DynamicBatchSampler(trainds, bsfn, shuffle=True, batch_size=batsize), collate_fn=autocollate, num_workers=NUMWORKERS)
-    evaltraindl = DataLoader(evaltrainds, batch_sampler=DynamicBatchSampler(evaltrainds, bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
-    validdl = DataLoader(validds, batch_sampler=DynamicBatchSampler(validds, bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
-    testdl = DataLoader(testds, batch_sampler=DynamicBatchSampler(testds, bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
+    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
+    evaltraindl = DataLoader(evaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    validdl = DataLoader(validds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    testdl = DataLoader(testds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
 
     tt.tock()
     tt.tock()
