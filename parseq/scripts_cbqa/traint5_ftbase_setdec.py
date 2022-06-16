@@ -133,27 +133,45 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
 
     kblens = []
     kbanswerlens = []
-    for tripletensor, answertensor in tqdm(kbds[0]):
-        kblens.append(tripletensor.size(-1))
-        kbanswerlens.append(answertensor.size(-1))
+    for tripletensors, answertensors in tqdm(kbds[0]):
+        for tripletensor in tripletensors:
+            kblens.append(tripletensor.size(-1))
+        for answertensor in answertensors:
+            kbanswerlens.append(answertensor.size(-1))
     print(f"KB triple avg/max length is {np.mean(kblens):.1f}/{max(kblens)}")
     print(f"KB answer avg/max length is {np.mean(kbanswerlens):.1f}/{max(kbanswerlens)}")
 
     qalens = []
     qaanswerlens = []
-    for question, answer in tqdm(qads[0]):
-        qalens.append(question.size(-1))
-        qaanswerlens.append(answer.size(-1))
-    for question, answer in tqdm(qads[2]):
-        qalens.append(question.size(-1))
-        qaanswerlens.append(answer.size(-1))
-    for question, answer in tqdm(qads[3]):
-        qalens.append(question.size(-1))
-        qaanswerlens.append(answer.size(-1))
+    for questions, answers in tqdm(qads[0]):
+        for question in questions:
+            qalens.append(question.size(-1))
+        for answer in answers:
+            qaanswerlens.append(answer.size(-1))
+    for questions, answers in tqdm(qads[2]):
+        for question in questions:
+            qalens.append(question.size(-1))
+        for answer in answers:
+            qaanswerlens.append(answer.size(-1))
+    for questions, answers in tqdm(qads[3]):
+        for question in questions:
+            qalens.append(question.size(-1))
+        for answer in answers:
+            qaanswerlens.append(answer.size(-1))
 
     print(f"QA questions avg/max length is {np.mean(qalens):.1f}/{max(qalens)}")
     print(f"QA answers avg/max length is {np.mean(qaanswerlens):.1f}/{max(qaanswerlens)}")
     return (tok,) + qads + kbds
+
+
+def collate_fn(data):
+    newdata = []
+    for datapoint in data:
+        inps, outs = datapoint
+        for inp, out in zip(inps, outs):
+            newdata.append((inp, out))
+    ret = autocollate(newdata)
+    return ret
 
 
 def run(lr=0.0001,
@@ -217,13 +235,13 @@ def run(lr=0.0001,
     tt.tick("dataloaders")
     NUMWORKERS = 0
 
-    kbtraindl = DataLoader(kbtrainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
-    kbvaliddl = DataLoader(kbvalidds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    kbtraindl = DataLoader(kbtrainds, batch_size=batsize, shuffle=True, collate_fn=collate_fn, num_workers=NUMWORKERS)
+    kbvaliddl = DataLoader(kbvalidds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
 
-    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=autocollate, num_workers=NUMWORKERS)
-    evaltraindl = DataLoader(evaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
-    validdl = DataLoader(validds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
-    testdl = DataLoader(testds, batch_size=testbatsize, shuffle=False, collate_fn=autocollate, num_workers=NUMWORKERS)
+    traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=collate_fn, num_workers=NUMWORKERS)
+    evaltraindl = DataLoader(evaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
+    validdl = DataLoader(validds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
+    testdl = DataLoader(testds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
 
     tt.tock()
     tt.tock()

@@ -137,10 +137,10 @@ class MetaQADatasetLoader(object):
 
 
 class QADataset(Dataset):
-    getitemtype = "pair"       # "pair" or "set"
-    maxnumpos = 10
-    maxnumnegs = 10
+    getitemtype = "seq"
     ansmaxlen = 200
+    maxitemnr = 100
+    numsamples = 2
 
     def __init__(self, examples, tok=None, kbds=None):
         super(QADataset, self).__init__()
@@ -167,21 +167,7 @@ class QADataset(Dataset):
         return_mode = return_mode if return_mode is not None else self.getitemtype
         question_pretokenized, values, hops = example
 
-        if return_mode == "pair":
-            posans = random.choice(list(values))
-            negans = random.choice(self.entities)
-            while negans in values:
-                negans = random.choice(self.entities)
-
-            posans_pretokenized = self.elems_pretokenized[self.elemdic[posans]]
-            negans_pretokenized = self.elems_pretokenized[self.elemdic[negans]]
-            return question_pretokenized, posans_pretokenized, negans_pretokenized
-
-        elif return_mode == "set":
-            valids = set([self.elemdic[value] for value in values])
-            return question_pretokenized, valids
-
-        elif return_mode == "seq":
+        if return_mode == "seq":
             retids = [self.elemdic[value] for value in sorted(values)]
             # retid = retids[0]
             # # retid = random.choice(retids)
@@ -205,22 +191,34 @@ class QADataset(Dataset):
                 assert torch.all(rettensor >= 0)
 
             return question_pretokenized, rettensor
-            # retids = [self.elemdic[value] for value in sorted(values)]
-            # if len(retids) > 20:
-            #     retids = retids[:20]
-            # rettensor = []
-            # for retid in retids:
-            #     rettensor_i = self.elems_pretokenized[retid]
-            #     rettensor_i[-1] = self.tok.vocab["[SEPITEM]"]
-            #     rettensor.append(rettensor_i)
-            # rettensor = torch.cat(rettensor, 0)
-            # rettensor[-1] = self.tok.vocab["</s>"]
-            # return question_pretokenized, rettensor
+
+        elif return_mode == "seqset":   # set of sequences
+            values = sorted(values)
+            if len(values) > self.maxitemnr:
+                values = values[:self.maxitemnr]
+            rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
+            rets.append((self.D[f"[ITEM-{len(rets)}]"], None))
+            choices = random.sample(rets, min(len(rets), self.numsamples))
+            rettensors = []
+            for choice in choices:
+                itemnr, retid = choice
+                if retid is None:
+                    rettensor = torch.tensor([itemnr, self.D["[ENDOFSET]"], self.D[self.tok.eos_token]], dtype=torch.long)
+                else:
+                    rettensor_ = self.elems_pretokenized[retid]
+                    rettensor = torch.zeros(rettensor_.size(0)+1, device=rettensor_.device, dtype=rettensor_.dtype)
+                    rettensor[0] = itemnr
+                    rettensor[1:] = rettensor_[:]
+                rettensors.append(rettensor)
+
+            return [question_pretokenized]*len(choices), rettensors
 
 
 class KBDataset(Dataset):
     getitemtype = "pair"       # "pair" or "set"
     ansmaxlen = 200
+    maxitemnr = 100
+    numsamples = 2
 
     def __init__(self, triples, tok=None):
         super(KBDataset, self).__init__()
@@ -271,25 +269,7 @@ class KBDataset(Dataset):
         return_mode = return_mode if return_mode is not None else self.getitemtype
         triple_pretokenized, negwhich, values = example
 
-        if return_mode == "pair":
-            posans = random.choice(list(values))
-            if negwhich == 1:
-                choices = list(set(self.rels) - values)
-                negans = random.choice(choices)
-            else:
-                negans = random.choice(self.entities)
-                while negans in values:
-                    negans = random.choice(self.entities)
-
-            posans_pretokenized = self.elems_pretokenized[self.elemdic[posans]]
-            negans_pretokenized = self.elems_pretokenized[self.elemdic[negans]]
-            return triple_pretokenized, posans_pretokenized, negans_pretokenized
-
-        elif return_mode == "set":
-            valids = set([self.elemdic[value] for value in values])
-            return triple_pretokenized, valids
-
-        elif return_mode == "seq":
+        if return_mode == "seq":
             retids = [self.elemdic[value] for value in sorted(values)]
             # retid = random.choice(retids)
             # rettensor = self.elems_pretokenized[retid]
@@ -309,18 +289,25 @@ class KBDataset(Dataset):
             return triple_pretokenized, rettensor
 
         elif return_mode == "seqset":   # set of sequences
-            rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(sorted(values))]
+            values = sorted(values)
+            if len(values) > self.maxitemnr:
+                values = values[:self.maxitemnr]
+            rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
             rets.append((self.D[f"[ITEM-{len(rets)}]"], None))
-            itemnr, retid = random.choice(rets)
-            if retid is None:
-                rettensor = torch.tensor([itemnr, self.D["[ENDOFSET]"], self.D[self.tok.eos_token]], dtype=torch.long)
-            else:
-                rettensor_ = self.elems_pretokenized[retid]
-                rettensor = torch.zeros(rettensor_.size(0)+1, device=rettensor_.device, dtype=rettensor_.dtype)
-                rettensor[0] = itemnr
-                rettensor[1:] = rettensor_[:]
+            choices = random.sample(rets, min(len(rets), self.numsamples))
+            rettensors = []
+            for choice in choices:
+                itemnr, retid = choice
+                if retid is None:
+                    rettensor = torch.tensor([itemnr, self.D["[ENDOFSET]"], self.D[self.tok.eos_token]], dtype=torch.long)
+                else:
+                    rettensor_ = self.elems_pretokenized[retid]
+                    rettensor = torch.zeros(rettensor_.size(0)+1, device=rettensor_.device, dtype=rettensor_.dtype)
+                    rettensor[0] = itemnr
+                    rettensor[1:] = rettensor_[:]
+                rettensors.append(rettensor)
 
-            return triple_pretokenized, rettensor
+            return [triple_pretokenized]*len(choices), rettensors
 
             # if len(retids) > 20:
             #     retids = retids[:20]
@@ -414,13 +401,13 @@ def try_metaqa(recompute = True):
     tok = T5TokenizerFast.from_pretrained("google/t5-v1_1-base", additional_special_tokens=extra_tokens, extra_ids=0)
     print(len(tok.vocab))
 
-    kbds, validkbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, mode="seq")
+    kbds, validkbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, mode="seqset")
     # kbds = kbds.map(kbds.item_mapper)
     print(len(kbds))
     print("\n".join([str(kbds[i]) for i in range(15)]))
 
     trainqads, evaltrainds, validqads, testqads = MetaQADatasetLoader().load_qa("1", kbds=kbds.baseds, tok=tok, recompute=recompute,
-                                                    mode="seq")
+                                                    mode="seqset")
     print("\n".join([str(trainqads[i]) for i in range(15)]))
     print("\n".join([str(validqads[i]) for i in range(15)]))
     # tok.add_tokens(["[SEP1]", "[SEP2]"])
