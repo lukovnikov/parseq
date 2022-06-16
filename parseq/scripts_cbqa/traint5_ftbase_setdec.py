@@ -68,27 +68,29 @@ class Model(torch.nn.Module):
 
     def test_forward(self, x, y):
         xmask = x != 0
-        # ylabel = y[:, 1:].clone().detach()
-        assert torch.all(y[:, 0] == y[0, 0].item())
+        maxlen = min(self.maxlen, y.size(1) + 1)
 
         preds = self.model.generate(
             input_ids = x,
+            decoder_input_ids=y[:, 0:1],
             attention_mask = xmask,
-            max_length=self.maxlen,
+            max_length=maxlen,
             num_beams=1,
             do_sample=False,
-            decoder_start_token_id=y[0, 0].detach().cpu().item(),
             )
 
         if preds.size(-1) < y.size(-1):
-            acc = torch.zeros(len(x), device=x.device)
+            # acc = torch.zeros(len(x), device=x.device)
+            app = torch.zeros(preds.size(0), y.size(1) - preds.size(1), device=preds.device, dtype=preds.dtype)
+            preds = torch.cat([preds, app], 1)
+            same = preds == y
         else:
             same = preds[..., :y.size(-1)] == y
-            same |= y == 0
-            acc = torch.all(same, -1).float()
+        same |= y == 0
+        acc = torch.all(same, -1).float()
 
-        predstring = [self.tok.decode(g, skip_special_tokens=False, clean_up_tokenization_spaces=True) for g in preds]
-        targetstring = [self.tok.decode(t, skip_special_tokens=False, clean_up_tokenization_spaces=True)for t in y.unbind(0)]
+        # predstring = [self.tok.decode(g, skip_special_tokens=False, clean_up_tokenization_spaces=True) for g in preds]
+        # targetstring = [self.tok.decode(t, skip_special_tokens=False, clean_up_tokenization_spaces=True) for t in y.unbind(0)]
         return {"accuracy": acc}, None
 
     def forward(self, *args, **kwargs):
@@ -114,13 +116,13 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
 
     dataset, whichhops = dataset.split("/")
 
-    extratokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]"]
+    extratokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]"]
     extratokens = extratokens + [f"[ITEM-{i}]" for i in range(1000)]
     tok = T5TokenizerFast.from_pretrained(tokname, additional_special_tokens=extratokens, extra_ids=0)
 
     tt.tick("loading data")
-    kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, mode="seq")
-    qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute, subset=subset, mode="seq")
+    kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, mode="seqset")
+    qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute, subset=subset, mode="seqset")
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
     print("length QADS train:", len(qads[0]))
@@ -152,17 +154,6 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
     print(f"QA questions avg/max length is {np.mean(qalens):.1f}/{max(qalens)}")
     print(f"QA answers avg/max length is {np.mean(qaanswerlens):.1f}/{max(qaanswerlens)}")
     return (tok,) + qads + kbds
-
-
-def collate_fn(x, pad_value=0, numtokens=5000):
-    lens = [len(xe[1]) for xe in x]
-    a = list(zip(lens, x))
-    a = sorted(a, key=lambda xe: xe[0], reverse=True)
-    maxnum = int(numtokens/max(lens))
-    b = a[:maxnum]
-    b = [be[1] for be in b]
-    ret = autocollate(b, pad_value=pad_value)
-    return ret
 
 
 def run(lr=0.0001,
@@ -207,7 +198,7 @@ def run(lr=0.0001,
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
 
-    run = wandb.init(project=f"t5-cbqa-ftbase", config=settings, reinit=True)
+    run = wandb.init(project=f"t5-cbqa-ftbase-setdec", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -292,7 +283,7 @@ def run(lr=0.0001,
 
     def wandb_logger_qaft():
         d = {}
-        for name, loss in zip(["loss", "accuracy"], tloss):
+        for name, loss in zip(["loss", "accuracy", "elemacc"], tloss):
             d["train_"+name] = loss.get_epoch_error()
         for name, loss in zip(["accuracy"], tmetrics):
             d["evaltrain_"+name] = loss.get_epoch_error()

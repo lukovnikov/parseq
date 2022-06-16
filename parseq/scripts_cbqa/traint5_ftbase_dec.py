@@ -156,9 +156,36 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
     return (tok,) + qads + kbds
 
 
+class NormalBatchSampler(BatchSampler):
+    def __init__(self, ds, shuffle:bool=True, batch_size: int=-1, drop_last: bool=False, **kw):
+        super(NormalBatchSampler, self).__init__(None, batch_size=batch_size, drop_last=drop_last)
+        self.shuffle = shuffle
+        self.numex = len(ds)
+        if self.drop_last:
+            self.length = len(ds) // self.batch_size
+        else:
+            self.length = (len(ds) + self.batch_size - 1) // self.batch_size
+
+    def __iter__(self) -> Iterator[List[int]]:
+        idxs = list(range(self.numex))
+        if self.shuffle:
+            random.shuffle(idxs)
+        batch = []
+        for idx in idxs:
+            batch.append(idx)
+            if len(batch) == self.batch_size:
+                yield batch
+                batch = []
+        if len(batch) > 0 and not self.drop_last:
+            yield batch
+
+    def __len__(self) -> int:
+        return self.length
+
+
 class DynamicBatchSampler(BatchSampler):
 
-    def __init__(self, ds:Dataset, effective_batch_size_fn, shuffle:bool=True, batch_size: int=-1, drop_last: bool=False) -> None:
+    def __init__(self, ds:Dataset, effective_batch_size_fn=None, shuffle:bool=True, batch_size: int=-1, drop_last: bool=False) -> None:
         # Since collections.abc.Iterable does not check for `__getitem__`, which
         # is one way for an object to be an iterable, we don't do an `isinstance`
         # check here.
@@ -211,6 +238,7 @@ def run(lr=0.0001,
         gradnorm=3,
         gradacc=1,
         batsize=60,
+        usedynamicatsize=False,
         maxlen=200,
         testbatsize=-1,
         epochs=16,
@@ -247,7 +275,7 @@ def run(lr=0.0001,
     settings = locals().copy()
     q.pp_dict(settings, indent=3)
 
-    run = wandb.init(project=f"t5-cbqa-ftbase", config=settings, reinit=True)
+    run = wandb.init(project=f"t5-cbqa-ftbase-dec", config=settings, reinit=True)
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -279,10 +307,18 @@ def run(lr=0.0001,
         ebs = maxinplen * numex + maxoutlen * numex
         return ebs, (maxinplen, maxoutlen, numex)
 
-    traindl = DataLoader(trainds, batch_sampler=DynamicBatchSampler(trainds, bsfn, shuffle=True, batch_size=batsize), collate_fn=autocollate, num_workers=NUMWORKERS)
-    evaltraindl = DataLoader(evaltrainds, batch_sampler=DynamicBatchSampler(evaltrainds, bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
-    validdl = DataLoader(validds, batch_sampler=DynamicBatchSampler(validds, bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
-    testdl = DataLoader(testds, batch_sampler=DynamicBatchSampler(testds, bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
+    usedynamicbatsize = False
+    if usedynamicbatsize:
+        print("Using dynamic batch size batch sampler")
+        BS = DynamicBatchSampler
+    else:
+        print("Using normal batch sampler")
+        BS = NormalBatchSampler
+
+    traindl = DataLoader(trainds, batch_sampler=BS(trainds, effective_batch_size_fn=bsfn, shuffle=True, batch_size=batsize), collate_fn=autocollate, num_workers=NUMWORKERS)
+    evaltraindl = DataLoader(evaltrainds, batch_sampler=BS(evaltrainds, effective_batch_size_fn=bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
+    validdl = DataLoader(validds, batch_sampler=BS(validds, effective_batch_size_fn=bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
+    testdl = DataLoader(testds, batch_sampler=BS(testds, effective_batch_size_fn=bsfn, shuffle=False, batch_size=testbatsize), collate_fn=autocollate, num_workers=NUMWORKERS)
 
     tt.tock()
     tt.tock()
@@ -342,7 +378,7 @@ def run(lr=0.0001,
 
     def wandb_logger_qaft():
         d = {}
-        for name, loss in zip(["loss", "accuracy"], tloss):
+        for name, loss in zip(["loss", "accuracy", "elemacc"], tloss):
             d["train_"+name] = loss.get_epoch_error()
         for name, loss in zip(["accuracy"], tmetrics):
             d["evaltrain_"+name] = loss.get_epoch_error()
@@ -459,6 +495,7 @@ def run_experiment(
         gradnorm=2,
         gradacc=1,
         batsize=-1,
+        usedynamicatsize=False,
         maxlen=30,
         testbatsize=-1,
         epochs=-1,
