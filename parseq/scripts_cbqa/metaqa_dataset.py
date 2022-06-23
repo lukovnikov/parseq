@@ -256,7 +256,7 @@ class KBDataset(Dataset):
     getitemtype = "pair"       # "pair" or "set"
     ansmaxlen = 200
     maxitemnr = 100
-    numsamples = 2
+    numsamples = 1
 
     def __init__(self, triples, tok=None):
         super(KBDataset, self).__init__()
@@ -326,7 +326,24 @@ class KBDataset(Dataset):
             rettensor = rettensor[:newpos + 1]
             return triple_pretokenized, rettensor
 
-        elif return_mode == "seqset":   # set of sequences
+        elif return_mode == "seqset":
+            values = sorted(values)
+            if len(values) > self.maxitemnr:
+                values = values[:self.maxitemnr]
+            rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
+            choices = random.sample(range(len(rets)), min(len(rets), self.numsamples))
+            rettensors = []
+            for choice in choices:
+                itemnr, retid = rets[choice]
+                rettensor_ = self.elems_pretokenized[retid]
+                rettensor = [itemnr, self.D[f"[TOTAL-{len(rets)}]"]] + [0] * rettensor_.size(0)
+                rettensor = torch.tensor(rettensor, device=rettensor_.device, dtype=rettensor_.dtype)
+                rettensor[2:] = rettensor_[:]
+                rettensors.append(rettensor)
+
+            return [triple_pretokenized] * len(choices), rettensors
+
+        elif return_mode == "seqsetold":   # set of sequences
             values = sorted(values)
             if len(values) > self.maxitemnr:
                 values = values[:self.maxitemnr]
