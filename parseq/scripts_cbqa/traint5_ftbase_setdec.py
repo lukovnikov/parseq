@@ -89,9 +89,15 @@ class Model(torch.nn.Module):
         same |= y == 0
         acc = torch.all(same, -1).float()
 
-        # predstring = [self.tok.decode(g, skip_special_tokens=False, clean_up_tokenization_spaces=True) for g in preds]
-        # targetstring = [self.tok.decode(t, skip_special_tokens=False, clean_up_tokenization_spaces=True) for t in y.unbind(0)]
-        return {"accuracy": acc}, None
+        inpstring = [self.tok.decode(xe, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "") for xe in x.unbind(0)]
+        predstring = [self.tok.decode(g, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "") for g in preds.unbind(0)]
+        targetstring = [self.tok.decode(t, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "") for t in y.unbind(0)]
+
+        stracc = [float(a == b) for a, b in zip(predstring, targetstring)]
+        stracc = torch.tensor(stracc, device=x.device)
+
+        ret = list(zip(inpstring, predstring, targetstring))
+        return {"accuracy": stracc}, ret
 
     def forward(self, *args, **kwargs):
         if self.training:

@@ -1,5 +1,6 @@
 import shelve
 from collections import Callable
+from copy import deepcopy
 
 import torch
 from functools import partial
@@ -124,14 +125,14 @@ class MetaQADatasetLoader(object):
         # validindexes = set(indexes[:round(validfrac * len(_ds))])
         # _ds[lambda x: ]
 
-        ds = _ds
         if subset is not None:
             print(f"using only subset: {subset}")
+            _ds = deepcopy(_ds)
             random.shuffle(_ds._examples)
-            ds = Dataset(_ds.examples[:subset])
+            _ds._examples = _ds._examples[:subset]
 
-        trainds = ds.map(partial(_ds.item_mapper, return_mode=mode))
-        trainvalidds = ds.map(partial(_ds.item_mapper, return_mode=mode))
+        trainds = _ds.map(partial(_ds.item_mapper, return_mode=mode))
+        trainvalidds = _ds.map(partial(_ds.item_mapper, return_mode=mode))
         return trainds, trainvalidds
 
     def process_kb_line(self, line:str):
@@ -147,7 +148,7 @@ class QADataset(Dataset):
     getitemtype = "seq"
     ansmaxlen = 200
     maxitemnr = 100
-    numsamples = 2
+    numsamples = 1
 
     def __init__(self, examples, tok=None, kbds=None):
         super(QADataset, self).__init__()
@@ -204,15 +205,26 @@ class QADataset(Dataset):
             if len(values) > self.maxitemnr:
                 values = values[:self.maxitemnr]
             rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
-            rets.append((self.D[f"[ITEM-{len(rets)}]"], None))
-            choices = random.sample(rets, min(len(rets), self.numsamples))
+            # lastret = rets[-1]
+            # rets[-1] = (lastret)
+            # rets.append((self.D[f"[ITEM-{len(rets)}]"], None))
+            choices = random.sample(range(len(rets)), min(len(rets), self.numsamples))
+            # choices = random.sample(rets, min(len(rets), self.numsamples))
             rettensors = []
             for choice in choices:
-                itemnr, retid = choice
-                if retid is None:
-                    rettensor = torch.tensor([itemnr, self.D["[ENDOFSET]"], self.D[self.tok.eos_token]], dtype=torch.long)
+                itemnr, retid = rets[choice]
+                # if retid is None:
+                #     rettensor = torch.tensor([itemnr, self.D["[ENDOFSET]"], self.D[self.tok.eos_token]], dtype=torch.long)
+                # else:
+                last = choice == len(rets) - 1
+                rettensor_ = self.elems_pretokenized[retid]
+                if last:
+                    rettensor = torch.zeros(rettensor_.size(0) + 2, device=rettensor_.device, dtype=rettensor_.dtype)
+                    rettensor[0] = itemnr
+                    rettensor[1:-2] = rettensor_[:-1]
+                    rettensor[-2] = self.D["[ENDOFSET]"]    # end of set
+                    rettensor[-1] = rettensor_[-1]          # EOS token
                 else:
-                    rettensor_ = self.elems_pretokenized[retid]
                     rettensor = torch.zeros(rettensor_.size(0)+1, device=rettensor_.device, dtype=rettensor_.dtype)
                     rettensor[0] = itemnr
                     rettensor[1:] = rettensor_[:]
