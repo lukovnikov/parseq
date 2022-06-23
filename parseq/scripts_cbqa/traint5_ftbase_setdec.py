@@ -122,9 +122,9 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
 
     dataset, whichhops = dataset.split("/")
 
-    extratokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]"]
-    extratokens = extratokens + [f"[ITEM-{i}]" for i in range(1000)]
-    tok = T5TokenizerFast.from_pretrained(tokname, additional_special_tokens=extratokens, extra_ids=0)
+    extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]", "[LASTITEM]"] # + [f"extra_id_{i}" for i in range(0)]
+    extra_tokens = extra_tokens + [f"[ITEM-{i}]" for i in range(1000)] + [f"[TOTAL-{i}" for i in range(1000)]
+    tok = T5TokenizerFast.from_pretrained(tokname, additional_special_tokens=extra_tokens, extra_ids=0)
 
     tt.tick("loading data")
     kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, subset=subset, mode="seqset")

@@ -200,7 +200,24 @@ class QADataset(Dataset):
 
             return question_pretokenized, rettensor
 
-        elif return_mode == "seqset":   # set of sequences
+        elif return_mode == "seqset":
+            values = sorted(values)
+            if len(values) > self.maxitemnr:
+                values = values[:self.maxitemnr]
+            rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
+            choices = random.sample(range(len(rets)), min(len(rets), self.numsamples))
+            rettensors = []
+            for choice in choices:
+                itemnr, retid = rets[choice]
+                rettensor_ = self.elems_pretokenized[retid]
+                rettensor = [itemnr, self.D[f"[TOTAL-{len(rets)}]"]] + [0] * len(rettensor_.size(0))
+                rettensor = torch.tensor(rettensor, device=rettensor_.device, dtype=rettensor_.dtype)
+                rettensor[2:] = rettensor_[:]
+                rettensors.append(rettensor)
+
+            return [question_pretokenized] * len(choices), rettensors
+
+        elif return_mode == "seqsetold":   # set of sequences
             values = sorted(values)
             if len(values) > self.maxitemnr:
                 values = values[:self.maxitemnr]
@@ -417,8 +434,8 @@ def elems_from_triples(triples):
 
 def try_metaqa(recompute = True):
     print("loading tokenizer")
-    extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]"] # + [f"extra_id_{i}" for i in range(0)]
-    extra_tokens = extra_tokens + [f"[ITEM-{i}]" for i in range(1000)]
+    extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]", "[LASTITEM]"] # + [f"extra_id_{i}" for i in range(0)]
+    extra_tokens = extra_tokens + [f"[ITEM-{i}]" for i in range(1000)] + [f"[TOTAL-{i}" for i in range(1000)]
     tok = T5TokenizerFast.from_pretrained("google/t5-v1_1-base", additional_special_tokens=extra_tokens, extra_ids=0)
     print(len(tok.vocab))
 
