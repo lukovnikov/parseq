@@ -121,7 +121,7 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
     tok = T5TokenizerFast.from_pretrained(tokname, additional_special_tokens=extratokens, extra_ids=0)
 
     tt.tick("loading data")
-    kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, mode="seqset")
+    kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, subset=subset, mode="seqset")
     qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute, subset=subset, mode="seqset")
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
@@ -175,7 +175,7 @@ def collate_fn(data):
 
 
 def run(lr=0.0001,
-        kbpretrain=False,
+        kbpretrainepochs=0,
         useadafactor=False,
         gradnorm=3,
         gradacc=1,
@@ -227,7 +227,7 @@ def run(lr=0.0001,
 
     tt = q.ticktock("script")
     tt.tick("data")
-    tok, trainds, evaltrainds, validds, testds, kbtrainds, kbvalidds = \
+    tok, trainds, evaltrainds, validds, testds, kbtrainds, kbevaltrainds = \
         load_ds(dataset=dataset, tokname=f"google/t5-v1_1-{modelsize}",
                 recompute=recomputedata,
                 subset=5000 if debugcode else None)
@@ -236,7 +236,7 @@ def run(lr=0.0001,
     NUMWORKERS = 0
 
     kbtraindl = DataLoader(kbtrainds, batch_size=batsize, shuffle=True, collate_fn=collate_fn, num_workers=NUMWORKERS)
-    kbvaliddl = DataLoader(kbvalidds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
+    kbevaltraindl = DataLoader(kbevaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
 
     traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=collate_fn, num_workers=NUMWORKERS)
     evaltraindl = DataLoader(evaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
@@ -281,7 +281,7 @@ def run(lr=0.0001,
     vmetrics = make_array_of_metrics("accuracy", reduction="mean")
     xmetrics = make_array_of_metrics("accuracy", reduction="mean")
 
-    kbtloss = make_array_of_metrics("loss", "accuracy", reduction="mean")
+    kbtloss = make_array_of_metrics("loss", "accuracy", "elemacc", reduction="mean")
     kbtmetrics = make_array_of_metrics("accuracy", reduction="mean")
 
     params = m.get_tunable_params_and_set_requires_grad()
@@ -313,12 +313,63 @@ def run(lr=0.0001,
 
     def wandb_logger_kbft():
         d = {}
-        for name, loss in zip(["loss", "accuracy"], kbtloss):
+        for name, loss in zip(["loss", "accuracy", "elemacc"], kbtloss):
             d["kbtrain_"+name] = loss.get_epoch_error()
         for name, loss in zip(["accuracy"], kbtmetrics):
-            d["kbvalid_"+name] = loss.get_epoch_error()
+            d["kbevaltrain_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
+    # do training on KB data
+    if kbpretrainepochs > 0:
+        print("Pretraining on KB data")
+
+        t_max = epochs * len(traindl) / gradacc
+        warmupsteps = int(round(warmup * t_max))
+        print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
+        if cosinecycles == 0:  # constant lr
+            tt.msg("Using constant LR with warmup")
+            lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> 1.
+        else:
+            tt.msg("Using cosine LR with restart and with warmup")
+            lr_schedule = q.sched.Linear(0, 1, steps=warmupsteps) >> (
+                CosineWithRestart(high=1., low=0.1, cycles=cosinecycles, steps=t_max - warmupsteps)) >> 0.1
+
+        lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
+
+        kbvalidepoch = partial(q.test_epoch,
+                             model=m,
+                             losses=kbtmetrics,
+                             dataloader=kbevaltraindl,
+                             device=device,
+                             on_end=[lambda: wandb_logger_kbft()])
+
+        kbtrainbatch = partial(q.train_batch,
+                             gradient_accumulation_steps=gradacc,
+                             on_before_optim_step=[
+                                 lambda: torch.nn.utils.clip_grad_norm_(params, gradnorm),
+                                 lambda: lr_schedule.step()
+                             ]
+                             )
+
+        kbtrainepoch = partial(q.train_epoch, model=m,
+                             dataloader=kbtraindl,
+                             optim=optim,
+                             losses=kbtloss,
+                             device=device,
+                             _train_batch=kbtrainbatch,
+                             on_start=[],
+                             on_end=[])
+
+        tt.tick("training")
+        q.run_training(run_train_epoch=kbtrainepoch,
+                       run_valid_epoch=[kbvalidepoch] if not debugcode else [kbvalidepoch],
+                       max_epochs=kbpretrainepochs,
+                       validinter=validinter,
+                       )
+        tt.tock("done training")
+
+    # do training on QA data
+    print("Training on QA data")
     t_max = epochs * len(traindl) / gradacc
     warmupsteps = int(round(warmup * t_max))
     print(f"Total number of updates: {t_max} . Warmup: {warmupsteps}")
@@ -413,7 +464,7 @@ def run(lr=0.0001,
 
 def run_experiment(
         lr=-1.,
-        kbpretrain=False,
+        kbpretrainepochs=0,
         useadafactor=False,
         gradnorm=2,
         gradacc=1,

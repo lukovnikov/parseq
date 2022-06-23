@@ -32,8 +32,9 @@ class AdaptedT5WordEmbeddings(torch.nn.Module):
         xtra_mapper = torch.zeros_like(orig_mapper)
         masker = torch.zeros_like(orig_mapper).to(torch.bool)
         newidx = 1
+        unk_id = tok.vocab[tok.unk_token]
         for added_token in self.added_tokens.values():
-            orig_mapper[added_token] = tok.vocab[tok.unk_token]
+            orig_mapper[added_token] = unk_id
             xtra_mapper[added_token] = newidx
             masker[added_token] = 1
             newidx += 1

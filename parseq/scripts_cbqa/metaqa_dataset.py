@@ -103,7 +103,7 @@ class MetaQADatasetLoader(object):
         question = question.replace("\s+", " ").strip()
         return question, answers
 
-    def load_kb(self, tok, validfrac=0.1, recompute=False, mode="set"):
+    def load_kb(self, tok, validfrac=0.1, recompute=False, subset=None, mode="set"):
         with shelve.open(os.path.basename(__file__)+".cache") as s:
             if f"kbds-{mode}" not in s or recompute:
                 print("loading KB dataset")
@@ -123,8 +123,15 @@ class MetaQADatasetLoader(object):
         # random.shuffle(indexes)
         # validindexes = set(indexes[:round(validfrac * len(_ds))])
         # _ds[lambda x: ]
-        trainds = _ds.map(partial(_ds.item_mapper, return_mode=mode))
-        trainvalidds = _ds.map(partial(_ds.item_mapper, return_mode=mode))
+
+        ds = _ds
+        if subset is not None:
+            print(f"using only subset: {subset}")
+            random.shuffle(_ds._examples)
+            ds = Dataset(_ds.examples[:subset])
+
+        trainds = ds.map(partial(_ds.item_mapper, return_mode=mode))
+        trainvalidds = ds.map(partial(_ds.item_mapper, return_mode=mode))
         return trainds, trainvalidds
 
     def process_kb_line(self, line:str):
