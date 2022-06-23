@@ -210,7 +210,7 @@ class QADataset(Dataset):
             for choice in choices:
                 itemnr, retid = rets[choice]
                 rettensor_ = self.elems_pretokenized[retid]
-                rettensor = [itemnr, self.D[f"[TOTAL-{len(rets)}]"]] + [0] * len(rettensor_.size(0))
+                rettensor = [itemnr, self.D[f"[TOTAL-{len(rets)}]"]] + [0] * rettensor_.size(0)
                 rettensor = torch.tensor(rettensor, device=rettensor_.device, dtype=rettensor_.dtype)
                 rettensor[2:] = rettensor_[:]
                 rettensors.append(rettensor)
