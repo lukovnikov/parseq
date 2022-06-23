@@ -218,7 +218,7 @@ class QADataset(Dataset):
                 # else:
                 last = choice == len(rets) - 1
                 rettensor_ = self.elems_pretokenized[retid]
-                if last and False:
+                if last:
                     rettensor = [itemnr] + [0] * (len(rettensor_.size(0)) - 1) + [self.D["[ENDOFSET]"], self.D[self.tok.eos_token]]
                     rettensor = torch.tensor(rettensor, device=rettensor_.device, dtype=rettensor_.dtype)
                     # rettensor = torch.zeros(rettensor_.size(0) + 2, device=rettensor_.device, dtype=rettensor_.dtype)
