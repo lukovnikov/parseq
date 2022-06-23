@@ -435,7 +435,7 @@ def elems_from_triples(triples):
 def try_metaqa(recompute = True):
     print("loading tokenizer")
     extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]", "[LASTITEM]"] # + [f"extra_id_{i}" for i in range(0)]
-    extra_tokens = extra_tokens + [f"[ITEM-{i}]" for i in range(1000)] + [f"[TOTAL-{i}" for i in range(1000)]
+    extra_tokens = extra_tokens + [f"[ITEM-{i}]" for i in range(1000)] + [f"[TOTAL-{i}]" for i in range(1000)]
     tok = T5TokenizerFast.from_pretrained("google/t5-v1_1-base", additional_special_tokens=extra_tokens, extra_ids=0)
     print(len(tok.vocab))
 
