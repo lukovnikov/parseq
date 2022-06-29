@@ -43,6 +43,9 @@ class Model(torch.nn.Module):
         self.model = model
         self.tok = tok
 
+    def copy_from(self, m):
+        self.model = m.model
+
     def get_tunable_params_and_set_requires_grad(self):
         ret = self.parameters()
         return ret
@@ -89,9 +92,9 @@ class Model(torch.nn.Module):
         same |= y == 0
         acc = torch.all(same, -1).float()
 
-        inpstring = [self.tok.decode(xe, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "") for xe in x.unbind(0)]
-        predstring = [self.tok.decode(g, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "") for g in preds.unbind(0)]
-        targetstring = [self.tok.decode(t, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "") for t in y.unbind(0)]
+        inpstring = [decode(xe, self.tok) for xe in x.unbind(0)]
+        predstring = [decode(g, self.tok) for g in preds.unbind(0)]
+        targetstring = [decode(t, self.tok) for t in y.unbind(0)]
 
         stracc = [float(a == b) for a, b in zip(predstring, targetstring)]
         stracc = torch.tensor(stracc, device=x.device)
@@ -421,7 +424,7 @@ def run(lr=0.0001,
 
     tt.tick("training")
     q.run_training(run_train_epoch=trainepoch,
-                   run_valid_epoch=[trainevalepoch, validepoch] if not debugcode else [trainevalepoch],
+                   run_valid_epoch=[trainevalepoch, validepoch] if not debugcode else [trainevalepoch, validepoch],
                    max_epochs=epochs,
                    check_stop=[lambda: eyt.check_stop()],
                    validinter=validinter,
@@ -435,37 +438,143 @@ def run(lr=0.0001,
                          losses=xmetrics,
                          dataloader=testdl,
                          device=device,
-                         on_end=[lambda: m.clear_cache()])
+                         on_end=[])
 
     tt.tick("running test before reloading")
     testres = testepoch()
 
-    settings.update({"test_fscore_at_end": xmetrics[2].get_epoch_error()})
+    settings.update({"test_acc_at_end": xmetrics[0].get_epoch_error()})
     tt.tock(f"Test results: {testres}")
 
     if eyt.remembered is not None:
         tt.msg("reloading model with best validation accuracy")
-        m.copy_from(eyt.remembered)
+        m = eyt.remembered
 
-        tt.tick("running evaluation on subset of train")
-        trainres = trainevalepoch()
-        settings.update({"train_fscore_at_earlystop": tmetrics[2].get_epoch_error()})
-        tt.tock(f"Train results: {trainres}")
+    tt.tick("running evaluation on subset of train")
+    trainres, _ = evaluate(m, evaltrainds, tok=tok, batsize=testbatsize, device=device, maxnumans=100)
+    settings.update({"train_fscore_at_earlystop": trainres["fscore"]})
+    tt.tock(f"Train results: {trainres}")
 
-        tt.tick("rerunning validation")
-        validres = validepoch()
-        settings.update({"valid_fscore_at_earlystop": vmetrics[2].get_epoch_error()})
-        tt.tock(f"Validation results: {validres}")
+    tt.tick("running evaluation on validation set")
+    validres, _ = evaluate(m, validds, tok=tok, batsize=testbatsize, device=device, maxnumans=100)
+    settings.update({"valid_fscore_at_earlystop": validres["fscore"]})
+    tt.tock(f"Validation results: {validres}")
 
-        tt.tick("running test")
-        testres = testepoch()
-        settings.update({"test_fscore_at_earlystop": xmetrics[2].get_epoch_error()})
-        tt.tock(f"Test results: {testres}")
+    tt.tick("running test")
+    testres, _ = evaluate(m, testds, tok=tok, batsize=testbatsize, device=device, maxnumans=100)
+    settings.update({"test_fscore_at_earlystop": testres["fscore"]})
+    tt.tock(f"Test results: {testres}")
 
     wandb.config.update(settings)
     q.pp_dict(settings)
     run.finish()
     # sleep(15)
+
+
+def decode(x, tok):
+    return tok.decode(x, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "")
+
+
+def evaluate(m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100):
+    expected = get_expected(ds, tok=tok)
+    predictions = get_predictions(m, ds, tok=tok, batsize=batsize, device=device, maxnumans=maxnumans)
+
+    fscore, precision, recall = compute_metrics(predictions, expected)
+
+    ret = {"fscore": fscore,
+           "precision": precision,
+           "recall": recall,
+           }
+    return ret, predictions
+
+
+def compute_metrics(preds, exps):
+    recalls = []
+    precisions = []
+    fscores = []
+    missing = 0
+    for k, exp in exps.items():
+        pred = preds[k] if k in preds else set()
+        if k not in preds:
+            missing += 1
+        tp = len(pred & exp)
+        recall = tp / max(1e-6, len(exp))
+        precision = tp / max(1e-6, len(pred))
+        fscore = 2 * recall * precision / max(1e-6, (recall + precision))
+        recalls.append(recall)
+        precisions.append(precision)
+        fscores.append(fscore)
+    # assert missing == 0
+    return np.mean(fscores), np.mean(precisions), np.mean(recalls)
+
+
+def get_expected(ds, tok=None):
+    rootds = ds.rootds
+    ret = {}
+    for example in rootds.examples:
+        inptensor, answers, _ = example
+        inpstr = decode(inptensor, tok)
+        if inpstr not in ret:
+            ret[inpstr] = set()
+        ret[inpstr].update(answers)
+    return ret
+
+
+def get_predictions(m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100):
+    tto = q.ticktock("pred")
+    tto.tick("predicting")
+    tt = q.ticktock("-")
+    dssize = len(ds)
+    vocab = {k: v for k, v in tok.vocab.items()}
+
+    m.eval()
+    m.to(device)
+
+    ret = {}
+    with torch.no_grad():
+        batch = []
+        i = 0
+        done = False
+        while not done:
+            while len(batch) < batsize:
+                inpstr = ds[i][0][0]
+                inpstr = decode(inpstr, tok)
+                batch.append((inpstr, ds[i][0][0], ds[i][1][0]))
+                batch[-1][-1][0] = vocab[f"[ITEM-0]"]
+                i += 1
+                if i == len(ds):
+                    done = True
+                    break
+
+            # tt.msg(f"{i}/{len(ds)}")
+            tt.live(f"{i}/{len(ds)}")
+            packedbatch = autocollate(batch)
+            packedbatch = q.recmap(packedbatch, lambda x: x.to(device) if hasattr(x, "to") else x)
+
+            _, outs = m(*packedbatch[1:])
+            newbatch = []
+            for j, out in enumerate(outs):
+                inpstr = batch[j][0]
+                _inpstr, predstr, _ = out
+                if inpstr not in ret:
+                    ret[inpstr] = set()
+                match = re.match(r"\[ITEM-(\d+)\]\[TOTAL-(\d+)\](.+)", predstr)
+                ansid, numans, ans = 0, 0, None
+                if match:
+                    ansid = int(match.group(1))
+                    numans = int(match.group(2))
+                    ans = match.group(3)
+                    ret[inpstr].add(re.sub(r"\[[^\]]+\]", "", ans).strip())
+                    if ansid + 1 >= min(numans, maxnumans):     # we can remove this example from the batch
+                        pass
+                    else:
+                        newbatch.append(batch[j])
+                        newbatch[-1][-1][0] = vocab[f"[ITEM-{ansid+1}]"]
+
+            batch = newbatch
+
+    return ret
+
 
 
 def run_experiment(
