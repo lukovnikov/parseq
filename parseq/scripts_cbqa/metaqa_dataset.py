@@ -67,8 +67,8 @@ class MetaQADatasetLoader(object):
         evaltrainds = Dataset(evaltrainds.examples[:len(evaltrainds)//10])
 
         trainds = _ds["train"]
-        validds = _ds["valid"]
-        testds = _ds["test"]
+        validds = Dataset(_ds["valid"].examples)
+        testds = Dataset(_ds["test"].examples)
         if subset is not None:
             print(f"using only subset: {subset}")
             random.shuffle(trainds._examples)
