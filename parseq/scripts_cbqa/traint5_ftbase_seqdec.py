@@ -129,8 +129,8 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
     tok = T5TokenizerFast.from_pretrained(tokname, additional_special_tokens=extra_tokens, extra_ids=0)
 
     tt.tick("loading data")
-    kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, subset=subset, mode="seqset")
-    qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute, subset=subset, mode="seqset")
+    kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, subset=subset, mode="seq")
+    qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute, subset=subset, mode="seq")
     print("length KBDS:", len(kbds))
     print("length QADS:", len(qads))
     print("length QADS train:", len(qads[0]))
@@ -170,16 +170,6 @@ def load_ds(dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None
     print(f"QA questions avg/max length is {np.mean(qalens):.1f}/{max(qalens)}")
     print(f"QA answers avg/max length is {np.mean(qaanswerlens):.1f}/{max(qaanswerlens)}")
     return (tok,) + qads + kbds
-
-
-def collate_fn(data):
-    newdata = []
-    for datapoint in data:
-        inps, outs = datapoint
-        for inp, out in zip(inps, outs):
-            newdata.append((inp, out))
-    ret = autocollate(newdata)
-    return ret
 
 
 def run(lr=0.0001,
@@ -228,7 +218,7 @@ def run(lr=0.0001,
 
     if usesavedconfig and len(loadfrom) > 0:
         print("loading into locals() is not supported by Python so calling run() again")
-        with open(f"runs/setdec/{loadfrom}/run.config", "r") as f:
+        with open(f"runs/seqdec/{loadfrom}/run.config", "r") as f:
             loadedconfig = json.load(f)
             settings.update(loadedconfig)
             run(**settings)
@@ -236,9 +226,9 @@ def run(lr=0.0001,
 
     q.pp_dict(settings, indent=3)
 
-    wandbrun = wandb.init(project=f"t5-cbqa-ftbase-setdec", config=settings, reinit=True)
-    configsavepath = Path(f"runs/setdec/{wandbrun.name}/run.config")
-    modelsavepath = Path(f"runs/setdec/{wandbrun.name}/model.ckpt")
+    wandbrun = wandb.init(project=f"t5-cbqa-ftbase-seqdec", config=settings, reinit=True)
+    configsavepath = Path(f"runs/seqdec/{wandbrun.name}/run.config")
+    modelsavepath = Path(f"runs/seqdec/{wandbrun.name}/model.ckpt")
     if not nosave:
         configsavepath.parent.mkdir(parents=True, exist_ok=True)
         with configsavepath.open("w") as f:
@@ -285,8 +275,8 @@ def run(lr=0.0001,
     m = Model(t5model, t5model.config.d_model, tok=tok)
 
     if len(loadfrom) > 0:
-        tt.tick(f"Loading model from runs/setdec/{loadfrom}/model.ckpt")
-        m.load_state_dict(torch.load(f"runs/setdec/{loadfrom}/model.ckpt"))
+        tt.tick(f"Loading model from runs/seqdec/{loadfrom}/model.ckpt")
+        m.load_state_dict(torch.load(f"runs/seqdec/{loadfrom}/model.ckpt"))
         tt.tock()
 
     m.maxlen = maxlen
@@ -482,17 +472,17 @@ def run(lr=0.0001,
         m = eyt.remembered
 
     tt.tick("running evaluation on subset of train")
-    trainres, _ = evaluate(m, evaltrainds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/setdec/{wandbrun.name}/evaltrain.outs.json")
+    trainres, _ = evaluate(m, evaltrainds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/seqdec/{wandbrun.name}/evaltrain.outs.json")
     settings.update({"train_fscore_at_earlystop": trainres["fscore"]})
     tt.tock(f"Train results: {trainres}")
 
     tt.tick("running evaluation on validation set")
-    validres, _ = evaluate(m, validds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/setdec/{wandbrun.name}/valid.outs.json")
+    validres, _ = evaluate(m, validds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/seqdec/{wandbrun.name}/valid.outs.json")
     settings.update({"valid_fscore_at_earlystop": validres["fscore"]})
     tt.tock(f"Validation results: {validres}")
 
     tt.tick("running test")
-    testres, _ = evaluate(m, testds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/setdec/{wandbrun.name}/test.outs.json")
+    testres, _ = evaluate(m, testds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/seqdec/{wandbrun.name}/test.outs.json")
     settings.update({"test_fscore_at_earlystop": testres["fscore"]})
     tt.tock(f"Test results: {testres}")
 
@@ -500,10 +490,6 @@ def run(lr=0.0001,
     q.pp_dict(settings)
     wandbrun.finish()
     # sleep(15)
-
-
-def decode(x, tok):
-    return tok.decode(x, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "")
 
 
 def evaluate(m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100, savename=None):
@@ -612,7 +598,6 @@ def get_predictions(m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"
             batch = newbatch
 
     return ret
-
 
 
 def run_experiment(
