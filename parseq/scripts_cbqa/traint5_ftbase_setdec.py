@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import itertools
 
 import json
@@ -207,6 +209,9 @@ def run(lr=0.0001,
         gpu=-1,
         recomputedata=False,
         version="v0",
+        nosave=False,
+        loadfrom="",
+        usesavedconfig=False,
         ):
     """
     :param lrmul:       multiplier for learning rate for secondary parameters
@@ -223,9 +228,25 @@ def run(lr=0.0001,
     """
 
     settings = locals().copy()
+
+    if usesavedconfig and len(loadfrom) > 0:
+        print("loading into locals() is not supported by Python so calling run() again")
+        with open(f"{loadfrom}/run.config", "r") as f:
+            loadedconfig = json.load(f)
+            settings.update(loadedconfig)
+            run(**settings)
+            return
+
     q.pp_dict(settings, indent=3)
 
-    run = wandb.init(project=f"t5-cbqa-ftbase-setdec", config=settings, reinit=True)
+    wandbrun = wandb.init(project=f"t5-cbqa-ftbase-setdec", config=settings, reinit=True)
+    configsavepath = Path(f"{wandbrun.name}/run.config")
+    modelsavepath = Path(f"{wandbrun.name}/model.ckpt")
+    if not nosave:
+        configsavepath.parent.mkdir(parents=True, exist_ok=True)
+        with configsavepath.open("w") as f:
+            json.dump(settings, f, indent=4)
+
     random.seed(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -265,6 +286,12 @@ def run(lr=0.0001,
     lmhead = AdaptedT5LMHead(t5model.lm_head, tok)
     t5model.lm_head = lmhead
     m = Model(t5model, t5model.config.d_model, tok=tok)
+
+    if len(loadfrom) > 0:
+        tt.tick(f"Loading model from {loadfrom}/model.ckpt")
+        m.load_state_dict(torch.load(f"{loadfrom}/model.ckpt"))
+        tt.tock()
+
     m.maxlen = maxlen
 
     def _set_dropout(m, _p=0.):
@@ -328,6 +355,13 @@ def run(lr=0.0001,
             d["kbevaltrain_"+name] = loss.get_epoch_error()
         wandb.log(d)
 
+    if not nosave:
+        tt.msg(f"Saving model at {modelsavepath} at every epoch")
+    def modelsaver():
+        if not nosave:
+            modelsavepath.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(m.state_dict(), modelsavepath)
+
     # do training on KB data
     if kbpretrainepochs > 0:
         print("Pretraining on KB data")
@@ -346,28 +380,28 @@ def run(lr=0.0001,
         lr_schedule = q.sched.LRSchedule(optim, lr_schedule)
 
         kbvalidepoch = partial(q.test_epoch,
-                             model=m,
-                             losses=kbtmetrics,
-                             dataloader=kbevaltraindl,
-                             device=device,
-                             on_end=[lambda: wandb_logger_kbft()])
+                               model=m,
+                               losses=kbtmetrics,
+                               dataloader=kbevaltraindl,
+                               device=device,
+                               on_end=[lambda: wandb_logger_kbft()])
 
         kbtrainbatch = partial(q.train_batch,
-                             gradient_accumulation_steps=gradacc,
-                             on_before_optim_step=[
-                                 lambda: torch.nn.utils.clip_grad_norm_(params, gradnorm),
-                                 lambda: lr_schedule.step()
-                             ]
-                             )
+                               gradient_accumulation_steps=gradacc,
+                               on_before_optim_step=[
+                                   lambda: torch.nn.utils.clip_grad_norm_(params, gradnorm),
+                                   lambda: lr_schedule.step()
+                               ]
+                               )
 
         kbtrainepoch = partial(q.train_epoch, model=m,
-                             dataloader=kbtraindl,
-                             optim=optim,
-                             losses=kbtloss,
-                             device=device,
-                             _train_batch=kbtrainbatch,
-                             on_start=[],
-                             on_end=[])
+                               dataloader=kbtraindl,
+                               optim=optim,
+                               losses=kbtloss,
+                               device=device,
+                               _train_batch=kbtrainbatch,
+                               on_start=[],
+                               on_end=[modelsaver])
 
         tt.tick("training")
         q.run_training(run_train_epoch=kbtrainepoch,
@@ -413,7 +447,7 @@ def run(lr=0.0001,
                          device=device,
                          _train_batch=trainbatch,
                          on_start=[],
-                         on_end=[])
+                         on_end=[modelsaver])
 
     trainevalepoch = partial(q.test_epoch,
                              model=m,
@@ -434,11 +468,11 @@ def run(lr=0.0001,
     settings.update({"train_loss_at_end": tloss[0].get_epoch_error()})
 
     testepoch = partial(q.test_epoch,
-                         model=m,
-                         losses=xmetrics,
-                         dataloader=testdl,
-                         device=device,
-                         on_end=[])
+                        model=m,
+                        losses=xmetrics,
+                        dataloader=testdl,
+                        device=device,
+                        on_end=[])
 
     tt.tick("running test before reloading")
     testres = testepoch()
@@ -451,23 +485,23 @@ def run(lr=0.0001,
         m = eyt.remembered
 
     tt.tick("running evaluation on subset of train")
-    trainres, _ = evaluate(m, evaltrainds, tok=tok, batsize=testbatsize, device=device, maxnumans=100)
+    trainres, _ = evaluate(m, evaltrainds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"{wandbrun.name}/evaltrain.outs.json")
     settings.update({"train_fscore_at_earlystop": trainres["fscore"]})
     tt.tock(f"Train results: {trainres}")
 
     tt.tick("running evaluation on validation set")
-    validres, _ = evaluate(m, validds, tok=tok, batsize=testbatsize, device=device, maxnumans=100)
+    validres, _ = evaluate(m, validds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"{wandbrun.name}/valid.outs.json")
     settings.update({"valid_fscore_at_earlystop": validres["fscore"]})
     tt.tock(f"Validation results: {validres}")
 
     tt.tick("running test")
-    testres, _ = evaluate(m, testds, tok=tok, batsize=testbatsize, device=device, maxnumans=100)
+    testres, _ = evaluate(m, testds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"{wandbrun.name}/test.outs.json")
     settings.update({"test_fscore_at_earlystop": testres["fscore"]})
     tt.tock(f"Test results: {testres}")
 
     wandb.config.update(settings)
     q.pp_dict(settings)
-    run.finish()
+    wandbrun.finish()
     # sleep(15)
 
 
@@ -475,24 +509,33 @@ def decode(x, tok):
     return tok.decode(x, skip_special_tokens=False, clean_up_tokenization_spaces=True).replace("<pad>", "").replace("</s>", "")
 
 
-def evaluate(m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100):
+def evaluate(m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100, savename=None):
     expected = get_expected(ds, tok=tok)
     predictions = get_predictions(m, ds, tok=tok, batsize=batsize, device=device, maxnumans=maxnumans)
 
-    fscore, precision, recall = compute_metrics(predictions, expected)
+    metrics = compute_metrics(predictions, expected)
 
-    ret = {"fscore": fscore,
-           "precision": precision,
-           "recall": recall,
+    fscores, precisions, recalls = list(zip(*list(metrics.values())))
+    ret = {"fscore": np.mean(fscores),
+           "precision": np.mean(precisions),
+           "recall":  np.mean(recalls),
            }
+
+    if savename is not None:
+        p = Path(savename)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w") as f:
+            json.dump({"expected": {k: tuple(v) for k, v in expected.items()},
+                       "predictions": {k: tuple(v) for k, v in predictions.items()},
+                       "metrics": metrics},
+                      f)
+
     return ret, predictions
 
 
 def compute_metrics(preds, exps):
-    recalls = []
-    precisions = []
-    fscores = []
     missing = 0
+    ret = {}
     for k, exp in exps.items():
         pred = preds[k] if k in preds else set()
         if k not in preds:
@@ -501,11 +544,9 @@ def compute_metrics(preds, exps):
         recall = tp / max(1e-6, len(exp))
         precision = tp / max(1e-6, len(pred))
         fscore = 2 * recall * precision / max(1e-6, (recall + precision))
-        recalls.append(recall)
-        precisions.append(precision)
-        fscores.append(fscore)
+        ret[k] = (fscore, precision, recall)
     # assert missing == 0
-    return np.mean(fscores), np.mean(precisions), np.mean(recalls)
+    return ret
 
 
 def get_expected(ds, tok=None):
@@ -600,6 +641,9 @@ def run_experiment(
         debugcode=False,
         gpu=-1,
         recomputedata=False,
+        nosave=False,
+        loadfrom="",
+        usesavedconfig=False,
         ):
 
     settings = locals().copy()
