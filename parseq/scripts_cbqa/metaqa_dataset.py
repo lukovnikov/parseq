@@ -198,7 +198,7 @@ class QADataset(Dataset):
             if not torch.all(rettensor >= 0):
                 assert torch.all(rettensor >= 0)
 
-            return question_pretokenized, rettensor
+            return [question_pretokenized], [rettensor]
 
         elif return_mode == "seqset":
             values = sorted(values)
@@ -216,40 +216,6 @@ class QADataset(Dataset):
                 rettensors.append(rettensor)
 
             return [question_pretokenized] * len(choices), rettensors
-
-        elif return_mode == "seqsetold":   # set of sequences
-            values = sorted(values)
-            if len(values) > self.maxitemnr:
-                values = values[:self.maxitemnr]
-            rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
-            # lastret = rets[-1]
-            # rets[-1] = (lastret)
-            # rets.append((self.D[f"[ITEM-{len(rets)}]"], None))
-            choices = random.sample(range(len(rets)), min(len(rets), self.numsamples))
-            # choices = random.sample(rets, min(len(rets), self.numsamples))
-            rettensors = []
-            for choice in choices:
-                itemnr, retid = rets[choice]
-                # if retid is None:
-                #     rettensor = torch.tensor([itemnr, self.D["[ENDOFSET]"], self.D[self.tok.eos_token]], dtype=torch.long)
-                # else:
-                last = choice == len(rets) - 1
-                rettensor_ = self.elems_pretokenized[retid]
-                if last:
-                    rettensor = [itemnr] + [0] * (len(rettensor_.size(0)) - 1) + [self.D["[ENDOFSET]"], self.D[self.tok.eos_token]]
-                    rettensor = torch.tensor(rettensor, device=rettensor_.device, dtype=rettensor_.dtype)
-                    # rettensor = torch.zeros(rettensor_.size(0) + 2, device=rettensor_.device, dtype=rettensor_.dtype)
-                    # rettensor[0] = itemnr
-                    rettensor[1:-2] = rettensor_[:-1]
-                    # rettensor[-2] = self.D["[ENDOFSET]"]    # end of set
-                    # rettensor[-1] = rettensor_[-1]          # EOS token
-                else:
-                    rettensor = torch.zeros(rettensor_.size(0)+1, device=rettensor_.device, dtype=rettensor_.dtype)
-                    rettensor[0] = itemnr
-                    rettensor[1:] = rettensor_[:]
-                rettensors.append(rettensor)
-
-            return [question_pretokenized]*len(choices), rettensors
 
 
 class KBDataset(Dataset):
@@ -324,7 +290,7 @@ class KBDataset(Dataset):
                     newpos = pos
             rettensor[newpos] = 1  # EOS
             rettensor = rettensor[:newpos + 1]
-            return triple_pretokenized, rettensor
+            return [triple_pretokenized], [rettensor]
 
         elif return_mode == "seqset":
             values = sorted(values)
@@ -342,99 +308,6 @@ class KBDataset(Dataset):
                 rettensors.append(rettensor)
 
             return [triple_pretokenized] * len(choices), rettensors
-
-        elif return_mode == "seqsetold":   # set of sequences
-            values = sorted(values)
-            if len(values) > self.maxitemnr:
-                values = values[:self.maxitemnr]
-            rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
-            rets.append((self.D[f"[ITEM-{len(rets)}]"], None))
-            choices = random.sample(rets, min(len(rets), self.numsamples))
-            rettensors = []
-            for choice in choices:
-                itemnr, retid = choice
-                if retid is None:
-                    rettensor = torch.tensor([itemnr, self.D["[ENDOFSET]"], self.D[self.tok.eos_token]], dtype=torch.long)
-                else:
-                    rettensor_ = self.elems_pretokenized[retid]
-                    rettensor = torch.zeros(rettensor_.size(0)+1, device=rettensor_.device, dtype=rettensor_.dtype)
-                    rettensor[0] = itemnr
-                    rettensor[1:] = rettensor_[:]
-                rettensors.append(rettensor)
-
-            return [triple_pretokenized]*len(choices), rettensors
-
-            # if len(retids) > 20:
-            #     retids = retids[:20]
-            # rettensor = []
-            # for retid in retids:
-            #     rettensor_i = self.elems_pretokenized[retid]
-            #     # rettensor_i[-1] = self.tok.vocab["[SEPITEM]"]
-            #     rettensor.append(rettensor_i)
-            # rettensor = torch.cat(rettensor, 0)
-            # rettensor[rettensor == self.tok.vocab["</s>"]] = self.tok.vocab["[SEPITEM]"]
-            # rettensor[-1] = self.tok.vocab["</s>"]
-            # return triple_pretokenized, rettensor
-
-        #
-        #
-        # triple = super(KBDataset, self).__getitem__(item)
-        # subj, rel, obj = triple
-        # if random.random() > 0.8:
-        #     posans = rel
-        #     negans = rel
-        #     while (subj, negans, obj) in self.tripleset:
-        #         negans = random.choice(self.rels)
-        #     whichreplaced = 1
-        # else:
-        #     if random.random() > 0.5:
-        #         posans = obj
-        #         negans = obj
-        #         while (subj, rel, negans) in self.tripleset:
-        #             negans = random.choice(self.entities)
-        #         whichreplaced = 2
-        #     else:
-        #         posans = subj
-        #         negans = subj
-        #         while (negans, rel, obj) in self.tripleset:
-        #             negans = random.choice(self.entities)
-        #         whichreplaced = 0
-        #
-        # triple = [subj, rel, obj]
-        # triple[whichreplaced] = "[ANS]"
-        #
-        # triplestr = f"{triple[0]} [SEP1] {triple[1]} [SEP2] {triple[2]}"
-        # return triplestr, posans, negans
-    #
-    #
-    # def __getitem__(self, item):
-    #     triple = super(KBDataset, self).__getitem__(item)
-    #     postriple = triple
-    #     subj, rel, obj = triple
-    #     if random.random() > 0.8:
-    #         randrel = rel
-    #         while (subj, randrel, obj) in self.tripleset:
-    #             randrel = random.choice(self.rels)
-    #         negtriple = (subj, randrel, obj)
-    #         whichreplaced = 2
-    #     else:
-    #         if random.random() > 0.5:
-    #             randobj = obj
-    #             while (subj, rel, randobj) in self.tripleset:
-    #                 randobj = random.choice(self.entities)
-    #             negtriple = (subj, rel, randobj)
-    #             whichreplaced = 3
-    #         else:
-    #             randsubj = subj
-    #             while (randsubj, rel, obj) in self.tripleset:
-    #                 randsubj = random.choice(self.entities)
-    #             negtriple = (randsubj, rel, obj)
-    #             whichreplaced = 1
-    #
-    #     triplestr = f"[ANS]"
-    #     posstr = f"{postriple[0]} [SEP1] {postriple[1]} [SEP2] {postriple[2]}"
-    #     negstr = f"{negtriple[0]} [SEP1] {negtriple[1]} [SEP2] {negtriple[2]}"
-    #     return posstr, negstr, whichreplaced
 
 
 def elems_from_triples(triples):
