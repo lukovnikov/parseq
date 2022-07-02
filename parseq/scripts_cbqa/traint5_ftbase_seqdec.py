@@ -107,6 +107,8 @@ class NewMain(Main):
                     predset = set([re.sub(r"\[[^\]]+\]", "", ae).strip() for ae in predset]) - {""}
                     ret[inpstr] = predset
 
+                batch = []
+
         return ret
 
 
