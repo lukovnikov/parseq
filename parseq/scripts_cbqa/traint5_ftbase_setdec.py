@@ -415,7 +415,7 @@ class Main():
                                    device=device,
                                    _train_batch=kbtrainbatch,
                                    on_start=[],
-                                   on_end=[modelsaverpretrain()])
+                                   on_end=[modelsaverpretrain])
 
             tt.tick("training")
             q.run_training(run_train_epoch=kbtrainepoch,
