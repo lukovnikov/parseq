@@ -249,6 +249,7 @@ class Main():
         wandbrun = wandb.init(project=f"t5-cbqa-ftbase-{self.VARIANT}", config=settings, reinit=True)
         configsavepath = Path(f"runs/{self.VARIANT}/{wandbrun.name}/run.config")
         modelsavepath = Path(f"runs/{self.VARIANT}/{wandbrun.name}/model.ckpt")
+        kbpretrainedmodelsavepath = Path(f"runs/{self.VARIANT}/{wandbrun.name}/model.kbpretrained.ckpt")
         if not nosave:
             configsavepath.parent.mkdir(parents=True, exist_ok=True)
             with configsavepath.open("w") as f:
@@ -370,6 +371,10 @@ class Main():
             if not nosave:
                 modelsavepath.parent.mkdir(parents=True, exist_ok=True)
                 torch.save(m.state_dict(), modelsavepath)
+        def modelsaverpretrain():
+            if not nosave:
+                kbpretrainedmodelsavepath.parent.mkdir(parents=True, exist_ok=True)
+                torch.save(m.state_dict(), kbpretrainedmodelsavepath)
 
         # do training on KB data
         if kbpretrainepochs > 0:
@@ -410,7 +415,7 @@ class Main():
                                    device=device,
                                    _train_batch=kbtrainbatch,
                                    on_start=[],
-                                   on_end=[modelsaver])
+                                   on_end=[modelsaverpretrain()])
 
             tt.tick("training")
             q.run_training(run_train_epoch=kbtrainepoch,
@@ -684,4 +689,7 @@ def run_experiment(
 if __name__ == '__main__':
     q.argprun(run_experiment)
 
-    # python traint5_ftbase_setdec.py -gpu 0 -batsize 150 -testbatsize 300 -epochs 16 -kbpretrainvalidinter 5 -validinter 1 -modelsize base -kbpretrainepochs 121 -seed 42
+    # T5-BASE:
+    # python traint5_ftbase_setdec.py -gpu 0 -batsize 150 -testbatsize 300 -epochs 16 -kbpretrainvalidinter 5 -validinter 1 -modelsize base -kbpretrainepochs 121
+    # T5-SMALL:
+    # python traint5_ftbase_setdec.py -gpu 0 -batsize 300 -testbatsize 500 -epochs 26 -kbpretrainvalidinter 5 -validinter 1 -modelsize small -kbpretrainepochs 201
