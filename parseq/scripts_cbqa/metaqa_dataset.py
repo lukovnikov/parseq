@@ -355,16 +355,16 @@ def try_metaqa(recompute = True):
     print("\n".join([str(trainqads[i]) for i in range(15)]))
     print("\n".join([str(validqads[i]) for i in range(15)]))
     # tok.add_tokens(["[SEP1]", "[SEP2]"])
-
-    t5 = T5Model.from_pretrained("google/t5-v1_1-base")
-    emb = t5.encoder.embed_tokens
-    # from parseq.scripts_qa.bert import adapt_embeddings
-    from parseq.scripts_cbqa.adapter_t5 import adapt_embeddings
-    emb = adapt_embeddings(emb, tok)
     #
-    tokids = tok("[SEP1] [SEP2] <unk> </s> <pad>", return_tensors="pt")["input_ids"]
-    embs = emb(tokids)
-    t5(tokids)
+    # t5 = T5Model.from_pretrained("google/t5-v1_1-base")
+    # emb = t5.encoder.embed_tokens
+    # # from parseq.scripts_qa.bert import adapt_embeddings
+    # from parseq.scripts_cbqa.adapter_t5 import adapt_embeddings
+    # emb = adapt_embeddings(emb, tok)
+    # #
+    # tokids = tok("[SEP1] [SEP2] <unk> </s> <pad>", return_tensors="pt")["input_ids"]
+    # embs = emb(tokids)
+    # t5(tokids)
 
 
 if __name__ == '__main__':

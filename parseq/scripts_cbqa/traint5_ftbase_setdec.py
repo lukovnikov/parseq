@@ -23,7 +23,7 @@ from parseq.datasets import autocollate
 
 from parseq.eval import make_array_of_metrics
 from parseq.scripts_cbqa.adapter_t5 import AdaptedT5WordEmbeddings, AdaptedT5LMHead
-from parseq.scripts_cbqa.metaqa_dataset import MetaQADatasetLoader
+from parseq.scripts_cbqa.metaqa_dataset import MetaQADatasetLoader, KBDataset, QADataset
 from parseq.scripts_resplit.t5 import CosineWithRestart
 
 # uses decoder to generate answer string
