@@ -155,6 +155,7 @@ class QADataset(Dataset):
         self.entities = kbds.entities
         self.elemdic = kbds.elemdic
         self.elems_pretokenized = kbds.elems_pretokenized
+        self.inoutdegrees = kbds.inoutdegrees
         mappedexamples = [self.init_mapper(example, tok) for example in tqdm.tqdm(examples)]
         self._examples = mappedexamples
         self.tok = tok
@@ -166,17 +167,16 @@ class QADataset(Dataset):
     def init_mapper(self, x, tok):
         question, answers, hops, split = x
         question_tokenized = tok(question, return_tensors="pt")["input_ids"][0]
-        # answerstr = " [SEPITEM] ".join(answers[:min(len(answers), self.maxans)])
-        # answertensor = tok(answerstr, return_tensors="pt")["input_ids"][0]
-        answerset = set(answers)
-        return question_tokenized, answerset, hops, split
+        answers = sorted(list(answers), key=lambda x: (-self.inoutdegrees[x] if x in self.inoutdegrees else 0, x))
+
+        return question_tokenized, answers, hops, split
 
     def item_mapper(self, example, return_mode=None):
         return_mode = return_mode if return_mode is not None else self.getitemtype
         question_pretokenized, values, hops = example
 
         if return_mode == "seq":
-            retids = [self.elemdic[value] for value in sorted(values)]
+            retids = [self.elemdic[value] for value in values]
             # retid = retids[0]
             # # retid = random.choice(retids)
             # rettensor = self.elems_pretokenized[retid]
@@ -201,7 +201,7 @@ class QADataset(Dataset):
             return [question_pretokenized], [rettensor]
 
         elif return_mode == "seqset":
-            values = sorted(values)
+            # values = sorted(values)
             if len(values) > self.maxitemnr:
                 values = values[:self.maxitemnr]
             rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
@@ -243,6 +243,18 @@ class KBDataset(Dataset):
         for elem in tqdm.tqdm(self.entities):
             self.elems_pretokenized.append(self.tok("[ENT] " + elem, return_tensors="pt")["input_ids"][0])
 
+        self.inoutdegrees = {}
+
+        print("Computing inoutdegrees")
+        for triple in tqdm.tqdm(triples):
+            subj, _, obj = triple
+            if obj not in self.inoutdegrees:
+                self.inoutdegrees[obj] = 0
+            if subj not in self.inoutdegrees:
+                self.inoutdegrees[subj] = 0
+            self.inoutdegrees[obj] += 1
+            self.inoutdegrees[subj] += 1
+
         # group triples
         print("Grouping triples")
         tripledict = {}
@@ -254,6 +266,10 @@ class KBDataset(Dataset):
                 if not _triple in tripledict:
                     tripledict[_triple] = set()
                 tripledict[_triple].add(triple[_triple[1]])
+
+        print("Sorting tripledict by inoutdegree")
+        for k in tqdm.tqdm(tripledict):
+            tripledict[k] = sorted(list(tripledict[k]), key=lambda x: (-self.inoutdegrees[x] if x in self.inoutdegrees else 0, x))
 
         outtriples = []
         print("Creating triple tensors")
@@ -274,7 +290,7 @@ class KBDataset(Dataset):
         triple_pretokenized, negwhich, values = example
 
         if return_mode == "seq":
-            retids = [self.elemdic[value] for value in sorted(values)]
+            retids = [self.elemdic[value] for value in values]
             # retid = random.choice(retids)
             # rettensor = self.elems_pretokenized[retid]
             rettensor = torch.ones(self.ansmaxlen, dtype=torch.long) * -1000
@@ -293,7 +309,7 @@ class KBDataset(Dataset):
             return [triple_pretokenized], [rettensor]
 
         elif return_mode == "seqset":
-            values = sorted(values)
+            # values = sorted(values)
             if len(values) > self.maxitemnr:
                 values = values[:self.maxitemnr]
             rets = [(self.D[f"[ITEM-{i}]"], self.elemdic[value]) for i, value in enumerate(values)]
