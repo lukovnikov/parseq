@@ -193,6 +193,7 @@ class Main():
     def run(self,
             lr=0.0001,
             kbpretrainepochs=0,
+            kbpretrainvalidinter=-1,
             useadafactor=False,
             gradnorm=3,
             gradacc=1,
@@ -260,6 +261,8 @@ class Main():
 
         if testbatsize == -1:
             testbatsize = batsize
+        if kbpretrainvalidinter == -1:
+            kbpretrainvalidinter = validinter
 
         tt = q.ticktock("script")
         tt.tick("data")
@@ -413,7 +416,7 @@ class Main():
             q.run_training(run_train_epoch=kbtrainepoch,
                            run_valid_epoch=[kbvalidepoch] if not debugcode else [kbvalidepoch],
                            max_epochs=kbpretrainepochs,
-                           validinter=validinter,
+                           validinter=kbpretrainvalidinter,
                            )
             tt.tock("done training")
 
@@ -618,6 +621,7 @@ class Main():
 def run_experiment(
         lr=-1.,
         kbpretrainepochs=0,
+        kbpretrainvalidinter=-1,
         useadafactor=False,
         gradnorm=2,
         gradacc=1,
@@ -679,3 +683,5 @@ def run_experiment(
 
 if __name__ == '__main__':
     q.argprun(run_experiment)
+
+    # python traint5_ftbase_setdec.py -gpu 0 -batsize 150 -testbatsize 300 -epochs 16 -kbpretrainvalidinter 5 -validinter 1 -modelsize base -kbpretrainepochs 121 -seed 42

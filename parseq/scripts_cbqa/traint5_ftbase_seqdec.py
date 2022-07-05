@@ -115,6 +115,7 @@ class NewMain(Main):
 def run_experiment(
         lr=-1.,
         kbpretrainepochs=0,
+        kbpretrainvalidinter=-1,
         useadafactor=False,
         gradnorm=2,
         gradacc=1,
