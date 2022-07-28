@@ -23,7 +23,8 @@ from parseq.datasets import autocollate
 
 from parseq.eval import make_array_of_metrics
 from parseq.scripts_cbqa.adapter_t5 import AdaptedT5WordEmbeddings, AdaptedT5LMHead
-from parseq.scripts_cbqa.metaqa_dataset import MetaQADatasetLoader, KBDataset, QADataset
+from parseq.scripts_cbqa.metaqa_dataset import MetaQADatasetLoader
+from parseq.scripts_cbqa.webqa_dataset import WebQADatasetLoader
 from parseq.scripts_resplit.t5 import CosineWithRestart
 
 # uses decoder to generate answer string
@@ -141,16 +142,20 @@ class Main():
         tt = q.ticktock("data")
         tt.tick(f"loading '{dataset}'")
 
-        dataset, whichhops = dataset.split("/")
+        dataset, whichhops = dataset.split("/") if "/" in dataset else (dataset, None)
 
         extra_tokens = ["[SEP1]", "[SEP2]", "[ANS]", "[ENT]", "[REL]", "[SEPITEM]", "[BOS]", "[ENDOFSET]", "[LASTITEM]"] # + [f"extra_id_{i}" for i in range(0)]
         extra_tokens = extra_tokens + [f"[ITEM-{i}]" for i in range(1000)] + [f"[TOTAL-{i}]" for i in range(1000)]
         tok = T5TokenizerFast.from_pretrained(tokname, additional_special_tokens=extra_tokens, extra_ids=0)
 
         tt.tick("loading data")
-        kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, subset=subset, mode=self.DATAMODE)
-        qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute, subset=subset, mode=self.DATAMODE)
-        print("length KBDS:", len(kbds))
+        if dataset == "metaqa":
+            kbds = MetaQADatasetLoader().load_kb(tok, recompute=recompute, subset=subset, mode=self.DATAMODE)
+            qads = MetaQADatasetLoader().load_qa(whichhops, kbds[0].baseds, tok, recompute=recompute, subset=subset, mode=self.DATAMODE)
+        elif dataset == "webqa":
+            kbds = None
+            qads = WebQADatasetLoader().load_qa(tok, recompute=recompute, mode=self.DATAMODE)
+
         print("length QADS:", len(qads))
         print("length QADS train:", len(qads[0]))
         print("length QADS eval train:", len(qads[1]))
@@ -158,15 +163,17 @@ class Main():
         print("length QADS test:", len(qads[3]))
         tt.tock("loaded data")
 
-        kblens = []
-        kbanswerlens = []
-        for tripletensors, answertensors in tqdm(kbds[0]):
-            for tripletensor in tripletensors:
-                kblens.append(tripletensor.size(-1))
-            for answertensor in answertensors:
-                kbanswerlens.append(answertensor.size(-1))
-        print(f"KB triple avg/max length is {np.mean(kblens):.1f}/{max(kblens)}")
-        print(f"KB answer avg/max length is {np.mean(kbanswerlens):.1f}/{max(kbanswerlens)}")
+        if kbds is not None:
+            print("length KBDS:", len(kbds))
+            kblens = []
+            kbanswerlens = []
+            for tripletensors, answertensors in tqdm(kbds[0]):
+                for tripletensor in tripletensors:
+                    kblens.append(tripletensor.size(-1))
+                for answertensor in answertensors:
+                    kbanswerlens.append(answertensor.size(-1))
+            print(f"KB triple avg/max length is {np.mean(kblens):.1f}/{max(kblens)}")
+            print(f"KB answer avg/max length is {np.mean(kbanswerlens):.1f}/{max(kbanswerlens)}")
 
         qalens = []
         qaanswerlens = []
@@ -188,6 +195,9 @@ class Main():
 
         print(f"QA questions avg/max length is {np.mean(qalens):.1f}/{max(qalens)}")
         print(f"QA answers avg/max length is {np.mean(qaanswerlens):.1f}/{max(qaanswerlens)}")
+
+        if kbds is None:
+            kbds = (None, None)
         return (tok,) + qads + kbds
 
     def run(self,
@@ -275,8 +285,11 @@ class Main():
         tt.tick("dataloaders")
         NUMWORKERS = 0
 
-        kbtraindl = DataLoader(kbtrainds, batch_size=batsize, shuffle=True, collate_fn=collate_fn, num_workers=NUMWORKERS)
-        kbevaltraindl = DataLoader(kbevaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
+        if kbtrainds is not None:
+            kbtraindl = DataLoader(kbtrainds, batch_size=batsize, shuffle=True, collate_fn=collate_fn, num_workers=NUMWORKERS)
+            kbevaltraindl = DataLoader(kbevaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
+        else:
+            kbtraindl, kbevaltraindl = None, None
 
         traindl = DataLoader(trainds, batch_size=batsize, shuffle=True, collate_fn=collate_fn, num_workers=NUMWORKERS)
         evaltraindl = DataLoader(evaltrainds, batch_size=testbatsize, shuffle=False, collate_fn=collate_fn, num_workers=NUMWORKERS)
