@@ -94,9 +94,11 @@ class QADataset(Dataset):
         super(QADataset, self).__init__()
 
         longestanswer = ""
+        maxanswersetlen = 0
         maxnumans = 0
         mappedexamples = []
         for example in tqdm.tqdm(examples):
+            answersetlen = 0
             question, answers, split = example
             question_tokenized = tok(question, return_tensors="pt")["input_ids"][0]                 # tokenize question
             answers = sorted(list(answers), key=lambda x: x)
@@ -105,10 +107,13 @@ class QADataset(Dataset):
             numans = len(answers)
             maxnumans = max(maxnumans, numans)
             for answer, _answer in zip(answers, _answers):
+                answersetlen += len(_answer)
                 if len(answer) > len(longestanswer):
                     longestanswer = answer
                     print("longer answer found: ", answer, _answer)
+            maxanswersetlen = max(maxanswersetlen, answersetlen)
 
+        print(f"maxanswersetlen: {maxanswersetlen}")
         print("maxnumans: ", maxnumans)
 
         self._examples = mappedexamples
