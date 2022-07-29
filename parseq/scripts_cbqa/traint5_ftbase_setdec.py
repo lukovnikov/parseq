@@ -275,6 +275,10 @@ class Main():
         if kbpretrainvalidinter == -1:
             kbpretrainvalidinter = validinter
 
+        decodeanswers = False
+        if dataset.startswith("webqa"):
+            decodeanswers = True
+
         tt = q.ticktock("script")
         tt.tick("data")
         tok, trainds, evaltrainds, validds, testds, kbtrainds, kbevaltrainds = \
@@ -512,17 +516,17 @@ class Main():
             m = eyt.remembered
 
         tt.tick("running evaluation on subset of train")
-        trainres, _ = self.evaluate(m, evaltrainds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/{self.VARIANT}/{wandbrun.name}/evaltrain.outs.json")
+        trainres, _ = self.evaluate(m, evaltrainds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/{self.VARIANT}/{wandbrun.name}/evaltrain.outs.json", decodeanswers=decodeanswers)
         settings.update({"train_fscore_at_earlystop": trainres["fscore"]})
         tt.tock(f"Train results: {trainres}")
 
         tt.tick("running evaluation on validation set")
-        validres, _ = self.evaluate(m, validds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/{self.VARIANT}/{wandbrun.name}/valid.outs.json")
+        validres, _ = self.evaluate(m, validds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/{self.VARIANT}/{wandbrun.name}/valid.outs.json", decodeanswers=decodeanswers)
         settings.update({"valid_fscore_at_earlystop": validres["fscore"]})
         tt.tock(f"Validation results: {validres}")
 
         tt.tick("running test")
-        testres, _ = self.evaluate(m, testds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/{self.VARIANT}/{wandbrun.name}/test.outs.json")
+        testres, _ = self.evaluate(m, testds, tok=tok, batsize=testbatsize, device=device, maxnumans=100, savename=f"runs/{self.VARIANT}/{wandbrun.name}/test.outs.json", decodeanswers=decodeanswers)
         settings.update({"test_fscore_at_earlystop": testres["fscore"]})
         tt.tock(f"Test results: {testres}")
 
@@ -531,8 +535,8 @@ class Main():
         wandbrun.finish()
         # sleep(15)
 
-    def evaluate(self, m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100, savename=None):
-        expected = self.get_expected(ds, tok=tok)
+    def evaluate(self, m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100, savename=None, decodeanswers=False):
+        expected = self.get_expected(ds, tok=tok, decodeanswers=decodeanswers)
         predictions = self.get_predictions(m, ds, tok=tok, batsize=batsize, device=device, maxnumans=maxnumans)
 
         metrics = self.compute_metrics(predictions, expected)
@@ -569,7 +573,7 @@ class Main():
         # assert missing == 0
         return ret
 
-    def get_expected(self, ds, tok=None):
+    def get_expected(self, ds, tok=None, decodeanswers=False):
         rootds = ds.rootds
         ret = {}
         for example in rootds.examples:
@@ -580,7 +584,9 @@ class Main():
             inpstr = decode(inptensor, tok)
             if inpstr not in ret:
                 ret[inpstr] = set()
-            answers = [decode(answer, tok) for answer in answers]
+            if decodeanswers:
+                answers = [decode(answer, tok) for answer in answers]
+                answers = [re.sub(r"\[[^\]]+\]", "", ans).strip() for ans in answers]
             ret[inpstr].update(answers)
         return ret
 
