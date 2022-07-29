@@ -573,7 +573,10 @@ class Main():
         rootds = ds.rootds
         ret = {}
         for example in rootds.examples:
-            inptensor, answers, _ = example
+            if len(example) == 3:
+                inptensor, answers, _ = example
+            else:
+                inptensor, answers = example
             inpstr = decode(inptensor, tok)
             if inpstr not in ret:
                 ret[inpstr] = set()
