@@ -580,6 +580,7 @@ class Main():
             inpstr = decode(inptensor, tok)
             if inpstr not in ret:
                 ret[inpstr] = set()
+            answers = [decode(answer, tok) for answer in answers]
             ret[inpstr].update(answers)
         return ret
 
