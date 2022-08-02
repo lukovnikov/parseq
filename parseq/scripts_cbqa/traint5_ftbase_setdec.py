@@ -22,7 +22,7 @@ from transformers import Adafactor, T5TokenizerFast, T5Model
 from parseq.datasets import autocollate
 
 from parseq.eval import make_array_of_metrics
-from parseq.scripts_cbqa.adapter_t5 import AdaptedT5WordEmbeddings, AdaptedT5LMHead
+from parseq.scripts_cbqa.adapter_t5 import AdaptedT5WordEmbeddings, AdaptedT5LMHead, adapt_t5_to_tok
 from parseq.scripts_cbqa.metaqa_dataset import MetaQADatasetLoader
 from parseq.scripts_cbqa.webqa_dataset import WebQADatasetLoader
 from parseq.scripts_resplit.t5 import CosineWithRestart
@@ -122,13 +122,13 @@ class Model(torch.nn.Module):
 class Main():
     DATAMODE = "seqset"
     TESTMETRIC = "accuracy"
-    VARIANT = "setdec"
+    VARIANT = "ftbase-setdec"
     MAXLEN = 30
 
     def __init__(self):
         super(Main, self).__init__()
 
-    def get_model(self):
+    def get_task_model(self):
         return Model
 
     def load_ds(self, dataset="metaqa/1", tokname="t5-small", recompute=False, subset=None):
@@ -200,6 +200,26 @@ class Main():
             kbds = (None, None)
         return (tok,) + qads + kbds
 
+    def create_model(self, tok=None, modelsize=None, maxlen=None, dropout=0., loadfrom=None, tt=None, **kwargs):
+        tt.tick("model")
+        modelname = f"google/t5-v1_1-{modelsize}"
+        t5model = T5ForConditionalGeneration.from_pretrained(modelname)
+        t5model = adapt_t5_to_tok(t5model, tok)
+        m = self.get_task_model()(t5model, t5model.config.d_model, tok=tok)
+
+        if len(loadfrom) > 0:
+            tt.tick(f"Loading model from runs/{self.VARIANT}/{loadfrom}/model.ckpt")
+            m.load_state_dict(torch.load(f"runs/{self.VARIANT}/{loadfrom}/model.ckpt"))
+            tt.tock()
+
+        m.maxlen = maxlen
+
+        def _set_dropout(m, _p=0.):
+            if isinstance(m, torch.nn.Dropout):
+                m.p = _p
+        m.apply(partial(_set_dropout, _p=dropout))
+        tt.tock()
+
     def run(self,
             lr=0.0001,
             kbpretrainepochs=0,
@@ -225,9 +245,10 @@ class Main():
             gpu=-1,
             recomputedata=False,
             version="v0",
-            nosave=False,
+            dosave=False,
             loadfrom="",
             usesavedconfig=False,
+            adapterdim=-1,
             ):
         """
         :param lrmul:       multiplier for learning rate for secondary parameters
@@ -256,11 +277,11 @@ class Main():
 
         q.pp_dict(settings, indent=3)
 
-        wandbrun = wandb.init(project=f"t5-cbqa-ftbase-{self.VARIANT}", config=settings, reinit=True)
+        wandbrun = wandb.init(project=f"t5-cbqa-{self.VARIANT}", config=settings, reinit=True)
         configsavepath = Path(f"runs/{self.VARIANT}/{wandbrun.name}/run.config")
         modelsavepath = Path(f"runs/{self.VARIANT}/{wandbrun.name}/model.ckpt")
         kbpretrainedmodelsavepath = Path(f"runs/{self.VARIANT}/{wandbrun.name}/model.kbpretrained.ckpt")
-        if not nosave:
+        if dosave:
             configsavepath.parent.mkdir(parents=True, exist_ok=True)
             with configsavepath.open("w") as f:
                 json.dump(settings, f, indent=4)
@@ -303,29 +324,9 @@ class Main():
         tt.tock()
         tt.tock()
 
-        tt.tick("model")
-        modelname = f"google/t5-v1_1-{modelsize}"
-        t5model = T5ForConditionalGeneration.from_pretrained(modelname)
-        emb = AdaptedT5WordEmbeddings(t5model.encoder.embed_tokens, tok)
-        t5model.encoder.embed_tokens = emb
-        t5model.decoder.embed_tokens = emb
-        t5model.shared = emb
-        lmhead = AdaptedT5LMHead(t5model.lm_head, tok)
-        t5model.lm_head = lmhead
-        m = self.get_model()(t5model, t5model.config.d_model, tok=tok)
-
-        if len(loadfrom) > 0:
-            tt.tick(f"Loading model from runs/{self.VARIANT}/{loadfrom}/model.ckpt")
-            m.load_state_dict(torch.load(f"runs/{self.VARIANT}/{loadfrom}/model.ckpt"))
-            tt.tock()
-
-        m.maxlen = maxlen
-
-        def _set_dropout(m, _p=0.):
-            if isinstance(m, torch.nn.Dropout):
-                m.p = _p
-        m.apply(partial(_set_dropout, _p=dropout))
-        tt.tock()
+        tt.msg("creating model")
+        m = self.create_model(tok=tok, modelsize=modelsize, maxlen=maxlen, dropout=dropout, loadfrom=loadfrom, tt=tt,
+                              adapterdim=adapterdim)
 
         if testcode:
             tt.tick("testcode")
@@ -382,20 +383,20 @@ class Main():
                 d["kbevaltrain_"+name] = loss.get_epoch_error()
             wandb.log(d)
 
-        if not nosave:
+        if dosave:
             tt.msg(f"Saving model at {modelsavepath} at every epoch")
         def modelsaver():
-            if not nosave:
+            if dosave:
                 modelsavepath.parent.mkdir(parents=True, exist_ok=True)
                 torch.save(m.state_dict(), modelsavepath)
         def modelsaverpretrain():
-            if not nosave:
+            if dosave:
                 kbpretrainedmodelsavepath.parent.mkdir(parents=True, exist_ok=True)
                 torch.save(m.state_dict(), kbpretrainedmodelsavepath)
 
         # do training on KB data
         if kbpretrainepochs > 0:
-            print("Pretraining on KB data")
+            print("Pretraining on knowledge data")
 
             t_max = epochs * len(traindl) / gradacc
             warmupsteps = int(round(warmup * t_max))
@@ -669,7 +670,7 @@ def run_experiment(
         debugcode=False,
         gpu=-1,
         recomputedata=False,
-        nosave=False,
+        dosave=False,
         loadfrom="",
         usesavedconfig=False,
         ):

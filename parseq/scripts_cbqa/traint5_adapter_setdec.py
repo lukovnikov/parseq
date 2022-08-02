@@ -1,8 +1,11 @@
 import fire
 import re
+from transformers import T5ForConditionalGeneration
+
 import qelos as q
 import torch
 from parseq.datasets import autocollate
+from parseq.scripts_cbqa.adapter_t5 import adapt_t5_to_tok
 
 from parseq.scripts_cbqa.traint5_ftbase_setdec import Main, decode, Model
 
@@ -64,52 +67,33 @@ class NewModel(Model):
 class NewMain(Main):
     DATAMODE = "seq"
     TESTMETRIC = "fscore"
-    VARIANT = "ftbase-seqdec"
+    VARIANT = "adapter-setdec"
     MAXLEN = 200
 
     def get_task_model(self):
         return NewModel
 
-    def get_predictions(self, m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100):
-        tto = q.ticktock("pred")
-        tto.tick("predicting")
-        tt = q.ticktock("-")
+    def create_model(self, tok=None, modelsize=None, maxlen=None, dropout=0., loadfrom=None, tt=None,
+                     adapterdim=-1, adapterlayers=-1, **kwargs):
+        tt.tick("model")
+        modelname = f"google/t5-v1_1-{modelsize}"
+        t5model = T5ForConditionalGeneration.from_pretrained(modelname)
+        t5model = adapt_t5_to_tok(t5model, tok)
+        t5model = add_ff_adapters(t5model, adapterdim=adapterdim, adapterlayers=adapterlayers)
+        m = self.get_task_model()(t5model, t5model.config.d_model, tok=tok)
 
-        m.eval()
-        m.to(device)
+        if len(loadfrom) > 0:
+            tt.tick(f"Loading model from runs/{self.VARIANT}/{loadfrom}/model.ckpt")
+            m.load_state_dict(torch.load(f"runs/{self.VARIANT}/{loadfrom}/model.ckpt"))
+            tt.tock()
 
-        ret = {}
-        with torch.no_grad():
-            batch = []
-            i = 0
-            done = False
-            while not done:
-                while len(batch) < batsize:
-                    inpstr = ds[i][0][0]
-                    inpstr = decode(inpstr, tok)
-                    batch.append((inpstr, ds[i][0][0], ds[i][1][0]))
-                    i += 1
-                    if i == len(ds):
-                        done = True
-                        break
+        m.maxlen = maxlen
 
-                # tt.msg(f"{i}/{len(ds)}")
-                tt.live(f"{i}/{len(ds)}")
-                packedbatch = autocollate(batch)
-                packedbatch = q.recmap(packedbatch, lambda x: x.to(device) if hasattr(x, "to") else x)
-
-                _, outs = m(*packedbatch[1:])
-                for j, out in enumerate(outs):
-                    inpstr = batch[j][0]
-                    _inpstr, predstr, _ = out
-
-                    predset = re.split(r"(\[ENT\]|\[REL\]|\[SEPITEM\])", predstr.replace("[BOS]", ""))
-                    predset = set([re.sub(r"\[[^\]]+\]", "", ae).strip() for ae in predset]) - {""}
-                    ret[inpstr] = predset
-
-                batch = []
-
-        return ret
+        def _set_dropout(m, _p=0.):
+            if isinstance(m, torch.nn.Dropout):
+                m.p = _p
+        m.apply(partial(_set_dropout, _p=dropout))
+        tt.tock()
 
 
 def run_experiment(
@@ -138,6 +122,7 @@ def run_experiment(
         dosave=False,
         loadfrom="",
         usesavedconfig=False,
+        adapterdim=-1,
 ):
     settings = locals().copy()
 

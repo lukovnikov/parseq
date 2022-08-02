@@ -12,7 +12,7 @@ from torch.utils.checkpoint import checkpoint
 from transformers import T5Tokenizer, T5ForConditionalGeneration, T5Config, T5TokenizerFast
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 from transformers.models.t5.modeling_t5 import T5Stack, T5Block, T5LayerNorm, load_tf_weights_in_t5, T5LayerFF, \
-    T5LayerSelfAttention, T5LayerCrossAttention
+    T5LayerSelfAttention, T5LayerCrossAttention, T5Model
 
 
 # use 100k LM pre-trained T5 weights instead of normal weights! --> https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md
@@ -59,32 +59,47 @@ class AdaptedT5WordEmbeddings(torch.nn.Module):
 
 
 class AdaptedT5LMHead(torch.nn.Module):
+    """ Adapts a given T5 output linear layer with additional tokens based on the given T5 tokenizer """
     def __init__(self, originalhead:torch.nn.Linear, tok:Union[T5Tokenizer, T5TokenizerFast]):
         super(AdaptedT5LMHead, self).__init__()
-        self.originhead = originalhead
+        self.originalhead = originalhead
 
         if isinstance(tok, T5Tokenizer):
             self.added_tokens = tok.added_tokens_encoder
         elif isinstance(tok, T5TokenizerFast):
             self.added_tokens = dict(zip(tok.additional_special_tokens, tok.additional_special_tokens_ids))
 
-        numorigtokens = self.originhead.out_features
+        numorigtokens = self.originalhead.out_features
         addedids = self.added_tokens.values()
         self.start = min(min(addedids), numorigtokens)
+        assert min(addedids) >= numorigtokens
 
         numnewtokens = max(addedids) + 1 - self.start
-        self.newhead = torch.nn.Linear(self.originhead.in_features, numnewtokens, bias=False)
+        self.newhead = torch.nn.Linear(self.originalhead.in_features, numnewtokens, bias=False)
 
     def forward(self, x):
-        origscores = self.originhead(x)
+        origscores = self.originalhead(x)
         newscores = self.newhead(x)
         ret = torch.cat([origscores[..., :self.start], newscores], -1)
         return ret
+
+    def get_ft_params(self):
+        return self.newhead.parameters()
 
 
 def adapt_embeddings(embeddings, tok:Union[T5Tokenizer, T5TokenizerFast]):
     adaptedembs = AdaptedT5WordEmbeddings(embeddings, tok)
     return adaptedembs
+
+
+def adapt_t5_to_tok(t5model:T5Model, tok:Union[T5Tokenizer, T5TokenizerFast]):
+    emb = AdaptedT5WordEmbeddings(t5model.encoder.embed_tokens, tok)
+    t5model.encoder.embed_tokens = emb
+    t5model.decoder.embed_tokens = emb
+    t5model.shared = emb
+    lmhead = AdaptedT5LMHead(t5model.lm_head, tok)
+    t5model.lm_head = lmhead
+    return t5model
 
 
 class CosineWithRestart(q.sched.Cosine):
