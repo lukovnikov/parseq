@@ -9,45 +9,25 @@ import torch
 from parseq.datasets import autocollate
 from parseq.scripts_cbqa.adapter_t5 import adapt_t5_to_tok, add_ff_adapters
 
-from parseq.scripts_cbqa.traint5_ftbase_setdec import Main as OldMain, Model as OldModel
+from parseq.scripts_cbqa.traint5_adapter_setdec import Main as OldMain
+from parseq.scripts_cbqa.traint5_ftbase_seqdec import Model as Model, Main as OldMain2
 
 # uses decoder to generate answer string
 
-class Model(OldModel):
-    def get_tunable_params_and_set_requires_grad(self):
-        def _get_ft_params(m, out=None):
-            if hasattr(m, "get_ft_params"):
-                out.extend(m.get_ft_params())
 
-        collectedparams = []
-        self.apply(partial(_get_ft_params, out=collectedparams))
-
-        for param in self.parameters():
-            computegrad = False
-            for tunableparam in collectedparams:
-                if param is tunableparam:
-                    computegrad = True
-            param.requires_grad = computegrad
-
-        return collectedparams
-
-
-class Main(OldMain):
+class Main(OldMain, OldMain2):
     DATAMODE = "seq"
     TESTMETRIC = "fscore"
-    VARIANT = "adapter-setdec"
+    VARIANT = "adapter-seqdec"
     MAXLEN = 200
 
-    def get_task_model(self):
-        return Model
-
     def create_model(self, tok=None, modelsize=None, maxlen=None, dropout=0., loadfrom=None, tt=None,
-                     adapterdim=-1, adapterlayers=-1, **kwargs):
+                     adapterdim=-1, **kwargs):
         tt.tick("model")
         modelname = f"google/t5-v1_1-{modelsize}"
         t5model = T5ForConditionalGeneration.from_pretrained(modelname)
         t5model = adapt_t5_to_tok(t5model, tok)
-        t5model = add_ff_adapters(t5model, adapterdim=adapterdim, adapterlayers=adapterlayers, adaptmode="ff")
+        t5model = add_ff_adapters(t5model, adapterdim=adapterdim, adaptmode="ff")
         m = self.get_task_model()(t5model, t5model.config.d_model, tok=tok)
 
         if len(loadfrom) > 0:
@@ -62,6 +42,7 @@ class Main(OldMain):
                 m.p = _p
         m.apply(partial(_set_dropout, _p=dropout))
         tt.tock()
+        return m
 
 
 def run_experiment(

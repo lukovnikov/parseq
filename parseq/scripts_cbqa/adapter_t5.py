@@ -22,6 +22,7 @@ class AdaptedT5WordEmbeddings(torch.nn.Module):
     def __init__(self, original_emb:torch.nn.Embedding, tok:Union[T5Tokenizer, T5TokenizerFast]):
         super(AdaptedT5WordEmbeddings, self).__init__()
         self.original_emb = original_emb
+        self.embedding_dim = self.original_emb.embedding_dim
 
         if isinstance(tok, T5Tokenizer):
             self.added_tokens = tok.added_tokens_encoder
@@ -197,7 +198,7 @@ class AdapteredT5LayerFF(T5LayerFF):
 
 class AdapteredT5LayerSelfAttention(T5LayerSelfAttention):
     @classmethod
-    def cast(cls, obj:T5LayerFF, dim=None, adapterdim=None):
+    def cast(cls, obj:T5LayerSelfAttention, dim=None, adapterdim=None):
         obj.__class__ = cls
         obj.adapterff = AdapterBiasGatedFF(dim, adapterdim)
 
@@ -232,7 +233,7 @@ class AdapteredT5LayerSelfAttention(T5LayerSelfAttention):
 
 class AdapteredT5LayerCrossAttention(T5LayerCrossAttention):
     @classmethod
-    def cast(cls, obj:T5LayerFF, dim=None, adapterdim=None):
+    def cast(cls, obj:T5LayerCrossAttention, dim=None, adapterdim=None):
         obj.__class__ = cls
         obj.adapterff = AdapterBiasGatedFF(dim, adapterdim)
 
@@ -269,7 +270,7 @@ class AdapteredT5LayerCrossAttention(T5LayerCrossAttention):
         return list(self.adapterff.parameters()) + list(self.layer_norm.parameters())
 
 
-def insert_adapters(m:torch.nn.Module, dim=None, adapterdim=None, adaptmode="ada"):
+def insert_adapters(m:torch.nn.Module, dim=None, adapterdim=None, adaptmode="ff+self+cross"):
     selectors = set([x for x in adaptmode.split("+") if x in ("ff", "self", "cross")])
     if len(selectors) == 0:
         selectors = {"ff", "self", "cross"}
@@ -293,6 +294,14 @@ class VanillaT5Gen(T5ForConditionalGeneration):
                 m.p = _p
 
         self.apply(partial(_set_dropout, _p=p))
+
+
+def add_ff_adapters(t5model, adapterdim=None, adaptencoder=True, adaptmode="ff"):
+    dim = t5model.shared.embedding_dim
+    if adaptencoder:
+        t5model.encoder.apply(partial(insert_adapters, dim=dim, adapterdim=adapterdim, adaptmode=adaptmode))
+    t5model.decoder.apply(partial(insert_adapters, dim=dim, adapterdim=adapterdim, adaptmode=adaptmode))
+    return t5model
 
 
 class AdapteredT5Gen(T5ForConditionalGeneration):

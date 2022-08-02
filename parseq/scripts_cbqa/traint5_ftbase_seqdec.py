@@ -4,11 +4,11 @@ import qelos as q
 import torch
 from parseq.datasets import autocollate
 
-from parseq.scripts_cbqa.traint5_ftbase_setdec import Main, decode, Model
+from parseq.scripts_cbqa.traint5_ftbase_setdec import Main as OldMain, decode, Model as OldModel
 
 # uses decoder to generate answer string
 
-class NewModel(Model):
+class Model(OldModel):
 
     def test_forward(self, x, y):
         xmask = x != 0
@@ -61,14 +61,14 @@ class NewModel(Model):
         return {"fscore": fscores}, ret
 
 
-class NewMain(Main):
+class Main(OldMain):
     DATAMODE = "seq"
     TESTMETRIC = "fscore"
     VARIANT = "ftbase-seqdec"
     MAXLEN = 200
 
     def get_task_model(self):
-        return NewModel
+        return Model
 
     def get_predictions(self, m:Model, ds, tok=None, batsize=10, device=torch.device("cpu"), maxnumans=100):
         tto = q.ticktock("pred")
@@ -141,7 +141,7 @@ def run_experiment(
 ):
     settings = locals().copy()
 
-    main = NewMain()
+    main = Main()
     maxlen = main.MAXLEN if maxlen == -1 else maxlen
     settings["maxlen"] = maxlen
 
