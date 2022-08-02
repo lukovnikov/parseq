@@ -9,40 +9,22 @@ import torch
 from parseq.datasets import autocollate
 from parseq.scripts_cbqa.adapter_t5 import adapt_t5_to_tok, add_ff_adapters
 
-from parseq.scripts_cbqa.traint5_adapter_setdec import Main as OldMain
-from parseq.scripts_cbqa.traint5_ftbase_seqdec import Model as Model, Main as OldMain2
+from parseq.scripts_cbqa.traint5_adapter_setdec import Model as AdapterModel, Main as AdapterMain
+from parseq.scripts_cbqa.traint5_ftbase_seqdec import Model as SeqModel, Main as SeqMain
 
 # uses decoder to generate answer string
 
+class Model(AdapterModel, SeqModel): pass
 
-class Main(OldMain, OldMain2):
+
+class Main(AdapterMain, SeqMain):
     DATAMODE = "seq"
     TESTMETRIC = "fscore"
     VARIANT = "adapter-seqdec"
     MAXLEN = 200
 
-    def create_model(self, tok=None, modelsize=None, maxlen=None, dropout=0., loadfrom=None, tt=None,
-                     adapterdim=-1, **kwargs):
-        tt.tick("model")
-        modelname = f"google/t5-v1_1-{modelsize}"
-        t5model = T5ForConditionalGeneration.from_pretrained(modelname)
-        t5model = adapt_t5_to_tok(t5model, tok)
-        t5model = add_ff_adapters(t5model, adapterdim=adapterdim, adaptmode="ff")
-        m = self.get_task_model()(t5model, t5model.config.d_model, tok=tok)
-
-        if len(loadfrom) > 0:
-            tt.tick(f"Loading model from runs/{self.VARIANT}/{loadfrom}/model.ckpt")
-            m.load_state_dict(torch.load(f"runs/{self.VARIANT}/{loadfrom}/model.ckpt"))
-            tt.tock()
-
-        m.maxlen = maxlen
-
-        def _set_dropout(m, _p=0.):
-            if isinstance(m, torch.nn.Dropout):
-                m.p = _p
-        m.apply(partial(_set_dropout, _p=dropout))
-        tt.tock()
-        return m
+    def get_task_model(self):
+        return Model
 
 
 def run_experiment(
