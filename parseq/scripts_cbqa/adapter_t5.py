@@ -74,7 +74,7 @@ class AdaptedT5LMHead(torch.nn.Module):
         self.start = min(min(addedids), numorigtokens)
         if min(addedids) < numorigtokens:
             print(f"min(addedids): {min(addedids)}, numorigtokens: {numorigtokens}")
-            assert min(addedids) >= numorigtokens
+            # assert min(addedids) >= numorigtokens
 
         numnewtokens = max(addedids) + 1 - self.start
         self.newhead = torch.nn.Linear(self.originalhead.in_features, numnewtokens, bias=False)
